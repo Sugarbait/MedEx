@@ -107,20 +107,28 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   const [smsAgentId, setSmsAgentId] = useState<string>('')
   const recordsPerPage = 25
 
-  // Helper function to calculate SMS segments for a chat (same logic as ChatDetailModal)
+  // Helper function to calculate SMS segments for a chat (same logic as SMS modal)
   const calculateChatSMSSegments = useCallback((chat: Chat): number => {
     try {
-      let messages = []
-      if (chat.message_with_tool_calls && Array.isArray(chat.message_with_tool_calls)) {
-        messages = chat.message_with_tool_calls
+      // Use the exact same method as SMS modal - using message_content directly
+      let content = ''
+
+      if (chat.message_with_tool_calls && Array.isArray(chat.message_with_tool_calls) && chat.message_with_tool_calls.length > 0) {
+        // Join all message contents if we have multiple messages
+        content = chat.message_with_tool_calls
+          .map(msg => msg.content || '')
+          .filter(c => c.trim().length > 0)
+          .join(' ')
       } else if (chat.transcript) {
-        // If only transcript available, create a message for segment calculation
-        messages = [{ content: chat.transcript, role: 'user' }]
+        content = chat.transcript
+      } else if (chat.message_content) {
+        content = chat.message_content
       }
 
-      if (messages.length > 0) {
-        const breakdown = twilioCostService.getDetailedSMSBreakdown(messages)
-        return breakdown.segmentCount
+      if (content && content.trim().length > 0) {
+        // Use the exact same method as SMS modal
+        const smsDebugInfo = twilioCostService.debugSMSCalculation([{ content: content }])
+        return smsDebugInfo.totalSegmentsCombined || smsDebugInfo.totalSegments
       } else {
         // Fallback: use estimated typical conversation pattern
         const estimatedMessages = [
@@ -129,12 +137,13 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           { content: 'Yes', role: 'user' },
           { content: 'Thanks! Enrollment received, team will follow up', role: 'agent' }
         ]
-        const fallbackBreakdown = twilioCostService.getDetailedSMSBreakdown(estimatedMessages)
-        return fallbackBreakdown.segmentCount
+        const fallbackDebugInfo = twilioCostService.debugSMSCalculation(estimatedMessages)
+        return fallbackDebugInfo.totalSegmentsCombined || fallbackDebugInfo.totalSegments
       }
     } catch (error) {
       console.error(`Error calculating SMS segments for chat ${chat.chat_id}:`, error)
-      return 1 // Minimal fallback
+      // Return a more reasonable fallback based on typical message length
+      return 2 // More realistic fallback for a typical SMS conversation
     }
   }, [])
 
