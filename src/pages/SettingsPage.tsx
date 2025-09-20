@@ -25,7 +25,7 @@ import { mfaService } from '@/services/mfaService'
 import { auditLogger } from '@/services/auditLogger'
 import { retellService } from '@/services'
 import { userProfileService } from '@/services/userProfileService'
-import { UserSettingsService } from '@/services/userSettingsService'
+import { RobustUserSettingsService } from '@/services/userSettingsServiceRobust'
 import { UserSettings } from '@/types/supabase'
 import { avatarStorageService } from '@/services/avatarStorageService'
 import { SimpleUserManager } from '@/components/settings/SimpleUserManager'
@@ -65,6 +65,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('synced')
+  const [retryQueueSize, setRetryQueueSize] = useState(0)
   const [userSettings, setUserSettings] = useState<LocalUserSettings>({
     // Don't set default theme - let it load from storage
     mfaEnabled: false,
@@ -88,18 +89,22 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
     ...(user?.role === 'super_user' ? [{ id: 'users', name: 'User Management', icon: UserIcon }] : [])
   ]
 
-  // Load settings from Supabase on component mount
+  // Load settings using robust service on component mount
   useEffect(() => {
     const loadSettings = async () => {
       setIsLoading(true)
       try {
-        // Try to load from Supabase first
-        console.log('Attempting to load settings from Supabase...')
-        const response = await UserSettingsService.getUserSettingsWithCache(user.id)
+        // Initialize the robust settings service
+        await RobustUserSettingsService.initialize()
+
+        // Load user settings with automatic fallback
+        console.log('Loading settings with robust service...')
+        const response = await RobustUserSettingsService.getUserSettings(user.id)
 
         if (response.status === 'success' && response.data) {
-          console.log('✅ Settings loaded from Supabase successfully')
-          const supabaseSettings = response.data
+          console.log('✅ Settings loaded successfully')
+          const settings = response.data
+
           // Check actual MFA status from service
           let actualMFAEnabled = false
           try {
@@ -111,60 +116,23 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
           }
 
           const loadedSettings = {
-            theme: supabaseSettings.theme || 'light',
+            theme: settings.theme || 'light',
             mfaEnabled: actualMFAEnabled,
             refreshInterval: 30000,
-            sessionTimeout: supabaseSettings.security_preferences?.session_timeout || 15,
-            notifications: supabaseSettings.notifications || {
-              calls: true,
-              sms: true,
-              system: true
+            sessionTimeout: settings.security_preferences?.session_timeout || 15,
+            notifications: {
+              calls: settings.notifications?.call_alerts ?? true,
+              sms: settings.notifications?.sms_alerts ?? true,
+              system: settings.notifications?.security_alerts ?? true
             },
-            retellApiKey: supabaseSettings.retell_config?.api_key,
-            callAgentId: supabaseSettings.retell_config?.call_agent_id,
-            smsAgentId: supabaseSettings.retell_config?.sms_agent_id
+            retellApiKey: settings.retell_config?.api_key,
+            callAgentId: settings.retell_config?.call_agent_id,
+            smsAgentId: settings.retell_config?.sms_agent_id
           }
           setUserSettings(loadedSettings)
+          setSyncStatus('synced')
 
-          // Log MFA toggle state for debugging
-          console.log('MFA toggle state loaded successfully')
-        } else {
-          // Fallback to localStorage for backward compatibility
-          console.log('⚠️ Supabase not available, falling back to localStorage')
-          const savedSettings = localStorage.getItem(`settings_${user.id}`)
-          // Check actual MFA status from service for fallback case too
-          let actualMFAEnabled = false
-          try {
-            actualMFAEnabled = await mfaService.hasMFAEnabled(user.id)
-            console.log('Actual MFA status from service (fallback):', actualMFAEnabled)
-          } catch (error) {
-            console.warn('Failed to get MFA status from service (fallback):', error)
-            actualMFAEnabled = user?.mfa_enabled || false
-          }
-
-          let loadedSettings = {
-            theme: 'light',
-            mfaEnabled: actualMFAEnabled,
-            refreshInterval: 30000
-          }
-
-          if (savedSettings) {
-            try {
-              const parsedSettings = JSON.parse(savedSettings)
-              loadedSettings = { ...loadedSettings, ...parsedSettings }
-              // Override MFA status with actual status
-              loadedSettings.mfaEnabled = actualMFAEnabled
-            } catch (error) {
-              console.error('Failed to parse saved settings:', error)
-            }
-          }
-
-          setUserSettings(loadedSettings)
-
-          // Log MFA toggle state for debugging (fallback case)
-          console.log('MFA toggle state loaded successfully (fallback)')
-
-          // Update retell service with loaded credentials if they exist
+          // Update retell service with loaded credentials
           if (loadedSettings.retellApiKey || loadedSettings.callAgentId || loadedSettings.smsAgentId) {
             console.log('Initializing retell service with saved credentials')
             retellService.updateCredentials(
@@ -173,25 +141,30 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
               loadedSettings.smsAgentId
             )
           }
+
+          console.log('Settings loaded and applied successfully')
+        } else {
+          console.warn('Failed to load settings:', response.error)
+          setSyncStatus('error')
+          setErrorMessage(`Failed to load settings: ${response.error}`)
+
+          // Set default settings on error
+          setUserSettings({
+            theme: 'light',
+            mfaEnabled: user?.mfa_enabled || false,
+            refreshInterval: 30000,
+            sessionTimeout: 15,
+            notifications: {
+              calls: true,
+              sms: true,
+              system: true
+            }
+          })
         }
       } catch (error) {
         console.error('Failed to load settings:', error)
-
-        // Check if it's a connection error
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-        const isConnectionError = errorMessage.includes('Failed to fetch') ||
-                                 errorMessage.includes('fetch') ||
-                                 errorMessage.includes('Connection refused')
-
-        if (isConnectionError) {
-          console.log('📱 Operating in offline mode - no cloud database connection')
-          setSyncStatus('offline')
-          // Don't show persistent error message on initial load for offline mode
-          // User will see the "Offline Mode" status indicator which is enough
-        } else {
-          setSyncStatus('error')
-          setErrorMessage(`Failed to load settings from cloud: ${errorMessage}`)
-        }
+        setSyncStatus('error')
+        setErrorMessage(`Failed to load settings: ${error instanceof Error ? error.message : 'Unknown error'}`)
 
         // Set default settings on error
         setUserSettings({
@@ -212,40 +185,61 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
     loadSettings()
 
-    // Initialize real-time sync for cross-device settings updates
-    UserSettingsService.initializeSync()
+    // Subscribe to settings changes for this user with robust service
+    const unsubscribe = RobustUserSettingsService.subscribeToUserSettings(user.id, (updatedSettings) => {
+      console.log('Real-time settings update received:', updatedSettings)
 
-    // Subscribe to settings changes for this user
-    const unsubscribe = UserSettingsService.subscribeToUserSettings(user.id, (updatedSettings) => {
-      console.log('Settings updated from another device:', updatedSettings)
+      // Check actual MFA status
+      mfaService.hasMFAEnabled(user.id).then(actualMFAEnabled => {
+        const localSettings = {
+          theme: updatedSettings.theme || 'light',
+          mfaEnabled: actualMFAEnabled,
+          refreshInterval: 30000,
+          sessionTimeout: updatedSettings.security_preferences?.session_timeout || 15,
+          notifications: {
+            calls: updatedSettings.notifications?.call_alerts ?? true,
+            sms: updatedSettings.notifications?.sms_alerts ?? true,
+            system: updatedSettings.notifications?.security_alerts ?? true
+          },
+          retellApiKey: updatedSettings.retell_config?.api_key,
+          callAgentId: updatedSettings.retell_config?.call_agent_id,
+          smsAgentId: updatedSettings.retell_config?.sms_agent_id
+        }
 
-      // Update local state with synced settings
-      const localSettings = {
-        theme: updatedSettings.theme || 'light',
-        mfaEnabled: user?.mfa_enabled || false,
-        refreshInterval: 30000,
-        sessionTimeout: updatedSettings.security_preferences?.session_timeout || 15,
-        notifications: updatedSettings.notifications || {
-          calls: true,
-          sms: true,
-          system: true
-        },
-        retellApiKey: updatedSettings.retell_config?.api_key,
-        callAgentId: updatedSettings.retell_config?.call_agent_id,
-        smsAgentId: updatedSettings.retell_config?.sms_agent_id
-      }
+        setUserSettings(localSettings)
+        setSyncStatus('synced')
 
-      setUserSettings(localSettings)
-
-      // Update retell service with synced credentials
-      if (localSettings.retellApiKey || localSettings.callAgentId || localSettings.smsAgentId) {
-        retellService.updateCredentials(
-          localSettings.retellApiKey,
-          localSettings.callAgentId,
-          localSettings.smsAgentId
-        )
-      }
+        // Update retell service with synced credentials
+        if (localSettings.retellApiKey || localSettings.callAgentId || localSettings.smsAgentId) {
+          retellService.updateCredentials(
+            localSettings.retellApiKey,
+            localSettings.callAgentId,
+            localSettings.smsAgentId
+          )
+        }
+      }).catch(error => {
+        console.warn('Failed to get MFA status during real-time update:', error)
+      })
     })
+
+    // Set up periodic sync status check
+    const statusInterval = setInterval(async () => {
+      try {
+        const status = await RobustUserSettingsService.getSyncStatus(user.id)
+        if (status.status === 'success') {
+          setRetryQueueSize(status.data.retryQueueSize)
+          if (!status.data.isOnline) {
+            setSyncStatus('offline')
+          } else if (status.data.hasPendingChanges || status.data.retryQueueSize > 0) {
+            setSyncStatus('syncing')
+          } else {
+            setSyncStatus('synced')
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to check sync status:', error)
+      }
+    }, 10000) // Check every 10 seconds
 
     // Initialize avatar preview from user data if available
     const initializeAvatar = async () => {
@@ -278,6 +272,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
     // Cleanup function
     return () => {
       unsubscribe()
+      clearInterval(statusInterval)
     }
   }, [user.id, user?.mfa_enabled, user?.avatar])
 
@@ -294,110 +289,70 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
       // Prepare settings for Supabase with proper structure
       const settingsForSupabase: Partial<UserSettings> = {
         theme: updatedSettings.theme as 'light' | 'dark' | 'auto',
-        notifications: updatedSettings.notifications || {
-          email: true,
-          sms: false,
+        notifications: {
+          email: updatedSettings.notifications?.calls ?? true,
+          sms: updatedSettings.notifications?.sms ?? true,
           push: true,
           in_app: true,
-          call_alerts: true,
-          sms_alerts: true,
-          security_alerts: true
+          call_alerts: updatedSettings.notifications?.calls ?? true,
+          sms_alerts: updatedSettings.notifications?.sms ?? true,
+          security_alerts: updatedSettings.notifications?.system ?? true
         },
         security_preferences: {
           session_timeout: updatedSettings.sessionTimeout || 15,
           require_mfa: updatedSettings.mfaEnabled || false,
           password_expiry_reminder: true,
           login_notifications: true
-        },
-        retell_config: {
+        }
+      }
+
+      // Only include retell_config if we have actual values
+      if (updatedSettings.retellApiKey || updatedSettings.callAgentId || updatedSettings.smsAgentId) {
+        settingsForSupabase.retell_config = {
           api_key: updatedSettings.retellApiKey,
           call_agent_id: updatedSettings.callAgentId,
           sms_agent_id: updatedSettings.smsAgentId
         }
       }
 
-      // Save to Supabase first
-      const response = await UserSettingsService.updateUserSettingsSync(
+      // Use robust settings service
+      const response = await RobustUserSettingsService.updateUserSettings(
         user.id,
         settingsForSupabase,
         true // Enable optimistic updates
       )
 
       if (response.status === 'success') {
-        console.log('Settings saved to Supabase successfully')
-
-        // Also update localStorage for backward compatibility
-        localStorage.setItem(`settings_${user.id}`, JSON.stringify(updatedSettings))
-
+        console.log('✅ Settings updated successfully')
         setSaveStatus('saved')
         setSyncStatus('synced')
         setTimeout(() => setSaveStatus('idle'), 2000)
-      } else {
-        // If Supabase fails, fallback to localStorage only
-        console.error('Failed to save settings to Supabase:', response.error)
-        localStorage.setItem(`settings_${user.id}`, JSON.stringify(updatedSettings))
 
-        // Check if it's a connection error (no local Supabase)
-        const isConnectionError = response.error?.includes('Failed to fetch') ||
-                                 response.error?.includes('fetch') ||
-                                 response.error?.includes('Connection refused')
-
-        if (isConnectionError) {
-          console.log('No Supabase connection - operating in offline mode')
-          setSaveStatus('saved') // Still show as saved since localStorage worked
-          setSyncStatus('offline')
-          // Don't show error message for successful offline saves
-          // Just silently save to localStorage
-
-          // Clear the saved status after showing success
-          setTimeout(() => setSaveStatus('idle'), 2000)
-        } else {
-          setSaveStatus('error')
-          setSyncStatus('error')
-          setErrorMessage(`Failed to sync to cloud: ${response.error}. Settings saved locally only.`)
-
-          // Clear the error status after showing it
-          setTimeout(() => setSaveStatus('idle'), 3000)
+        // Update retell service if API settings changed
+        if (newSettings.retellApiKey || newSettings.callAgentId || newSettings.smsAgentId) {
+          retellService.updateCredentials(
+            updatedSettings.retellApiKey,
+            updatedSettings.callAgentId,
+            updatedSettings.smsAgentId
+          )
         }
-
-        // Clear error message after timeout
-        setTimeout(() => {
-          setErrorMessage(null)
-        }, 5000)
-      }
-    } catch (error) {
-      console.error('Failed to update settings:', error)
-
-      // Fallback to localStorage only
-      localStorage.setItem(`settings_${user.id}`, JSON.stringify(userSettings))
-
-      // Check if it's a connection error in the catch block too
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      const isConnectionError = errorMessage.includes('Failed to fetch') ||
-                               errorMessage.includes('fetch') ||
-                               errorMessage.includes('Connection refused')
-
-      if (isConnectionError) {
-        console.log('Catch block: No Supabase connection - operating in offline mode')
-        setSaveStatus('saved') // Still show as saved since localStorage worked
-        setSyncStatus('offline')
-        // Don't show error message for successful offline saves
-
-        // Clear the saved status after showing success
-        setTimeout(() => setSaveStatus('idle'), 2000)
       } else {
+        console.error('❌ Failed to update settings:', response.error)
         setSaveStatus('error')
         setSyncStatus('error')
-        setErrorMessage(`Settings update failed: ${errorMessage}`)
+        setErrorMessage(`Failed to update settings: ${response.error}`)
 
-        // Clear the error status after showing it
         setTimeout(() => setSaveStatus('idle'), 3000)
+        setTimeout(() => setErrorMessage(null), 5000)
       }
+    } catch (error) {
+      console.error('❌ Settings update failed:', error)
+      setSaveStatus('error')
+      setSyncStatus('error')
+      setErrorMessage(`Settings update failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
 
-      // Clear error message after timeout
-      setTimeout(() => {
-        setErrorMessage(null)
-      }, 5000)
+      setTimeout(() => setSaveStatus('idle'), 3000)
+      setTimeout(() => setErrorMessage(null), 5000)
     } finally {
       setIsLoading(false)
     }
@@ -1024,10 +979,25 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
             </div>
           )}
 
-          {/* Local Storage Mode */}
+          {/* Sync Status Indicator */}
           <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-gray-500" />
-            <span className="text-xs text-gray-500 dark:text-gray-400">Local Storage</span>
+            <div className={`w-2 h-2 rounded-full ${
+              syncStatus === 'synced' ? 'bg-green-500' :
+              syncStatus === 'syncing' ? 'bg-blue-500 animate-pulse' :
+              syncStatus === 'offline' ? 'bg-yellow-500' :
+              'bg-red-500'
+            }`} />
+            <span className={`text-xs ${
+              syncStatus === 'synced' ? 'text-green-600 dark:text-green-400' :
+              syncStatus === 'syncing' ? 'text-blue-600 dark:text-blue-400' :
+              syncStatus === 'offline' ? 'text-yellow-600 dark:text-yellow-400' :
+              'text-red-600 dark:text-red-400'
+            }`}>
+              {syncStatus === 'synced' && 'Synced'}
+              {syncStatus === 'syncing' && (retryQueueSize > 0 ? `Syncing (${retryQueueSize} pending)` : 'Syncing')}
+              {syncStatus === 'offline' && 'Offline Mode'}
+              {syncStatus === 'error' && 'Sync Error'}
+            </span>
           </div>
         </div>
       </div>
@@ -1055,7 +1025,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
             </p>
             {syncStatus === 'offline' && (
               <p className="text-xs text-blue-600 mt-2">
-                💡 All settings are still functional and will be saved to your browser. To enable cloud sync, set up a Supabase database connection.
+                💡 Operating in offline mode. Settings will sync automatically when connection is restored.
+              </p>
+            )}
+            {syncStatus === 'syncing' && retryQueueSize > 0 && (
+              <p className="text-xs text-blue-600 mt-2">
+                🔄 Syncing {retryQueueSize} pending changes across devices...
               </p>
             )}
           </div>
@@ -1588,7 +1563,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                 <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
                   <div className="flex items-center gap-2 text-sm text-green-600">
                     <SmartphoneIcon className="w-4 h-4" />
-                    <span>Settings sync across all your devices</span>
+                    <span>Settings sync in real-time across all your devices</span>
+                  </div>
+                  <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
+                    • Automatic sync when online
+                    • Offline mode with sync when connected
+                    • Conflict resolution for concurrent changes
                   </div>
                 </div>
 
