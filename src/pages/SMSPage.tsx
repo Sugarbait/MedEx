@@ -114,6 +114,11 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   // Force re-render trigger for segment updates
   const [segmentUpdateTrigger, setSegmentUpdateTrigger] = useState(0)
 
+  // Rate limiting state for API requests
+  const [concurrentRequests, setConcurrentRequests] = useState<number>(0)
+  const [requestQueue, setRequestQueue] = useState<string[]>([])
+  const maxConcurrentRequests = 2 // Limit to 2 concurrent API calls
+
   // Helper function to calculate SMS segments for a chat (with caching and smart loading)
   const calculateChatSMSSegments = useCallback((chat: Chat): number => {
     try {
@@ -191,8 +196,9 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           segments = 2 // Default fallback for conversations without transcript
         }
 
-        // Disable automatic full chat loading to prevent rate limiting (429 errors)
-        // loadFullChatForSegments(chat.chat_id)
+        // Enable controlled full chat loading with improved rate limiting
+        const delay = Math.random() * 1000 + 200 // Random delay 200ms-1.2s
+        setTimeout(() => loadFullChatForSegments(chat.chat_id), delay)
       }
 
       // Cache the result
@@ -239,14 +245,32 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
   }, [segmentCache])
 
-  // Async function to load full chat details and recalculate segments (with throttling)
-  const loadFullChatForSegments = useCallback(async (chatId: string) => {
-    // Prevent duplicate requests for the same chat
-    if (loadingFullChats.has(chatId)) {
-      console.log(`⏸️ Already loading full chat details for ${chatId}`)
+  // Rate-limited queue processor
+  const processRequestQueue = useCallback(async () => {
+    if (requestQueue.length === 0 || concurrentRequests >= maxConcurrentRequests) {
       return
     }
 
+    const chatId = requestQueue[0]
+    setRequestQueue(prev => prev.slice(1))
+    setConcurrentRequests(prev => prev + 1)
+
+    try {
+      await loadFullChatForSegmentsInternal(chatId)
+    } finally {
+      setConcurrentRequests(prev => prev - 1)
+      // Process next item in queue after a small delay
+      setTimeout(() => processRequestQueue(), 300)
+    }
+  }, [])
+
+  // Process queue when it changes
+  useEffect(() => {
+    processRequestQueue()
+  }, [requestQueue, concurrentRequests])
+
+  // Internal function that does the actual work
+  const loadFullChatForSegmentsInternal = useCallback(async (chatId: string) => {
     try {
       setLoadingFullChats(prev => new Set(prev.add(chatId)))
       console.log(`🔄 Loading full chat details for better segment calculation: ${chatId}`)
@@ -343,6 +367,19 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
   }, [loadingFullChats])
 
+  // Public function with queue management
+  const loadFullChatForSegments = useCallback(async (chatId: string) => {
+    // Prevent duplicate requests for the same chat
+    if (loadingFullChats.has(chatId) || requestQueue.includes(chatId)) {
+      console.log(`⏸️ Already loading or queued full chat details for ${chatId}`)
+      return
+    }
+
+    // Add to queue
+    setRequestQueue(prev => [...prev, chatId])
+    console.log(`📋 Queued chat ${chatId} for segment calculation (queue length: ${requestQueue.length + 1})`)
+  }, [loadingFullChats, requestQueue])
+
   // Debounced search and filters
   const { debouncedValue: debouncedSearchTerm } = useDebounce(searchTerm, 500, {
     leading: false,
@@ -380,6 +417,8 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     smsCostManager.clearCosts() // Clear costs when date range changes
     setSegmentCache(new Map()) // Clear segment cache for new date range
     setLoadingFullChats(new Set()) // Clear loading state for new date range
+    setRequestQueue([]) // Clear any pending API requests for new date range
+    setConcurrentRequests(0) // Reset concurrent request counter
     setTotalSegments(0) // Reset segments count for new date range
     setSegmentUpdateTrigger(0) // Reset segment update trigger
     setIsSmartRefreshing(false) // Reset smart refresh state to prevent infinite spinning
