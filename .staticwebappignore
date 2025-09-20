@@ -1,13 +1,45 @@
-# Exclude all documentation files
+# Git and version control
+.git/
+.github/
+.githubworkflows/
+.gitignore
+.gitattributes
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+
+# Development and build artifacts (exclude everything except dist)
+src/
+public/
+*.ts
+*.tsx
+*.js
+*.jsx
+*.vue
+*.config.*
+tsconfig*.json
+
+# Environment files
+.env*
+!.env.production.template
+
+# Documentation
 *.md
 docs/
+README*
 
-# Exclude test files
+# Test files
 test_*
 *test*
 *.test.*
+__tests__/
+coverage/
 
-# Exclude scripts and utilities
+# Scripts and utilities
 scripts/
 promote-user-to-super.js
 reset_mfa_state.js
@@ -16,19 +48,32 @@ apply_migration.js
 database_setup.js
 verify_mfa_for_all_users.js
 user-settings-client-example.ts
+setup-users-local.html
 
-# Exclude debug/development files
+# Debug/development files
 ChatDetailModal_Debug.tsx
 ChatDetailModal_Fixed.tsx
 
-# Exclude Azure pipeline files (not needed in deployment)
+# Build folders (keep only dist)
+Git-*/
+.claude/
+
+# Azure and CI/CD files
 azure-pipelines.yml
 
-# Exclude Supabase local files
+# Supabase local files
 supabase/
 
-# Exclude development environment templates
-.env.*
-
-# Exclude source maps in production
+# Source maps and other build artifacts
 *.map
+*.log
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
