@@ -110,8 +110,8 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   // Helper function to calculate SMS segments for a chat (same logic as SMS modal)
   const calculateChatSMSSegments = useCallback((chat: Chat): number => {
     try {
-      // Use the exact same method as SMS modal - using message_content directly
-      let content = ''
+      // Use the EXACT same method as ChatDetailModal - getDetailedSMSBreakdown
+      let messages = []
 
       console.log(`🔍 Calculating segments for chat ${chat.chat_id}:`, {
         hasMessageWithToolCalls: !!(chat.message_with_tool_calls && Array.isArray(chat.message_with_tool_calls)),
@@ -121,36 +121,29 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       })
 
       if (chat.message_with_tool_calls && Array.isArray(chat.message_with_tool_calls) && chat.message_with_tool_calls.length > 0) {
-        // Join all message contents if we have multiple messages
-        content = chat.message_with_tool_calls
-          .map(msg => msg.content || '')
-          .filter(c => c.trim().length > 0)
-          .join(' ')
-        console.log(`📝 Using message_with_tool_calls, content length: ${content.length}`)
+        // Use the message_with_tool_calls array directly (same as modal)
+        messages = chat.message_with_tool_calls
+        console.log(`📝 Using message_with_tool_calls, ${messages.length} messages`)
       } else if (chat.transcript && chat.transcript.trim().length > 0) {
-        content = chat.transcript
-        console.log(`📝 Using transcript, content length: ${content.length}`)
+        // If only transcript available, create a message for segment calculation (same as modal)
+        messages = [{ content: chat.transcript, role: 'user' }]
+        console.log(`📝 Using transcript as single message, content length: ${chat.transcript.length}`)
       }
 
-      if (content && content.trim().length > 0) {
-        // Use the exact same method as SMS modal
-        const smsDebugInfo = twilioCostService.debugSMSCalculation([{ content: content }])
-        const segments = smsDebugInfo.totalSegmentsCombined || smsDebugInfo.totalSegments
-        console.log(`📊 Chat ${chat.chat_id} calculated segments: ${segments}`)
+      if (messages.length > 0) {
+        // Use the EXACT same method as ChatDetailModal: getDetailedSMSBreakdown
+        const breakdown = twilioCostService.getDetailedSMSBreakdown(messages)
+        const segments = breakdown.segmentCount
+        console.log(`📊 Chat ${chat.chat_id} calculated segments: ${segments} (using getDetailedSMSBreakdown)`)
         return segments
       } else {
-        console.log(`⚠️ No content found for chat ${chat.chat_id}, using realistic fallback`)
-        // Use a more realistic fallback based on typical SMS conversation length
-        // Average SMS conversation is around 3-4 segments (480-640 characters)
-        const fallbackSegments = 3
-        console.log(`📊 Chat ${chat.chat_id} fallback segments: ${fallbackSegments}`)
-        return fallbackSegments
+        console.log(`⚠️ No messages found for chat ${chat.chat_id}, using fallback`)
+        return 1 // Use 1 as fallback when no content is available
       }
     } catch (error) {
       console.error(`❌ Error calculating SMS segments for chat ${chat.chat_id}:`, error)
-      // Use a more realistic error fallback
-      console.log(`📊 Chat ${chat.chat_id} error fallback: 3 segments`)
-      return 3 // More realistic than 1 segment for an error case
+      console.log(`📊 Chat ${chat.chat_id} error fallback: 1 segment`)
+      return 1 // Use 1 as error fallback
     }
   }, [])
 
