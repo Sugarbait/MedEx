@@ -365,11 +365,12 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       console.log('📊 Chat metrics calculated:', calculatedMetrics)
       setMetrics(prev => {
         console.log('📊 Previous totalSMSSegments:', prev.totalSMSSegments)
+        console.log('📊 Current totalSegments state:', totalSegments)
         return {
           ...prev,
           ...calculatedMetrics,
-          // Preserve totalSMSSegments as it's calculated separately
-          totalSMSSegments: prev.totalSMSSegments
+          // Use current totalSegments state if prev.totalSMSSegments is undefined or 0
+          totalSMSSegments: (prev.totalSMSSegments !== undefined && prev.totalSMSSegments !== 0) ? prev.totalSMSSegments : totalSegments
         }
       })
 
