@@ -266,15 +266,20 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
       // Update metrics efficiently
       console.log(`💰 Updating metrics with totalSMSSegments: ${totalSegments}`)
-      setMetrics(prevMetrics => ({
-        ...prevMetrics,
-        totalCost: totalCostFromFilteredChats,
-        avgCostPerChat,
-        totalSMSSegments: totalSegments,
-        positiveSentimentCount,
-        peakHour,
-        peakHourCount
-      }))
+      console.log(`💰 Previous metrics before SMS segments update:`, metrics)
+      setMetrics(prevMetrics => {
+        const updatedMetrics = {
+          ...prevMetrics,
+          totalCost: totalCostFromFilteredChats,
+          avgCostPerChat,
+          totalSMSSegments: totalSegments,
+          positiveSentimentCount,
+          peakHour,
+          peakHourCount
+        }
+        console.log(`💰 Updated metrics after SMS segments:`, updatedMetrics)
+        return updatedMetrics
+      })
     }
 
     calculateMetrics()
@@ -357,10 +362,19 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
       // Calculate metrics using optimized service
       const calculatedMetrics = chatService.getChatStats(finalFiltered)
-      setMetrics(prev => ({ ...prev, ...calculatedMetrics }))
+      console.log('📊 Chat metrics calculated:', calculatedMetrics)
+      setMetrics(prev => {
+        console.log('📊 Previous totalSMSSegments:', prev.totalSMSSegments)
+        return {
+          ...prev,
+          ...calculatedMetrics,
+          // Preserve totalSMSSegments as it's calculated separately
+          totalSMSSegments: prev.totalSMSSegments
+        }
+      })
 
       console.log('Optimized SMS Chats fetched:', {
-        agentFilter: SMS_AGENT_ID || 'All agents',
+        agentFilter: smsAgentId || 'All agents',
         displayedChats: paginatedChats.length,
         totalFilteredChats: finalFiltered.length,
         cacheUsed: Date.now() - lastDataFetch < 300000
