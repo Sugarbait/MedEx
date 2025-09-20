@@ -110,12 +110,19 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     fetchChats()
   }, [currentPage])
 
-  // Fetch costs for visible chats when chats or costs change
+  // Fetch costs for visible chats when chats or costs change (with rate limiting)
   useEffect(() => {
     const fetchVisibleChatCosts = async () => {
-      for (const chat of chats) {
-        if (!chatCosts.has(chat.chat_id)) {
-          await fetchChatCost(chat.chat_id)
+      const uncachedChats = chats.filter(chat => !chatCosts.has(chat.chat_id))
+
+      // Limit to 5 concurrent requests to avoid rate limiting
+      for (let i = 0; i < uncachedChats.length; i += 5) {
+        const batch = uncachedChats.slice(i, i + 5)
+        await Promise.all(batch.map(chat => fetchChatCost(chat.chat_id)))
+
+        // Add 200ms delay between batches to respect rate limits
+        if (i + 5 < uncachedChats.length) {
+          await new Promise(resolve => setTimeout(resolve, 200))
         }
       }
     }
@@ -125,17 +132,25 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
   }, [chats])
 
-  // Fetch costs for ALL filtered chats (not just visible ones)
+  // Fetch costs for ALL filtered chats (not just visible ones) - with aggressive rate limiting
   useEffect(() => {
     const fetchAllFilteredChatCosts = async () => {
-      for (const chat of allFilteredChats) {
-        if (!chatCosts.has(chat.chat_id)) {
-          await fetchChatCost(chat.chat_id)
+      const uncachedChats = allFilteredChats.filter(chat => !chatCosts.has(chat.chat_id))
+
+      // More conservative: only 3 concurrent requests for background fetching
+      for (let i = 0; i < uncachedChats.length; i += 3) {
+        const batch = uncachedChats.slice(i, i + 3)
+        await Promise.all(batch.map(chat => fetchChatCost(chat.chat_id)))
+
+        // Longer delay for background fetching (500ms)
+        if (i + 3 < uncachedChats.length) {
+          await new Promise(resolve => setTimeout(resolve, 500))
         }
       }
     }
 
-    if (allFilteredChats.length > 0) {
+    // Only fetch background costs if we have less than 50 chats to avoid excessive API calls
+    if (allFilteredChats.length > 0 && allFilteredChats.length <= 50) {
       fetchAllFilteredChatCosts()
     }
   }, [allFilteredChats])
@@ -481,7 +496,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
   }
 
-  // Fetch full chat details and calculate SMS cost
+  // Fetch full chat details and calculate SMS cost (with 429 handling)
   const fetchChatCost = async (chatId: string): Promise<number> => {
     try {
       // Check if we already have the cost cached
@@ -506,7 +521,13 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       setChatCosts(prev => new Map(prev).set(chatId, cost))
 
       return cost
-    } catch (error) {
+    } catch (error: any) {
+      // Handle rate limiting gracefully
+      if (error.message?.includes('429') || error.status === 429) {
+        console.log(`Rate limited for chat ${chatId}, will retry later`)
+        return 0 // Return 0 cost instead of failing
+      }
+
       console.error('Error fetching chat cost for chat:', chatId, error)
       return 0
     }
