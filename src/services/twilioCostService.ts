@@ -191,16 +191,30 @@ class TwilioCostService {
    */
   public getSMSCostCAD(messages: any[]): number {
     try {
+      console.log('SMS Cost Calculation:', {
+        messageCount: messages?.length || 0,
+        messages: messages?.map(m => ({ content: m?.content?.substring(0, 50) + '...', length: m?.content?.length || 0 })) || []
+      })
+
+      if (!messages || messages.length === 0) {
+        console.log('No messages provided for SMS cost calculation')
+        return 0
+      }
+
       const result = this.calculateSMSCost(messages)
+      console.log('SMS Cost Result:', result)
       return result.costCAD
     } catch (error) {
+      console.error('SMS cost calculation error:', error)
       this.handleCurrencyServiceError(error, 'getSMSCostCAD')
       // Return fallback cost calculation
       const totalSegments = messages.reduce((sum, message) => {
         return sum + this.calculateSMSSegments(message.content || '')
       }, 0)
       const costUSD = totalSegments * this.SMS_RATE_USD_PER_SEGMENT
-      return costUSD * 1.35 // Fallback rate
+      const fallbackCost = costUSD * 1.35 // Fallback rate
+      console.log('Using fallback SMS cost calculation:', { totalSegments, costUSD, fallbackCost })
+      return fallbackCost
     }
   }
 

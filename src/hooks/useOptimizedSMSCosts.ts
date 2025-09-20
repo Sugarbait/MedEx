@@ -1,5 +1,4 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { optimizedApiService } from '@/services/optimizedApiService'
 import { chatService } from '@/services/chatService'
 import { twilioCostService } from '@/services/twilioCostService'
 import type { Chat } from '@/services/chatService'
@@ -62,46 +61,49 @@ export function useOptimizedSMSCosts(options: OptimizedSMSCostOptions = {}) {
     return () => {
       mountedRef.current = false
       // Cancel all ongoing operations
-      optimizedApiService.cancelAllRequests()
+      loadingOperationsRef.current.clear()
     }
   }, [])
 
   /**
-   * Calculate SMS cost for a chat using cached data when possible
+   * Calculate SMS cost for a chat using available chat data
    */
   const calculateChatCost = useCallback(async (chat: Chat): Promise<number> => {
     try {
-      // Try to get full chat data with messages for accurate cost calculation
-      const fullChat = await optimizedApiService.request<Chat>(
-        `/api/chat/${chat.chat_id}`,
-        {
-          priority: 'medium',
-          cacheTTL: cacheTimeout,
-          timeout: 15000
+      console.log(`Calculating SMS cost for chat ${chat.chat_id}:`, {
+        hasMessages: !!chat.message_with_tool_calls,
+        messageCount: chat.message_with_tool_calls?.length || 0
+      })
+
+      // Use the messages already available in the chat object
+      const messages = chat.message_with_tool_calls || []
+
+      if (messages.length > 0) {
+        // Use actual messages if available
+        return twilioCostService.getSMSCostCAD(messages)
+      } else {
+        // Fallback to estimation based on available data
+        console.log(`No messages available for ${chat.chat_id}, using estimation`)
+
+        let estimatedMessages = 2
+        if (chat.end_timestamp && chat.start_timestamp) {
+          const durationMinutes = (chat.end_timestamp - chat.start_timestamp) / 60
+          estimatedMessages = Math.max(2, Math.ceil(durationMinutes * 2))
         }
-      )
+        estimatedMessages = Math.min(estimatedMessages, 20)
 
-      const messages = fullChat.message_with_tool_calls || []
-      return twilioCostService.getSMSCostCAD(messages)
-    } catch (error) {
-      console.warn(`Failed to get detailed cost for ${chat.chat_id}, using estimation:`, error)
+        const mockMessages = Array(estimatedMessages).fill(null).map((_, i) => ({
+          content: 'Average SMS message for cost estimation (160 chars)',
+          role: i % 2 === 0 ? 'user' : 'agent'
+        }))
 
-      // Fallback to estimation based on available data
-      let estimatedMessages = 2
-      if (chat.end_timestamp && chat.start_timestamp) {
-        const durationMinutes = (chat.end_timestamp - chat.start_timestamp) / 60
-        estimatedMessages = Math.max(2, Math.ceil(durationMinutes * 2))
+        return twilioCostService.getSMSCostCAD(mockMessages)
       }
-      estimatedMessages = Math.min(estimatedMessages, 20)
-
-      const mockMessages = Array(estimatedMessages).fill(null).map((_, i) => ({
-        content: 'Average SMS message for cost estimation',
-        role: i % 2 === 0 ? 'user' : 'agent'
-      }))
-
-      return twilioCostService.getSMSCostCAD(mockMessages)
+    } catch (error) {
+      console.error(`Failed to calculate cost for ${chat.chat_id}:`, error)
+      return 0
     }
-  }, [cacheTimeout])
+  }, [])
 
   /**
    * Load costs for visible chats with high priority
@@ -243,48 +245,30 @@ export function useOptimizedSMSCosts(options: OptimizedSMSCostOptions = {}) {
     })
 
     try {
-      // Use optimized API service for batch requests with low priority
-      const requests = backgroundChats.map(chat => ({
-        url: `/api/chat/${chat.chat_id}`,
-        options: {
-          priority: backgroundPriority,
-          cacheTTL: cacheTimeout,
-          timeout: 30000,
-          backgroundRequest: true
-        }
-      }))
-
-      const results = await optimizedApiService.batchRequests<Chat>(requests, {
-        maxConcurrency: 3, // Very conservative for background
-        delayBetweenBatches: 500, // Longer delay for background
-        priority: backgroundPriority
-      })
-
-      // Process results
-      results.forEach((result, index) => {
+      // Calculate costs directly using available chat data
+      for (const chat of backgroundChats) {
         if (!mountedRef.current) return
 
-        const chat = backgroundChats[index]
-        loadingOperationsRef.current.delete(chat.chat_id)
-
-        if (result instanceof Error) {
-          console.warn(`Background cost load failed for ${chat.chat_id}:`, result)
-          return
-        }
-
         try {
-          const messages = (result as Chat).message_with_tool_calls || []
-          const cost = twilioCostService.getSMSCostCAD(messages)
+          const cost = await calculateChatCost(chat)
+
+          if (!mountedRef.current) return
 
           setState(prev => {
             const newCosts = new Map(prev.costs)
             newCosts.set(chat.chat_id, cost)
             return { ...prev, costs: newCosts }
           })
+
         } catch (error) {
           console.warn(`Failed to calculate cost for background chat ${chat.chat_id}:`, error)
+        } finally {
+          loadingOperationsRef.current.delete(chat.chat_id)
         }
-      })
+
+        // Small delay between calculations to prevent blocking
+        await new Promise(resolve => setTimeout(resolve, 10))
+      }
 
     } catch (error) {
       console.warn('Background cost loading failed:', error)
@@ -325,7 +309,6 @@ export function useOptimizedSMSCosts(options: OptimizedSMSCostOptions = {}) {
    * Clear all costs and cache
    */
   const clearCosts = useCallback(() => {
-    optimizedApiService.clearCache('chat')
     loadingOperationsRef.current.clear()
     attemptedLoadsRef.current.clear()
 
@@ -344,9 +327,7 @@ export function useOptimizedSMSCosts(options: OptimizedSMSCostOptions = {}) {
    * Get loading statistics
    */
   const getStats = useCallback(() => {
-    const apiStats = optimizedApiService.getStats()
     return {
-      ...apiStats,
       costs: {
         cached: state.costs.size,
         loading: state.loadingCosts.size,
