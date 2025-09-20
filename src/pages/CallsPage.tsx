@@ -413,6 +413,20 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
     // Get Twilio cost (already in CAD)
     const twilioCostCAD = twilioCostService.getTwilioCostCAD(call.call_length_seconds || 0)
 
+    // Debug logging to understand why all calls show $0.69
+    if (retellCostCAD + twilioCostCAD > 0.68 && retellCostCAD + twilioCostCAD < 0.70) {
+      console.log('Call Cost Debug - Potential $0.69 issue:', {
+        callId: call.call_id,
+        duration: call.call_length_seconds,
+        retellCostCents,
+        retellCostUSD,
+        retellCostCAD: retellCostCAD.toFixed(4),
+        twilioCostCAD: twilioCostCAD.toFixed(4),
+        totalCAD: (retellCostCAD + twilioCostCAD).toFixed(4),
+        exchangeRate: currencyService.getCurrentRate?.() || 'unknown'
+      })
+    }
+
     // Total cost
     return retellCostCAD + twilioCostCAD
   }
