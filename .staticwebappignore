@@ -1,3 +1,6 @@
+# This file is now primarily for backup purposes since we deploy from dist/ directly
+# But keeping comprehensive ignore rules for any fallback scenarios
+
 # Git and version control
 .git/
 .github/
@@ -11,8 +14,9 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 package-lock.json
+package.json
 
-# Development and build artifacts (exclude everything except dist)
+# Development and build artifacts (exclude everything except dist contents)
 src/
 public/
 *.ts
@@ -22,6 +26,8 @@ public/
 *.vue
 *.config.*
 tsconfig*.json
+vite.config.*
+index.html
 
 # Environment files
 .env*
@@ -54,7 +60,7 @@ setup-users-local.html
 ChatDetailModal_Debug.tsx
 ChatDetailModal_Fixed.tsx
 
-# Build folders (keep only dist)
+# Large backup/deployment folders
 Git-*/
 .claude/
 
