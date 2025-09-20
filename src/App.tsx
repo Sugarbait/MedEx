@@ -5,6 +5,9 @@ import { auditLogger, AuditAction, ResourceType, AuditOutcome } from './services
 import { userProfileService } from './services/userProfileService'
 import { mfaService } from './services/mfaService'
 import { retellService } from './services/retellService'
+
+// Import SMS cost test for validation
+import './test/smsCostCalculationTest'
 import { ThemeManager } from './utils/themeManager'
 import { initializeSecureStorage } from './services/storageSecurityMigration'
 import { secureUserDataService } from './services/secureUserDataService'

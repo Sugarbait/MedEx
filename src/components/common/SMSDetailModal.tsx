@@ -14,6 +14,7 @@ import {
   AlertCircleIcon
 } from 'lucide-react'
 import { EnhancedChatNotes } from '@/components/common/EnhancedChatNotes'
+import { twilioCostService } from '@/services/twilioCostService'
 
 interface SMSDetailModalProps {
   message: {
@@ -169,28 +170,12 @@ export const SMSDetailModal: React.FC<SMSDetailModalProps> = ({ message, isOpen,
   const { date, time, relative } = formatDateTime(message.timestamp)
   const messageLength = message.message_content.length
 
-  // Calculate SMS segments using the same logic as the cost service
-  const calculateSMSSegments = (content: string): number => {
-    if (!content) return 0
-
-    // Standard SMS: 160 characters per segment
-    // With special characters/unicode: 70 characters per segment
-    const hasUnicode = /[^\x00-\x7F]/.test(content)
-    const maxCharsPerSegment = hasUnicode ? 70 : 160
-
-    return Math.ceil(content.length / maxCharsPerSegment)
-  }
-
-  const smsSegments = calculateSMSSegments(message.message_content)
-
-  // Debug logging to see what's causing the segment calculation issue
-  console.log('SMS Modal Debug:', {
-    messageContent: JSON.stringify(message.message_content),
-    messageLength: message.message_content.length,
-    hasUnicode: /[^\x00-\x7F]/.test(message.message_content),
-    calculatedSegments: smsSegments,
-    rawContent: message.message_content
-  })
+  // Use the updated Twilio cost service for SMS segment calculation
+  // This properly excludes role indicators and uses 160 chars per segment
+  const smsDebugInfo = twilioCostService.debugSMSCalculation([{ content: message.message_content }])
+  const smsSegments = smsDebugInfo.totalSegments
+  const cleanContent = smsDebugInfo.originalMessages[0]?.cleanContent || message.message_content
+  const cleanLength = smsDebugInfo.totalCleanChars
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -258,10 +243,13 @@ export const SMSDetailModal: React.FC<SMSDetailModalProps> = ({ message, isOpen,
                   <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Length</span>
                 </div>
                 <div className="text-lg font-bold text-purple-600">
-                  {messageLength} chars
+                  {cleanLength} chars
                 </div>
                 <div className="text-xs text-gray-500 dark:text-gray-400">
                   {smsSegments} {smsSegments === 1 ? 'segment' : 'segments'}
+                </div>
+                <div className="text-xs text-gray-500 dark:text-gray-400">
+                  Original: {messageLength} chars
                 </div>
               </div>
 
@@ -329,7 +317,7 @@ export const SMSDetailModal: React.FC<SMSDetailModalProps> = ({ message, isOpen,
                 <p className="text-gray-900 dark:text-gray-100 leading-relaxed whitespace-pre-wrap">{message.message_content}</p>
               </div>
               <div className="mt-3 flex items-center gap-4 text-sm text-gray-500 dark:text-gray-400">
-                <span>{messageLength} characters</span>
+                <span>{cleanLength} billable characters (original: {messageLength})</span>
                 <span>{smsSegments} SMS {smsSegments === 1 ? 'segment' : 'segments'}</span>
                 {message.cost && <span>Cost: ${message.cost.toFixed(4)}</span>}
               </div>

@@ -98,7 +98,8 @@
       "WebFetch(domain:localhost)",
       "Bash(npm ls:*)",
       "Bash(tasklist)",
-      "Bash(del timestamp-test.js)"
+      "Bash(del timestamp-test.js)",
+      "WebFetch(domain:www.twilio.com)"
     ],
     "deny": [],
     "ask": []

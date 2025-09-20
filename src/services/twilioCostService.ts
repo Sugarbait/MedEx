@@ -130,18 +130,43 @@ class TwilioCostService {
 
   /**
    * Calculate SMS message segment count based on message length
-   * Standard SMS = 160 chars, with unicode/special chars reducing the limit
+   * Fixed: 160 characters per segment (no Unicode special handling)
    */
   private calculateSMSSegments(messageContent: string): number {
     if (!messageContent) return 0
 
-    // Basic SMS segmentation logic
-    // Standard SMS: 160 characters per segment
-    // With special characters/unicode: 70 characters per segment
-    const hasUnicode = /[^\x00-\x7F]/.test(messageContent)
-    const maxCharsPerSegment = hasUnicode ? 70 : 160
-
+    // Fixed segmentation: 160 characters per segment
+    const maxCharsPerSegment = 160
     return Math.ceil(messageContent.length / maxCharsPerSegment)
+  }
+
+  /**
+   * Parse chat content to exclude role/title indicators
+   * Removes "Patient", "AI Assistant" and similar role indicators
+   */
+  private parseMessageContent(content: string): string {
+    if (!content) return ''
+
+    // Remove role indicators at the start of lines
+    // Patterns: "Patient", "AI Assistant", "User", "Agent", etc.
+    const rolePatterns = [
+      /^Patient\s*/gm,
+      /^AI Assistant\s*/gm,
+      /^User\s*/gm,
+      /^Agent\s*/gm,
+      /^Assistant\s*/gm,
+      /^Bot\s*/gm
+    ]
+
+    let cleanContent = content
+    rolePatterns.forEach(pattern => {
+      cleanContent = cleanContent.replace(pattern, '')
+    })
+
+    // Remove empty lines that might be left after role removal
+    cleanContent = cleanContent.replace(/^\s*$/gm, '').trim()
+
+    return cleanContent
   }
 
   /**
@@ -161,9 +186,11 @@ class TwilioCostService {
       }
     }
 
-    // Calculate total segments for all messages
+    // Calculate total segments for all messages (excluding role indicators)
     const totalSegments = messages.reduce((sum, message) => {
-      const segments = this.calculateSMSSegments(message.content || '')
+      // Parse content to exclude role/title indicators
+      const cleanContent = this.parseMessageContent(message.content || '')
+      const segments = this.calculateSMSSegments(cleanContent)
       return sum + segments
     }, 0)
 
@@ -199,9 +226,10 @@ class TwilioCostService {
       return result.costCAD
     } catch (error) {
       this.handleCurrencyServiceError(error, 'getSMSCostCAD')
-      // Return fallback cost calculation
+      // Return fallback cost calculation (excluding role indicators)
       const totalSegments = messages.reduce((sum, message) => {
-        return sum + this.calculateSMSSegments(message.content || '')
+        const cleanContent = this.parseMessageContent(message.content || '')
+        return sum + this.calculateSMSSegments(cleanContent)
       }, 0)
       const costUSD = totalSegments * this.SMS_RATE_USD_PER_SEGMENT
       return costUSD * 1.35 // Fallback rate
@@ -234,6 +262,43 @@ class TwilioCostService {
    */
   public getDetailedSMSBreakdown(messages: any[]): TwilioSMSCostBreakdown {
     return this.calculateSMSCost(messages)
+  }
+
+  /**
+   * Debug method to test SMS calculation with parsed content
+   * Shows character count, segments, and cost breakdown
+   */
+  public debugSMSCalculation(messages: any[]): {
+    originalMessages: { content: string; originalLength: number; cleanContent: string; cleanLength: number; segments: number }[]
+    totalOriginalChars: number
+    totalCleanChars: number
+    totalSegments: number
+    costBreakdown: TwilioSMSCostBreakdown
+  } {
+    const originalMessages = messages.map(message => {
+      const originalContent = message.content || ''
+      const cleanContent = this.parseMessageContent(originalContent)
+      return {
+        content: originalContent,
+        originalLength: originalContent.length,
+        cleanContent: cleanContent,
+        cleanLength: cleanContent.length,
+        segments: this.calculateSMSSegments(cleanContent)
+      }
+    })
+
+    const totalOriginalChars = originalMessages.reduce((sum, msg) => sum + msg.originalLength, 0)
+    const totalCleanChars = originalMessages.reduce((sum, msg) => sum + msg.cleanLength, 0)
+    const totalSegments = originalMessages.reduce((sum, msg) => sum + msg.segments, 0)
+    const costBreakdown = this.calculateSMSCost(messages)
+
+    return {
+      originalMessages,
+      totalOriginalChars,
+      totalCleanChars,
+      totalSegments,
+      costBreakdown
+    }
   }
 
   /**
