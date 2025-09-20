@@ -1,9 +1,9 @@
 import React, { useState } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
-import { ShieldCheckIcon } from 'lucide-react'
+import { ShieldCheckIcon, LogOutIcon } from 'lucide-react'
 
 export const MFAPage: React.FC = () => {
-  const { completeMFA, mfaChallenge } = useAuth()
+  const { completeMFA, mfaChallenge, logout } = useAuth()
   const [code, setCode] = useState('')
   const [isVerifying, setIsVerifying] = useState(false)
   const [error, setError] = useState('')
@@ -30,9 +30,29 @@ export const MFAPage: React.FC = () => {
     }
   }
 
+  const handleLogout = async () => {
+    try {
+      await logout()
+    } catch (error) {
+      console.error('Logout failed:', error)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-primary-50 to-neutral-100 dark:from-gray-900 dark:to-gray-800 flex items-center justify-center p-4">
       <div className="max-w-md w-full">
+        {/* Logout Button - Top Right */}
+        <div className="flex justify-end mb-4">
+          <button
+            onClick={handleLogout}
+            className="flex items-center gap-2 px-3 py-2 text-sm text-neutral-600 dark:text-gray-400 hover:text-neutral-900 dark:hover:text-gray-100 transition-colors"
+            title="Logout to allow another user to access the system"
+          >
+            <LogOutIcon className="w-4 h-4" />
+            Switch User
+          </button>
+        </div>
+
         {/* Header */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
@@ -97,8 +117,11 @@ export const MFAPage: React.FC = () => {
 
         {/* Help */}
         <div className="mt-6 text-center">
-          <p className="text-sm text-neutral-600">
+          <p className="text-sm text-neutral-600 dark:text-gray-400">
             Having trouble? Contact your system administrator.
+          </p>
+          <p className="text-xs text-neutral-500 dark:text-gray-500 mt-2">
+            Need to let another user access the system? Use "Switch User" above.
           </p>
         </div>
       </div>
