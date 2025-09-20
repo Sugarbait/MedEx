@@ -120,7 +120,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   // Optimized auto-refresh with smart change detection
   const { formatLastRefreshTime } = useAutoRefresh({
     enabled: true,
-    interval: 120000, // 2 minutes (reduced frequency)
+    interval: 60000, // 1 minute (reduced frequency)
     onRefresh: useCallback(() => {
       performSmartRefresh()
     }, [])
@@ -575,7 +575,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       </div>
       <div className="text-xs text-gray-500 mb-6 flex items-center justify-between">
         <div>
-          Last refreshed: {formatLastRefreshTime()} (Auto-refresh every 2 minutes) | {totalChatsCount} total chats
+          Last refreshed: {formatLastRefreshTime()} (Auto-refresh every 1 minute) | {totalChatsCount} total chats
         </div>
         {smsCostManager.progress && (
           <div className="flex items-center gap-2">
