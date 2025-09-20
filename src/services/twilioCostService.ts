@@ -162,10 +162,14 @@ class TwilioCostService {
     }
 
     // Calculate total segments for all messages
-    const totalSegments = messages.reduce((sum, message) => {
-      const segments = this.calculateSMSSegments(message.content || '')
+    console.log('SMS Cost Calculation - Message Details:')
+    const totalSegments = messages.reduce((sum, message, index) => {
+      const content = message.content || ''
+      const segments = this.calculateSMSSegments(content)
+      console.log(`Message ${index + 1}: "${content.substring(0, 100)}..." (${content.length} chars, ${segments} segments)`)
       return sum + segments
     }, 0)
+    console.log(`Total segments calculated: ${totalSegments}`)
 
     // Calculate cost in USD first
     const costUSD = totalSegments * this.SMS_RATE_USD_PER_SEGMENT

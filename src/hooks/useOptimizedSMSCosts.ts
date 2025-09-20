@@ -85,17 +85,26 @@ export function useOptimizedSMSCosts(options: OptimizedSMSCostOptions = {}) {
         // Fallback to estimation based on available data
         console.log(`No messages available for ${chat.chat_id}, using estimation`)
 
-        let estimatedMessages = 2
+        // More conservative estimation - SMS chats are typically short
+        let estimatedMessages = 4 // Default to 4 messages (2 user, 2 agent)
         if (chat.end_timestamp && chat.start_timestamp) {
           const durationMinutes = (chat.end_timestamp - chat.start_timestamp) / 60
-          estimatedMessages = Math.max(2, Math.ceil(durationMinutes * 2))
+          // SMS chats are quick - estimate 1 message per minute, max 8 messages
+          estimatedMessages = Math.max(2, Math.min(8, Math.ceil(durationMinutes)))
         }
-        estimatedMessages = Math.min(estimatedMessages, 20)
 
-        const mockMessages = Array(estimatedMessages).fill(null).map((_, i) => ({
-          content: 'Average SMS message for cost estimation (160 chars)',
-          role: i % 2 === 0 ? 'user' : 'agent'
-        }))
+        console.log(`Estimating ${estimatedMessages} messages for chat ${chat.chat_id}`)
+
+        // Create realistic mock messages with varying lengths
+        const mockMessages = Array(estimatedMessages).fill(null).map((_, i) => {
+          const isLongMessage = i === 1 // Make the second message (AI response) longer
+          return {
+            content: isLongMessage
+              ? 'Thank you for providing your details. I have reviewed the information and everything appears to be in order. A member of our team will be in touch with you shortly to discuss the next steps in your enrollment process.'
+              : 'Thank you for your interest in our services.',
+            role: i % 2 === 0 ? 'user' : 'agent'
+          }
+        })
 
         return twilioCostService.getSMSCostCAD(mockMessages)
       }
