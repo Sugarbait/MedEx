@@ -235,6 +235,17 @@ const App: React.FC = () => {
 
     const loadUser = async () => {
       try {
+        // Add emergency logout function (press Ctrl+Shift+L to force logout)
+        window.addEventListener('keydown', (e) => {
+          if (e.ctrlKey && e.shiftKey && e.key === 'L') {
+            e.preventDefault()
+            console.log('🚪 Emergency logout triggered')
+            localStorage.removeItem('currentUser')
+            localStorage.removeItem('mfa_verified')
+            window.location.reload()
+          }
+        })
+
         // Temporarily use localStorage directly for stability
         let storedUser = null
         try {
@@ -648,6 +659,17 @@ const App: React.FC = () => {
           </div>
           <p className="text-gray-600 dark:text-gray-300">Loading CareXPS Healthcare CRM...</p>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Initializing HIPAA-compliant environment</p>
+          <button
+            onClick={() => {
+              localStorage.removeItem('currentUser')
+              localStorage.removeItem('mfa_verified')
+              window.location.reload()
+            }}
+            className="mt-4 px-4 py-2 text-sm bg-red-500 text-white rounded hover:bg-red-600"
+          >
+            Force Logout & Show Login
+          </button>
+          <p className="text-xs text-gray-400 mt-2">Press Ctrl+Shift+L for emergency logout</p>
         </div>
       </div>
     )
