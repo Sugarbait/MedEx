@@ -74,7 +74,6 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   const [isSmartRefreshing, setIsSmartRefreshing] = useState(false)
   const [showDebugPanel, setShowDebugPanel] = useState(false)
   const mountedRef = useRef(true)
-  const currentFetchRef = useRef<AbortController | null>(null)
   const [metrics, setMetrics] = useState<ChatMetrics>({
     totalChats: 0,
     activeChats: 0,
@@ -258,71 +257,61 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     calculateMetrics()
   }, [allFilteredChats, smsCostManager.totalCost, smsCostManager.averageCost, totalSegments])
 
-  // Optimized chat fetching with intelligent caching
-  const fetchChatsOptimized = useCallback(async () => {
+  // Simplified chat fetching following CallsPage pattern
+  const fetchChatsOptimized = useCallback(async (retryCount = 0) => {
     if (!mountedRef.current) return
-
-    // Cancel any ongoing fetch
-    if (currentFetchRef.current) {
-      currentFetchRef.current.abort()
-    }
-    currentFetchRef.current = new AbortController()
 
     setLoading(true)
     setError('')
 
     try {
-      // Configuration check (cached)
-      if (!chatService.isConfigured()) {
-        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
-        if (currentUser.id) {
-          const settings = JSON.parse(localStorage.getItem(`settings_${currentUser.id}`) || '{}')
-          chatService.updateCredentials(settings.retellApiKey, settings.smsAgentId)
-        }
+      // Reload credentials (localStorage + Supabase sync) - same as Calls page
+      chatService.reloadCredentials()
+      console.log('Reloaded chat credentials:', {
+        hasApiKey: !!chatService.isConfigured(),
+        configured: chatService.isConfigured()
+      })
 
-        if (!chatService.isConfigured()) {
-          setError('API not configured. Go to Settings → API Configuration to set up your credentials.')
-          setChats([])
-          setAllFilteredChats([])
-          setTotalChatsCount(0)
-          setSmsAgentConfigured(false)
-          setLoading(false)
-          return
-        }
+      if (!chatService.isConfigured()) {
+        setError('API not configured. Go to Settings → API Configuration to set up your credentials.')
+        setLoading(false)
+        return
       }
 
       // Get date range for filtering
       const { start, end } = getDateRangeFromSelection(selectedDateRange)
 
-      // Get SMS agent ID from settings (cached)
-      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
-      let SMS_AGENT_ID = null
-
-      if (currentUser.id) {
-        const settingsResponse = await UserSettingsService.getUserSettings(currentUser.id)
-        if (settingsResponse.status === 'success' && settingsResponse.data?.retell_config) {
-          SMS_AGENT_ID = settingsResponse.data.retell_config.sms_agent_id || null
+      // Fetch with retry logic for rate limiting - same as Calls page
+      let allChatsResponse
+      try {
+        // Add small delay to prevent rate limiting
+        if (retryCount > 0) {
+          const delay = Math.min(1000 * Math.pow(2, retryCount), 8000) // Exponential backoff, max 8 seconds
+          console.log(`Rate limited, retrying in ${delay}ms (attempt ${retryCount + 1})`)
+          await new Promise(resolve => setTimeout(resolve, delay))
         }
+
+        // Fetch chats using standard service - same pattern as Calls page
+        allChatsResponse = await chatService.getChatHistory({
+          limit: 300, // Reduced limit for faster initial load
+          sort_order: 'descending'
+        })
+      } catch (error: any) {
+        // Handle rate limiting specifically
+        if (error.message?.includes('429') || error.status === 429) {
+          if (retryCount < 3) {
+            console.log(`Rate limited (429), retrying... (attempt ${retryCount + 1}/3)`)
+            return fetchChatsOptimized(retryCount + 1)
+          } else {
+            throw new Error('Rate limit exceeded. Please wait a moment and try again.')
+          }
+        }
+        throw error
       }
-
-      setSmsAgentConfigured(!!SMS_AGENT_ID)
-
-      // Use optimized chat service with intelligent caching
-      const chatOptions: ChatListOptions = {
-        limit: Math.max(recordsPerPage * 2, 50), // Fetch more efficiently
-        filter_criteria: SMS_AGENT_ID ? { agent_id: SMS_AGENT_ID } : undefined
-      }
-
-      const allChatsResponse = await optimizedChatService.getOptimizedChats({
-        ...chatOptions,
-        priority: 'high',
-        backgroundRequest: false,
-        deltaUpdate: Date.now() - lastDataFetch < 300000 // Use delta if last fetch was < 5 min ago
-      })
 
       if (!mountedRef.current) return
 
-      // Optimized filtering
+      // Filter by date range - same as Calls page
       const startMs = start.getTime()
       const endMs = end.getTime()
 
@@ -362,7 +351,6 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     } finally {
       if (mountedRef.current) {
         setLoading(false)
-        currentFetchRef.current = null
       }
     }
   }, [selectedDateRange, currentPage, lastDataFetch])
@@ -374,7 +362,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       const result = await chatService.endChat(chatId)
       if (result.success) {
         console.log('Chat ended successfully:', chatId)
-        fetchChats() // Refresh to show updated status
+        fetchChatsOptimized() // Refresh to show updated status
       } else {
         throw new Error(result.error || 'Failed to end chat')
       }
@@ -490,9 +478,6 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   useEffect(() => {
     return () => {
       mountedRef.current = false
-      if (currentFetchRef.current) {
-        currentFetchRef.current.abort()
-      }
       optimizedChatService.cancelAllOperations()
       debouncedFetchChats.cancel()
     }
