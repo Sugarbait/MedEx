@@ -405,13 +405,14 @@ const App: React.FC = () => {
             retellService.loadCredentials()
           }
 
-          // Check if MFA is required - use MFA service for accurate check
-          const checkMFARequirement = async () => {
+          // Check if MFA is required - use fast synchronous checks for performance
+          const checkMFARequirement = () => {
             try {
-              const hasMFAEnabled = await mfaService.hasMFAEnabled(userData.id)
-              const currentSession = mfaService.getCurrentSession(userData.id)
+              // Use fast synchronous methods to avoid slow async database calls during auth
+              const hasMFAEnabled = mfaService.hasMFAEnabledSync(userData.id)
+              const currentSession = mfaService.getCurrentSessionSync(userData.id)
 
-              console.log('MFA Check: Status evaluated')
+              console.log('MFA Check: Fast status evaluated', { hasMFAEnabled, hasSession: !!currentSession })
 
               // MFA is required if:
               // 1. User has MFA enabled AND
@@ -425,6 +426,13 @@ const App: React.FC = () => {
               } else {
                 console.log('ℹ️ MFA not enabled for current user')
                 setMfaRequired(false)
+              }
+
+              // Background sync to ensure cache is up to date (non-blocking)
+              if (hasMFAEnabled) {
+                mfaService.hasMFAEnabled(userData.id).catch(error => {
+                  console.warn('Background MFA sync failed:', error)
+                })
               }
             } catch (error) {
               console.error('Error checking MFA requirement:', error)
@@ -643,8 +651,8 @@ const App: React.FC = () => {
     // Clear MFA sessions for the user
     if (user?.id) {
       try {
-        // Invalidate all sessions for this user
-        const currentSession = mfaService.getCurrentSession(user.id)
+        // Invalidate all sessions for this user (use fast sync method)
+        const currentSession = mfaService.getCurrentSessionSync(user.id)
         if (currentSession) {
           mfaService.invalidateSession(currentSession.sessionToken)
         }

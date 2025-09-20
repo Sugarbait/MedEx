@@ -534,7 +534,8 @@ class TOTPMFAService {
   }
 
   /**
-   * Synchronous version of hasMFAEnabled for backward compatibility
+   * Fast synchronous check for MFA enabled status (uses localStorage cache)
+   * Use this for performance-critical authentication flows
    */
   hasMFAEnabledSync(userId: string): boolean {
     const mfaData = this.getLocalMFAData(userId)
@@ -545,11 +546,36 @@ class TOTPMFAService {
   }
 
   /**
-   * Synchronous version of hasMFASetup for backward compatibility
+   * Fast synchronous check for MFA setup status (uses localStorage cache)
    */
   hasMFASetupSync(userId: string): boolean {
     const mfaData = this.getLocalMFAData(userId)
     return mfaData !== null && mfaData.encryptedSecret !== null
+  }
+
+  /**
+   * Fast synchronous method to get current session (optimized for auth flow)
+   */
+  getCurrentSessionSync(userId: string): MFASession | null {
+    // Find the most recent valid session for this user (optimized version)
+    let currentSession: MFASession | null = null
+    let latestTime = 0
+    const now = new Date()
+
+    for (const [token, session] of this.activeSessions.entries()) {
+      if (session.userId === userId) {
+        // Quick expiry check without deletion (avoid storage writes during auth)
+        if (now <= session.expiresAt) {
+          const sessionTime = new Date(session.verifiedAt).getTime()
+          if (sessionTime > latestTime) {
+            latestTime = sessionTime
+            currentSession = session
+          }
+        }
+      }
+    }
+
+    return currentSession
   }
 
   /**
