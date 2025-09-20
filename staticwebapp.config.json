@@ -11,6 +11,31 @@
       "allowedRoles": ["anonymous"]
     },
     {
+      "route": "/dashboard",
+      "serve": "/index.html",
+      "statusCode": 200
+    },
+    {
+      "route": "/calls",
+      "serve": "/index.html",
+      "statusCode": 200
+    },
+    {
+      "route": "/sms",
+      "serve": "/index.html",
+      "statusCode": 200
+    },
+    {
+      "route": "/settings",
+      "serve": "/index.html",
+      "statusCode": 200
+    },
+    {
+      "route": "/login",
+      "serve": "/index.html",
+      "statusCode": 200
+    },
+    {
       "route": "/*",
       "serve": "/index.html",
       "statusCode": 200
