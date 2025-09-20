@@ -117,9 +117,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         hasMessageWithToolCalls: !!(chat.message_with_tool_calls && Array.isArray(chat.message_with_tool_calls)),
         messageCount: chat.message_with_tool_calls?.length,
         hasTranscript: !!chat.transcript,
-        hasMessageContent: !!chat.message_content,
-        transcriptLength: chat.transcript?.length,
-        messageContentLength: chat.message_content?.length
+        transcriptLength: chat.transcript?.length
       })
 
       if (chat.message_with_tool_calls && Array.isArray(chat.message_with_tool_calls) && chat.message_with_tool_calls.length > 0) {
@@ -129,12 +127,9 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           .filter(c => c.trim().length > 0)
           .join(' ')
         console.log(`📝 Using message_with_tool_calls, content length: ${content.length}`)
-      } else if (chat.transcript) {
+      } else if (chat.transcript && chat.transcript.trim().length > 0) {
         content = chat.transcript
         console.log(`📝 Using transcript, content length: ${content.length}`)
-      } else if (chat.message_content) {
-        content = chat.message_content
-        console.log(`📝 Using message_content, content length: ${content.length}`)
       }
 
       if (content && content.trim().length > 0) {
@@ -144,24 +139,18 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         console.log(`📊 Chat ${chat.chat_id} calculated segments: ${segments}`)
         return segments
       } else {
-        console.log(`⚠️ No content found for chat ${chat.chat_id}, using fallback`)
-        // Fallback: use estimated typical conversation pattern
-        const estimatedMessages = [
-          { content: 'Patient enrollment details and personal information', role: 'user' },
-          { content: 'AI Assistant confirmation response with formatted details for review', role: 'agent' },
-          { content: 'Yes', role: 'user' },
-          { content: 'Thanks! Enrollment received, team will follow up', role: 'agent' }
-        ]
-        const fallbackDebugInfo = twilioCostService.debugSMSCalculation(estimatedMessages)
-        const fallbackSegments = fallbackDebugInfo.totalSegmentsCombined || fallbackDebugInfo.totalSegments
+        console.log(`⚠️ No content found for chat ${chat.chat_id}, using realistic fallback`)
+        // Use a more realistic fallback based on typical SMS conversation length
+        // Average SMS conversation is around 3-4 segments (480-640 characters)
+        const fallbackSegments = 3
         console.log(`📊 Chat ${chat.chat_id} fallback segments: ${fallbackSegments}`)
         return fallbackSegments
       }
     } catch (error) {
       console.error(`❌ Error calculating SMS segments for chat ${chat.chat_id}:`, error)
-      // Return a more reasonable fallback based on typical message length
-      console.log(`📊 Chat ${chat.chat_id} error fallback: 1 segment`)
-      return 1 // Use 1 as the error fallback to match what we're seeing
+      // Use a more realistic error fallback
+      console.log(`📊 Chat ${chat.chat_id} error fallback: 3 segments`)
+      return 3 // More realistic than 1 segment for an error case
     }
   }, [])
 

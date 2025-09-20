@@ -100,7 +100,9 @@
       "Bash(tasklist)",
       "Bash(del timestamp-test.js)",
       "WebFetch(domain:www.twilio.com)",
-      "Bash(npm run test:sms:*)"
+      "Bash(npm run test:sms:*)",
+      "Bash(npm start)",
+      "Bash(npm run:*)"
     ],
     "deny": [],
     "ask": []
