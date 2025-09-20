@@ -1,0 +1,34 @@
+# Exclude all documentation files
+*.md
+docs/
+
+# Exclude test files
+test_*
+*test*
+*.test.*
+
+# Exclude scripts and utilities
+scripts/
+promote-user-to-super.js
+reset_mfa_state.js
+run-migrations.js
+apply_migration.js
+database_setup.js
+verify_mfa_for_all_users.js
+user-settings-client-example.ts
+
+# Exclude debug/development files
+ChatDetailModal_Debug.tsx
+ChatDetailModal_Fixed.tsx
+
+# Exclude Azure pipeline files (not needed in deployment)
+azure-pipelines.yml
+
+# Exclude Supabase local files
+supabase/
+
+# Exclude development environment templates
+.env.*
+
+# Exclude source maps in production
+*.map

@@ -127,6 +127,22 @@ fix-*
 Git-Deploy/
 Git-Final/
 Git-Deployment/
+Git-*/
+*.tar.gz
+
+# Documentation files
+*_DEBUG.md
+*_ANALYSIS.md
+*_DOCUMENTATION.md
+*_GUIDE.md
+*_SUMMARY.md
+*_TESTING_GUIDE.md
+*_IMPLEMENTATION_GUIDE.md
+*_SETUP.md
+*_FIXES.md
+*_COMPLETE.md
+*_LOCKED.md
+*_ISSUES.md
 
 # Backup files
 *.backup
