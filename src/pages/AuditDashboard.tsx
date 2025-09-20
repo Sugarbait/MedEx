@@ -225,11 +225,11 @@ export const AuditDashboard: React.FC<AuditDashboardProps> = ({ user }) => {
               <span className="text-sm text-gray-600">Total Events</span>
               <ActivityIcon className="w-4 h-4 text-gray-400" />
             </div>
-            <div className="text-3xl font-black text-blue-600 mb-1">
+            <div className="text-3xl font-black text-blue-600 mb-1 numeric-data">
               {auditReport.summary.totalAccess}
             </div>
             <div className="text-xs text-gray-500">
-              Last {Math.round((auditReport.summary.timeRange.end.getTime() - auditReport.summary.timeRange.start.getTime()) / (1000 * 60 * 60 * 24))} days
+              Last <span className="numeric-data">{Math.round((auditReport.summary.timeRange.end.getTime() - auditReport.summary.timeRange.start.getTime()) / (1000 * 60 * 60 * 24))}</span> days
             </div>
           </div>
 
@@ -238,11 +238,11 @@ export const AuditDashboard: React.FC<AuditDashboardProps> = ({ user }) => {
               <span className="text-sm text-gray-600">PHI Access</span>
               <EyeIcon className="w-4 h-4 text-gray-400" />
             </div>
-            <div className="text-3xl font-black text-green-600 mb-1">
+            <div className="text-3xl font-black text-green-600 mb-1 numeric-data">
               {auditReport.summary.phiAccess}
             </div>
             <div className="text-xs text-gray-500">
-              {((auditReport.summary.phiAccess / auditReport.summary.totalAccess) * 100).toFixed(1)}% of events
+              <span className="numeric-data">{((auditReport.summary.phiAccess / auditReport.summary.totalAccess) * 100).toFixed(1)}</span>% of events
             </div>
           </div>
 
@@ -251,11 +251,11 @@ export const AuditDashboard: React.FC<AuditDashboardProps> = ({ user }) => {
               <span className="text-sm text-gray-600">Failures</span>
               <AlertTriangleIcon className="w-4 h-4 text-gray-400" />
             </div>
-            <div className="text-3xl font-black text-red-600 mb-1">
+            <div className="text-3xl font-black text-red-600 mb-1 numeric-data">
               {auditReport.summary.failures}
             </div>
             <div className="text-xs text-gray-500">
-              {((auditReport.summary.failures / auditReport.summary.totalAccess) * 100).toFixed(1)}% failure rate
+              <span className="numeric-data">{((auditReport.summary.failures / auditReport.summary.totalAccess) * 100).toFixed(1)}</span>% failure rate
             </div>
           </div>
 
@@ -264,7 +264,7 @@ export const AuditDashboard: React.FC<AuditDashboardProps> = ({ user }) => {
               <span className="text-sm text-gray-600">Unique Users</span>
               <UserIcon className="w-4 h-4 text-gray-400" />
             </div>
-            <div className="text-3xl font-black text-purple-600 mb-1">
+            <div className="text-3xl font-black text-purple-600 mb-1 numeric-data">
               {auditReport.summary.uniqueUsers}
             </div>
             <div className="text-xs text-gray-500">

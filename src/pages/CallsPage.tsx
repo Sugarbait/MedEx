@@ -517,11 +517,13 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
             <span className="text-sm text-gray-600 dark:text-gray-400">Total Calls</span>
             <PhoneIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-1">
+          <div className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-1 numeric-data">
             {loading ? '...' : metrics.totalCalls}
           </div>
           <div className="text-xs text-gray-500 dark:text-gray-400">
-            {metrics.totalCalls > 0 ? `${metrics.totalCalls - metrics.failedCalls} completed, ${metrics.failedCalls} failed` : 'No calls made'}
+            {metrics.totalCalls > 0 ? (
+              <><span className="numeric-data">{metrics.totalCalls - metrics.failedCalls}</span> completed, <span className="numeric-data">{metrics.failedCalls}</span> failed</>
+            ) : 'No calls made'}
           </div>
         </div>
 
@@ -531,11 +533,11 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
             <span className="text-sm text-gray-600 dark:text-gray-400">Avg Call Duration</span>
             <ClockIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-1">
+          <div className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-1 numeric-data">
             {loading ? '...' : metrics.avgDuration}
           </div>
           <div className="text-xs text-gray-500 dark:text-gray-400">
-            Longest: {metrics.avgDuration}
+            Longest: <span className="numeric-data">{metrics.avgDuration}</span>
           </div>
         </div>
 
@@ -545,11 +547,11 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
             <span className="text-sm text-gray-600 dark:text-gray-400">Avg Cost Per Call</span>
             <DollarSignIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-1">
+          <div className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-1 numeric-data">
             CAD ${loading ? '...' : (metrics.avgCostPerCall || 0).toFixed(3)}
           </div>
           <div className="text-xs text-gray-500 dark:text-gray-400">
-            Total cost: CAD ${(metrics.totalCost || 0).toFixed(2)}
+            Total cost: CAD $<span className="numeric-data">{(metrics.totalCost || 0).toFixed(2)}</span>
           </div>
         </div>
 
@@ -559,11 +561,13 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
             <span className="text-sm text-gray-600 dark:text-gray-400">Success Rate</span>
             <TrendingUpIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-1">
+          <div className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-1 numeric-data">
             {loading ? '...' : `${metrics.successRate.toFixed(1)}%`}
           </div>
           <div className="text-xs text-gray-500 dark:text-gray-400">
-            {metrics.totalCalls > 0 ? `${metrics.totalCalls - metrics.failedCalls} goals achieved` : '0 goals achieved'}
+            {metrics.totalCalls > 0 ? (
+              <><span className="numeric-data">{metrics.totalCalls - metrics.failedCalls}</span> goals achieved</>
+            ) : (<><span className="numeric-data">0</span> goals achieved</>)}
           </div>
         </div>
 
@@ -573,7 +577,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
             <span className="text-sm text-gray-600 dark:text-gray-400">Total Duration</span>
             <ClockIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-1">
+          <div className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-1 numeric-data">
             {loading ? '...' : metrics.totalDuration}
           </div>
           <div className="text-xs text-gray-500 dark:text-gray-400">
@@ -587,11 +591,11 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
             <span className="text-sm text-gray-600 dark:text-gray-400">Total Minutes</span>
             <ClockIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-1">
+          <div className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-1 numeric-data">
             {loading ? '...' : (metrics.totalMinutes || 0)}
           </div>
           <div className="text-xs text-gray-500 dark:text-gray-400">
-            {metrics.totalCalls} calls
+            <span className="numeric-data">{metrics.totalCalls}</span> calls
           </div>
         </div>
 
@@ -601,7 +605,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
             <span className="text-sm text-gray-600 dark:text-gray-400">Highest Cost Call</span>
             <TrendingUpIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-1">
+          <div className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-1 numeric-data">
             CAD ${loading ? '...' : (metrics.highestCostCall || 0).toFixed(3)}
           </div>
           <div className="text-xs text-gray-500 dark:text-gray-400">

@@ -45,7 +45,58 @@
 
   /* Healthcare-specific typography */
   .healthcare-heading {
-    @apply font-semibold tracking-tight text-neutral-900;
+    @apply font-semibold tracking-tight text-neutral-900 font-title;
+  }
+
+  /* Title elements use Inter font */
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-title;
+  }
+
+  /* Bold all numeric data - use font-black (900) for maximum boldness */
+  .numeric-data {
+    @apply font-black !important;
+  }
+
+  /* Auto-bold numbers in specific contexts */
+  [data-type="number"],
+  .metric-value,
+  .count,
+  .amount,
+  .price,
+  .percentage,
+  .score,
+  .rating {
+    @apply font-black !important;
+  }
+
+  /* Ensure all text-3xl and text-2xl numeric displays use maximum bold */
+  .text-3xl.numeric-data,
+  .text-2xl.numeric-data,
+  .text-xl.numeric-data,
+  .text-5xl.numeric-data {
+    font-weight: 900 !important;
+  }
+
+  /* Force bold for any span with numeric-data class */
+  span.numeric-data {
+    font-weight: 900 !important;
+  }
+
+  /* Make all large text displays in cards extra bold by default */
+  .text-3xl, .text-2xl, .text-4xl, .text-5xl {
+    font-weight: 900 !important;
+  }
+
+  /* Ensure metric cards have bold numbers */
+  div[class*="text-3xl"][class*="text-blue"],
+  div[class*="text-3xl"][class*="text-green"],
+  div[class*="text-3xl"][class*="text-red"],
+  div[class*="text-3xl"][class*="text-purple"],
+  div[class*="text-2xl"][class*="text-blue"],
+  div[class*="text-2xl"][class*="text-purple"],
+  div[class*="text-5xl"][class*="text-green"] {
+    font-weight: 900 !important;
   }
 
   .healthcare-body {
@@ -225,7 +276,7 @@
 
   /* Dark mode typography */
   .dark .healthcare-heading {
-    @apply text-gray-100;
+    @apply text-gray-100 font-title;
   }
 
   .dark .healthcare-body {

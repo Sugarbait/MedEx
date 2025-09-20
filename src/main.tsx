@@ -4,9 +4,10 @@ import App from './App.tsx'
 import './index.css'
 
 // Import test utilities in development
-if (import.meta.env.DEV) {
-  import('./test/notesUuidFixTest')
-}
+// Commented out to fix blank page issue
+// if (import.meta.env.DEV) {
+//   import('./test/notesUuidFixTest')
+// }
 
 // Register service worker via virtual module
 if ('serviceWorker' in navigator) {

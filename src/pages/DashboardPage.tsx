@@ -3,6 +3,7 @@ import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { DateRangePicker, DateRange, getDateRangeFromSelection } from '@/components/common/DateRangePicker'
 import { retellService, currencyService, twilioCostService, chatService } from '@/services'
 import { pdfExportService } from '@/services/pdfExportService'
+import { UserSettingsService } from '@/services/userSettingsService'
 import {
   PhoneIcon,
   MessageSquareIcon,
@@ -355,15 +356,18 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
         })
         console.log(`Total chats fetched: ${allChatsResponse.chats.length}`)
 
-        // Define date range for chat filtering and SMS agent ID like SMS page
+        // Define date range for chat filtering and get SMS agent ID from settings
         const startMs = start.getTime()
         const endMs = end.getTime()
-        const SMS_AGENT_ID = 'agent_643486efd4b5a0e9d7e094ab99'
+
+        // Get SMS agent ID from settings
+        const apiConfig = await UserSettingsService.getApiConfiguration()
+        const SMS_AGENT_ID = apiConfig?.sms_agent_id || null
 
         // Filter chats by date range AND SMS agent like SMS page does
         const filteredChats = allChatsResponse.chats.filter(chat => {
-          // Filter by SMS agent first
-          if (chat.agent_id !== SMS_AGENT_ID) return false
+          // If SMS_AGENT_ID is configured, filter by it; otherwise show all chats
+          if (SMS_AGENT_ID && chat.agent_id !== SMS_AGENT_ID) return false
 
           // Check if timestamp is in seconds (10 digits) or milliseconds (13+ digits)
           let chatTimeMs: number
@@ -380,7 +384,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
           const isInRange = chatTimeMs >= startMs && chatTimeMs <= endMs
 
           // Debug logging for chat filtering
-          console.log(`SMS Chat ${chat.chat_id}: date=${new Date(chatTimeMs).toLocaleDateString()}, isInRange=${isInRange}`)
+          if (isInRange) {
+            console.log(`SMS Chat ${chat.chat_id}: date=${new Date(chatTimeMs).toLocaleDateString()}, agent=${chat.agent_id}`)
+          }
 
           return isInRange
         })
@@ -594,11 +600,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
                 <PhoneIcon className="w-5 h-5 text-blue-600" />
                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Call Costs</span>
               </div>
-              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+              <div className="text-2xl font-bold text-blue-600 dark:text-blue-400 numeric-data">
                 CAD ${isLoading ? '...' : (metrics.totalCost || 0).toFixed(2)}
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {metrics.totalCalls} calls
+                <span className="numeric-data">{metrics.totalCalls}</span> calls
               </div>
             </div>
 
@@ -608,7 +614,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
                 <DollarSignIcon className="w-6 h-6 text-green-600" />
                 <span className="text-lg font-semibold text-gray-900 dark:text-gray-100">Combined Service Cost</span>
               </div>
-              <div className="text-5xl font-black text-green-600 dark:text-green-400 mb-2">
+              <div className="text-5xl font-black text-green-600 dark:text-green-400 mb-2 numeric-data">
                 CAD ${isLoading ? '...' : ((metrics.totalCost || 0) + (metrics.totalSMSCost || 0)).toFixed(2)}
               </div>
               <div className="text-sm text-gray-500 dark:text-gray-400">
@@ -622,11 +628,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
                 <MessageSquareIcon className="w-5 h-5 text-purple-600" />
                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400">SMS Costs</span>
               </div>
-              <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
+              <div className="text-2xl font-bold text-purple-600 dark:text-purple-400 numeric-data">
                 CAD ${isLoading ? '...' : (metrics.totalSMSCost || 0).toFixed(2)}
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                {metrics.totalMessages} conversations
+                <span className="numeric-data">{metrics.totalMessages}</span> conversations
               </div>
             </div>
           </div>
@@ -641,11 +647,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
             <span className="text-sm text-gray-600 dark:text-gray-400">Total Calls</span>
             <PhoneIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 mb-1">
+          <div className="text-3xl font-black text-blue-600 mb-1 numeric-data">
             {isLoading ? '...' : metrics.totalCalls}
           </div>
           <div className="text-xs text-gray-500">
-            {metrics.totalCalls === 0 ? 'No calls made' : `${metrics.totalCalls} calls completed`}
+            {metrics.totalCalls === 0 ? 'No calls made' : (
+              <>
+                <span className="numeric-data">{metrics.totalCalls}</span> calls completed
+              </>
+            )}
           </div>
         </div>
 
@@ -655,11 +665,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
             <span className="text-sm text-gray-600 dark:text-gray-400">Total Talk Time</span>
             <ClockIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 mb-1">
+          <div className="text-3xl font-black text-blue-600 mb-1 numeric-data">
             {isLoading ? '...' : metrics.totalCallDuration}
           </div>
           <div className="text-xs text-gray-500">
-            Avg: {metrics.avgCallDuration}
+            Avg: <span className="numeric-data">{metrics.avgCallDuration}</span>
           </div>
         </div>
 
@@ -669,11 +679,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
             <span className="text-sm text-gray-600 dark:text-gray-400">Avg Cost Per Call</span>
             <DollarSignIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 mb-1">
+          <div className="text-3xl font-black text-blue-600 mb-1 numeric-data">
             CAD ${isLoading ? '...' : (metrics.avgCostPerCall || 0).toFixed(3)}
           </div>
           <div className="text-xs text-gray-500">
-            Total: CAD ${(metrics.totalCost || 0).toFixed(2)}
+            Total: CAD $<span className="numeric-data">{(metrics.totalCost || 0).toFixed(2)}</span>
           </div>
         </div>
 
@@ -683,11 +693,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
             <span className="text-sm text-gray-600 dark:text-gray-400">Highest Cost</span>
             <TrendingUpIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 mb-1">
+          <div className="text-3xl font-black text-blue-600 mb-1 numeric-data">
             CAD ${isLoading ? '...' : (metrics.highestCostCall || 0).toFixed(3)}
           </div>
           <div className="text-xs text-gray-500">
-            Lowest: CAD ${(metrics.lowestCostCall || 0).toFixed(3)}
+            Lowest: CAD $<span className="numeric-data">{(metrics.lowestCostCall || 0).toFixed(3)}</span>
           </div>
         </div>
 
@@ -701,7 +711,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
             <span className="text-sm text-gray-600 dark:text-gray-400">Total Messages</span>
             <MessageSquareIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 mb-1">
+          <div className="text-3xl font-black text-blue-600 mb-1 numeric-data">
             {isLoading ? '...' : metrics.totalMessages}
           </div>
           <div className="text-xs text-gray-500">
@@ -715,11 +725,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
             <span className="text-sm text-gray-600 dark:text-gray-400">Avg Messages Per Chat</span>
             <BarChart3Icon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 mb-1">
+          <div className="text-3xl font-black text-blue-600 mb-1 numeric-data">
             {isLoading ? '...' : (metrics.totalMessages > 0 ? (metrics.avgMessagesPerChat || 0).toFixed(1) : '0')}
           </div>
           <div className="text-xs text-gray-500">
-            {metrics.totalMessages > 0 ? `From ${metrics.totalMessages} conversations` : 'No conversations yet'}
+            {metrics.totalMessages > 0 ? (
+              <>From <span className="numeric-data">{metrics.totalMessages}</span> conversations</>
+            ) : 'No conversations yet'}
           </div>
         </div>
 
@@ -729,11 +741,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
             <span className="text-sm text-gray-600 dark:text-gray-400">Avg Cost Per Message</span>
             <DollarSignIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 mb-1">
+          <div className="text-3xl font-black text-blue-600 mb-1 numeric-data">
             CAD ${isLoading ? '...' : (metrics.avgCostPerMessage || 0).toFixed(3)}
           </div>
           <div className="text-xs text-gray-500">
-            Total cost: ${((metrics.avgCostPerMessage || 0) * metrics.totalMessages).toFixed(2)}
+            Total cost: $<span className="numeric-data">{((metrics.avgCostPerMessage || 0) * metrics.totalMessages).toFixed(2)}</span>
           </div>
         </div>
 
@@ -743,7 +755,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
             <span className="text-sm text-gray-600 dark:text-gray-400">Message Delivery Rate</span>
             <TrendingUpIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 mb-1">
+          <div className="text-3xl font-black text-blue-600 mb-1 numeric-data">
             {isLoading ? '...' : `${metrics.messageDeliveryRate.toFixed(1)}%`}
           </div>
           <div className="text-xs text-gray-500">
