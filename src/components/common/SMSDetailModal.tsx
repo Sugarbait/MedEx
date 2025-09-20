@@ -119,7 +119,29 @@ export const SMSDetailModal: React.FC<SMSDetailModalProps> = ({ message, isOpen,
 
   const { date, time, relative } = formatDateTime(message.timestamp)
   const messageLength = message.message_content.length
-  const smsSegments = Math.ceil(messageLength / 160)
+
+  // Calculate SMS segments using the same logic as the cost service
+  const calculateSMSSegments = (content: string): number => {
+    if (!content) return 0
+
+    // Standard SMS: 160 characters per segment
+    // With special characters/unicode: 70 characters per segment
+    const hasUnicode = /[^\x00-\x7F]/.test(content)
+    const maxCharsPerSegment = hasUnicode ? 70 : 160
+
+    return Math.ceil(content.length / maxCharsPerSegment)
+  }
+
+  const smsSegments = calculateSMSSegments(message.message_content)
+
+  // Debug logging to see what's causing the segment calculation issue
+  console.log('SMS Modal Debug:', {
+    messageContent: JSON.stringify(message.message_content),
+    messageLength: message.message_content.length,
+    hasUnicode: /[^\x00-\x7F]/.test(message.message_content),
+    calculatedSegments: smsSegments,
+    rawContent: message.message_content
+  })
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
