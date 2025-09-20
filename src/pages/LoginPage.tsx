@@ -593,8 +593,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           </form>
         </div>
 
-        <div className="text-center mt-6 text-xs text-gray-500">
-          © 2025 NexaSync. All rights reserved.
+        <div className="text-center mt-6">
+          <img
+            src="https://phaetonai.ca/clients/nexasync/images/nexasync-white.png"
+            alt="NexaSync Logo"
+            className="h-6 w-auto mx-auto mb-2 opacity-70"
+            onError={(e) => {
+              e.currentTarget.style.display = 'none'
+            }}
+          />
+          <div className="text-xs text-gray-500">
+            © 2025 NexaSync. All rights reserved.
+          </div>
         </div>
       </div>
     </div>
