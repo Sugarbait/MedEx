@@ -44,29 +44,77 @@ export const SMSDetailModal: React.FC<SMSDetailModalProps> = ({ message, isOpen,
   if (!isOpen) return null
 
   const formatDateTime = (timestamp: string) => {
-    // Handle both Unix timestamp (seconds) and milliseconds
-    let dateValue = parseInt(timestamp)
+    try {
+      let date: Date
 
-    // If timestamp appears to be in seconds (less than year 2100), convert to milliseconds
-    if (dateValue < 4102444800) { // Jan 1, 2100 in seconds
-      dateValue = dateValue * 1000
-    }
+      // First, check if it's already an ISO string or a valid date string
+      if (isNaN(Number(timestamp)) || timestamp.includes('-') || timestamp.includes('T')) {
+        date = new Date(timestamp)
+      } else {
+        // It's a numeric timestamp - determine if it's seconds or milliseconds
+        const numericTimestamp = parseInt(timestamp)
 
-    const date = new Date(dateValue)
+        // Timestamps in milliseconds are typically 13 digits (e.g., 1672531200000)
+        // Timestamps in seconds are typically 10 digits (e.g., 1672531200)
+        // We'll use a more reliable approach: check if the value represents a reasonable date
 
-    // Validate the date
-    if (isNaN(date.getTime())) {
+        // Try as milliseconds first
+        let testDate = new Date(numericTimestamp)
+
+        // If the date is invalid or before year 1980 or after year 2100, try as seconds
+        if (isNaN(testDate.getTime()) ||
+            testDate.getFullYear() < 1980 ||
+            testDate.getFullYear() > 2100) {
+          // Try multiplying by 1000 (convert seconds to milliseconds)
+          testDate = new Date(numericTimestamp * 1000)
+        }
+
+        // Final validation - if still invalid or unreasonable, default to current time
+        if (isNaN(testDate.getTime()) ||
+            testDate.getFullYear() < 1980 ||
+            testDate.getFullYear() > 2100) {
+          console.warn('Invalid timestamp detected:', timestamp)
+          date = new Date() // Use current time as fallback
+        } else {
+          date = testDate
+        }
+      }
+
+      // Final validation
+      if (isNaN(date.getTime())) {
+        return {
+          date: 'Invalid Date',
+          time: 'Invalid Time',
+          relative: 'Unknown'
+        }
+      }
+
+      // Format with proper options for better display
+      const dateOptions: Intl.DateTimeFormatOptions = {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric'
+      }
+
+      const timeOptions: Intl.DateTimeFormatOptions = {
+        hour: 'numeric',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      }
+
+      return {
+        date: date.toLocaleDateString('en-US', dateOptions),
+        time: date.toLocaleTimeString('en-US', timeOptions),
+        relative: getRelativeTime(date)
+      }
+    } catch (error) {
+      console.error('Error formatting timestamp:', timestamp, error)
       return {
         date: 'Invalid Date',
         time: 'Invalid Time',
         relative: 'Unknown'
       }
-    }
-
-    return {
-      date: date.toLocaleDateString(),
-      time: date.toLocaleTimeString(),
-      relative: getRelativeTime(date)
     }
   }
 
@@ -301,9 +349,35 @@ export const SMSDetailModal: React.FC<SMSDetailModalProps> = ({ message, isOpen,
                 <div>
                   <label className="text-gray-700 dark:text-gray-300 font-medium">Timestamp</label>
                   <p className="text-gray-600 dark:text-gray-400">{(() => {
-                    let dateValue = parseInt(message.timestamp)
-                    if (dateValue < 4102444800) dateValue = dateValue * 1000
-                    return new Date(dateValue).toISOString()
+                    try {
+                      let date: Date
+
+                      // Use the same robust parsing logic as formatDateTime
+                      if (isNaN(Number(message.timestamp)) || message.timestamp.includes('-') || message.timestamp.includes('T')) {
+                        date = new Date(message.timestamp)
+                      } else {
+                        const numericTimestamp = parseInt(message.timestamp)
+                        let testDate = new Date(numericTimestamp)
+
+                        if (isNaN(testDate.getTime()) ||
+                            testDate.getFullYear() < 1980 ||
+                            testDate.getFullYear() > 2100) {
+                          testDate = new Date(numericTimestamp * 1000)
+                        }
+
+                        if (isNaN(testDate.getTime()) ||
+                            testDate.getFullYear() < 1980 ||
+                            testDate.getFullYear() > 2100) {
+                          date = new Date()
+                        } else {
+                          date = testDate
+                        }
+                      }
+
+                      return isNaN(date.getTime()) ? 'Invalid timestamp' : date.toISOString()
+                    } catch (error) {
+                      return 'Invalid timestamp'
+                    }
                   })()}</p>
                 </div>
                 <div>

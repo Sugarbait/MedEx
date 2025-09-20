@@ -97,7 +97,8 @@
       "Bash(start http://localhost:3003)",
       "WebFetch(domain:localhost)",
       "Bash(npm ls:*)",
-      "Bash(tasklist)"
+      "Bash(tasklist)",
+      "Bash(del timestamp-test.js)"
     ],
     "deny": [],
     "ask": []
