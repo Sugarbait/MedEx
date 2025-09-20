@@ -53,13 +53,29 @@ class NotesService {
   private async getCurrentUserInfo() {
     try {
       const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
-      const { data: { user } } = await supabase.auth.getUser()
+
+      let user = null
+      try {
+        // Try to get user from Supabase auth, but don't fail if it's not available
+        const { data } = await supabase.auth.getUser()
+        user = data?.user
+      } catch (authError) {
+        console.log('Supabase auth not available, using localStorage user info')
+        // Gracefully continue with just localStorage info
+      }
 
       // Get the string ID first
       const stringId = user?.id || currentUser.id
 
-      // Convert to UUID for database storage
-      const uuid = await userIdTranslationService.stringToUuid(stringId)
+      // Convert to UUID for database storage, with fallback handling
+      let uuid = null
+      try {
+        uuid = await userIdTranslationService.stringToUuid(stringId)
+      } catch (translationError) {
+        console.log('User ID translation failed, using fallback')
+        // Use a deterministic fallback if translation service fails
+        uuid = stringId || 'anonymous-user'
+      }
 
       console.log('User ID translation:', { originalId: stringId, convertedUuid: uuid })
 
@@ -70,8 +86,9 @@ class NotesService {
       }
     } catch (error) {
       console.error('Error getting current user info:', error)
+      // Return a more robust fallback
       return {
-        id: null,
+        id: 'anonymous-user',
         name: 'Anonymous User',
         email: undefined
       }
@@ -200,6 +217,13 @@ class NotesService {
 
       if (error) {
         console.error('Supabase error fetching notes:', error)
+        // Return empty notes instead of failing for most database errors
+        if (error.message.includes('Failed to fetch') ||
+            error.message.includes('network') ||
+            error.message.includes('connection')) {
+          console.log('Network/connection error, returning empty notes')
+          return { success: true, notes: [] }
+        }
         return { success: false, error: error.message }
       }
 
@@ -207,12 +231,16 @@ class NotesService {
       return { success: true, notes: notes || [] }
     } catch (error) {
       console.error('Error fetching notes:', error)
-      // Gracefully handle connection failures - return empty notes array
-      if (error instanceof Error && error.message.includes('Failed to fetch')) {
-        console.log('Supabase not available, returning empty notes')
+      // Gracefully handle all connection failures - return empty notes array
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      if (errorMessage.includes('Failed to fetch') ||
+          errorMessage.includes('network') ||
+          errorMessage.includes('connection') ||
+          errorMessage.includes('TypeError')) {
+        console.log('Connection error, returning empty notes to prevent UI breakage')
         return { success: true, notes: [] }
       }
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+      return { success: false, error: errorMessage }
     }
   }
 
