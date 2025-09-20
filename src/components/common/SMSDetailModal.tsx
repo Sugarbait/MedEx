@@ -172,10 +172,11 @@ export const SMSDetailModal: React.FC<SMSDetailModalProps> = ({ message, isOpen,
 
   // Use the updated Twilio cost service for SMS segment calculation
   // This properly excludes role indicators and uses 160 chars per segment
+  // Fixed: Use the new combined calculation method for accurate segments
   const smsDebugInfo = twilioCostService.debugSMSCalculation([{ content: message.message_content }])
-  const smsSegments = smsDebugInfo.totalSegments
-  const cleanContent = smsDebugInfo.originalMessages[0]?.cleanContent || message.message_content
-  const cleanLength = smsDebugInfo.totalCleanChars
+  const smsSegments = smsDebugInfo.totalSegmentsCombined || smsDebugInfo.totalSegments
+  const cleanContent = smsDebugInfo.combinedCleanContent || smsDebugInfo.originalMessages[0]?.cleanContent || message.message_content
+  const cleanLength = smsDebugInfo.combinedCleanLength || smsDebugInfo.totalCleanChars
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">

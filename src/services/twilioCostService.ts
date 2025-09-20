@@ -143,19 +143,21 @@ class TwilioCostService {
   /**
    * Parse chat content to exclude role/title indicators
    * Removes "Patient", "AI Assistant" and similar role indicators
+   * Fixed: Added case-insensitive matching and improved pattern handling
    */
   private parseMessageContent(content: string): string {
     if (!content) return ''
 
     // Remove role indicators at the start of lines, including the newline if they're on their own line
     // Patterns: "Patient", "AI Assistant", "User", "Agent", etc.
+    // Fixed: Added case-insensitive flag (i) and improved whitespace handling
     const rolePatterns = [
-      /^Patient(?:\s*\n?)/gm,
-      /^AI Assistant(?:\s*\n?)/gm,
-      /^User(?:\s*\n?)/gm,
-      /^Agent(?:\s*\n?)/gm,
-      /^Assistant(?:\s*\n?)/gm,
-      /^Bot(?:\s*\n?)/gm
+      /^Patient(?:\s*\n?)/gmi,      // Case-insensitive
+      /^AI Assistant(?:\s*\n?)/gmi, // Case-insensitive
+      /^User(?:\s*\n?)/gmi,         // Case-insensitive
+      /^Agent(?:\s*\n?)/gmi,        // Case-insensitive
+      /^Assistant(?:\s*\n?)/gmi,    // Case-insensitive
+      /^Bot(?:\s*\n?)/gmi           // Case-insensitive
     ]
 
     let cleanContent = content
@@ -173,6 +175,7 @@ class TwilioCostService {
    * Calculate Twilio SMS cost for messages in a chat
    * @param messages Array of chat messages
    * @returns SMS cost breakdown
+   * Fixed: Now uses combined content approach for more accurate segment calculation
    */
   public calculateSMSCost(messages: any[]): TwilioSMSCostBreakdown {
     if (!messages || messages.length === 0) {
@@ -186,13 +189,14 @@ class TwilioCostService {
       }
     }
 
-    // Calculate total segments for all messages (excluding role indicators)
-    const totalSegments = messages.reduce((sum, message) => {
-      // Parse content to exclude role/title indicators
-      const cleanContent = this.parseMessageContent(message.content || '')
-      const segments = this.calculateSMSSegments(cleanContent)
-      return sum + segments
-    }, 0)
+    // Fixed: Combine all clean content first, then calculate segments
+    // This provides more accurate segment calculation for conversations
+    const allCleanContent = messages
+      .map(message => this.parseMessageContent(message.content || ''))
+      .filter(content => content.trim().length > 0) // Remove empty messages
+      .join(' ') // Join with space to ensure proper separation
+
+    const totalSegments = this.calculateSMSSegments(allCleanContent)
 
     // Calculate cost in USD first
     const costUSD = totalSegments * this.SMS_RATE_USD_PER_SEGMENT
@@ -227,10 +231,12 @@ class TwilioCostService {
     } catch (error) {
       this.handleCurrencyServiceError(error, 'getSMSCostCAD')
       // Return fallback cost calculation (excluding role indicators)
-      const totalSegments = messages.reduce((sum, message) => {
-        const cleanContent = this.parseMessageContent(message.content || '')
-        return sum + this.calculateSMSSegments(cleanContent)
-      }, 0)
+      // Fixed: Use combined approach for consistency
+      const allCleanContent = messages
+        .map(message => this.parseMessageContent(message.content || ''))
+        .filter(content => content.trim().length > 0)
+        .join(' ')
+      const totalSegments = this.calculateSMSSegments(allCleanContent)
       const costUSD = totalSegments * this.SMS_RATE_USD_PER_SEGMENT
       return costUSD * 1.35 // Fallback rate
     }
@@ -267,12 +273,16 @@ class TwilioCostService {
   /**
    * Debug method to test SMS calculation with parsed content
    * Shows character count, segments, and cost breakdown
+   * Fixed: Now shows both per-message and combined calculation methods
    */
   public debugSMSCalculation(messages: any[]): {
     originalMessages: { content: string; originalLength: number; cleanContent: string; cleanLength: number; segments: number }[]
     totalOriginalChars: number
     totalCleanChars: number
     totalSegments: number
+    totalSegmentsCombined: number
+    combinedCleanContent: string
+    combinedCleanLength: number
     costBreakdown: TwilioSMSCostBreakdown
   } {
     const originalMessages = messages.map(message => {
@@ -290,6 +300,15 @@ class TwilioCostService {
     const totalOriginalChars = originalMessages.reduce((sum, msg) => sum + msg.originalLength, 0)
     const totalCleanChars = originalMessages.reduce((sum, msg) => sum + msg.cleanLength, 0)
     const totalSegments = originalMessages.reduce((sum, msg) => sum + msg.segments, 0)
+
+    // Combined approach calculation (new method)
+    const combinedCleanContent = messages
+      .map(message => this.parseMessageContent(message.content || ''))
+      .filter(content => content.trim().length > 0)
+      .join(' ')
+    const combinedCleanLength = combinedCleanContent.length
+    const totalSegmentsCombined = this.calculateSMSSegments(combinedCleanContent)
+
     const costBreakdown = this.calculateSMSCost(messages)
 
     return {
@@ -297,6 +316,9 @@ class TwilioCostService {
       totalOriginalChars,
       totalCleanChars,
       totalSegments,
+      totalSegmentsCombined,
+      combinedCleanContent,
+      combinedCleanLength,
       costBreakdown
     }
   }
