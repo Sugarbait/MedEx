@@ -186,24 +186,30 @@ class SMSCostCacheService {
         throw new DOMException('Aborted', 'AbortError')
       }
 
-      // Use estimation as fallback
+      // Use realistic estimation as fallback based on actual conversation patterns
       console.warn(`[SMSCostCache] Using fallback estimation for ${chat.chat_id}:`, error)
 
-      let estimatedMessages = 2
-      if (chat.end_timestamp && chat.start_timestamp) {
-        const durationMinutes = (chat.end_timestamp - chat.start_timestamp) / 60
-        estimatedMessages = Math.max(2, Math.ceil(durationMinutes * 2))
-      }
-      estimatedMessages = Math.min(estimatedMessages, 20)
+      // Use realistic conversation templates that match actual SMS patterns
+      const estimatedMessages = [
+        {
+          content: 'User provided enrollment details and personal information for health services',
+          role: 'user'
+        },
+        {
+          content: 'Thank you for the details! I have formatted what you sent and filled in likely corrections. Please review and confirm if this is correct: Full Name, Date of Birth, Health Card Number (first 10 digits), Version Code, Sex (as on health card), Phone Number, Email Address. Is everything above correct? If yes, I will proceed with your enrollment. If anything is off, please resend with the corrected information in one line.',
+          role: 'agent'
+        },
+        {
+          content: 'Yes it is correct',
+          role: 'user'
+        },
+        {
+          content: 'Thanks! We have received your enrollment details. A CareXPS team member will review and reach out with next steps. Have a great day!',
+          role: 'agent'
+        }
+      ]
 
-      const mockMessages = Array(estimatedMessages).fill(null).map((_, i) => ({
-        message_id: `est_${i}`,
-        role: i % 2 === 0 ? 'user' : 'agent',
-        content: 'Average SMS message content for cost estimation',
-        created_timestamp: Date.now()
-      }))
-
-      return twilioCostService.getSMSCostCAD(mockMessages)
+      return twilioCostService.getSMSCostCAD(estimatedMessages)
     }
   }
 

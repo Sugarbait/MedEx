@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { useDebounce, useDebouncedCallback } from '@/hooks/useDebounce'
-import { useOptimizedSMSCosts } from '@/hooks/useOptimizedSMSCosts'
+import { useSMSCostManager } from '@/hooks/useSMSCostManager'
 import { DateRangePicker, DateRange, getDateRangeFromSelection } from '@/components/common/DateRangePicker'
 import { ChatDetailModal } from '@/components/common/ChatDetailModal'
 import { APIOptimizationDebugPanel } from '@/components/common/APIOptimizationDebugPanel'
@@ -91,11 +91,8 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     peakHourCount: 0
   })
 
-  // Optimized SMS cost management
-  const smsCostManager = useOptimizedSMSCosts({
-    visibleChatsOnly: false,
-    backgroundPriority: 'low',
-    maxConcurrentRequests: 3,
+  // SMS cost management using cache service
+  const smsCostManager = useSMSCostManager({
     onProgress: (loaded, total) => {
       console.log(`SMS cost loading progress: ${loaded}/${total}`)
     }
@@ -165,21 +162,12 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     debouncedFetchChats.debouncedCallback(true)
   }, [debouncedSearchTerm, debouncedStatusFilter, debouncedSentimentFilter])
 
-  // Optimized cost loading for visible chats
+  // Load SMS costs for visible chats
   useEffect(() => {
     if (chats.length > 0) {
-      // Load costs for visible chats with high priority
-      smsCostManager.loadVisibleCosts(chats)
+      smsCostManager.loadCostsForChats(chats)
     }
-  }, [chats])
-
-  // Background cost loading for all filtered chats (optimized)
-  useEffect(() => {
-    if (allFilteredChats.length > 0 && allFilteredChats.length <= 100) {
-      // Load background costs with low priority
-      smsCostManager.loadBackgroundCosts(allFilteredChats)
-    }
-  }, [allFilteredChats])
+  }, [chats, smsCostManager])
 
   // Optimized segment calculation using cost manager data
   useEffect(() => {
@@ -209,9 +197,19 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     if (allFilteredChats.length === 0) return
 
     const calculateMetrics = () => {
-      // Use optimized cost manager data
-      const totalCostFromFilteredChats = smsCostManager.totalCost
-      const avgCostPerChat = smsCostManager.averageCost
+      // Calculate total cost from all filtered chats
+      let totalCostFromFilteredChats = 0
+      let costsCalculated = 0
+
+      allFilteredChats.forEach(chat => {
+        const { cost } = smsCostManager.getChatCost(chat.chat_id)
+        if (cost > 0) {
+          totalCostFromFilteredChats += cost
+          costsCalculated++
+        }
+      })
+
+      const avgCostPerChat = costsCalculated > 0 ? totalCostFromFilteredChats / costsCalculated : 0
 
       // Calculate positive sentiment count from filtered chats
       const positiveSentimentCount = allFilteredChats.filter(chat =>
@@ -255,7 +253,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
 
     calculateMetrics()
-  }, [allFilteredChats, smsCostManager.totalCost, smsCostManager.averageCost, totalSegments])
+  }, [allFilteredChats, smsCostManager.costs, totalSegments])
 
   // Simplified chat fetching following CallsPage pattern
   const fetchChatsOptimized = useCallback(async (retryCount = 0) => {
