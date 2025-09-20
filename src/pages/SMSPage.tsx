@@ -538,18 +538,6 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
   return (
     <div className="p-6 space-y-6">
-      {/* Warning when SMS agent not configured */}
-      {!smsAgentConfigured && (
-        <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 flex items-center gap-3">
-          <AlertCircleIcon className="w-5 h-5 text-yellow-600 flex-shrink-0" />
-          <div>
-            <div className="text-yellow-800 font-medium">SMS Agent Not Configured</div>
-            <div className="text-yellow-700 text-sm mt-1">
-              Showing all chat messages. To filter by SMS agent, go to Settings → API Configuration and set your SMS Agent ID.
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
