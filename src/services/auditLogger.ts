@@ -375,29 +375,55 @@ class HIPAAAuditLogger {
    * Store audit entry in database
    */
   private async storeAuditEntry(encryptedEntry: any): Promise<void> {
-    // Temporarily disable Supabase and use only localStorage
-    // TODO: Re-enable Supabase once properly configured
-    console.log('Audit logging: Using localStorage only (Supabase disabled)')
-    this.storeAuditEntryLocally(encryptedEntry)
-    return
+    // HIPAA Compliance: Store audit logs server-side with localStorage backup
+    console.log('Audit logging: Storing to Supabase with localStorage backup')
 
-    /* Supabase integration disabled temporarily due to 404 errors
+    try {
+      // Primary: Store in Supabase database (HIPAA compliant)
+      await this.storeAuditEntrySupabase(encryptedEntry)
+    } catch (error) {
+      console.error('Primary audit storage failed, using backup:', error)
+      // Backup: Store locally only if server fails
+      this.storeAuditEntryLocally(encryptedEntry)
+    }
+
+  }
+
+  /**
+   * Store audit entry in Supabase database (HIPAA compliant)
+   */
+  private async storeAuditEntrySupabase(encryptedEntry: any): Promise<void> {
     try {
       const { error } = await supabase
         .from('audit_logs')
-        .insert([encryptedEntry])
+        .insert([{
+          id: encryptedEntry.id,
+          user_id: encryptedEntry.userId,
+          action: encryptedEntry.action,
+          resource_type: encryptedEntry.resourceType,
+          resource_id: encryptedEntry.resourceId,
+          outcome: encryptedEntry.outcome,
+          timestamp: encryptedEntry.timestamp,
+          ip_address: encryptedEntry.ipAddress,
+          user_agent: encryptedEntry.userAgent,
+          session_id: encryptedEntry.sessionId,
+          encrypted_details: encryptedEntry.encryptedDetails,
+          phi_accessed: encryptedEntry.phiAccessed || false,
+          compliance_flags: encryptedEntry.complianceFlags || [],
+          severity: encryptedEntry.severity || 'INFO',
+          created_at: new Date().toISOString()
+        }])
 
       if (error) {
-        console.warn('Supabase audit logging failed, falling back to local storage:', error.message)
-        // Fall back to local storage
-        this.storeAuditEntryLocally(encryptedEntry)
+        console.error('Supabase audit log error:', error)
+        throw new Error(`HIPAA audit storage failed: ${error.message}`)
       }
+
+      console.log('✅ HIPAA audit entry stored successfully in Supabase')
     } catch (error) {
-      console.warn('Supabase connection failed, using local storage for audit logs:', error)
-      // Fall back to local storage
-      this.storeAuditEntryLocally(encryptedEntry)
+      console.error('❌ Critical: HIPAA audit storage failed:', error)
+      throw error
     }
-    */
   }
 
   /**

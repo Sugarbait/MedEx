@@ -27,6 +27,30 @@ import { forcePierreUser } from '@/utils/forcePierreUser'
 // Use the SystemUserWithCredentials type from the service
 type User = SystemUserWithCredentials
 
+// Secure password generation utility - replaces hardcoded passwords
+const generateSecurePassword = (length: number = 16): string => {
+  const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'
+  const values = crypto.getRandomValues(new Uint32Array(length))
+
+  let password = ''
+  for (let i = 0; i < length; i++) {
+    password += charset[values[i] % charset.length]
+  }
+
+  // Ensure password complexity requirements
+  const hasUpper = /[A-Z]/.test(password)
+  const hasLower = /[a-z]/.test(password)
+  const hasNumber = /[0-9]/.test(password)
+  const hasSpecial = /[!@#$%^&*]/.test(password)
+
+  // Regenerate if doesn't meet complexity requirements
+  if (!hasUpper || !hasLower || !hasNumber || !hasSpecial) {
+    return generateSecurePassword(length)
+  }
+
+  return password
+}
+
 interface UserManagementPageProps {
   user: any
 }
@@ -54,28 +78,28 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
     {
       name: 'John Smith',
       email: 'john.smith@carexps.com',
-      password: 'User123!',
+      password: generateSecurePassword(),
       role: 'user' as const,
       description: 'Standard User Template'
     },
     {
       name: 'Super Admin',
       email: 'superadmin@carexps.com',
-      password: 'Super123!',
+      password: generateSecurePassword(),
       role: 'super_user' as const,
       description: 'Super User Template'
     },
     {
       name: 'Test User',
       email: 'test@carexps.com',
-      password: 'Test123!',
+      password: generateSecurePassword(),
       role: 'user' as const,
       description: 'Test User Template'
     },
     {
       name: 'Manager User',
       email: 'manager@carexps.com',
-      password: 'Manager123!',
+      password: generateSecurePassword(),
       role: 'super_user' as const,
       description: 'Manager Super User Template'
     }

@@ -218,10 +218,16 @@ Use the comprehensive fix instead.`
       // Reset demo user passwords
       result.details.push('2. Resetting demo user passwords...')
       const demoUserEmails = [
-        { email: 'pierre@phaetonai.com', password: 'Pierre123!' },
-        { email: 'demo@carexps.com', password: 'Demo123!' },
-        { email: 'elmfarrell@yahoo.com', password: 'Super123!' }
+        { email: 'pierre@phaetonai.com', password: this.generateSecurePassword() },
+        { email: 'demo@carexps.com', password: this.generateSecurePassword() },
+        { email: 'elmfarrell@yahoo.com', password: this.generateSecurePassword() }
       ]
+
+      // Log secure passwords for first-time setup (remove in production)
+      console.log('🔐 SECURITY: Demo account passwords generated (change on first login):')
+      demoUserEmails.forEach(user => {
+        console.log(`📧 ${user.email}: ${user.password}`)
+      })
 
       const demoUsers = []
       for (const userConfig of demoUserEmails) {
@@ -348,6 +354,33 @@ Use the comprehensive fix instead.`
         recommendations: ['Run emergency reset to restore functionality']
       }
     }
+  }
+
+  /**
+   * Generate cryptographically secure password
+   * Replaces hardcoded passwords for security compliance
+   */
+  private static generateSecurePassword(length: number = 16): string {
+    const charset = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*'
+    const values = crypto.getRandomValues(new Uint32Array(length))
+
+    let password = ''
+    for (let i = 0; i < length; i++) {
+      password += charset[values[i] % charset.length]
+    }
+
+    // Ensure password complexity requirements
+    const hasUpper = /[A-Z]/.test(password)
+    const hasLower = /[a-z]/.test(password)
+    const hasNumber = /[0-9]/.test(password)
+    const hasSpecial = /[!@#$%^&*]/.test(password)
+
+    // Regenerate if doesn't meet complexity requirements
+    if (!hasUpper || !hasLower || !hasNumber || !hasSpecial) {
+      return this.generateSecurePassword(length)
+    }
+
+    return password
   }
 }
 
