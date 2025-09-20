@@ -1,9 +1,50 @@
 {
   "navigationFallback": {
     "rewrite": "/index.html",
-    "exclude": ["/assets/*", "/api/*", "/manifest.webmanifest", "/sw.js", "/registerSW.js", "/workbox-*.js", "/*.{png,jpg,gif,svg,ico,css,js,json,woff,woff2,ttf}"]
+    "exclude": [
+      "/assets/*",
+      "/api/*",
+      "/*.{png,jpg,jpeg,gif,svg,ico,webp}",
+      "/*.{css,js,mjs}",
+      "/*.{json,xml,txt}",
+      "/*.{woff,woff2,ttf,eot}",
+      "/manifest.webmanifest",
+      "/sw.js",
+      "/registerSW.js",
+      "/workbox-*.js",
+      "/robots.txt",
+      "/sitemap.xml"
+    ]
   },
   "routes": [
+    {
+      "route": "/",
+      "rewrite": "/index.html"
+    },
+    {
+      "route": "/dashboard",
+      "rewrite": "/index.html"
+    },
+    {
+      "route": "/calls",
+      "rewrite": "/index.html"
+    },
+    {
+      "route": "/sms",
+      "rewrite": "/index.html"
+    },
+    {
+      "route": "/users",
+      "rewrite": "/index.html"
+    },
+    {
+      "route": "/settings",
+      "rewrite": "/index.html"
+    },
+    {
+      "route": "/login",
+      "rewrite": "/index.html"
+    },
     {
       "route": "/assets/*",
       "headers": {
@@ -24,7 +65,9 @@
     ".svg": "image/svg+xml",
     ".png": "image/png",
     ".jpg": "image/jpeg",
+    ".jpeg": "image/jpeg",
     ".gif": "image/gif",
+    ".webp": "image/webp",
     ".ico": "image/x-icon",
     ".woff2": "font/woff2",
     ".woff": "font/woff",
@@ -39,16 +82,6 @@
     "X-XSS-Protection": "1; mode=block",
     "Referrer-Policy": "strict-origin-when-cross-origin",
     "Content-Security-Policy": "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval' https://login.microsoftonline.com https://api.retellai.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://login.microsoftonline.com https://api.retellai.com https://*.supabase.co wss://*.supabase.co; frame-src 'self' https://login.microsoftonline.com;"
-  },
-  "responseOverrides": {
-    "404": {
-      "rewrite": "/index.html",
-      "statusCode": 200
-    },
-    "401": {
-      "redirect": "/login",
-      "statusCode": 302
-    }
   },
   "platform": {
     "apiRuntime": "node:18"

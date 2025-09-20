@@ -2,10 +2,32 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
+import { copyFileSync } from 'fs'
 
 export default defineConfig({
   plugins: [
     react(),
+    // Plugin to copy Azure Static Web Apps files
+    {
+      name: 'copy-azure-files',
+      generateBundle() {
+        // Copy staticwebapp.config.json to dist
+        try {
+          copyFileSync('staticwebapp.config.json', 'dist/staticwebapp.config.json')
+          console.log('✅ Copied staticwebapp.config.json to dist/')
+        } catch (error) {
+          console.warn('⚠️ Failed to copy staticwebapp.config.json:', error)
+        }
+
+        // Copy 404.html to dist
+        try {
+          copyFileSync('404.html', 'dist/404.html')
+          console.log('✅ Copied 404.html to dist/')
+        } catch (error) {
+          console.warn('⚠️ Failed to copy 404.html:', error)
+        }
+      }
+    },
     VitePWA({
       registerType: 'autoUpdate',
       includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],

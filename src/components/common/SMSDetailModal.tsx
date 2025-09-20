@@ -13,6 +13,7 @@ import {
   TrendingUpIcon,
   AlertCircleIcon
 } from 'lucide-react'
+import { EnhancedChatNotes } from '@/components/common/EnhancedChatNotes'
 
 interface SMSDetailModalProps {
   message: {
@@ -333,6 +334,19 @@ export const SMSDetailModal: React.FC<SMSDetailModalProps> = ({ message, isOpen,
                 {message.cost && <span>Cost: ${message.cost.toFixed(4)}</span>}
               </div>
             </div>
+
+            {/* Chat Notes Section */}
+            {message.metadata?.chat_id && (
+              <EnhancedChatNotes
+                chatId={message.metadata.chat_id}
+                referenceType="sms"
+                isReadonly={false}
+                onNotesChanged={() => {
+                  console.log('SMS Notes updated for chat:', message.metadata?.chat_id)
+                  // Optionally trigger refresh of parent data or show success message
+                }}
+              />
+            )}
 
             {/* Technical Details */}
             <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">

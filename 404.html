@@ -5,11 +5,51 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>CareXPS Healthcare CRM</title>
     <script>
-      // Redirect all 404s to index.html for client-side routing
-      window.location.replace('/');
+      // SPA fallback for Azure Static Web Apps
+      // Preserve the original URL path for client-side routing
+      (function() {
+        var path = window.location.pathname;
+        var search = window.location.search;
+        var hash = window.location.hash;
+
+        // Store the current path for the React Router to handle
+        sessionStorage.setItem('spa-redirect-path', path + search + hash);
+
+        // Redirect to index.html which will load the React app
+        window.location.replace('/');
+      })();
     </script>
   </head>
   <body>
-    <div>Redirecting...</div>
+    <div style="
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      font-family: system-ui, -apple-system, sans-serif;
+      background: #f9fafb;
+      color: #374151;
+    ">
+      <div style="text-align: center;">
+        <div style="
+          width: 48px;
+          height: 48px;
+          margin: 0 auto 16px;
+          border: 3px solid #3b82f6;
+          border-radius: 50%;
+          border-top-color: transparent;
+          animation: spin 1s linear infinite;
+        "></div>
+        <p>Loading CareXPS Healthcare CRM...</p>
+        <p style="font-size: 14px; color: #6b7280; margin-top: 8px;">
+          Initializing client-side routing
+        </p>
+      </div>
+    </div>
+    <style>
+      @keyframes spin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
   </body>
 </html>

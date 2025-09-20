@@ -588,6 +588,59 @@ export interface Database {
           updated_at?: string
         }
       }
+      notes: {
+        Row: {
+          id: string
+          reference_id: string
+          reference_type: 'call' | 'sms'
+          content: string
+          content_type: 'plain' | 'html' | 'markdown'
+          created_by: string | null
+          created_by_name: string
+          created_by_email: string | null
+          created_at: string
+          updated_at: string
+          is_edited: boolean
+          last_edited_by: string | null
+          last_edited_by_name: string | null
+          last_edited_at: string | null
+          metadata: Json | null
+        }
+        Insert: {
+          id?: string
+          reference_id: string
+          reference_type: 'call' | 'sms'
+          content: string
+          content_type?: 'plain' | 'html' | 'markdown'
+          created_by?: string | null
+          created_by_name: string
+          created_by_email?: string | null
+          created_at?: string
+          updated_at?: string
+          is_edited?: boolean
+          last_edited_by?: string | null
+          last_edited_by_name?: string | null
+          last_edited_at?: string | null
+          metadata?: Json | null
+        }
+        Update: {
+          id?: string
+          reference_id?: string
+          reference_type?: 'call' | 'sms'
+          content?: string
+          content_type?: 'plain' | 'html' | 'markdown'
+          created_by?: string | null
+          created_by_name?: string
+          created_by_email?: string | null
+          created_at?: string
+          updated_at?: string
+          is_edited?: boolean
+          last_edited_by?: string | null
+          last_edited_by_name?: string | null
+          last_edited_at?: string | null
+          metadata?: Json | null
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -722,7 +775,7 @@ export interface DecryptedCallNote extends Omit<Database['public']['Tables']['ca
 }
 
 // Real-time subscription types
-export type RealtimeChannel = 'user_settings' | 'calls' | 'sms_messages' | 'security_events' | 'call_notes'
+export type RealtimeChannel = 'user_settings' | 'calls' | 'sms_messages' | 'security_events' | 'call_notes' | 'notes'
 
 export interface RealtimePayload<T = any> {
   schema: string

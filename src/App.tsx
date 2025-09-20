@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom'
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom'
 import { supabase } from './config/supabase'
 import { auditLogger, AuditAction, ResourceType, AuditOutcome } from './services/auditLogger'
 import { userProfileService } from './services/userProfileService'
@@ -47,6 +47,27 @@ const getPageTitle = (pathname: string): string => {
     default:
       return 'Dashboard'
   }
+}
+
+// Component to handle SPA redirect from 404.html
+const SPARedirectHandler: React.FC = () => {
+  const navigate = useNavigate()
+
+  useEffect(() => {
+    // Check if there's a stored redirect path from 404.html
+    const storedPath = sessionStorage.getItem('spa-redirect-path')
+    if (storedPath && storedPath !== '/') {
+      console.log('🔄 SPA redirect detected, navigating to:', storedPath)
+      sessionStorage.removeItem('spa-redirect-path')
+
+      // Use setTimeout to ensure React Router is ready
+      setTimeout(() => {
+        navigate(storedPath, { replace: true })
+      }, 100)
+    }
+  }, [navigate])
+
+  return null
 }
 
 const AppContent: React.FC<{
@@ -698,6 +719,7 @@ const App: React.FC = () => {
 
   return (
     <Router>
+      <SPARedirectHandler />
       <AppContent
         user={user}
         mfaRequired={mfaRequired}
