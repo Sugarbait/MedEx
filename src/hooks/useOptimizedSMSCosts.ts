@@ -70,15 +70,23 @@ export function useOptimizedSMSCosts(options: OptimizedSMSCostOptions = {}) {
    */
   const calculateChatCost = useCallback(async (chat: Chat): Promise<number> => {
     try {
-      console.log(`Calculating SMS cost for chat ${chat.chat_id}:`, {
+      console.log(`🔍 SMS Cost Debug for chat ${chat.chat_id}:`, {
         hasMessages: !!chat.message_with_tool_calls,
-        messageCount: chat.message_with_tool_calls?.length || 0
+        messageCount: chat.message_with_tool_calls?.length || 0,
+        chatData: {
+          start_timestamp: chat.start_timestamp,
+          end_timestamp: chat.end_timestamp,
+          chat_status: chat.chat_status,
+          // Show first few characters of available data
+          availableFields: Object.keys(chat)
+        }
       })
 
       // Use the messages already available in the chat object
       const messages = chat.message_with_tool_calls || []
 
       if (messages.length > 0) {
+        console.log(`✅ Using actual messages for ${chat.chat_id}`)
         // Use actual messages if available
         return twilioCostService.getSMSCostCAD(messages)
       } else {
@@ -127,7 +135,8 @@ export function useOptimizedSMSCosts(options: OptimizedSMSCostOptions = {}) {
 
     if (chatsToLoad.length === 0) return
 
-    console.log(`[OptimizedSMSCosts] Loading visible costs for ${chatsToLoad.length} chats`)
+    console.log(`📊 [SMS Costs] Loading visible costs for ${chatsToLoad.length} chats:`,
+      chatsToLoad.map(chat => chat.chat_id))
 
     setState(prev => ({
       ...prev,
