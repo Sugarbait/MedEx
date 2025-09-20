@@ -162,14 +162,10 @@ class TwilioCostService {
     }
 
     // Calculate total segments for all messages
-    console.log('SMS Cost Calculation - Message Details:')
-    const totalSegments = messages.reduce((sum, message, index) => {
-      const content = message.content || ''
-      const segments = this.calculateSMSSegments(content)
-      console.log(`Message ${index + 1}: "${content.substring(0, 100)}..." (${content.length} chars, ${segments} segments)`)
+    const totalSegments = messages.reduce((sum, message) => {
+      const segments = this.calculateSMSSegments(message.content || '')
       return sum + segments
     }, 0)
-    console.log(`Total segments calculated: ${totalSegments}`)
 
     // Calculate cost in USD first
     const costUSD = totalSegments * this.SMS_RATE_USD_PER_SEGMENT
@@ -195,30 +191,20 @@ class TwilioCostService {
    */
   public getSMSCostCAD(messages: any[]): number {
     try {
-      console.log('SMS Cost Calculation:', {
-        messageCount: messages?.length || 0,
-        messages: messages?.map(m => ({ content: m?.content?.substring(0, 50) + '...', length: m?.content?.length || 0 })) || []
-      })
-
       if (!messages || messages.length === 0) {
-        console.log('No messages provided for SMS cost calculation')
         return 0
       }
 
       const result = this.calculateSMSCost(messages)
-      console.log('SMS Cost Result:', result)
       return result.costCAD
     } catch (error) {
-      console.error('SMS cost calculation error:', error)
       this.handleCurrencyServiceError(error, 'getSMSCostCAD')
       // Return fallback cost calculation
       const totalSegments = messages.reduce((sum, message) => {
         return sum + this.calculateSMSSegments(message.content || '')
       }, 0)
       const costUSD = totalSegments * this.SMS_RATE_USD_PER_SEGMENT
-      const fallbackCost = costUSD * 1.35 // Fallback rate
-      console.log('Using fallback SMS cost calculation:', { totalSegments, costUSD, fallbackCost })
-      return fallbackCost
+      return costUSD * 1.35 // Fallback rate
     }
   }
 

@@ -96,7 +96,8 @@
       "Bash(timeout 10 npm run dev)",
       "Bash(start http://localhost:3003)",
       "WebFetch(domain:localhost)",
-      "Bash(npm ls:*)"
+      "Bash(npm ls:*)",
+      "Bash(tasklist)"
     ],
     "deny": [],
     "ask": []

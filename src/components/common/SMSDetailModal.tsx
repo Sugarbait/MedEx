@@ -44,7 +44,25 @@ export const SMSDetailModal: React.FC<SMSDetailModalProps> = ({ message, isOpen,
   if (!isOpen) return null
 
   const formatDateTime = (timestamp: string) => {
-    const date = new Date(timestamp)
+    // Handle both Unix timestamp (seconds) and milliseconds
+    let dateValue = parseInt(timestamp)
+
+    // If timestamp appears to be in seconds (less than year 2100), convert to milliseconds
+    if (dateValue < 4102444800) { // Jan 1, 2100 in seconds
+      dateValue = dateValue * 1000
+    }
+
+    const date = new Date(dateValue)
+
+    // Validate the date
+    if (isNaN(date.getTime())) {
+      return {
+        date: 'Invalid Date',
+        time: 'Invalid Time',
+        relative: 'Unknown'
+      }
+    }
+
     return {
       date: date.toLocaleDateString(),
       time: date.toLocaleTimeString(),
@@ -260,7 +278,11 @@ export const SMSDetailModal: React.FC<SMSDetailModalProps> = ({ message, isOpen,
                 </div>
                 <div>
                   <label className="text-gray-700 dark:text-gray-300 font-medium">Timestamp</label>
-                  <p className="text-gray-600 dark:text-gray-400">{new Date(message.timestamp).toISOString()}</p>
+                  <p className="text-gray-600 dark:text-gray-400">{(() => {
+                    let dateValue = parseInt(message.timestamp)
+                    if (dateValue < 4102444800) dateValue = dateValue * 1000
+                    return new Date(dateValue).toISOString()
+                  })()}</p>
                 </div>
                 <div>
                   <label className="text-gray-700 dark:text-gray-300 font-medium">Status</label>

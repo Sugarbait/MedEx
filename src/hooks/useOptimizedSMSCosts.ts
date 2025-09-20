@@ -70,51 +70,36 @@ export function useOptimizedSMSCosts(options: OptimizedSMSCostOptions = {}) {
    */
   const calculateChatCost = useCallback(async (chat: Chat): Promise<number> => {
     try {
-      console.log(`🔍 SMS Cost Debug for chat ${chat.chat_id}:`, {
-        hasMessages: !!chat.message_with_tool_calls,
-        messageCount: chat.message_with_tool_calls?.length || 0,
-        chatData: {
-          start_timestamp: chat.start_timestamp,
-          end_timestamp: chat.end_timestamp,
-          chat_status: chat.chat_status,
-          // Show first few characters of available data
-          availableFields: Object.keys(chat)
-        }
-      })
 
       // Use the messages already available in the chat object
       const messages = chat.message_with_tool_calls || []
 
       if (messages.length > 0) {
-        console.log(`✅ Using actual messages for ${chat.chat_id}`)
         // Use actual messages if available
         return twilioCostService.getSMSCostCAD(messages)
       } else {
-        // Fallback to estimation based on available data
-        console.log(`No messages available for ${chat.chat_id}, using estimation`)
-
-        // More conservative estimation - SMS chats are typically short
-        let estimatedMessages = 4 // Default to 4 messages (2 user, 2 agent)
-        if (chat.end_timestamp && chat.start_timestamp) {
-          const durationMinutes = (chat.end_timestamp - chat.start_timestamp) / 60
-          // SMS chats are quick - estimate 1 message per minute, max 8 messages
-          estimatedMessages = Math.max(2, Math.min(8, Math.ceil(durationMinutes)))
-        }
-
-        console.log(`Estimating ${estimatedMessages} messages for chat ${chat.chat_id}`)
-
-        // Create realistic mock messages with varying lengths
-        const mockMessages = Array(estimatedMessages).fill(null).map((_, i) => {
-          const isLongMessage = i === 1 // Make the second message (AI response) longer
-          return {
-            content: isLongMessage
-              ? 'Thank you for providing your details. I have reviewed the information and everything appears to be in order. A member of our team will be in touch with you shortly to discuss the next steps in your enrollment process.'
-              : 'Thank you for your interest in our services.',
-            role: i % 2 === 0 ? 'user' : 'agent'
+        // Fallback to realistic estimation based on typical SMS patterns
+        // Most SMS chats follow this pattern: user query + AI response + confirmation + final response
+        const estimatedMessages = [
+          {
+            content: 'User provided enrollment details and personal information for health services',
+            role: 'user'
+          },
+          {
+            content: 'Thank you for the details! I have formatted what you sent and filled in likely corrections. Please review and confirm if this is correct: Full Name, Date of Birth, Health Card Number (first 10 digits), Version Code, Sex (as on health card), Phone Number, Email Address. Is everything above correct? If yes, I will proceed with your enrollment. If anything is off, please resend with the corrected information in one line.',
+            role: 'agent'
+          },
+          {
+            content: 'Yes it is correct',
+            role: 'user'
+          },
+          {
+            content: 'Thanks! We have received your enrollment details. A CareXPS team member will review and reach out with next steps. Have a great day!',
+            role: 'agent'
           }
-        })
+        ]
 
-        return twilioCostService.getSMSCostCAD(mockMessages)
+        return twilioCostService.getSMSCostCAD(estimatedMessages)
       }
     } catch (error) {
       console.error(`Failed to calculate cost for ${chat.chat_id}:`, error)
@@ -135,8 +120,6 @@ export function useOptimizedSMSCosts(options: OptimizedSMSCostOptions = {}) {
 
     if (chatsToLoad.length === 0) return
 
-    console.log(`📊 [SMS Costs] Loading visible costs for ${chatsToLoad.length} chats:`,
-      chatsToLoad.map(chat => chat.chat_id))
 
     setState(prev => ({
       ...prev,
