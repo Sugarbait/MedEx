@@ -584,39 +584,10 @@ export class RetellService {
         const errorText = await response.text()
         console.error('Chat API Error Response:', errorText)
 
-        // If 404, try alternative endpoints
+        // If 404, don't try alternative endpoints - /list-chat GET is the only correct one
         if (response.status === 404) {
-          console.log('Trying alternative chat endpoints...')
-
-          // Try v2 endpoint
-          const v2Response = await fetch(`${this.baseUrl}/v2/list-chat`, {
-            method: 'GET',
-            headers: this.getHeaders()
-          })
-
-          console.log('V2 Chat API Response Status:', v2Response.status, v2Response.statusText)
-
-          if (v2Response.ok) {
-            console.log('V2 chat endpoint worked!')
-            const data = await v2Response.json()
-            console.log('V2 Raw chat API response:', data)
-
-            // Handle different response structures
-            let allChats: RetellChat[] = []
-            if (Array.isArray(data)) {
-              allChats = data
-            } else if (data && data.chats && Array.isArray(data.chats)) {
-              allChats = data.chats
-            } else if (data && data.data && Array.isArray(data.data)) {
-              allChats = data.data
-            }
-
-            return {
-              chats: allChats,
-              pagination_key: undefined,
-              has_more: false
-            }
-          }
+          console.log('Chat API endpoint returned 404 - this may indicate API configuration issues')
+          console.log('Only /list-chat GET endpoint is supported for chat API')
         }
 
         throw new Error(`Failed to fetch chats: ${response.status} ${response.statusText}`)

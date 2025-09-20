@@ -67,7 +67,7 @@ class CurrencyService {
         .single()
 
       if (error) {
-        console.warn('💱 No exchange rate found in database, using fallback')
+        console.log('💱 No exchange rate found in database or connection unavailable, using fallback rate')
         return
       }
 
@@ -76,7 +76,12 @@ class CurrencyService {
 
       console.log('💱 Loaded exchange rate from database:', this.currentRate, 'CAD per USD')
     } catch (error) {
-      console.error('💱 Error loading exchange rate from database:', error)
+      // Gracefully handle connection failures - don't spam the console
+      if (error instanceof Error && (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED'))) {
+        console.log('💱 Database connection unavailable, using fallback exchange rate')
+      } else {
+        console.log('💱 Error loading exchange rate from database, using fallback:', error instanceof Error ? error.message : 'Unknown error')
+      }
     }
   }
 
@@ -189,13 +194,18 @@ class CurrencyService {
         })
 
       if (error) {
-        console.error('💱 Error saving rate to database:', error)
+        console.log('💱 Cannot save rate to database (connection unavailable), using in-memory fallback')
         return
       }
 
       console.log('💱 Rate saved to database successfully')
     } catch (error) {
-      console.error('💱 Database save error:', error)
+      // Gracefully handle connection failures
+      if (error instanceof Error && (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED'))) {
+        console.log('💱 Database connection unavailable, rate will be kept in memory only')
+      } else {
+        console.log('💱 Database save error, rate will be kept in memory only:', error instanceof Error ? error.message : 'Unknown error')
+      }
     }
   }
 

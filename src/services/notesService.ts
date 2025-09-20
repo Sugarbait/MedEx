@@ -282,6 +282,9 @@ class NotesService {
         )
         .subscribe((status) => {
           console.log('Notes subscription status:', status)
+          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.log('Notes realtime subscription failed - continuing with manual refresh only')
+          }
         })
 
       this.subscriptions.set(subscriptionKey, channel)

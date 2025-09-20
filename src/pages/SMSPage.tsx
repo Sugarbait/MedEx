@@ -1,8 +1,12 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useAutoRefresh } from '@/hooks/useAutoRefresh'
+import { useDebounce, useDebouncedCallback } from '@/hooks/useDebounce'
+import { useOptimizedSMSCosts } from '@/hooks/useOptimizedSMSCosts'
 import { DateRangePicker, DateRange, getDateRangeFromSelection } from '@/components/common/DateRangePicker'
 import { ChatDetailModal } from '@/components/common/ChatDetailModal'
+import { APIOptimizationDebugPanel } from '@/components/common/APIOptimizationDebugPanel'
 import { chatService, type Chat, type ChatListOptions } from '@/services/chatService'
+import { optimizedChatService } from '@/services/optimizedChatService'
 import { retellService } from '@/services'
 import { twilioCostService } from '@/services/twilioCostService'
 import { UserSettingsService } from '@/services/userSettingsService'
@@ -64,6 +68,13 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     const saved = localStorage.getItem('sms_page_date_range')
     return (saved as DateRange) || 'thisMonth'
   })
+
+  // Optimization state
+  const [lastDataFetch, setLastDataFetch] = useState<number>(0)
+  const [isSmartRefreshing, setIsSmartRefreshing] = useState(false)
+  const [showDebugPanel, setShowDebugPanel] = useState(false)
+  const mountedRef = useRef(true)
+  const currentFetchRef = useRef<AbortController | null>(null)
   const [metrics, setMetrics] = useState<ChatMetrics>({
     totalChats: 0,
     activeChats: 0,
@@ -80,123 +91,135 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     peakHour: 'N/A',
     peakHourCount: 0
   })
+
+  // Optimized SMS cost management
+  const smsCostManager = useOptimizedSMSCosts({
+    visibleChatsOnly: false,
+    backgroundPriority: 'low',
+    maxConcurrentRequests: 3,
+    onProgress: (loaded, total) => {
+      console.log(`SMS cost loading progress: ${loaded}/${total}`)
+    }
+  })
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null)
   const [isChatDetailModalOpen, setIsChatDetailModalOpen] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalChatsCount, setTotalChatsCount] = useState(0)
-  const [chatCosts, setChatCosts] = useState<Map<string, number>>(new Map())
   const [allFilteredChats, setAllFilteredChats] = useState<Chat[]>([])
   const [totalSegments, setTotalSegments] = useState<number>(0)
   const [smsAgentConfigured, setSmsAgentConfigured] = useState<boolean>(true)
   const recordsPerPage = 25
 
-  // Auto-refresh functionality
+  // Debounced search and filters
+  const { debouncedValue: debouncedSearchTerm } = useDebounce(searchTerm, 500, {
+    leading: false,
+    trailing: true,
+    maxWait: 2000
+  })
+
+  const { debouncedValue: debouncedStatusFilter } = useDebounce(statusFilter, 300)
+  const { debouncedValue: debouncedSentimentFilter } = useDebounce(sentimentFilter, 300)
+
+  // Optimized auto-refresh with smart change detection
   const { formatLastRefreshTime } = useAutoRefresh({
     enabled: true,
-    interval: 60000, // 1 minute
-    onRefresh: () => {
-      fetchChats()
-      console.log('SMS Chat page refreshed at:', new Date().toLocaleTimeString())
-    }
+    interval: 120000, // 2 minutes (reduced frequency)
+    onRefresh: useCallback(() => {
+      performSmartRefresh()
+    }, [])
   })
+
+  // Optimized data fetching
+  const debouncedFetchChats = useDebouncedCallback(
+    async (resetPage: boolean = false) => {
+      if (resetPage) {
+        setCurrentPage(1)
+      }
+      await fetchChatsOptimized()
+    },
+    300,
+    { leading: false, trailing: true }
+  )
 
   // Fetch chats when component mounts or date range changes
   useEffect(() => {
-    setCurrentPage(1) // Reset to first page when date range changes
-    fetchChats()
+    setCurrentPage(1)
+    smsCostManager.clearCosts() // Clear costs when date range changes
+    debouncedFetchChats.debouncedCallback(true)
   }, [selectedDateRange])
 
+  // Fetch when page changes (no debouncing for pagination)
   useEffect(() => {
-    fetchChats()
+    if (currentPage > 1) {
+      fetchChatsOptimized()
+    }
   }, [currentPage])
 
-  // Fetch costs for visible chats when chats or costs change (with rate limiting)
+  // Fetch when debounced filters change
   useEffect(() => {
-    const fetchVisibleChatCosts = async () => {
-      const uncachedChats = chats.filter(chat => !chatCosts.has(chat.chat_id))
-
-      // Limit to 5 concurrent requests to avoid rate limiting
-      for (let i = 0; i < uncachedChats.length; i += 5) {
-        const batch = uncachedChats.slice(i, i + 5)
-        await Promise.all(batch.map(chat => fetchChatCost(chat.chat_id)))
-
-        // Add 200ms delay between batches to respect rate limits
-        if (i + 5 < uncachedChats.length) {
-          await new Promise(resolve => setTimeout(resolve, 200))
-        }
-      }
+    if (debouncedSearchTerm !== searchTerm ||
+        debouncedStatusFilter !== statusFilter ||
+        debouncedSentimentFilter !== sentimentFilter) {
+      return // Wait for debouncing to complete
     }
+    setCurrentPage(1)
+    debouncedFetchChats.debouncedCallback(true)
+  }, [debouncedSearchTerm, debouncedStatusFilter, debouncedSentimentFilter])
 
+  // Optimized cost loading for visible chats
+  useEffect(() => {
     if (chats.length > 0) {
-      fetchVisibleChatCosts()
+      // Load costs for visible chats with high priority
+      smsCostManager.loadVisibleCosts(chats)
     }
   }, [chats])
 
-  // Fetch costs for ALL filtered chats (not just visible ones) - with aggressive rate limiting
+  // Background cost loading for all filtered chats (optimized)
   useEffect(() => {
-    const fetchAllFilteredChatCosts = async () => {
-      const uncachedChats = allFilteredChats.filter(chat => !chatCosts.has(chat.chat_id))
-
-      // More conservative: only 3 concurrent requests for background fetching
-      for (let i = 0; i < uncachedChats.length; i += 3) {
-        const batch = uncachedChats.slice(i, i + 3)
-        await Promise.all(batch.map(chat => fetchChatCost(chat.chat_id)))
-
-        // Longer delay for background fetching (500ms)
-        if (i + 3 < uncachedChats.length) {
-          await new Promise(resolve => setTimeout(resolve, 500))
-        }
-      }
-    }
-
-    // Only fetch background costs if we have less than 50 chats to avoid excessive API calls
-    if (allFilteredChats.length > 0 && allFilteredChats.length <= 50) {
-      fetchAllFilteredChatCosts()
+    if (allFilteredChats.length > 0 && allFilteredChats.length <= 100) {
+      // Load background costs with low priority
+      smsCostManager.loadBackgroundCosts(allFilteredChats)
     }
   }, [allFilteredChats])
 
-  // Calculate total segments for all filtered chats
+  // Optimized segment calculation using cost manager data
   useEffect(() => {
-    const calculateTotalSegments = async () => {
-      let segments = 0
-      for (const chat of allFilteredChats) {
-        try {
-          const chatSegments = await calculateChatSMSSegments(chat.chat_id)
-          segments += chatSegments
-        } catch (error) {
-          console.error('Error calculating segments for chat:', chat.chat_id, error)
-        }
-      }
-      setTotalSegments(segments)
-      console.log('Total SMS segments calculated:', segments, 'for', allFilteredChats.length, 'chats')
-    }
-
     if (allFilteredChats.length > 0) {
-      calculateTotalSegments()
-    }
-  }, [allFilteredChats])
-
-  // Recalculate total costs when chatCosts change
-  useEffect(() => {
-    const recalculateTotalCosts = () => {
-      // Calculate total cost from all filtered chats that have cached costs
-      let totalCostFromFilteredChats = 0
-      let chatsWithCosts = 0
+      // Use SMS cost manager's cached data when available
+      let totalSegments = 0
 
       allFilteredChats.forEach(chat => {
-        const cachedCost = chatCosts.get(chat.chat_id)
-        if (cachedCost !== undefined) {
-          totalCostFromFilteredChats += cachedCost
-          chatsWithCosts++
+        const { cost } = smsCostManager.getChatCost(chat.chat_id)
+        if (cost > 0) {
+          // Estimate segments from cost (cost per segment is ~$0.01 CAD)
+          const estimatedSegments = Math.max(1, Math.round(cost / 0.01))
+          totalSegments += estimatedSegments
+        } else {
+          // Fallback estimation
+          const estimatedMessages = chat.message_with_tool_calls?.length || 2
+          totalSegments += Math.max(1, estimatedMessages)
         }
       })
+
+      setTotalSegments(totalSegments)
+    }
+  }, [allFilteredChats, smsCostManager.costs])
+
+  // Optimized metrics calculation using cost manager
+  useEffect(() => {
+    if (allFilteredChats.length === 0) return
+
+    const calculateMetrics = () => {
+      // Use optimized cost manager data
+      const totalCostFromFilteredChats = smsCostManager.totalCost
+      const avgCostPerChat = smsCostManager.averageCost
 
       // Calculate positive sentiment count from filtered chats
       const positiveSentimentCount = allFilteredChats.filter(chat =>
         chat.chat_analysis?.user_sentiment === 'Positive'
       ).length
 
-      // Calculate peak hours from filtered chats
+      // Calculate peak hours from filtered chats (optimized)
       const hourCounts = allFilteredChats.reduce((acc, chat) => {
         const timestamp = chat.start_timestamp
         const chatTimeMs = timestamp.toString().length <= 10 ? timestamp * 1000 : timestamp
@@ -220,51 +243,36 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         peakHour = `${hour12}:00 ${ampm}`
       }
 
-      const sentimentBreakdown = allFilteredChats.reduce((acc, chat) => {
-        const sentiment = chat.chat_analysis?.user_sentiment || 'unknown'
-        acc[sentiment] = (acc[sentiment] || 0) + 1
-        return acc
-      }, {} as Record<string, number>)
-
-      console.log('✅ Sentiment analysis:', {
-        totalFilteredChats: allFilteredChats.length,
-        positiveSentimentCount,
-        sentimentBreakdown,
-        peakHour,
-        peakHourCount
-      })
-
-      // Update metrics with new total cost, segments, sentiment, and peak hours
+      // Update metrics efficiently
       setMetrics(prevMetrics => ({
         ...prevMetrics,
         totalCost: totalCostFromFilteredChats,
-        avgCostPerChat: allFilteredChats.length > 0 ? totalCostFromFilteredChats / allFilteredChats.length : 0,
+        avgCostPerChat,
         totalSMSSegments: totalSegments,
-        positiveSentimentCount: positiveSentimentCount,
-        peakHour: peakHour,
-        peakHourCount: peakHourCount
+        positiveSentimentCount,
+        peakHour,
+        peakHourCount
       }))
-
-      console.log('Total SMS cost recalculated:', {
-        totalFilteredChats: allFilteredChats.length,
-        chatsWithCosts,
-        totalCost: totalCostFromFilteredChats,
-        totalSegments,
-        positiveSentimentCount
-      })
     }
 
-    if (allFilteredChats.length > 0) {
-      recalculateTotalCosts()
-    }
-  }, [chatCosts, allFilteredChats, totalSegments])
+    calculateMetrics()
+  }, [allFilteredChats, smsCostManager.totalCost, smsCostManager.averageCost, totalSegments])
 
-  const fetchChats = async () => {
+  // Optimized chat fetching with intelligent caching
+  const fetchChatsOptimized = useCallback(async () => {
+    if (!mountedRef.current) return
+
+    // Cancel any ongoing fetch
+    if (currentFetchRef.current) {
+      currentFetchRef.current.abort()
+    }
+    currentFetchRef.current = new AbortController()
+
     setLoading(true)
     setError('')
 
     try {
-      // Skip credential reload if already configured to reduce overhead
+      // Configuration check (cached)
       if (!chatService.isConfigured()) {
         const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
         if (currentUser.id) {
@@ -274,24 +282,10 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
         if (!chatService.isConfigured()) {
           setError('API not configured. Go to Settings → API Configuration to set up your credentials.')
-          setChats([])  // Clear any existing chats
-          setAllFilteredChats([])  // Clear filtered chats
-          setTotalChatsCount(0)  // Reset count
-          setSmsAgentConfigured(false)  // Mark as not configured
-          setLoading(false)
-          return
-        }
-      }
-
-      // Skip connection test on subsequent calls for faster loading
-      const skipConnectionTest = chatService.isConfigured()
-      if (!skipConnectionTest) {
-        const connectionTest = await chatService.testConnection()
-        if (!connectionTest.success) {
-          setError(`API Connection Error: ${connectionTest.message}`)
-          setChats([])  // Clear any existing chats
-          setAllFilteredChats([])  // Clear filtered chats
-          setTotalChatsCount(0)  // Reset count
+          setChats([])
+          setAllFilteredChats([])
+          setTotalChatsCount(0)
+          setSmsAgentConfigured(false)
           setLoading(false)
           return
         }
@@ -300,7 +294,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       // Get date range for filtering
       const { start, end } = getDateRangeFromSelection(selectedDateRange)
 
-      // Get SMS agent ID from settings
+      // Get SMS agent ID from settings (cached)
       const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
       let SMS_AGENT_ID = null
 
@@ -311,77 +305,67 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         }
       }
 
-      // Update state to track if SMS agent is configured
       setSmsAgentConfigured(!!SMS_AGENT_ID)
 
-      // Optimized: Fetch with reduced limit and use pagination on server side if possible
-      const allChatsResponse = await chatService.getChatHistory({
-        limit: 500 // Reduced from 1000 for faster initial load
+      // Use optimized chat service with intelligent caching
+      const chatOptions: ChatListOptions = {
+        limit: Math.max(recordsPerPage * 2, 50), // Fetch more efficiently
+        filter_criteria: SMS_AGENT_ID ? { agent_id: SMS_AGENT_ID } : undefined
+      }
+
+      const allChatsResponse = await optimizedChatService.getOptimizedChats({
+        ...chatOptions,
+        priority: 'high',
+        backgroundRequest: false,
+        deltaUpdate: Date.now() - lastDataFetch < 300000 // Use delta if last fetch was < 5 min ago
       })
 
-      // Combined filtering for better performance
+      if (!mountedRef.current) return
+
+      // Optimized filtering
       const startMs = start.getTime()
       const endMs = end.getTime()
 
       const finalFiltered = allChatsResponse.chats.filter(chat => {
-        // If SMS_AGENT_ID is configured, filter by it; otherwise show all chats
-        if (SMS_AGENT_ID && chat.agent_id !== SMS_AGENT_ID) return false
-
-        // Optimized timestamp conversion
-        let chatTimeMs: number
         const timestamp = chat.start_timestamp
-        chatTimeMs = timestamp.toString().length <= 10 ? timestamp * 1000 : timestamp
-
+        const chatTimeMs = timestamp.toString().length <= 10 ? timestamp * 1000 : timestamp
         return chatTimeMs >= startMs && chatTimeMs <= endMs
       })
 
       setTotalChatsCount(finalFiltered.length)
       setAllFilteredChats(finalFiltered)
 
-      // Calculate pagination using filtered data
+      // Calculate pagination
       const startIndex = (currentPage - 1) * recordsPerPage
       const endIndex = startIndex + recordsPerPage
       const paginatedChats = finalFiltered.slice(startIndex, endIndex)
 
       setChats(paginatedChats)
+      setLastDataFetch(Date.now())
 
-      // Calculate metrics using filtered chat service
+      // Calculate metrics using optimized service
       const calculatedMetrics = chatService.getChatStats(finalFiltered)
+      setMetrics(prev => ({ ...prev, ...calculatedMetrics }))
 
-      // Calculate SMS costs for the filtered chats using cached values
-      const totalSMSCost = finalFiltered.reduce((sum, chat) => {
-        const cachedCost = chatCosts.get(chat.chat_id)
-        if (cachedCost !== undefined) {
-          return sum + cachedCost
-        }
-        // Fallback calculation if not cached yet
-        return sum + calculateChatSMSCost(chat)
-      }, 0)
-
-      // Update metrics with SMS costs
-      const updatedMetrics = {
-        ...calculatedMetrics,
-        totalCost: totalSMSCost,
-        avgCostPerChat: finalFiltered.length > 0 ? totalSMSCost / finalFiltered.length : 0
-      }
-
-      setMetrics(updatedMetrics)
-
-      console.log('SMS Chats fetched:', {
-        agentFilter: SMS_AGENT_ID || 'All agents (no filter)',
+      console.log('Optimized SMS Chats fetched:', {
+        agentFilter: SMS_AGENT_ID || 'All agents',
         displayedChats: paginatedChats.length,
         totalFilteredChats: finalFiltered.length,
-        configMessage: SMS_AGENT_ID ? 'Using configured SMS agent' : 'No SMS agent configured - showing all chats'
+        cacheUsed: Date.now() - lastDataFetch < 300000
       })
-      console.log('Chat Analytics:', calculatedMetrics)
 
     } catch (error) {
+      if (!mountedRef.current) return
+
       console.error('Failed to fetch chats:', error)
       setError(error instanceof Error ? error.message : 'Failed to fetch chat data')
     } finally {
-      setLoading(false)
+      if (mountedRef.current) {
+        setLoading(false)
+        currentFetchRef.current = null
+      }
     }
-  }
+  }, [selectedDateRange, currentPage, lastDataFetch])
 
 
 
@@ -474,113 +458,72 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
   }
 
-  // Calculate SMS segments for a chat
-  const calculateChatSMSSegments = async (chatId: string): Promise<number> => {
+  // Smart refresh that only updates when needed
+  const performSmartRefresh = useCallback(async () => {
+    if (!mountedRef.current || loading) return
+
+    setIsSmartRefreshing(true)
+
     try {
-      // Fetch full chat details to get messages
-      const fullChat = await chatService.getChatById(chatId)
+      const result = await optimizedChatService.smartRefresh(chats, {
+        limit: recordsPerPage * 2,
+        filter_criteria: smsAgentConfigured ? { agent_id: 'current_sms_agent' } : undefined
+      })
 
-      let messages = []
-      if (fullChat.message_with_tool_calls && Array.isArray(fullChat.message_with_tool_calls)) {
-        messages = fullChat.message_with_tool_calls
-      } else if (fullChat.transcript) {
-        messages = [{ content: fullChat.transcript, role: 'user' }]
+      if (result.hasChanges) {
+        console.log('Smart refresh detected changes, updating data')
+        await fetchChatsOptimized()
+      } else {
+        console.log('Smart refresh: no changes detected')
       }
-
-      // Calculate segments using twilio service logic
-      const breakdown = twilioCostService.getDetailedSMSBreakdown(messages)
-      return breakdown.segmentCount
     } catch (error) {
-      console.error('Error calculating SMS segments for chat:', chatId, error)
-      return 0
-    }
-  }
-
-  // Fetch full chat details and calculate SMS cost (with 429 handling)
-  const fetchChatCost = async (chatId: string): Promise<number> => {
-    try {
-      // Check if we already have the cost cached
-      if (chatCosts.has(chatId)) {
-        return chatCosts.get(chatId) || 0
+      console.warn('Smart refresh failed, falling back to full refresh:', error)
+      await fetchChatsOptimized()
+    } finally {
+      if (mountedRef.current) {
+        setIsSmartRefreshing(false)
       }
-
-      // Fetch full chat details to get messages
-      const fullChat = await chatService.getChatById(chatId)
-
-      let messages = []
-      if (fullChat.message_with_tool_calls && Array.isArray(fullChat.message_with_tool_calls)) {
-        messages = fullChat.message_with_tool_calls
-      } else if (fullChat.transcript) {
-        // If only transcript available, create a message for cost calculation
-        messages = [{ content: fullChat.transcript, role: 'user' }]
-      }
-
-      const cost = twilioCostService.getSMSCostCAD(messages)
-
-      // Cache the result
-      setChatCosts(prev => new Map(prev).set(chatId, cost))
-
-      return cost
-    } catch (error: any) {
-      // Handle rate limiting gracefully
-      if (error.message?.includes('429') || error.status === 429) {
-        console.log(`Rate limited for chat ${chatId}, will retry later`)
-        return 0 // Return 0 cost instead of failing
-      }
-
-      console.error('Error fetching chat cost for chat:', chatId, error)
-      return 0
     }
-  }
+  }, [chats, loading, smsAgentConfigured, fetchChatsOptimized])
 
-  const calculateChatSMSCost = (chat: Chat): number => {
-    // Return cached cost if available, otherwise return 0 and trigger async fetch
-    const cachedCost = chatCosts.get(chat.chat_id)
-    if (cachedCost !== undefined) {
-      return cachedCost
-    }
-
-    // Trigger async fetch but don't wait for it
-    fetchChatCost(chat.chat_id)
-
-    // Fallback: try to calculate from available data
-    try {
-      let messages = []
-      if (chat.message_with_tool_calls && Array.isArray(chat.message_with_tool_calls)) {
-        messages = chat.message_with_tool_calls
-      } else if (chat.transcript) {
-        messages = [{ content: chat.transcript, role: 'user' }]
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      mountedRef.current = false
+      if (currentFetchRef.current) {
+        currentFetchRef.current.abort()
       }
-
-      return twilioCostService.getSMSCostCAD(messages)
-    } catch (error) {
-      return 0
+      optimizedChatService.cancelAllOperations()
+      debouncedFetchChats.cancel()
     }
-  }
+  }, [])
 
-  const filteredChats = chats.filter(chat => {
-    const phoneNumber = chat.metadata?.phone_number || chat.metadata?.customer_phone_number || ''
-    const extractedName = chat.metadata?.patient_name ||
-                          chat.metadata?.customer_name ||
-                          chat.metadata?.caller_name ||
-                          chat.metadata?.name ||
-                          chat.collected_dynamic_variables?.patient_name ||
-                          chat.collected_dynamic_variables?.customer_name ||
-                          chat.collected_dynamic_variables?.name ||
-                          null
-    const patientName = extractedName || ''
+  // Memoized filtered chats for performance
+  const filteredChats = useMemo(() => {
+    return chats.filter(chat => {
+      const phoneNumber = chat.metadata?.phone_number || chat.metadata?.customer_phone_number || ''
+      const extractedName = chat.metadata?.patient_name ||
+                            chat.metadata?.customer_name ||
+                            chat.metadata?.caller_name ||
+                            chat.metadata?.name ||
+                            chat.collected_dynamic_variables?.patient_name ||
+                            chat.collected_dynamic_variables?.customer_name ||
+                            chat.collected_dynamic_variables?.name ||
+                            null
+      const patientName = extractedName || ''
 
-    const matchesSearch = !searchTerm ||
-      phoneNumber.includes(searchTerm) ||
-      patientName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      chat.transcript.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      chat.chat_id.toLowerCase().includes(searchTerm.toLowerCase())
+      const matchesSearch = !debouncedSearchTerm ||
+        phoneNumber.includes(debouncedSearchTerm) ||
+        patientName.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+        chat.transcript.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
+        chat.chat_id.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
 
-    const matchesStatus = statusFilter === 'all' || chat.chat_status === statusFilter
-    const matchesSentiment = sentimentFilter === 'all' || chat.chat_analysis?.user_sentiment === sentimentFilter
+      const matchesStatus = debouncedStatusFilter === 'all' || chat.chat_status === debouncedStatusFilter
+      const matchesSentiment = debouncedSentimentFilter === 'all' || chat.chat_analysis?.user_sentiment === debouncedSentimentFilter
 
-    return matchesSearch && matchesStatus && matchesSentiment
-  })
+      return matchesSearch && matchesStatus && matchesSentiment
+    })
+  }, [chats, debouncedSearchTerm, debouncedStatusFilter, debouncedSentimentFilter])
 
   return (
     <div className="p-6 space-y-6">
@@ -613,16 +556,17 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           <button
             onClick={() => {
               console.log('SMS page manual refresh triggered at:', new Date().toLocaleTimeString())
-              // Force a complete refresh by clearing error state and triggering fetch
+              // Clear caches and force a complete refresh
+              optimizedChatService.clearAllCaches()
+              smsCostManager.clearCosts()
               setError('')
-              setLoading(true)
-              fetchChats()
+              fetchChatsOptimized()
             }}
-            disabled={loading}
+            disabled={loading || isSmartRefreshing}
             className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 transition-colors disabled:opacity-50"
           >
-            <RefreshCwIcon className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+            <RefreshCwIcon className={`w-4 h-4 ${loading || isSmartRefreshing ? 'animate-spin' : ''}`} />
+            {isSmartRefreshing ? 'Smart Refresh...' : 'Refresh'}
           </button>
           <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
             <DownloadIcon className="w-4 h-4" />
@@ -630,8 +574,23 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           </button>
         </div>
       </div>
-      <div className="text-xs text-gray-500 mb-6">
-        Last refreshed: {formatLastRefreshTime()} (Auto-refresh every minute) | {totalChatsCount} total chats
+      <div className="text-xs text-gray-500 mb-6 flex items-center justify-between">
+        <div>
+          Last refreshed: {formatLastRefreshTime()} (Auto-refresh every 2 minutes) | {totalChatsCount} total chats
+        </div>
+        {smsCostManager.progress && (
+          <div className="flex items-center gap-2">
+            <div className="w-32 bg-gray-200 rounded-full h-1.5">
+              <div
+                className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+                style={{ width: `${(smsCostManager.progress.loaded / smsCostManager.progress.total) * 100}%` }}
+              ></div>
+            </div>
+            <span className="text-xs">
+              Loading costs: {smsCostManager.progress.loaded}/{smsCostManager.progress.total}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Key Metrics Grid */}
@@ -953,10 +912,14 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                             {/* Cost */}
                             <div className="col-span-2">
                               <div className="text-sm font-medium text-gray-900">
-                                ${(chatCosts.get(chat.chat_id) || calculateChatSMSCost(chat)).toFixed(3)}
+                                ${smsCostManager.getChatCost(chat.chat_id).cost.toFixed(3)}
                               </div>
                               <div className="text-xs text-gray-500">
-                                SMS Cost
+                                {smsCostManager.getChatCost(chat.chat_id).loading ? (
+                                  <span className="text-blue-600">Loading...</span>
+                                ) : (
+                                  'SMS Cost'
+                                )}
                               </div>
                             </div>
 
@@ -1063,7 +1026,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                                 {chat.message_with_tool_calls?.length || 0} msgs
                               </span>
                               <span className="text-green-600 font-medium">
-                                ${(chatCosts.get(chat.chat_id) || calculateChatSMSCost(chat)).toFixed(3)}
+                                ${smsCostManager.getChatCost(chat.chat_id).cost.toFixed(3)}
                               </span>
                             </div>
                           </div>
@@ -1183,6 +1146,12 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
             onEndChat={endChat}
           />
         )}
+
+        {/* API Optimization Debug Panel */}
+        <APIOptimizationDebugPanel
+          isVisible={showDebugPanel}
+          onToggle={() => setShowDebugPanel(!showDebugPanel)}
+        />
 
     </div>
   )

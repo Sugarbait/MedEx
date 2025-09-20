@@ -352,10 +352,9 @@ export class ChatService {
         return { success: false, message: 'API key not configured' }
       }
 
-      const response = await this.makeApiRequest(`${this.baseUrl}/v2/list-chat`, {
-        method: 'POST',
-        headers: this.getHeaders(),
-        body: JSON.stringify({ limit: 10 }) // Minimal test request
+      const response = await this.makeApiRequest(`${this.baseUrl}/list-chat?limit=10`, {
+        method: 'GET',
+        headers: this.getHeaders()
       })
 
       if (response.ok) {
@@ -435,11 +434,9 @@ export class ChatService {
 
       console.log('Chat Service: Making getChatHistory request with options:', options)
 
-      // Try multiple API endpoint approaches based on official documentation
-      // Prioritize v2 POST endpoint as it's the official method according to Retell AI docs
+      // Use the correct API endpoint based on retellService.ts implementation
+      // Only use the GET /list-chat endpoint which is the working one
       const endpoints = [
-        { url: `${this.baseUrl}/v2/list-chat`, method: 'POST' as const },
-        { url: `${this.baseUrl}/list-chat`, method: 'POST' as const },
         { url: `${this.baseUrl}/list-chat`, method: 'GET' as const }
       ]
 
@@ -452,77 +449,34 @@ export class ChatService {
         console.log(`Trying endpoint ${i + 1}/${endpoints.length}: ${endpoint.method} ${endpoint.url}`)
 
         try {
-          if (endpoint.method === 'GET') {
-            // Build query parameters for GET request
-            const queryParams = new URLSearchParams()
+          // Only GET method is supported for chat API
+          const queryParams = new URLSearchParams()
 
-            if (options.limit) {
-              queryParams.append('limit', options.limit.toString())
-            }
-
-            if (options.pagination_key) {
-              queryParams.append('pagination_key', options.pagination_key)
-            }
-
-            if (options.sort_order) {
-              queryParams.append('sort_order', options.sort_order)
-            }
-
-            // Add agent ID filter if available
-            if (this.smsAgentId && !options.filter_criteria?.agent_id && !options.skipFilters) {
-              queryParams.append('agent_id', this.smsAgentId)
-              console.log(`[ChatService] Adding agent_id filter to GET request: ${this.smsAgentId}`)
-            }
-
-            const url = `${endpoint.url}${queryParams.toString() ? '?' + queryParams.toString() : ''}`
-            console.log('Chat API Request URL:', url)
-
-            response = await this.makeApiRequest(url, {
-              method: 'GET',
-              headers: this.getHeaders()
-            })
-          } else {
-            // POST request with body parameters (similar to list-calls API)
-            const requestBody: any = {}
-
-            if (options.filter_criteria && !options.skipFilters) {
-              requestBody.filter_criteria = {
-                ...options.filter_criteria
-              }
-
-              // Add SMS agent ID to filter criteria if not already present
-              if (this.smsAgentId && !options.filter_criteria.agent_id) {
-                requestBody.filter_criteria.agent_id = this.smsAgentId
-                console.log(`[ChatService] Adding agent_id to existing filter_criteria: ${this.smsAgentId}`)
-              }
-            } else if (this.smsAgentId && !options.skipFilters) {
-              // Create filter criteria with just agent ID
-              requestBody.filter_criteria = {
-                agent_id: this.smsAgentId
-              }
-              console.log(`[ChatService] Creating new filter_criteria with agent_id: ${this.smsAgentId}`)
-            }
-
-            if (options.sort_order) {
-              requestBody.sort_order = options.sort_order
-            }
-
-            if (options.limit) {
-              requestBody.limit = options.limit
-            }
-
-            if (options.pagination_key) {
-              requestBody.pagination_key = options.pagination_key
-            }
-
-            console.log('Chat API Request Body:', JSON.stringify(requestBody, null, 2))
-
-            response = await this.makeApiRequest(endpoint.url, {
-              method: 'POST',
-              headers: this.getHeaders(),
-              body: JSON.stringify(requestBody)
-            })
+          if (options.limit) {
+            queryParams.append('limit', options.limit.toString())
           }
+
+          if (options.pagination_key) {
+            queryParams.append('pagination_key', options.pagination_key)
+          }
+
+          if (options.sort_order) {
+            queryParams.append('sort_order', options.sort_order)
+          }
+
+          // Add agent ID filter if available
+          if (this.smsAgentId && !options.filter_criteria?.agent_id && !options.skipFilters) {
+            queryParams.append('agent_id', this.smsAgentId)
+            console.log(`[ChatService] Adding agent_id filter to GET request: ${this.smsAgentId}`)
+          }
+
+          const url = `${endpoint.url}${queryParams.toString() ? '?' + queryParams.toString() : ''}`
+          console.log('Chat API Request URL:', url)
+
+          response = await this.makeApiRequest(url, {
+            method: 'GET',
+            headers: this.getHeaders()
+          })
 
           // If request was successful, break out of the loop
           if (response.ok) {

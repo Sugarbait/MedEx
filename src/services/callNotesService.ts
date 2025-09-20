@@ -164,7 +164,12 @@ export class CallNotesService {
         user_agent: navigator.userAgent
       })
     } catch (error) {
-      console.warn('Failed to log security event:', error)
+      // Gracefully handle connection failures - don't spam the console
+      if (error instanceof Error && (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED'))) {
+        // Silent fail when database is not available
+        return
+      }
+      console.log('Security event logging unavailable:', error instanceof Error ? error.message : 'Unknown error')
     }
   }
 

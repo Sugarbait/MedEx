@@ -238,12 +238,17 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
     setError('')
 
     try {
-      // Reload credentials (localStorage + Supabase sync)
-      await retellService.loadCredentialsAsync()
-      console.log('Reloaded credentials with cross-device sync:', {
-        hasApiKey: !!retellService.isConfigured(),
-        configured: retellService.isConfigured()
-      })
+      // Reload credentials (localStorage + Supabase sync) with error handling
+      try {
+        await retellService.loadCredentialsAsync()
+        console.log('Reloaded credentials with cross-device sync:', {
+          hasApiKey: !!retellService.isConfigured(),
+          configured: retellService.isConfigured()
+        })
+      } catch (error) {
+        console.log('Supabase credential sync failed, using localStorage fallback:', error)
+        // Continue with localStorage-only credentials
+      }
 
       // Check if Retell API is configured
       if (!retellService.isConfigured()) {
@@ -360,14 +365,26 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
         const startMs = start.getTime()
         const endMs = end.getTime()
 
-        // Get SMS agent ID from settings
+        // Get SMS agent ID from settings with fallback handling
         const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
         let SMS_AGENT_ID = null
 
         if (currentUser.id) {
-          const settingsResponse = await UserSettingsService.getUserSettings(currentUser.id)
-          if (settingsResponse.status === 'success' && settingsResponse.data?.retell_config) {
-            SMS_AGENT_ID = settingsResponse.data.retell_config.sms_agent_id || null
+          try {
+            const settingsResponse = await UserSettingsService.getUserSettings(currentUser.id)
+            if (settingsResponse.status === 'success' && settingsResponse.data?.retell_config) {
+              SMS_AGENT_ID = settingsResponse.data.retell_config.sms_agent_id || null
+            }
+          } catch (error) {
+            console.log('Supabase connection failed, falling back to localStorage settings')
+            // Fallback to localStorage settings when Supabase is not available
+            try {
+              const localSettings = JSON.parse(localStorage.getItem(`settings_${currentUser.id}`) || '{}')
+              SMS_AGENT_ID = localSettings.smsAgentId || null
+            } catch (localError) {
+              console.log('localStorage fallback also failed, continuing without SMS agent filter')
+              SMS_AGENT_ID = null
+            }
           }
         }
 

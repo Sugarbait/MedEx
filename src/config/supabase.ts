@@ -39,12 +39,24 @@ const createSupabaseClient = () => {
         params: {
           eventsPerSecond: 10
         },
-        // Configure WebSocket for localhost development
+        // Enhanced WebSocket configuration with better error handling
         logger: (level, message, details) => {
           if (level === 'error') {
-            console.error('Supabase Realtime error:', message, details)
+            // Don't spam the console with connection errors when Supabase is down
+            if (message.includes('WebSocket') || message.includes('connection') || message.includes('ECONNREFUSED')) {
+              console.log('Supabase realtime connection unavailable (working in offline mode)')
+            } else {
+              console.error('Supabase Realtime error:', message, details)
+            }
           }
-        }
+        },
+        // Add reconnection settings for better resilience
+        reconnectAfterMs: (tries) => {
+          // Exponential backoff with max delay of 30 seconds
+          return Math.min(1000 * Math.pow(2, tries), 30000)
+        },
+        maxReconnectAttempts: 5,
+        timeout: 10000
       },
       global: {
         headers: {

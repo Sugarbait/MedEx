@@ -27,7 +27,12 @@ export class SupabaseService {
         user_agent: navigator.userAgent
       })
     } catch (error) {
-      console.error('Failed to log security event:', error)
+      // Gracefully handle connection failures - don't spam the console
+      if (error instanceof Error && (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED'))) {
+        // Silent fail when database is not available
+        return
+      }
+      console.log('Security event logging unavailable:', error instanceof Error ? error.message : 'Unknown error')
     }
   }
 
@@ -103,7 +108,11 @@ export class SupabaseService {
           })
         } catch (auditError) {
           // Gracefully handle audit logging failures - don't break the main operation
-          console.warn('Audit logging failed (operation succeeded):', auditError)
+          if (auditError instanceof Error && (auditError.message.includes('Failed to fetch') || auditError.message.includes('ERR_CONNECTION_REFUSED'))) {
+            // Silent fail when database is not available
+          } else {
+            console.log('Audit logging unavailable (operation succeeded):', auditError instanceof Error ? auditError.message : 'Unknown error')
+          }
         }
       }
 
