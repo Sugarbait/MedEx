@@ -309,7 +309,11 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       console.log(`📊 Total SMS segments calculated: ${calculatedTotalSegments}`)
       setTotalSegments(calculatedTotalSegments)
 
-      // Calculate total cost from all filtered chats
+      // Calculate total cost from calculated segments (more accurate than individual chat costs)
+      const totalCostFromSegments = calculatedTotalSegments * 0.0083 // USD per segment
+      console.log(`💰 Total cost calculated from ${calculatedTotalSegments} segments: $${totalCostFromSegments.toFixed(4)} USD`)
+
+      // Also calculate from individual chat costs for comparison/fallback
       let totalCostFromFilteredChats = 0
       let costsCalculated = 0
 
@@ -321,7 +325,11 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         }
       })
 
-      const avgCostPerChat = costsCalculated > 0 ? totalCostFromFilteredChats / costsCalculated : 0
+      // Use segments-based calculation as primary, fallback to individual costs if no segments
+      const finalTotalCost = calculatedTotalSegments > 0 ? totalCostFromSegments : totalCostFromFilteredChats
+      const avgCostPerChat = allFilteredChats.length > 0 ? finalTotalCost / allFilteredChats.length : 0
+
+      console.log(`💰 Cost comparison - Segments: $${totalCostFromSegments.toFixed(4)}, Individual: $${totalCostFromFilteredChats.toFixed(4)}, Using: $${finalTotalCost.toFixed(4)}`)
 
       // Calculate positive sentiment count from filtered chats
       const positiveSentimentCount = allFilteredChats.filter(chat =>
@@ -358,14 +366,14 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       setMetrics(prevMetrics => {
         const updatedMetrics = {
           ...prevMetrics,
-          totalCost: totalCostFromFilteredChats,
+          totalCost: finalTotalCost, // Use segments-based calculation
           avgCostPerChat,
           totalSMSSegments: calculatedTotalSegments,
           positiveSentimentCount,
           peakHour,
           peakHourCount
         }
-        console.log(`💰 Updated metrics: Total SMS Segments = ${updatedMetrics.totalSMSSegments}`)
+        console.log(`💰 Updated metrics: Total SMS Segments = ${updatedMetrics.totalSMSSegments}, Total Cost = $${updatedMetrics.totalCost.toFixed(4)}`)
         return updatedMetrics
       })
     }
