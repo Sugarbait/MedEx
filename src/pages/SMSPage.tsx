@@ -113,23 +113,38 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       // Use the exact same method as SMS modal - using message_content directly
       let content = ''
 
+      console.log(`🔍 Calculating segments for chat ${chat.chat_id}:`, {
+        hasMessageWithToolCalls: !!(chat.message_with_tool_calls && Array.isArray(chat.message_with_tool_calls)),
+        messageCount: chat.message_with_tool_calls?.length,
+        hasTranscript: !!chat.transcript,
+        hasMessageContent: !!chat.message_content,
+        transcriptLength: chat.transcript?.length,
+        messageContentLength: chat.message_content?.length
+      })
+
       if (chat.message_with_tool_calls && Array.isArray(chat.message_with_tool_calls) && chat.message_with_tool_calls.length > 0) {
         // Join all message contents if we have multiple messages
         content = chat.message_with_tool_calls
           .map(msg => msg.content || '')
           .filter(c => c.trim().length > 0)
           .join(' ')
+        console.log(`📝 Using message_with_tool_calls, content length: ${content.length}`)
       } else if (chat.transcript) {
         content = chat.transcript
+        console.log(`📝 Using transcript, content length: ${content.length}`)
       } else if (chat.message_content) {
         content = chat.message_content
+        console.log(`📝 Using message_content, content length: ${content.length}`)
       }
 
       if (content && content.trim().length > 0) {
         // Use the exact same method as SMS modal
         const smsDebugInfo = twilioCostService.debugSMSCalculation([{ content: content }])
-        return smsDebugInfo.totalSegmentsCombined || smsDebugInfo.totalSegments
+        const segments = smsDebugInfo.totalSegmentsCombined || smsDebugInfo.totalSegments
+        console.log(`📊 Chat ${chat.chat_id} calculated segments: ${segments}`)
+        return segments
       } else {
+        console.log(`⚠️ No content found for chat ${chat.chat_id}, using fallback`)
         // Fallback: use estimated typical conversation pattern
         const estimatedMessages = [
           { content: 'Patient enrollment details and personal information', role: 'user' },
@@ -138,12 +153,15 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           { content: 'Thanks! Enrollment received, team will follow up', role: 'agent' }
         ]
         const fallbackDebugInfo = twilioCostService.debugSMSCalculation(estimatedMessages)
-        return fallbackDebugInfo.totalSegmentsCombined || fallbackDebugInfo.totalSegments
+        const fallbackSegments = fallbackDebugInfo.totalSegmentsCombined || fallbackDebugInfo.totalSegments
+        console.log(`📊 Chat ${chat.chat_id} fallback segments: ${fallbackSegments}`)
+        return fallbackSegments
       }
     } catch (error) {
-      console.error(`Error calculating SMS segments for chat ${chat.chat_id}:`, error)
+      console.error(`❌ Error calculating SMS segments for chat ${chat.chat_id}:`, error)
       // Return a more reasonable fallback based on typical message length
-      return 2 // More realistic fallback for a typical SMS conversation
+      console.log(`📊 Chat ${chat.chat_id} error fallback: 1 segment`)
+      return 1 // Use 1 as the error fallback to match what we're seeing
     }
   }, [])
 
