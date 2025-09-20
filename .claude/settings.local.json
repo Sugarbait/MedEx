@@ -91,7 +91,12 @@
       "Bash(git remote set-url:*)",
       "Bash(del nul)",
       "Bash(rm:*)",
-      "Bash(git rm:*)"
+      "Bash(git rm:*)",
+      "Bash(npx vite:*)",
+      "Bash(timeout 10 npm run dev)",
+      "Bash(start http://localhost:3003)",
+      "WebFetch(domain:localhost)",
+      "Bash(npm ls:*)"
     ],
     "deny": [],
     "ask": []

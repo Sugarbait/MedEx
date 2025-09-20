@@ -361,8 +361,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
         const endMs = end.getTime()
 
         // Get SMS agent ID from settings
-        const apiConfig = await UserSettingsService.getApiConfiguration()
-        const SMS_AGENT_ID = apiConfig?.sms_agent_id || null
+        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
+        let SMS_AGENT_ID = null
+
+        if (currentUser.id) {
+          const settingsResponse = await UserSettingsService.getUserSettings(currentUser.id)
+          if (settingsResponse.status === 'success' && settingsResponse.data?.retell_config) {
+            SMS_AGENT_ID = settingsResponse.data.retell_config.sms_agent_id || null
+          }
+        }
 
         // Filter chats by date range AND SMS agent like SMS page does
         const filteredChats = allChatsResponse.chats.filter(chat => {

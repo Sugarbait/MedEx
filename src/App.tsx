@@ -223,7 +223,7 @@ const App: React.FC = () => {
         ThemeManager.initialize()
 
         // Initialize cross-device settings synchronization
-        await UserSettingsService.initializeSync()
+        UserSettingsService.initialize()
 
         console.log('Basic security systems and cross-device sync initialized successfully')
       } catch (error) {
@@ -231,7 +231,10 @@ const App: React.FC = () => {
       }
     }
 
-    initializeSecurity()
+    // Don't wait for async initialization to complete
+    initializeSecurity().catch(error => {
+      console.error('Security initialization failed:', error)
+    })
 
     const loadUser = async () => {
       try {
@@ -246,7 +249,7 @@ const App: React.FC = () => {
           }
         })
 
-        // Temporarily use localStorage directly for stability
+        // Use localStorage directly for stability
         let storedUser = null
         try {
           const localStorageUser = localStorage.getItem('currentUser')
@@ -261,9 +264,15 @@ const App: React.FC = () => {
         if (storedUser) {
           const userData = storedUser
 
-          // Try to load full profile from Supabase
+          // Try to load full profile from Supabase with timeout
           try {
-            const profileResponse = await userProfileService.loadUserProfile(userData.id)
+            // Add timeout to prevent hanging
+            const profileResponse = await Promise.race([
+              userProfileService.loadUserProfile(userData.id),
+              new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Supabase timeout')), 5000)
+              )
+            ]) as any
 
             if (profileResponse.status === 'success' && profileResponse.data) {
               // Use Supabase data as primary source
