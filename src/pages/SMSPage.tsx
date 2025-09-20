@@ -170,22 +170,35 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
   }, [chats, smsCostManager])
 
-  // Optimized segment calculation using cost manager data
+  // Calculate total segments using the actual twilioCostService
   useEffect(() => {
     if (allFilteredChats.length > 0) {
-      // Use SMS cost manager's cached data when available
       let totalSegments = 0
 
       allFilteredChats.forEach(chat => {
-        const { cost } = smsCostManager.getChatCost(chat.chat_id)
-        if (cost > 0) {
-          // Estimate segments from cost (cost per segment is ~$0.01 CAD)
-          const estimatedSegments = Math.max(1, Math.round(cost / 0.01))
-          totalSegments += estimatedSegments
-        } else {
-          // Fallback estimation
-          const estimatedMessages = chat.message_with_tool_calls?.length || 2
-          totalSegments += Math.max(1, estimatedMessages)
+        try {
+          // Use actual messages if available for accurate segment calculation
+          const messages = chat.message_with_tool_calls || []
+
+          if (messages.length > 0) {
+            // Get actual segment count using the updated service
+            const breakdown = twilioCostService.getDetailedSMSBreakdown(messages)
+            totalSegments += breakdown.segmentCount
+          } else {
+            // Fallback: use estimated typical conversation pattern
+            const estimatedMessages = [
+              { content: 'Patient enrollment details and personal information', role: 'user' },
+              { content: 'AI Assistant confirmation response with formatted details for review', role: 'agent' },
+              { content: 'Yes', role: 'user' },
+              { content: 'Thanks! Enrollment received, team will follow up', role: 'agent' }
+            ]
+            const fallbackBreakdown = twilioCostService.getDetailedSMSBreakdown(estimatedMessages)
+            totalSegments += fallbackBreakdown.segmentCount
+          }
+        } catch (error) {
+          console.error(`Error calculating segments for chat ${chat.chat_id}:`, error)
+          // Minimal fallback
+          totalSegments += 1
         }
       })
 

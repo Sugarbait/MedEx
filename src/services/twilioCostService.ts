@@ -147,15 +147,15 @@ class TwilioCostService {
   private parseMessageContent(content: string): string {
     if (!content) return ''
 
-    // Remove role indicators at the start of lines
+    // Remove role indicators at the start of lines, including the newline if they're on their own line
     // Patterns: "Patient", "AI Assistant", "User", "Agent", etc.
     const rolePatterns = [
-      /^Patient\s*/gm,
-      /^AI Assistant\s*/gm,
-      /^User\s*/gm,
-      /^Agent\s*/gm,
-      /^Assistant\s*/gm,
-      /^Bot\s*/gm
+      /^Patient(?:\s*\n?)/gm,
+      /^AI Assistant(?:\s*\n?)/gm,
+      /^User(?:\s*\n?)/gm,
+      /^Agent(?:\s*\n?)/gm,
+      /^Assistant(?:\s*\n?)/gm,
+      /^Bot(?:\s*\n?)/gm
     ]
 
     let cleanContent = content
