@@ -107,6 +107,37 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   const [smsAgentId, setSmsAgentId] = useState<string>('')
   const recordsPerPage = 25
 
+  // Helper function to calculate SMS segments for a chat (same logic as ChatDetailModal)
+  const calculateChatSMSSegments = useCallback((chat: Chat): number => {
+    try {
+      let messages = []
+      if (chat.message_with_tool_calls && Array.isArray(chat.message_with_tool_calls)) {
+        messages = chat.message_with_tool_calls
+      } else if (chat.transcript) {
+        // If only transcript available, create a message for segment calculation
+        messages = [{ content: chat.transcript, role: 'user' }]
+      }
+
+      if (messages.length > 0) {
+        const breakdown = twilioCostService.getDetailedSMSBreakdown(messages)
+        return breakdown.segmentCount
+      } else {
+        // Fallback: use estimated typical conversation pattern
+        const estimatedMessages = [
+          { content: 'Patient enrollment details and personal information', role: 'user' },
+          { content: 'AI Assistant confirmation response with formatted details for review', role: 'agent' },
+          { content: 'Yes', role: 'user' },
+          { content: 'Thanks! Enrollment received, team will follow up', role: 'agent' }
+        ]
+        const fallbackBreakdown = twilioCostService.getDetailedSMSBreakdown(estimatedMessages)
+        return fallbackBreakdown.segmentCount
+      }
+    } catch (error) {
+      console.error(`Error calculating SMS segments for chat ${chat.chat_id}:`, error)
+      return 1 // Minimal fallback
+    }
+  }, [])
+
   // Debounced search and filters
   const { debouncedValue: debouncedSearchTerm } = useDebounce(searchTerm, 500, {
     leading: false,
@@ -142,6 +173,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   useEffect(() => {
     setCurrentPage(1)
     smsCostManager.clearCosts() // Clear costs when date range changes
+    setTotalSegments(0) // Reset segments count for new date range
     debouncedFetchChats.debouncedCallback(true)
   }, [selectedDateRange])
 
@@ -170,51 +202,25 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
   }, [chats, smsCostManager])
 
-  // Calculate total segments using the actual twilioCostService
+  // Calculate total segments using consistent helper function
   useEffect(() => {
     if (allFilteredChats.length > 0) {
       let totalSegments = 0
-      console.log(`📊 Calculating SMS segments for ${allFilteredChats.length} chats`)
+      console.log(`📊 Calculating SMS segments for ${allFilteredChats.length} chats using consistent helper method`)
 
       allFilteredChats.forEach((chat, index) => {
-        try {
-          // Use actual messages if available for accurate segment calculation
-          const messages = chat.message_with_tool_calls || []
-
-          if (messages.length > 0) {
-            // Get actual segment count using the updated service with combined method
-            const debugInfo = twilioCostService.debugSMSCalculation(messages)
-            const segments = debugInfo.totalSegmentsCombined || debugInfo.totalSegments
-            console.log(`Chat ${index + 1} (${chat.chat_id}): ${segments} segments`)
-            totalSegments += segments
-          } else {
-            // Fallback: use estimated typical conversation pattern
-            const estimatedMessages = [
-              { content: 'Patient enrollment details and personal information', role: 'user' },
-              { content: 'AI Assistant confirmation response with formatted details for review', role: 'agent' },
-              { content: 'Yes', role: 'user' },
-              { content: 'Thanks! Enrollment received, team will follow up', role: 'agent' }
-            ]
-            const fallbackDebugInfo = twilioCostService.debugSMSCalculation(estimatedMessages)
-            const fallbackSegments = fallbackDebugInfo.totalSegmentsCombined || fallbackDebugInfo.totalSegments
-            console.log(`Chat ${index + 1} (${chat.chat_id}): ${fallbackSegments} segments (fallback)`)
-            totalSegments += fallbackSegments
-          }
-        } catch (error) {
-          console.error(`Error calculating segments for chat ${chat.chat_id}:`, error)
-          // Minimal fallback
-          totalSegments += 1
-          console.log(`Chat ${index + 1} (${chat.chat_id}): 1 segment (error fallback)`)
-        }
+        const segments = calculateChatSMSSegments(chat)
+        console.log(`Chat ${index + 1} (${chat.chat_id}): ${segments} segments`)
+        totalSegments += segments
       })
 
-      console.log(`📊 Total SMS segments calculated: ${totalSegments}`)
+      console.log(`📊 Total SMS segments calculated: ${totalSegments} (matches individual chat calculations)`)
       setTotalSegments(totalSegments)
     } else {
       console.log(`📊 No chats to calculate segments for`)
       setTotalSegments(0)
     }
-  }, [allFilteredChats, smsCostManager.costs])
+  }, [allFilteredChats, calculateChatSMSSegments])
 
   // Optimized metrics calculation using cost manager
   useEffect(() => {
@@ -266,7 +272,11 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
       // Update metrics efficiently
       console.log(`💰 Updating metrics with totalSMSSegments: ${totalSegments}`)
-      console.log(`💰 Previous metrics before SMS segments update:`, metrics)
+
+      // Verification: Calculate individual segments sum for comparison
+      const verificationTotal = allFilteredChats.reduce((sum, chat) => sum + calculateChatSMSSegments(chat), 0)
+      console.log(`✅ Verification: Sum of individual chat segments: ${verificationTotal} (should match ${totalSegments})`)
+
       setMetrics(prevMetrics => {
         const updatedMetrics = {
           ...prevMetrics,
@@ -277,13 +287,13 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           peakHour,
           peakHourCount
         }
-        console.log(`💰 Updated metrics after SMS segments:`, updatedMetrics)
+        console.log(`💰 Updated metrics: Total SMS Segments = ${updatedMetrics.totalSMSSegments}`)
         return updatedMetrics
       })
     }
 
     calculateMetrics()
-  }, [allFilteredChats, smsCostManager.costs, totalSegments])
+  }, [allFilteredChats, smsCostManager.costs, totalSegments, calculateChatSMSSegments])
 
   // Simplified chat fetching following CallsPage pattern
   const fetchChatsOptimized = useCallback(async (retryCount = 0) => {
@@ -956,7 +966,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                                 {smsCostManager.getChatCost(chat.chat_id).loading ? (
                                   <span className="text-blue-600">Loading...</span>
                                 ) : (
-                                  'SMS Cost'
+                                  `${calculateChatSMSSegments(chat)} segments`
                                 )}
                               </div>
                             </div>
