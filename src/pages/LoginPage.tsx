@@ -496,29 +496,46 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex flex-col">
-      <div className="flex-1 flex items-center justify-center p-4">
+      <div className="flex-1 flex items-center justify-center p-4 py-8">
         <div className="max-w-md w-full">
-          {/* Header */}
+          {/* Header with Logo */}
           <div className="text-center mb-8">
-            <div className="flex justify-center mb-6">
+            <div className="flex justify-center mb-8">
               <img
                 src="https://carexps.nexasync.ca/images/Logo.png"
                 alt="CareXPS Logo"
-                className="h-16 w-auto object-contain"
+                className="h-20 w-auto object-contain"
+                onError={(e) => {
+                  // Fallback text if logo fails to load
+                  e.currentTarget.style.display = 'none'
+                  const parent = e.currentTarget.parentElement
+                  if (parent && !parent.querySelector('.logo-fallback')) {
+                    const fallback = document.createElement('div')
+                    fallback.className = 'logo-fallback text-4xl font-bold text-blue-600 dark:text-blue-400'
+                    fallback.textContent = 'CareXPS'
+                    parent.appendChild(fallback)
+                  }
+                }}
               />
             </div>
+            <h1 className="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-2">
+              CareXPS Healthcare CRM
+            </h1>
+            <p className="text-gray-600 dark:text-gray-300 text-sm">
+              Secure HIPAA-Compliant Platform
+            </p>
           </div>
 
           {/* Login Card */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8">
-          <div className="text-center mb-6">
-            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
-              Welcome Back
-            </h2>
-            <p className="text-gray-600 dark:text-gray-300">
-              Sign in to your healthcare account
-            </p>
-          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8 border border-gray-200 dark:border-gray-700">
+            <div className="text-center mb-6">
+              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+                Welcome Back
+              </h2>
+              <p className="text-gray-600 dark:text-gray-300">
+                Sign in to your healthcare account
+              </p>
+            </div>
 
           {/* Error Display */}
           {error && (
@@ -608,7 +625,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-medium py-3 px-4 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="w-full bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
             >
               {isLoading ? (
                 <>
@@ -616,16 +633,31 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                   Signing in...
                 </>
               ) : (
-                'Sign In'
+                <>
+                  <ShieldCheckIcon className="w-5 h-5" />
+                  Sign In
+                </>
               )}
             </button>
           </form>
-        </div>
+
+          {/* Demo Account Information */}
+          <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+            <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">Demo Accounts Available:</h3>
+            <div className="text-xs text-blue-700 dark:text-blue-300 space-y-1">
+              <div><strong>Admin:</strong> pierre@phaetonai.com / $Ineed1millie$_carexps</div>
+              <div><strong>Super User:</strong> elmfarrell@yahoo.com / Farrell1000!</div>
+              <div><strong>Staff:</strong> guest@email.com / Guest1000!</div>
+            </div>
+          </div>
+          </div>
         </div>
       </div>
 
-      {/* Footer */}
-      <Footer variant="transparent" />
+      {/* Footer with proper spacing */}
+      <div className="mt-auto py-4">
+        <Footer variant="transparent" />
+      </div>
     </div>
   )
 }
