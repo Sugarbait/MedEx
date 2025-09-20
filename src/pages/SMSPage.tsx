@@ -299,16 +299,6 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       // Update state to track if SMS agent is configured
       setSmsAgentConfigured(!!SMS_AGENT_ID)
 
-      // If SMS Agent ID is not configured, show the appropriate message and stop execution
-      if (!SMS_AGENT_ID) {
-        setError('API not configured. Go to Settings → API Configuration to set up your credentials.')
-        setChats([])  // Clear any existing chats
-        setAllFilteredChats([])  // Clear filtered chats
-        setTotalChatsCount(0)  // Reset count
-        setLoading(false)
-        return
-      }
-
       // Optimized: Fetch with reduced limit and use pagination on server side if possible
       const allChatsResponse = await chatService.getChatHistory({
         limit: 500 // Reduced from 1000 for faster initial load
