@@ -104,6 +104,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   const [allFilteredChats, setAllFilteredChats] = useState<Chat[]>([])
   const [totalSegments, setTotalSegments] = useState<number>(0)
   const [smsAgentConfigured, setSmsAgentConfigured] = useState<boolean>(true)
+  const [smsAgentId, setSmsAgentId] = useState<string>('')
   const recordsPerPage = 25
 
   // Debounced search and filters
@@ -453,7 +454,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     try {
       const result = await optimizedChatService.smartRefresh(chats, {
         limit: recordsPerPage * 2,
-        filter_criteria: smsAgentConfigured ? { agent_id: 'current_sms_agent' } : undefined
+        filter_criteria: smsAgentConfigured && smsAgentId ? { agent_id: smsAgentId } : undefined
       })
 
       if (result.hasChanges) {
@@ -470,7 +471,34 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         setIsSmartRefreshing(false)
       }
     }
-  }, [chats, loading, smsAgentConfigured, fetchChatsOptimized])
+  }, [chats, loading, smsAgentConfigured, smsAgentId, fetchChatsOptimized])
+
+  // Load SMS agent configuration on mount
+  useEffect(() => {
+    const loadSMSAgentConfig = async () => {
+      try {
+        // Load from user settings
+        const currentUser = UserSettingsService.getCurrentUser()
+        if (currentUser?.id) {
+          const settings = JSON.parse(localStorage.getItem(`settings_${currentUser.id}`) || '{}')
+          const agentId = settings.smsAgentId || ''
+
+          setSmsAgentId(agentId)
+          setSmsAgentConfigured(!!agentId)
+
+          console.log('SMS Agent Configuration:', {
+            agentId,
+            configured: !!agentId
+          })
+        }
+      } catch (error) {
+        console.error('Error loading SMS agent configuration:', error)
+        setSmsAgentConfigured(false)
+      }
+    }
+
+    loadSMSAgentConfig()
+  }, [])
 
   // Cleanup on unmount
   useEffect(() => {
