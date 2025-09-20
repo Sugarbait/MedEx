@@ -9,6 +9,7 @@ import { chatService, type Chat, type ChatListOptions } from '@/services/chatSer
 import { optimizedChatService } from '@/services/optimizedChatService'
 import { retellService } from '@/services'
 import { twilioCostService } from '@/services/twilioCostService'
+import { currencyService } from '@/services/currencyService'
 import { UserSettingsService } from '@/services/userSettingsService'
 import {
   MessageSquareIcon,
@@ -310,8 +311,9 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       setTotalSegments(calculatedTotalSegments)
 
       // Calculate total cost from calculated segments (more accurate than individual chat costs)
-      const totalCostFromSegments = calculatedTotalSegments * 0.0083 // USD per segment
-      console.log(`💰 Total cost calculated from ${calculatedTotalSegments} segments: $${totalCostFromSegments.toFixed(4)} USD`)
+      const totalCostFromSegmentsUSD = calculatedTotalSegments * 0.0083 // USD per segment
+      const totalCostFromSegments = currencyService.convertUSDToCAD(totalCostFromSegmentsUSD) // Convert to CAD
+      console.log(`💰 Total cost calculated from ${calculatedTotalSegments} segments: $${totalCostFromSegmentsUSD.toFixed(4)} USD → $${totalCostFromSegments.toFixed(4)} CAD`)
 
       // Also calculate from individual chat costs for comparison/fallback
       let totalCostFromFilteredChats = 0
@@ -329,7 +331,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       const finalTotalCost = calculatedTotalSegments > 0 ? totalCostFromSegments : totalCostFromFilteredChats
       const avgCostPerChat = allFilteredChats.length > 0 ? finalTotalCost / allFilteredChats.length : 0
 
-      console.log(`💰 Cost comparison - Segments: $${totalCostFromSegments.toFixed(4)}, Individual: $${totalCostFromFilteredChats.toFixed(4)}, Using: $${finalTotalCost.toFixed(4)}`)
+      console.log(`💰 Cost comparison - Segments: $${totalCostFromSegments.toFixed(4)} CAD, Individual: $${totalCostFromFilteredChats.toFixed(4)}, Using: $${finalTotalCost.toFixed(4)} CAD`)
 
       // Calculate positive sentiment count from filtered chats
       const positiveSentimentCount = allFilteredChats.filter(chat =>
@@ -373,7 +375,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           peakHour,
           peakHourCount
         }
-        console.log(`💰 Updated metrics: Total SMS Segments = ${updatedMetrics.totalSMSSegments}, Total Cost = $${updatedMetrics.totalCost.toFixed(4)}`)
+        console.log(`💰 Updated metrics: Total SMS Segments = ${updatedMetrics.totalSMSSegments}, Total Cost = $${updatedMetrics.totalCost.toFixed(4)} CAD`)
         return updatedMetrics
       })
     }
