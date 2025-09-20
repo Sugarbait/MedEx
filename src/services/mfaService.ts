@@ -52,7 +52,9 @@ class TOTPMFAService {
 
   constructor() {
     // Load existing sessions from localStorage on service initialization
+    console.log('🔐 MFA Service initializing, loading sessions from storage...')
     this.loadSessionsFromStorage()
+    console.log(`🔐 MFA Service initialized with ${this.activeSessions.size} active sessions`)
   }
 
   /**
@@ -557,7 +559,7 @@ class TOTPMFAService {
    * Fast synchronous method to get current session (optimized for auth flow)
    */
   getCurrentSessionSync(userId: string): MFASession | null {
-    // Find the most recent valid session for this user (optimized version)
+    // First check in-memory sessions
     let currentSession: MFASession | null = null
     let latestTime = 0
     const now = new Date()
@@ -573,6 +575,49 @@ class TOTPMFAService {
           }
         }
       }
+    }
+
+    // If no session found in memory, check localStorage as fallback (important for page refreshes)
+    if (!currentSession) {
+      console.log(`🔍 No MFA session found in memory for user ${userId}, checking localStorage...`)
+      try {
+        const storedSessions = localStorage.getItem(this.SESSION_STORAGE_KEY)
+        if (storedSessions) {
+          const sessionsArray = JSON.parse(storedSessions)
+          console.log(`📦 Found ${sessionsArray.length} stored sessions in localStorage`)
+
+          for (const { token, session } of sessionsArray) {
+            if (session.userId === userId) {
+              const expiresAt = new Date(session.expiresAt)
+              console.log(`⏰ Checking session for user ${userId}: expires at ${expiresAt.toISOString()}, now: ${now.toISOString()}`)
+
+              if (now <= expiresAt) {
+                const sessionTime = new Date(session.verifiedAt).getTime()
+                if (sessionTime > latestTime) {
+                  latestTime = sessionTime
+                  currentSession = {
+                    ...session,
+                    verifiedAt: new Date(session.verifiedAt),
+                    expiresAt: expiresAt
+                  }
+
+                  // Restore this session to memory for future calls
+                  this.activeSessions.set(token, currentSession)
+                  console.log(`✅ Restored valid MFA session for user ${userId} from localStorage`)
+                }
+              } else {
+                console.log(`❌ Session for user ${userId} has expired`)
+              }
+            }
+          }
+        } else {
+          console.log('📭 No MFA sessions found in localStorage')
+        }
+      } catch (error) {
+        console.warn('Failed to check localStorage for MFA session during refresh:', error)
+      }
+    } else {
+      console.log(`✅ Found valid MFA session in memory for user ${userId}`)
     }
 
     return currentSession
