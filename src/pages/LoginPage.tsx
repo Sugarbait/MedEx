@@ -495,168 +495,208 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex flex-col">
-      <div className="flex-1 flex items-center justify-center p-4 py-8">
-        <div className="max-w-md w-full">
-          {/* Header with Logo */}
-          <div className="text-center mb-8">
-            <div className="flex justify-center mb-8">
-              <img
-                src="https://carexps.nexasync.ca/images/Logo.png"
-                alt="CareXPS Logo"
-                className="h-20 w-auto object-contain"
-                onError={(e) => {
-                  // Fallback text if logo fails to load
-                  e.currentTarget.style.display = 'none'
-                  const parent = e.currentTarget.parentElement
-                  if (parent && !parent.querySelector('.logo-fallback')) {
-                    const fallback = document.createElement('div')
-                    fallback.className = 'logo-fallback text-4xl font-bold text-blue-600 dark:text-blue-400'
-                    fallback.textContent = 'CareXPS'
-                    parent.appendChild(fallback)
-                  }
-                }}
-              />
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-gray-100 dark:from-gray-900 dark:via-gray-800 dark:to-gray-700 flex flex-col">
+      {/* Main Content Container - ensures footer stays at bottom */}
+      <div className="flex-1 flex items-center justify-center px-4 py-12 relative">
+        {/* Centered Login Container */}
+        <div className="w-full max-w-md mx-auto relative z-10">
+
+          {/* Header Section with Logo and Branding */}
+          <div className="text-center mb-12">
+            {/* Logo Container with proper spacing */}
+            <div className="flex justify-center mb-6">
+              <div className="p-4 bg-white dark:bg-gray-800 rounded-2xl shadow-lg border border-gray-200 dark:border-gray-700">
+                <img
+                  src="https://carexps.nexasync.ca/images/Logo.png"
+                  alt="CareXPS Logo"
+                  className="h-16 w-auto object-contain"
+                  onError={(e) => {
+                    // Fallback text if logo fails to load
+                    e.currentTarget.style.display = 'none'
+                    const parent = e.currentTarget.parentElement
+                    if (parent && !parent.querySelector('.logo-fallback')) {
+                      const fallback = document.createElement('div')
+                      fallback.className = 'logo-fallback text-3xl font-bold text-blue-600 dark:text-blue-400 px-4 py-2'
+                      fallback.textContent = 'CareXPS'
+                      parent.appendChild(fallback)
+                    }
+                  }}
+                />
+              </div>
             </div>
-            <h1 className="text-2xl font-bold text-blue-600 dark:text-blue-400 mb-2">
-              CareXPS Healthcare CRM
-            </h1>
-            <p className="text-gray-600 dark:text-gray-300 text-sm">
-              Secure HIPAA-Compliant Platform
-            </p>
+
+            {/* Brand Title and Subtitle */}
+            <div className="space-y-3">
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 dark:from-blue-400 dark:to-blue-300 bg-clip-text text-transparent">
+                CareXPS Healthcare CRM
+              </h1>
+              <p className="text-gray-600 dark:text-gray-300 text-sm font-medium tracking-wide">
+                Secure HIPAA-Compliant Platform
+              </p>
+            </div>
           </div>
 
-          {/* Login Card */}
-          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl p-8 border border-gray-200 dark:border-gray-700">
-            <div className="text-center mb-6">
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-2">
+          {/* Login Form Card */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl border border-gray-200 dark:border-gray-700 overflow-hidden">
+            {/* Card Header */}
+            <div className="bg-gradient-to-r from-blue-600 to-blue-700 dark:from-blue-700 dark:to-blue-800 px-8 py-6 text-center">
+              <h2 className="text-xl font-semibold text-white mb-1">
                 Welcome Back
               </h2>
-              <p className="text-gray-600 dark:text-gray-300">
+              <p className="text-blue-100 text-sm">
                 Sign in to your healthcare account
               </p>
             </div>
 
-          {/* Error Display */}
-          {error && (
-            <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-center gap-3">
-              <AlertCircleIcon className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0" />
-              <span className="text-red-700 dark:text-red-300 text-sm">{error}</span>
-            </div>
-          )}
+            {/* Card Body */}
+            <div className="px-8 py-8">
+              {/* Error Display */}
+              {error && (
+                <div className="mb-6 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4 flex items-start gap-3">
+                  <AlertCircleIcon className="w-5 h-5 text-red-600 dark:text-red-400 flex-shrink-0 mt-0.5" />
+                  <span className="text-red-700 dark:text-red-300 text-sm leading-relaxed">{error}</span>
+                </div>
+              )}
 
-          {/* Warning Display */}
-          {warning && (
-            <div className="mb-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg p-4 flex items-center gap-3">
-              <AlertCircleIcon className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
-              <span className="text-yellow-700 dark:text-yellow-300 text-sm">{warning}</span>
-            </div>
-          )}
+              {/* Warning Display */}
+              {warning && (
+                <div className="mb-6 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-xl p-4 flex items-start gap-3">
+                  <AlertCircleIcon className="w-5 h-5 text-yellow-600 dark:text-yellow-400 flex-shrink-0 mt-0.5" />
+                  <span className="text-yellow-700 dark:text-yellow-300 text-sm leading-relaxed">{warning}</span>
+                </div>
+              )}
 
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Email Field */}
-            <div>
-              <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
-                Email Address
-              </label>
-              <input
-                id="email"
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="Enter your email"
-                autoComplete="email"
-                className="w-full px-3 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
-                required
-              />
-            </div>
+              {/* Login Form */}
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Email Field */}
+                <div className="space-y-2">
+                  <label htmlFor="email" className="block text-sm font-semibold text-gray-700 dark:text-gray-200">
+                    Email Address
+                  </label>
+                  <input
+                    id="email"
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="Enter your email address"
+                    autoComplete="email"
+                    className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400 transition-all duration-200"
+                    required
+                  />
+                </div>
 
-            {/* Password Field */}
-            <div>
-              <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
-                Password
-              </label>
-              <div className="relative">
-                <input
-                  id="password"
-                  type={showPassword ? 'text' : 'password'}
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Enter your password"
-                  autoComplete="current-password"
-                  className="w-full px-3 py-3 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400"
-                  required
-                />
+                {/* Password Field */}
+                <div className="space-y-2">
+                  <label htmlFor="password" className="block text-sm font-semibold text-gray-700 dark:text-gray-200">
+                    Password
+                  </label>
+                  <div className="relative">
+                    <input
+                      id="password"
+                      type={showPassword ? 'text' : 'password'}
+                      value={password}
+                      onChange={(e) => setPassword(e.target.value)}
+                      placeholder="Enter your password"
+                      autoComplete="current-password"
+                      className="w-full px-4 py-3 pr-12 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 dark:focus:ring-blue-400 focus:border-blue-500 dark:focus:border-blue-400 transition-all duration-200"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      className="absolute inset-y-0 right-0 pr-4 flex items-center hover:bg-gray-50 dark:hover:bg-gray-600/50 rounded-r-xl transition-colors duration-200"
+                      aria-label={showPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showPassword ? (
+                        <EyeOffIcon className="w-5 h-5 text-gray-400 dark:text-gray-300" />
+                      ) : (
+                        <EyeIcon className="w-5 h-5 text-gray-400 dark:text-gray-300" />
+                      )}
+                    </button>
+                  </div>
+                </div>
+
+                {/* Remember Me & Forgot Password */}
+                <div className="flex items-center justify-between pt-2">
+                  <div className="flex items-center">
+                    <input
+                      id="remember-me"
+                      type="checkbox"
+                      className="h-4 w-4 text-blue-600 dark:text-blue-400 focus:ring-blue-500 dark:focus:ring-blue-400 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded transition-colors"
+                    />
+                    <label htmlFor="remember-me" className="ml-3 block text-sm text-gray-700 dark:text-gray-200 font-medium">
+                      Remember me
+                    </label>
+                  </div>
+                  <button
+                    type="button"
+                    className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 focus:outline-none focus:underline font-medium transition-colors"
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+
+                {/* Submit Button */}
                 <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 pr-3 flex items-center hover:bg-gray-100 dark:hover:bg-gray-600 rounded-r-lg transition-colors"
+                  type="submit"
+                  disabled={isLoading}
+                  className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 dark:from-blue-500 dark:to-blue-600 dark:hover:from-blue-600 dark:hover:to-blue-700 text-white font-semibold py-3.5 px-4 rounded-xl transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 mt-8"
                 >
-                  {showPassword ? (
-                    <EyeOffIcon className="w-5 h-5 text-gray-400 dark:text-gray-300" />
+                  {isLoading ? (
+                    <>
+                      <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      <span>Signing in...</span>
+                    </>
                   ) : (
-                    <EyeIcon className="w-5 h-5 text-gray-400 dark:text-gray-300" />
+                    <>
+                      <ShieldCheckIcon className="w-5 h-5" />
+                      <span>Sign In Securely</span>
+                    </>
                   )}
                 </button>
+              </form>
+            </div>
+
+            {/* Demo Account Information - Separate Card Section */}
+            <div className="border-t border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/50 px-8 py-6">
+              <div className="text-center mb-4">
+                <h3 className="text-sm font-semibold text-gray-800 dark:text-gray-200 mb-3">
+                  Demo Accounts Available
+                </h3>
+              </div>
+              <div className="space-y-3">
+                <div className="bg-white dark:bg-gray-700/50 rounded-lg p-3 border border-gray-200 dark:border-gray-600">
+                  <div className="text-xs">
+                    <div className="font-semibold text-purple-700 dark:text-purple-300 mb-1">Administrator</div>
+                    <div className="text-gray-600 dark:text-gray-300">pierre@phaetonai.com</div>
+                    <div className="text-gray-500 dark:text-gray-400 font-mono">$Ineed1millie$_carexps</div>
+                  </div>
+                </div>
+                <div className="bg-white dark:bg-gray-700/50 rounded-lg p-3 border border-gray-200 dark:border-gray-600">
+                  <div className="text-xs">
+                    <div className="font-semibold text-blue-700 dark:text-blue-300 mb-1">Super User</div>
+                    <div className="text-gray-600 dark:text-gray-300">elmfarrell@yahoo.com</div>
+                    <div className="text-gray-500 dark:text-gray-400 font-mono">Farrell1000!</div>
+                  </div>
+                </div>
+                <div className="bg-white dark:bg-gray-700/50 rounded-lg p-3 border border-gray-200 dark:border-gray-600">
+                  <div className="text-xs">
+                    <div className="font-semibold text-green-700 dark:text-green-300 mb-1">Staff User</div>
+                    <div className="text-gray-600 dark:text-gray-300">guest@email.com</div>
+                    <div className="text-gray-500 dark:text-gray-400 font-mono">Guest1000!</div>
+                  </div>
+                </div>
               </div>
             </div>
-
-            {/* Remember Me & Forgot Password */}
-            <div className="flex items-center justify-between">
-              <div className="flex items-center">
-                <input
-                  id="remember-me"
-                  type="checkbox"
-                  className="h-4 w-4 text-blue-600 dark:text-blue-400 focus:ring-blue-500 dark:focus:ring-blue-400 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 rounded"
-                />
-                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-700 dark:text-gray-200">
-                  Remember me
-                </label>
-              </div>
-              <button
-                type="button"
-                className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-500 dark:hover:text-blue-300 focus:outline-none focus:underline"
-              >
-                Forgot password?
-              </button>
-            </div>
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={isLoading}
-              className="w-full bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 text-white font-medium py-3 px-4 rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
-            >
-              {isLoading ? (
-                <>
-                  <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                  Signing in...
-                </>
-              ) : (
-                <>
-                  <ShieldCheckIcon className="w-5 h-5" />
-                  Sign In
-                </>
-              )}
-            </button>
-          </form>
-
-          {/* Demo Account Information */}
-          <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg">
-            <h3 className="text-sm font-medium text-blue-800 dark:text-blue-200 mb-2">Demo Accounts Available:</h3>
-            <div className="text-xs text-blue-700 dark:text-blue-300 space-y-1">
-              <div><strong>Admin:</strong> pierre@phaetonai.com / $Ineed1millie$_carexps</div>
-              <div><strong>Super User:</strong> elmfarrell@yahoo.com / Farrell1000!</div>
-              <div><strong>Staff:</strong> guest@email.com / Guest1000!</div>
-            </div>
-          </div>
           </div>
         </div>
       </div>
 
-      {/* Footer with proper spacing */}
-      <div className="mt-auto py-4">
-        <Footer variant="transparent" />
+      {/* Footer - Properly positioned at bottom */}
+      <div className="flex-shrink-0 py-6 px-4">
+        <div className="max-w-md mx-auto">
+          <Footer variant="transparent" />
+        </div>
       </div>
     </div>
   )
