@@ -1,0 +1,531 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    border-color: rgb(229 231 235);
+  }
+
+  body {
+    @apply bg-neutral-50 text-neutral-900 font-sans;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    min-height: 100vh;
+    min-height: 100dvh;
+  }
+
+  html {
+    scroll-behavior: smooth;
+  }
+
+  /* High contrast support for accessibility */
+  @media (prefers-contrast: high) {
+    .healthcare-card {
+      @apply border-2 border-neutral-800;
+    }
+
+    .healthcare-button {
+      @apply border-2 border-current;
+    }
+  }
+
+  /* Reduced motion support */
+  @media (prefers-reduced-motion: reduce) {
+    * {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+    }
+  }
+
+  /* Focus styles for keyboard navigation */
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2 focus:ring-offset-white;
+  }
+
+  /* Healthcare-specific typography */
+  .healthcare-heading {
+    @apply font-semibold tracking-tight text-neutral-900;
+  }
+
+  .healthcare-body {
+    @apply text-neutral-700 leading-relaxed;
+  }
+
+  .healthcare-caption {
+    @apply text-sm text-neutral-600;
+  }
+
+  .healthcare-mono {
+    @apply font-mono text-sm;
+  }
+}
+
+@layer components {
+  /* Healthcare Card Component */
+  .healthcare-card {
+    @apply bg-white border border-neutral-200 rounded-lg shadow-healthcare p-6 transition-all duration-200;
+  }
+
+  .healthcare-card:hover {
+    @apply shadow-healthcare-lg border-neutral-300;
+  }
+
+  /* Healthcare Button Variants */
+  .healthcare-button {
+    @apply inline-flex items-center justify-center rounded-md font-medium transition-all duration-200 focus-ring disabled:opacity-50 disabled:pointer-events-none;
+    min-height: 48px; /* Accessible touch target */
+    min-width: 48px;
+  }
+
+  .healthcare-button-primary {
+    @apply healthcare-button bg-primary-500 text-white hover:bg-primary-600 active:bg-primary-700;
+  }
+
+  .healthcare-button-secondary {
+    @apply healthcare-button bg-neutral-100 text-neutral-900 hover:bg-neutral-200 active:bg-neutral-300;
+  }
+
+  .healthcare-button-success {
+    @apply healthcare-button bg-success-500 text-white hover:bg-success-600 active:bg-success-700;
+  }
+
+  .healthcare-button-danger {
+    @apply healthcare-button bg-danger-500 text-white hover:bg-danger-600 active:bg-danger-700;
+  }
+
+  /* Healthcare Input */
+  .healthcare-input {
+    @apply w-full px-4 py-3 border border-neutral-300 rounded-md focus:ring-2 focus:ring-primary-500 focus:border-primary-500 transition-colors duration-200;
+    min-height: 48px;
+  }
+
+  .healthcare-input:invalid {
+    @apply border-danger-500 focus:ring-danger-500 focus:border-danger-500;
+  }
+
+  /* Navigation */
+  .healthcare-nav-item {
+    @apply flex items-center gap-3 px-4 py-3 rounded-lg transition-all duration-200 focus-ring;
+    min-height: 48px;
+  }
+
+  .healthcare-nav-item:hover {
+    @apply bg-neutral-100;
+  }
+
+  .healthcare-nav-item.active {
+    @apply bg-primary-50 text-primary-700 border-l-4 border-primary-500;
+  }
+
+  /* Status Indicators */
+  .status-indicator {
+    @apply inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium;
+  }
+
+  .status-online {
+    @apply status-indicator bg-success-100 text-success-800;
+  }
+
+  .status-offline {
+    @apply status-indicator bg-neutral-100 text-neutral-800;
+  }
+
+  .status-warning {
+    @apply status-indicator bg-warning-100 text-warning-800;
+  }
+
+  .status-error {
+    @apply status-indicator bg-danger-100 text-danger-800;
+  }
+
+  /* Security Indicators */
+  .security-badge {
+    @apply inline-flex items-center gap-1 px-2 py-1 rounded text-xs font-medium bg-primary-100 text-primary-800;
+  }
+
+  .encryption-indicator {
+    @apply flex items-center gap-1 text-xs text-success-700;
+  }
+
+  /* Loading States */
+  .loading-shimmer {
+    @apply bg-gradient-to-r from-neutral-200 via-neutral-100 to-neutral-200 animate-shimmer bg-[length:200%_100%];
+  }
+
+  .loading-pulse {
+    @apply animate-pulse-soft;
+  }
+
+  /* Responsive utilities */
+  .mobile-only {
+    @apply block md:hidden;
+  }
+
+  .desktop-only {
+    @apply hidden md:block;
+  }
+
+  /* Screen reader only content */
+  .sr-only {
+    @apply absolute w-px h-px p-0 -m-px overflow-hidden whitespace-nowrap border-0;
+    clip-path: inset(50%);
+  }
+}
+
+@layer utilities {
+  /* Healthcare-specific spacing */
+  .healthcare-spacing {
+    @apply space-y-6;
+  }
+
+  .healthcare-grid {
+    @apply grid gap-6;
+  }
+
+  /* Safe area handling for mobile */
+  .safe-top {
+    padding-top: env(safe-area-inset-top);
+  }
+
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  .safe-left {
+    padding-left: env(safe-area-inset-left);
+  }
+
+  .safe-right {
+    padding-right: env(safe-area-inset-right);
+  }
+
+  /* High contrast mode utilities */
+  @media (prefers-contrast: high) {
+    .healthcare-contrast {
+      @apply border-2 border-neutral-900;
+    }
+  }
+}
+
+/* Dark Mode Implementation */
+@layer base {
+  /* Dark mode base styles */
+  .dark {
+    color-scheme: dark;
+  }
+
+  .dark * {
+    border-color: rgb(55 65 81);
+  }
+
+  .dark body {
+    @apply bg-gray-900 text-gray-100;
+  }
+
+  /* Dark mode typography */
+  .dark .healthcare-heading {
+    @apply text-gray-100;
+  }
+
+  .dark .healthcare-body {
+    @apply text-gray-300;
+  }
+
+  .dark .healthcare-caption {
+    @apply text-gray-400;
+  }
+
+  /* Focus styles for dark mode */
+  .dark .focus-ring {
+    @apply focus:ring-offset-gray-900;
+  }
+}
+
+@layer components {
+  /* Dark mode component styles */
+
+  /* Cards */
+  .dark .healthcare-card {
+    @apply bg-gray-800 border-gray-700;
+  }
+
+  .dark .healthcare-card:hover {
+    @apply border-gray-600 shadow-xl;
+  }
+
+  /* Buttons */
+  .dark .healthcare-button-secondary {
+    @apply bg-gray-700 text-gray-100 hover:bg-gray-600;
+  }
+
+  /* Inputs */
+  .dark .healthcare-input {
+    @apply bg-gray-800 border-gray-600 text-gray-100;
+  }
+
+  .dark .healthcare-input:focus {
+    @apply border-blue-400 ring-blue-400;
+  }
+
+  .dark .healthcare-input::placeholder {
+    @apply text-gray-400;
+  }
+
+  /* Navigation */
+  .dark .healthcare-nav-item:hover {
+    @apply bg-gray-800;
+  }
+
+  .dark .healthcare-nav-item.active {
+    @apply bg-blue-900/50 text-blue-300 border-blue-400;
+  }
+
+  /* Status indicators */
+  .dark .status-online {
+    @apply bg-green-900/50 text-green-300;
+  }
+
+  .dark .status-offline {
+    @apply bg-gray-700 text-gray-300;
+  }
+
+  .dark .status-warning {
+    @apply bg-yellow-900/50 text-yellow-300;
+  }
+
+  .dark .status-error {
+    @apply bg-red-900/50 text-red-300;
+  }
+
+  /* Security indicators */
+  .dark .security-badge {
+    @apply bg-blue-900/50 text-blue-300;
+  }
+
+  .dark .encryption-indicator {
+    @apply text-green-400;
+  }
+
+  /* Loading states */
+  .dark .loading-shimmer {
+    @apply bg-gradient-to-r from-gray-700 via-gray-600 to-gray-700;
+  }
+}
+
+/* Dark mode utility classes */
+@layer utilities {
+  /* Background colors */
+  .dark-bg-primary {
+    @apply dark:bg-gray-900;
+  }
+
+  .dark-bg-secondary {
+    @apply dark:bg-gray-800;
+  }
+
+  .dark-bg-tertiary {
+    @apply dark:bg-gray-700;
+  }
+
+  /* Text colors */
+  .dark-text-primary {
+    @apply dark:text-gray-100;
+  }
+
+  .dark-text-secondary {
+    @apply dark:text-gray-300;
+  }
+
+  .dark-text-tertiary {
+    @apply dark:text-gray-400;
+  }
+
+  /* Border colors */
+  .dark-border-primary {
+    @apply dark:border-gray-700;
+  }
+
+  .dark-border-secondary {
+    @apply dark:border-gray-600;
+  }
+
+  /* Custom dark mode overrides for specific elements */
+  .dark .bg-white {
+    @apply !bg-gray-800;
+  }
+
+  .dark .bg-gray-50 {
+    @apply !bg-gray-900;
+  }
+
+  .dark .bg-gray-100 {
+    @apply !bg-gray-800;
+  }
+
+  .dark .bg-gray-200 {
+    @apply !bg-gray-700;
+  }
+
+  .dark .bg-blue-50 {
+    @apply !bg-blue-900/20;
+  }
+
+  .dark .bg-blue-100 {
+    @apply !bg-blue-900/30;
+  }
+
+  .dark .bg-green-50 {
+    @apply !bg-green-900/20;
+  }
+
+  .dark .bg-green-100 {
+    @apply !bg-green-900/30;
+  }
+
+  .dark .bg-red-50 {
+    @apply !bg-red-900/20;
+  }
+
+  .dark .bg-red-100 {
+    @apply !bg-red-900/30;
+  }
+
+  .dark .bg-yellow-50 {
+    @apply !bg-yellow-900/20;
+  }
+
+  .dark .bg-yellow-100 {
+    @apply !bg-yellow-900/30;
+  }
+
+  /* Text color overrides */
+  .dark .text-gray-900 {
+    @apply !text-gray-100;
+  }
+
+  .dark .text-gray-800 {
+    @apply !text-gray-200;
+  }
+
+  .dark .text-gray-700 {
+    @apply !text-gray-300;
+  }
+
+  .dark .text-gray-600 {
+    @apply !text-gray-400;
+  }
+
+
+  .dark .text-blue-600 {
+    @apply !text-blue-400;
+  }
+
+  .dark .text-blue-700 {
+    @apply !text-blue-300;
+  }
+
+  .dark .text-blue-800 {
+    @apply !text-blue-200;
+  }
+
+  .dark .text-green-600 {
+    @apply !text-green-400;
+  }
+
+  .dark .text-green-700 {
+    @apply !text-green-300;
+  }
+
+  .dark .text-green-800 {
+    @apply !text-green-200;
+  }
+
+  .dark .text-red-600 {
+    @apply !text-red-400;
+  }
+
+  .dark .text-red-700 {
+    @apply !text-red-300;
+  }
+
+  .dark .text-red-800 {
+    @apply !text-red-200;
+  }
+
+  /* Border color overrides */
+  .dark .border-gray-200 {
+    @apply !border-gray-700;
+  }
+
+  .dark .border-gray-300 {
+    @apply !border-gray-600;
+  }
+
+  .dark .border-gray-400 {
+    @apply !border-gray-500;
+  }
+
+  .dark .border-blue-200 {
+    @apply !border-blue-700;
+  }
+
+  .dark .border-blue-500 {
+    @apply !border-blue-400;
+  }
+
+  .dark .border-blue-600 {
+    @apply !border-blue-400;
+  }
+
+  /* Hover state overrides */
+  .dark .hover\:bg-gray-50:hover {
+    @apply !bg-gray-800;
+  }
+
+  .dark .hover\:bg-gray-100:hover {
+    @apply !bg-gray-700;
+  }
+
+  .dark .hover\:bg-blue-50:hover {
+    @apply !bg-blue-900/30;
+  }
+
+  .dark .hover\:text-gray-900:hover {
+    @apply !text-gray-100;
+  }
+
+  .dark .hover\:text-blue-700:hover {
+    @apply !text-blue-300;
+  }
+
+  .dark .hover\:border-gray-300:hover {
+    @apply !border-gray-600;
+  }
+
+  .dark .hover\:border-blue-700:hover {
+    @apply !border-blue-400;
+  }
+
+  /* Focus state overrides */
+  .dark .focus\:ring-blue-500:focus {
+    @apply !ring-blue-400;
+  }
+
+  .dark .focus\:border-blue-500:focus {
+    @apply !border-blue-400;
+  }
+
+  .dark .focus\:ring-offset-white:focus {
+    @apply !ring-offset-gray-900;
+  }
+
+  /* Disabled state overrides */
+  .dark .disabled\:bg-gray-400:disabled {
+    @apply !bg-gray-600;
+  }
+
+  .dark .disabled\:text-gray-500:disabled {
+    @apply !text-gray-400;
+  }
+}

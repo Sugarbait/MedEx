@@ -1,0 +1,134 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Testing
+coverage/
+*.coverage
+.nyc_output
+
+# Production build
+dist/
+dist-ssr/
+build/
+*.local
+
+# Environment files - NEVER commit these
+.env
+.env.local
+.env.development
+.env.development.local
+.env.test
+.env.test.local
+.env.production
+.env.production.local
+!.env.production.template
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage/
+*.lcov
+
+# nyc test coverage
+.nyc_output
+
+# Dependency directories
+jspm_packages/
+
+# Snowpack dependency directory (https://snowpack.dev/)
+web_modules/
+
+# Microbundle cache
+.rpt2_cache/
+.rts2_cache_cjs/
+.rts2_cache_es/
+.rts2_cache_umd/
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional stylelint cache
+.stylelintcache
+
+# Storybook build outputs
+.out
+.storybook-out
+
+# Temporary folders
+tmp/
+temp/
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Azure specific
+.azure/
+*.PublishSettings
+ServiceConfiguration.*.cscfg
+*.azurePubxml
+
+# Security - CRITICAL
+*.key
+*.pem
+*.pfx
+*.p12
+*.cer
+secrets/
+credentials/
+
+# PHI/PII Data - HIPAA Compliance
+patient_data/
+phi_exports/
+*.phi
+*.pii
+
+# Test files
+test_data/
+mock_data/
+test-*
+setup-*
+fix-*
+*.sql
+
+# Git deployment folders (keep local only)
+Git-Deploy/
+Git-Final/
+Git-Deployment/
+
+# Backup files
+*.backup
+*.bak
+*~

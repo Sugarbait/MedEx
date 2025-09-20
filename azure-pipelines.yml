@@ -1,0 +1,117 @@
+# Azure DevOps Pipeline for CareXPS Healthcare CRM
+# HIPAA-Compliant Deployment Configuration
+
+trigger:
+  branches:
+    include:
+      - main
+      - master
+      - develop
+  paths:
+    exclude:
+      - README.md
+      - docs/*
+
+pool:
+  vmImage: 'ubuntu-latest'
+
+variables:
+  - group: CareXPS-Production
+  - name: NODE_VERSION
+    value: '18.x'
+  - name: BUILD_CONFIGURATION
+    value: 'production'
+
+stages:
+  - stage: Build
+    displayName: 'Build Application'
+    jobs:
+      - job: BuildJob
+        displayName: 'Build and Test'
+        steps:
+          # Install Node.js
+          - task: NodeTool@0
+            inputs:
+              versionSpec: $(NODE_VERSION)
+            displayName: 'Install Node.js'
+
+          # Cache node_modules for faster builds
+          - task: Cache@2
+            inputs:
+              key: 'node | "$(Agent.OS)" | package-lock.json'
+              restoreKeys: |
+                node | "$(Agent.OS)"
+              path: node_modules
+            displayName: 'Cache node_modules'
+
+          # Install dependencies
+          - script: |
+              npm ci
+            displayName: 'Install dependencies'
+
+          # Run security audit
+          - script: |
+              npm audit --production
+            displayName: 'Security Audit'
+            continueOnError: true
+
+          # Run tests
+          - script: |
+              npm test -- --coverage --watchAll=false
+            displayName: 'Run Tests'
+            continueOnError: true
+
+          # Build application
+          - script: |
+              npm run build
+            displayName: 'Build Application'
+            env:
+              VITE_APP_URL: $(VITE_APP_URL)
+              VITE_APP_ENVIRONMENT: $(BUILD_CONFIGURATION)
+              VITE_HIPAA_MODE: 'true'
+              VITE_SUPABASE_URL: $(VITE_SUPABASE_URL)
+              VITE_SUPABASE_ANON_KEY: $(VITE_SUPABASE_ANON_KEY)
+              VITE_ENCRYPTION_KEY: $(VITE_ENCRYPTION_KEY)
+
+          # Copy staticwebapp.config.json
+          - task: CopyFiles@2
+            inputs:
+              Contents: 'staticwebapp.config.json'
+              TargetFolder: '$(Build.ArtifactStagingDirectory)/dist'
+            displayName: 'Copy Azure Static Web App config'
+
+          # Publish build artifacts
+          - task: PublishBuildArtifacts@1
+            inputs:
+              PathtoPublish: 'dist'
+              ArtifactName: 'dist'
+              publishLocation: 'Container'
+            displayName: 'Publish Artifacts'
+
+  - stage: Deploy
+    displayName: 'Deploy to Azure'
+    dependsOn: Build
+    condition: succeeded()
+    jobs:
+      - deployment: DeployToAzure
+        displayName: 'Deploy to Azure Static Web App'
+        environment: 'production'
+        strategy:
+          runOnce:
+            deploy:
+              steps:
+                # Download artifacts
+                - task: DownloadBuildArtifacts@0
+                  inputs:
+                    buildType: 'current'
+                    downloadType: 'single'
+                    artifactName: 'dist'
+                    downloadPath: '$(System.ArtifactsDirectory)'
+
+                # Deploy to Azure Static Web App
+                - task: AzureStaticWebApp@0
+                  inputs:
+                    app_location: '$(System.ArtifactsDirectory)/dist'
+                    api_location: ''
+                    output_location: ''
+                    azure_static_web_apps_api_token: $(AZURE_STATIC_WEB_APPS_API_TOKEN)
