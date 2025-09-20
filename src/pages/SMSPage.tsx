@@ -111,6 +111,8 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   // Cache for SMS segment calculations to avoid repeated API calls
   const [segmentCache, setSegmentCache] = useState<Map<string, number>>(new Map())
   const [loadingFullChats, setLoadingFullChats] = useState<Set<string>>(new Set())
+  // Force re-render trigger for segment updates
+  const [segmentUpdateTrigger, setSegmentUpdateTrigger] = useState(0)
 
   // Helper function to calculate SMS segments for a chat (with caching and smart loading)
   const calculateChatSMSSegments = useCallback((chat: Chat): number => {
@@ -123,6 +125,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
       let messages = []
       let segments = 1 // Default fallback
+      let needsAsyncLoad = false
 
       console.log(`🔍 Calculating segments for chat ${chat.chat_id}:`, {
         hasMessages: !!(chat.message_with_tool_calls?.length),
@@ -143,8 +146,20 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
       // Priority 2: Use transcript as fallback if no proper messages found
       if (messages.length === 0 && chat.transcript && chat.transcript.trim().length > 0) {
-        messages = [{ content: chat.transcript, role: 'user' }]
-        console.log(`📝 Using transcript (${chat.transcript.length} chars) as single message`)
+        // Try to extract meaningful content from transcript
+        const transcriptLength = chat.transcript.trim().length
+        if (transcriptLength > 50) { // Only use transcript if it has substantial content
+          messages = [{ content: chat.transcript, role: 'user' }]
+          console.log(`📝 Using transcript (${transcriptLength} chars) as single message`)
+        } else {
+          // Transcript is too short, mark for async loading
+          needsAsyncLoad = true
+          console.log(`📝 Transcript too short (${transcriptLength} chars), marking for async load`)
+        }
+      } else if (messages.length === 0) {
+        // No messages or transcript, definitely need async loading
+        needsAsyncLoad = true
+        console.log(`📝 No content available, marking for async load`)
       }
 
       // Calculate segments if we have content
@@ -153,25 +168,74 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         segments = Math.max(breakdown.segmentCount, 1)
 
         console.log(`📊 Chat ${chat.chat_id}: ${segments} segments calculated from available data`)
-      } else {
+      } else if (needsAsyncLoad) {
         console.log(`⚠️ No usable content for chat ${chat.chat_id}, will try to load full details`)
 
         // If we couldn't calculate segments from available data,
         // we'll need to load full chat details (this will be done async)
-        // For now, return 1 as placeholder
-        segments = 1
+        // Use a more realistic fallback based on typical SMS conversations
+        // Consider transcript length if available for better estimation
+        if (chat.transcript && chat.transcript.trim().length > 0) {
+          const transcriptLength = chat.transcript.trim().length
+          // Use Twilio service for accurate estimation instead of rough calculation
+          try {
+            const transcriptSegments = twilioCostService.getDetailedSMSBreakdown([{ content: chat.transcript, role: 'user' }]).segmentCount
+            segments = Math.max(transcriptSegments, 1)
+            console.log(`📈 Using transcript-based calculation: ${segments} segments for ${transcriptLength} chars`)
+          } catch (transcriptError) {
+            // Fallback to rough estimation if Twilio service fails
+            segments = Math.max(Math.ceil(transcriptLength / 160), 1)
+            console.log(`📈 Using rough transcript estimation: ${segments} segments for ${transcriptLength} chars`)
+          }
+        } else {
+          segments = 2 // Default fallback for conversations without transcript
+        }
 
-        // Trigger async loading of full chat details for better calculation
-        loadFullChatForSegments(chat.chat_id)
+        // Disable automatic full chat loading to prevent rate limiting (429 errors)
+        // loadFullChatForSegments(chat.chat_id)
       }
 
       // Cache the result
-      setSegmentCache(prev => new Map(prev.set(chat.chat_id, segments)))
+      setSegmentCache(prev => {
+        const newCache = new Map(prev.set(chat.chat_id, segments))
+        return newCache
+      })
       return segments
 
     } catch (error) {
       console.error(`❌ Error calculating SMS segments for chat ${chat.chat_id}:`, error)
-      return 1
+
+      // Try to use transcript as last resort
+      try {
+        if (chat.transcript && chat.transcript.trim().length > 0) {
+          const transcriptLength = chat.transcript.trim().length
+          let fallbackSegments
+
+          try {
+            // Try using Twilio service for accurate calculation
+            fallbackSegments = twilioCostService.getDetailedSMSBreakdown([{ content: chat.transcript, role: 'user' }]).segmentCount
+            fallbackSegments = Math.max(fallbackSegments, 1)
+          } catch (twilioError) {
+            // Fallback to rough estimation
+            fallbackSegments = Math.max(Math.ceil(transcriptLength / 160), 1)
+          }
+
+          console.log(`🆘 Emergency fallback using transcript for ${chat.chat_id}: ${fallbackSegments} segments`)
+
+          // Cache this emergency fallback
+          setSegmentCache(prev => {
+            const newCache = new Map(prev.set(chat.chat_id, fallbackSegments))
+            return newCache
+          })
+
+          return fallbackSegments
+        }
+      } catch (fallbackError) {
+        console.error(`❌ Emergency fallback failed for ${chat.chat_id}:`, fallbackError)
+      }
+
+      // Final fallback
+      return 2
     }
   }, [segmentCache])
 
@@ -199,11 +263,77 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           console.log(`✅ Updated segments for chat ${chatId}: ${segments} (from full chat data)`)
 
           // Update cache with accurate calculation
-          setSegmentCache(prev => new Map(prev.set(chatId, segments)))
+          setSegmentCache(prev => {
+            const newCache = new Map(prev.set(chatId, segments))
+            return newCache
+          })
+
+          // Force re-render to update UI with new segment data
+          setSegmentUpdateTrigger(prev => prev + 1)
+          console.log(`🔄 Triggered UI update for chat ${chatId} segment calculation`)
+        } else {
+          console.log(`⚠️ No content messages found in full chat ${chatId}, trying transcript fallback`)
+
+          // If we can't get content messages, try to use transcript as fallback
+          const currentChat = chats.find(c => c.chat_id === chatId) || allFilteredChats.find(c => c.chat_id === chatId)
+          if (currentChat?.transcript && currentChat.transcript.trim().length > 0) {
+            try {
+              const transcriptSegments = twilioCostService.getDetailedSMSBreakdown([{ content: currentChat.transcript, role: 'user' }]).segmentCount
+              const fallbackSegments = Math.max(transcriptSegments, 1)
+
+              console.log(`📝 Using transcript fallback for ${chatId}: ${fallbackSegments} segments`)
+              setSegmentCache(prev => {
+                const newCache = new Map(prev.set(chatId, fallbackSegments))
+                return newCache
+              })
+              setSegmentUpdateTrigger(prev => prev + 1)
+            } catch (transcriptError) {
+              console.error(`❌ Error with transcript fallback:`, transcriptError)
+            }
+          }
+        }
+      } else {
+        console.log(`⚠️ No message data in full chat ${chatId}, trying transcript fallback`)
+
+        // If we can't get full chat data, try to use transcript as a more realistic fallback
+        const currentChat = chats.find(c => c.chat_id === chatId) || allFilteredChats.find(c => c.chat_id === chatId)
+        if (currentChat?.transcript && currentChat.transcript.trim().length > 0) {
+          try {
+            const transcriptSegments = twilioCostService.getDetailedSMSBreakdown([{ content: currentChat.transcript, role: 'user' }]).segmentCount
+            const fallbackSegments = Math.max(transcriptSegments, 1)
+
+            console.log(`📝 Using transcript fallback for ${chatId}: ${fallbackSegments} segments`)
+            setSegmentCache(prev => {
+              const newCache = new Map(prev.set(chatId, fallbackSegments))
+              return newCache
+            })
+            setSegmentUpdateTrigger(prev => prev + 1)
+          } catch (transcriptError) {
+            console.error(`❌ Error with transcript fallback:`, transcriptError)
+          }
         }
       }
     } catch (error) {
       console.error(`❌ Error loading full chat for segments calculation:`, error)
+
+      // On error, try to use transcript or basic estimation
+      const currentChat = chats.find(c => c.chat_id === chatId) || allFilteredChats.find(c => c.chat_id === chatId)
+      if (currentChat?.transcript && currentChat.transcript.trim().length > 0) {
+        try {
+          const transcriptSegments = twilioCostService.getDetailedSMSBreakdown([{ content: currentChat.transcript, role: 'user' }]).segmentCount
+          const errorFallbackSegments = Math.max(transcriptSegments, 1)
+
+          console.log(`🔄 Error fallback using transcript for ${chatId}: ${errorFallbackSegments} segments`)
+          setSegmentCache(prev => {
+            const newCache = new Map(prev.set(chatId, errorFallbackSegments))
+            return newCache
+          })
+          setSegmentUpdateTrigger(prev => prev + 1)
+        } catch (transcriptError) {
+          console.error(`❌ Error with transcript fallback for ${chatId}:`, transcriptError)
+          // Keep the original fallback value (2) set in calculateChatSMSSegments
+        }
+      }
     } finally {
       setLoadingFullChats(prev => {
         const newSet = new Set(prev)
@@ -251,7 +381,9 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     setSegmentCache(new Map()) // Clear segment cache for new date range
     setLoadingFullChats(new Set()) // Clear loading state for new date range
     setTotalSegments(0) // Reset segments count for new date range
+    setSegmentUpdateTrigger(0) // Reset segment update trigger
     setIsSmartRefreshing(false) // Reset smart refresh state to prevent infinite spinning
+    console.log('📅 Date range changed, cleared all caches and reset state')
     debouncedFetchChats.debouncedCallback(true)
   }, [selectedDateRange])
 
@@ -300,15 +432,21 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     const calculateMetrics = () => {
       // Calculate SMS segments first using consistent helper function
       let calculatedTotalSegments = 0
+      let chatsWithAsyncLoading = 0
       console.log(`📊 Calculating SMS segments for ${allFilteredChats.length} chats using consistent helper method`)
 
       allFilteredChats.forEach((chat, index) => {
         const segments = calculateChatSMSSegments(chat)
         console.log(`Chat ${index + 1} (${chat.chat_id}): ${segments} segments`)
         calculatedTotalSegments += segments
+
+        // Track if this chat is still loading async data
+        if (loadingFullChats.has(chat.chat_id)) {
+          chatsWithAsyncLoading++
+        }
       })
 
-      console.log(`📊 Total SMS segments calculated: ${calculatedTotalSegments}`)
+      console.log(`📊 Total SMS segments calculated: ${calculatedTotalSegments} (${chatsWithAsyncLoading} chats still loading)`)
       setTotalSegments(calculatedTotalSegments)
 
       // Calculate total cost from calculated segments (more accurate than individual chat costs)
@@ -382,7 +520,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
 
     calculateMetrics()
-  }, [allFilteredChats, smsCostManager.costs, calculateChatSMSSegments, segmentCache])
+  }, [allFilteredChats, smsCostManager.costs, calculateChatSMSSegments, segmentCache, segmentUpdateTrigger, loadingFullChats])
 
   // Simplified chat fetching following CallsPage pattern
   const fetchChatsOptimized = useCallback(async (retryCount = 0) => {
@@ -702,7 +840,11 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
               // Clear caches and force a complete refresh
               optimizedChatService.clearAllCaches()
               smsCostManager.clearCosts()
+              setSegmentCache(new Map()) // Clear segment cache on manual refresh
+              setLoadingFullChats(new Set()) // Clear loading state
+              setSegmentUpdateTrigger(0) // Reset segment update trigger
               setError('')
+              console.log('🔄 Manual refresh: cleared all caches including segments')
               fetchChatsOptimized()
             }}
             disabled={loading || isSmartRefreshing}
@@ -1060,6 +1202,8 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                               <div className="text-xs text-gray-500">
                                 {smsCostManager.getChatCost(chat.chat_id).loading ? (
                                   <span className="text-blue-600">Loading...</span>
+                                ) : loadingFullChats.has(chat.chat_id) ? (
+                                  <span className="text-orange-600">Calculating...</span>
                                 ) : (
                                   `${calculateChatSMSSegments(chat)} segments`
                                 )}

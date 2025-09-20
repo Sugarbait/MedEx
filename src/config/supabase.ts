@@ -17,12 +17,15 @@ const createSupabaseClient = () => {
     if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('example.') || supabaseUrl === 'your_url_here') {
       console.warn('Using fallback Supabase configuration for localStorage-only mode')
       // Create a minimal client that will fail gracefully
-      return createClient<Database>('http://localhost:54321', 'dummy-key', {
+      return createClient<Database>('https://placeholder.supabase.co', 'dummy-key', {
         auth: {
           detectSessionInUrl: false,
           persistSession: false,
           autoRefreshToken: false,
           storageKey: 'carexps-auth-fallback'
+        },
+        global: {
+          fetch: () => Promise.reject(new Error('Supabase not configured - using localStorage mode'))
         }
       })
     }
@@ -68,12 +71,15 @@ const createSupabaseClient = () => {
   } catch (error) {
     console.error('Failed to create Supabase client:', error)
     // Return a minimal fallback client
-    return createClient<Database>('http://localhost:54321', 'dummy-key', {
+    return createClient<Database>('https://placeholder.supabase.co', 'dummy-key', {
       auth: {
         detectSessionInUrl: false,
         persistSession: false,
         autoRefreshToken: false,
         storageKey: 'carexps-auth-fallback'
+      },
+      global: {
+        fetch: () => Promise.reject(new Error('Supabase not configured - using localStorage mode'))
       }
     })
   }
