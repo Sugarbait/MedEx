@@ -181,9 +181,10 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           const messages = chat.message_with_tool_calls || []
 
           if (messages.length > 0) {
-            // Get actual segment count using the updated service
-            const breakdown = twilioCostService.getDetailedSMSBreakdown(messages)
-            totalSegments += breakdown.segmentCount
+            // Get actual segment count using the updated service with combined method
+            const debugInfo = twilioCostService.debugSMSCalculation(messages)
+            const segments = debugInfo.totalSegmentsCombined || debugInfo.totalSegments
+            totalSegments += segments
           } else {
             // Fallback: use estimated typical conversation pattern
             const estimatedMessages = [
@@ -192,8 +193,9 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
               { content: 'Yes', role: 'user' },
               { content: 'Thanks! Enrollment received, team will follow up', role: 'agent' }
             ]
-            const fallbackBreakdown = twilioCostService.getDetailedSMSBreakdown(estimatedMessages)
-            totalSegments += fallbackBreakdown.segmentCount
+            const fallbackDebugInfo = twilioCostService.debugSMSCalculation(estimatedMessages)
+            const fallbackSegments = fallbackDebugInfo.totalSegmentsCombined || fallbackDebugInfo.totalSegments
+            totalSegments += fallbackSegments
           }
         } catch (error) {
           console.error(`Error calculating segments for chat ${chat.chat_id}:`, error)
