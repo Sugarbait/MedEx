@@ -202,31 +202,37 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
   }, [chats, smsCostManager])
 
-  // Calculate total segments using consistent helper function
+  // Optimized metrics calculation with consolidated SMS segments calculation
   useEffect(() => {
-    if (allFilteredChats.length > 0) {
-      let totalSegments = 0
+    if (allFilteredChats.length === 0) {
+      // Reset everything when no chats
+      setTotalSegments(0)
+      setMetrics(prevMetrics => ({
+        ...prevMetrics,
+        totalSMSSegments: 0,
+        totalCost: 0,
+        avgCostPerChat: 0,
+        positiveSentimentCount: 0,
+        peakHour: 'N/A',
+        peakHourCount: 0
+      }))
+      return
+    }
+
+    const calculateMetrics = () => {
+      // Calculate SMS segments first using consistent helper function
+      let calculatedTotalSegments = 0
       console.log(`📊 Calculating SMS segments for ${allFilteredChats.length} chats using consistent helper method`)
 
       allFilteredChats.forEach((chat, index) => {
         const segments = calculateChatSMSSegments(chat)
         console.log(`Chat ${index + 1} (${chat.chat_id}): ${segments} segments`)
-        totalSegments += segments
+        calculatedTotalSegments += segments
       })
 
-      console.log(`📊 Total SMS segments calculated: ${totalSegments} (matches individual chat calculations)`)
-      setTotalSegments(totalSegments)
-    } else {
-      console.log(`📊 No chats to calculate segments for`)
-      setTotalSegments(0)
-    }
-  }, [allFilteredChats, calculateChatSMSSegments])
+      console.log(`📊 Total SMS segments calculated: ${calculatedTotalSegments}`)
+      setTotalSegments(calculatedTotalSegments)
 
-  // Optimized metrics calculation using cost manager
-  useEffect(() => {
-    if (allFilteredChats.length === 0) return
-
-    const calculateMetrics = () => {
       // Calculate total cost from all filtered chats
       let totalCostFromFilteredChats = 0
       let costsCalculated = 0
@@ -270,19 +276,15 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         peakHour = `${hour12}:00 ${ampm}`
       }
 
-      // Update metrics efficiently
-      console.log(`💰 Updating metrics with totalSMSSegments: ${totalSegments}`)
-
-      // Verification: Calculate individual segments sum for comparison
-      const verificationTotal = allFilteredChats.reduce((sum, chat) => sum + calculateChatSMSSegments(chat), 0)
-      console.log(`✅ Verification: Sum of individual chat segments: ${verificationTotal} (should match ${totalSegments})`)
+      // Update metrics with calculated SMS segments
+      console.log(`💰 Updating metrics with totalSMSSegments: ${calculatedTotalSegments}`)
 
       setMetrics(prevMetrics => {
         const updatedMetrics = {
           ...prevMetrics,
           totalCost: totalCostFromFilteredChats,
           avgCostPerChat,
-          totalSMSSegments: totalSegments,
+          totalSMSSegments: calculatedTotalSegments,
           positiveSentimentCount,
           peakHour,
           peakHourCount
@@ -293,7 +295,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
 
     calculateMetrics()
-  }, [allFilteredChats, smsCostManager.costs, totalSegments, calculateChatSMSSegments])
+  }, [allFilteredChats, smsCostManager.costs, calculateChatSMSSegments])
 
   // Simplified chat fetching following CallsPage pattern
   const fetchChatsOptimized = useCallback(async (retryCount = 0) => {
@@ -370,19 +372,15 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       setChats(paginatedChats)
       setLastDataFetch(Date.now())
 
-      // Calculate metrics using optimized service
+      // Calculate basic metrics using optimized service (exclude SMS segments, handled separately)
       const calculatedMetrics = chatService.getChatStats(finalFiltered)
       console.log('📊 Chat metrics calculated:', calculatedMetrics)
-      setMetrics(prev => {
-        console.log('📊 Previous totalSMSSegments:', prev.totalSMSSegments)
-        console.log('📊 Current totalSegments state:', totalSegments)
-        return {
-          ...prev,
-          ...calculatedMetrics,
-          // Use current totalSegments state if prev.totalSMSSegments is undefined or 0
-          totalSMSSegments: (prev.totalSMSSegments !== undefined && prev.totalSMSSegments !== 0) ? prev.totalSMSSegments : totalSegments
-        }
-      })
+      setMetrics(prev => ({
+        ...prev,
+        ...calculatedMetrics,
+        // Preserve totalSMSSegments - it will be calculated in the separate useEffect
+        totalSMSSegments: prev.totalSMSSegments
+      }))
 
       console.log('Optimized SMS Chats fetched:', {
         agentFilter: smsAgentId || 'All agents',
