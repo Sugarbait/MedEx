@@ -45,7 +45,7 @@ export const MFAPage: React.FC = () => {
         <div className="flex justify-end mb-4">
           <button
             onClick={handleLogout}
-            className="flex items-center gap-2 px-3 py-2 text-sm bg-white/10 dark:bg-gray-800/50 text-white dark:text-gray-200 hover:bg-white/20 dark:hover:bg-gray-700/50 rounded-md border border-white/20 dark:border-gray-600 transition-all duration-200"
+            className="flex items-center gap-2 px-3 py-2 text-sm bg-white/20 dark:bg-gray-800/60 text-gray-700 dark:text-gray-200 hover:bg-white/30 dark:hover:bg-gray-700/70 rounded-md border border-gray-300/40 dark:border-gray-600/60 shadow-sm transition-all duration-200"
             title="Logout to allow another user to access the system"
           >
             <LogOutIcon className="w-4 h-4" />
