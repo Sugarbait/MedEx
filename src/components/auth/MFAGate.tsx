@@ -44,11 +44,6 @@ export const MFAGate: React.FC<MFAGateProps> = ({ onSuccess, user }) => {
     }
   }
 
-  const handleResendCode = () => {
-    setError('')
-    // Simulate resending code
-    alert('Verification code sent to your registered device.')
-  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex items-center justify-center px-4">
@@ -111,13 +106,6 @@ export const MFAGate: React.FC<MFAGateProps> = ({ onSuccess, user }) => {
               )}
             </button>
 
-            <button
-              type="button"
-              onClick={handleResendCode}
-              className="w-full text-sm text-blue-600 hover:text-blue-500 focus:outline-none focus:underline"
-            >
-              Didn't receive code? Resend
-            </button>
           </div>
         </form>
 
