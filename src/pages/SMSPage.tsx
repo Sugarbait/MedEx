@@ -251,6 +251,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     setSegmentCache(new Map()) // Clear segment cache for new date range
     setLoadingFullChats(new Set()) // Clear loading state for new date range
     setTotalSegments(0) // Reset segments count for new date range
+    setIsSmartRefreshing(false) // Reset smart refresh state to prevent infinite spinning
     debouncedFetchChats.debouncedCallback(true)
   }, [selectedDateRange])
 
@@ -580,8 +581,12 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
   // Smart refresh that only updates when needed
   const performSmartRefresh = useCallback(async () => {
-    if (!mountedRef.current || loading) return
+    if (!mountedRef.current || loading || isSmartRefreshing) {
+      console.log('Skipping smart refresh - component unmounted, loading, or already refreshing')
+      return
+    }
 
+    console.log('🔄 Starting smart refresh...')
     setIsSmartRefreshing(true)
 
     try {
@@ -590,21 +595,27 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         filter_criteria: smsAgentConfigured && smsAgentId ? { agent_id: smsAgentId } : undefined
       })
 
-      if (result.hasChanges) {
-        console.log('Smart refresh detected changes, updating data')
-        await fetchChatsOptimized()
+      if (result.hasChanges && mountedRef.current) {
+        console.log('✅ Smart refresh detected changes, updating data')
+        // Don't call fetchChatsOptimized to avoid recursion, just use the result data
+        if (result.chats) {
+          setChats(result.chats)
+          setLastDataFetch(Date.now())
+        }
       } else {
-        console.log('Smart refresh: no changes detected')
+        console.log('✅ Smart refresh: no changes detected')
       }
     } catch (error) {
-      console.warn('Smart refresh failed, falling back to full refresh:', error)
-      await fetchChatsOptimized()
+      console.warn('❌ Smart refresh failed:', error)
+      // Don't do fallback refresh to avoid infinite loops
     } finally {
+      // Always ensure we reset the smart refreshing state
       if (mountedRef.current) {
+        console.log('🔄 Smart refresh finished, resetting state')
         setIsSmartRefreshing(false)
       }
     }
-  }, [chats, loading, smsAgentConfigured, smsAgentId, fetchChatsOptimized])
+  }, [chats, loading, isSmartRefreshing, smsAgentConfigured, smsAgentId])
 
   // Load SMS agent configuration on mount
   useEffect(() => {
