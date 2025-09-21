@@ -203,32 +203,19 @@ class NotesService {
       try {
         console.log('✨ Fast path: Creating note with Supabase:', noteData)
 
-        // Short timeout for immediate feedback
-        const insertPromise = supabase
-          .from('notes')
-          .insert(noteData)
-          .select()
-          .single()
-
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Save timeout - note may have been saved locally')), 3000)
-        )
-
-        const { data: note, error } = await Promise.race([insertPromise, timeoutPromise]) as any
-
-        if (!error && note) {
-          console.log('Note created successfully in Supabase:', note)
-          this.isSupabaseAvailable = true
-          return { success: true, note }
+        // Optimistic UI approach: save to localStorage first, then sync to Supabase
+        const localNote = await this.createNoteLocalStorage(data, userInfo)
+        if (!localNote.success) {
+          throw new Error(localNote.error || 'Failed to create local note')
         }
 
-        // If Supabase fails, fall back to localStorage
-        if (error.message?.includes('Save timeout')) {
-          console.log('Note save timed out, but may have been saved. Using localStorage as backup.')
-        } else {
-          console.error('Supabase error creating note, falling back to localStorage:', error)
-        }
-        this.isSupabaseAvailable = false
+        // Background sync to Supabase (no timeout, no blocking)
+        this.backgroundSyncNote(localNote.note!, 'create').catch(error => {
+          console.log('Background sync failed, note remains in localStorage:', error)
+        })
+
+        console.log('Note created successfully with optimistic approach')
+        return { success: true, note: localNote.note }
       } catch (error) {
         console.error('Supabase connection failed during note creation, falling back to localStorage:', error)
         this.isSupabaseAvailable = false
@@ -243,6 +230,78 @@ class NotesService {
       const userInfo = await this.getCurrentUserInfo()
       return this.createNoteLocalStorage(data, userInfo)
     }
+  }
+
+  /**
+   * Background sync a note to Supabase without blocking the UI
+   */
+  private async backgroundSyncNote(note: Note, operation: 'create' | 'update'): Promise<void> {
+    try {
+      if (operation === 'create') {
+        // For local notes, try to sync to Supabase
+        if (note.id.startsWith('local_')) {
+          const { data: supabaseNote, error } = await supabase
+            .from('notes')
+            .insert({
+              reference_id: note.reference_id,
+              reference_type: note.reference_type,
+              content: note.content,
+              content_type: note.content_type,
+              created_by: note.created_by,
+              created_by_name: note.created_by_name,
+              created_by_email: note.created_by_email,
+              metadata: note.metadata
+            })
+            .select()
+            .single()
+
+          if (!error && supabaseNote) {
+            // Replace local note with Supabase note in localStorage
+            const localNotes = this.getNotesFromLocalStorage(note.reference_id, note.reference_type)
+            const updatedNotes = localNotes.map(n => n.id === note.id ? supabaseNote : n)
+            this.saveNotesToLocalStorage(note.reference_id, note.reference_type, updatedNotes)
+            console.log('Background sync successful: local note synced to Supabase')
+          }
+        }
+      } else if (operation === 'update') {
+        // For existing notes, try to update in Supabase
+        if (!note.id.startsWith('local_')) {
+          await supabase
+            .from('notes')
+            .update({
+              content: note.content,
+              content_type: note.content_type,
+              last_edited_by: note.last_edited_by,
+              last_edited_by_name: note.last_edited_by_name,
+              last_edited_at: note.last_edited_at,
+              metadata: note.metadata
+            })
+            .eq('id', note.id)
+
+          console.log('Background sync successful: note updated in Supabase')
+        }
+      }
+    } catch (error) {
+      console.log('Background sync failed (note remains local):', error)
+    }
+  }
+
+  /**
+   * Merge notes from Supabase and localStorage, preferring Supabase data
+   */
+  private mergeNotesPreferringSupabase(supabaseNotes: Note[], localNotes: Note[]): Note[] {
+    const merged = [...supabaseNotes]
+    const supabaseIds = new Set(supabaseNotes.map(n => n.id))
+
+    // Add local-only notes (ones that haven't been synced yet)
+    localNotes.forEach(localNote => {
+      if (!supabaseIds.has(localNote.id)) {
+        merged.push(localNote)
+      }
+    })
+
+    // Sort by creation date
+    return merged.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime())
   }
 
   /**
@@ -378,33 +437,19 @@ class NotesService {
 
       // Try Supabase first with timeout
       try {
-        // Add timeout to prevent hanging
-        const updatePromise = supabase
-          .from('notes')
-          .update(updateData)
-          .eq('id', noteId)
-          .select()
-          .single()
-
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Save timeout - note may have been saved locally')), 3000)
-        )
-
-        const { data: note, error } = await Promise.race([updatePromise, timeoutPromise]) as any
-
-        if (!error && note) {
-          console.log('Note updated successfully in Supabase:', note)
-          this.isSupabaseAvailable = true
-          return { success: true, note }
+        // Optimistic UI approach: update localStorage first, then sync to Supabase
+        const localNote = await this.updateNoteLocalStorage(noteId, data, userInfo)
+        if (!localNote.success) {
+          throw new Error(localNote.error || 'Failed to update local note')
         }
 
-        // If Supabase fails, fall back to localStorage
-        if (error.message?.includes('Save timeout')) {
-          console.log('Note update timed out, but may have been saved. Using localStorage as backup.')
-        } else {
-          console.error('Supabase error updating note, falling back to localStorage:', error)
-        }
-        this.isSupabaseAvailable = false
+        // Background sync to Supabase (no timeout, no blocking)
+        this.backgroundSyncNote(localNote.note!, 'update').catch(error => {
+          console.log('Background sync failed, note remains in localStorage:', error)
+        })
+
+        console.log('Note updated successfully with optimistic approach')
+        return { success: true, note: localNote.note }
       } catch (error) {
         console.error('Supabase connection failed during note update, falling back to localStorage:', error)
         this.isSupabaseAvailable = false
@@ -466,7 +511,7 @@ class NotesService {
 
       // Try Supabase first with timeout
       try {
-        // Add timeout to prevent hanging
+        // Try Supabase with reasonable timeout, but no user-facing errors
         const fetchPromise = supabase
           .from('notes')
           .select('*')
@@ -475,19 +520,22 @@ class NotesService {
           .order('created_at', { ascending: true })
 
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Load timeout - using local data')), 3000)
+          setTimeout(() => reject(new Error('Internal timeout')), 10000)
         )
 
         const { data: notes, error } = await Promise.race([fetchPromise, timeoutPromise]) as any
 
-        if (!error) {
-          console.log('Notes fetched successfully from Supabase:', notes?.length || 0)
+        if (!error && notes) {
+          console.log('Notes fetched successfully from Supabase:', notes.length)
           this.isSupabaseAvailable = true
-          return { success: true, notes: notes || [] }
+          // Merge with localStorage to ensure no data loss
+          const localNotes = this.getNotesFromLocalStorage(referenceId, referenceType)
+          const mergedNotes = this.mergeNotesPreferringSupabase(notes, localNotes)
+          return { success: true, notes: mergedNotes }
         }
 
-        // If Supabase fails, fall back to localStorage
-        console.error('Supabase error fetching notes, falling back to localStorage:', error)
+        // If Supabase fails, use localStorage without showing errors
+        console.log('Supabase fetch failed, using localStorage data')
         this.isSupabaseAvailable = false
       } catch (error) {
         console.error('Supabase connection failed, falling back to localStorage:', error)

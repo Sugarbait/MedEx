@@ -64,11 +64,8 @@ export const EnhancedChatNotes: React.FC<EnhancedChatNotesProps> = ({
     autoSaveDelay: 3000,
     maxRetries: 3,
     onError: (error) => {
-      // Filter out timeout errors that are expected during save operations
-      if (!error.includes('Save timeout') && !error.includes('Load timeout')) {
-        setError(error)
-        setTimeout(() => setError(null), 5000)
-      }
+      setError(error)
+      setTimeout(() => setError(null), 5000)
     },
     onSuccess: (message) => {
       setSuccessMessage(message)

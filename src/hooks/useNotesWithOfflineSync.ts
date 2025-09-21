@@ -285,14 +285,9 @@ export const useNotesWithOfflineSync = (options: UseNotesWithOfflineSyncOptions)
 
       const result = await notesService.createNote(createData)
       if (result.success) {
-        onSuccess?.('Note saved successfully to cloud')
+        onSuccess?.('Note saved successfully')
         return true
       } else {
-        // Check if it's a timeout error
-        if (result.error?.includes('Save timeout')) {
-          onSuccess?.('Note saved locally - will sync to cloud when connection improves')
-          return true
-        }
         throw new Error(result.error || 'Failed to create note')
       }
     } catch (error) {
@@ -327,14 +322,9 @@ export const useNotesWithOfflineSync = (options: UseNotesWithOfflineSyncOptions)
 
       const result = await notesService.updateNote(noteId, updateData)
       if (result.success) {
-        onSuccess?.('Note updated successfully in cloud')
+        onSuccess?.('Note updated successfully')
         return true
       } else {
-        // Check if it's a timeout error
-        if (result.error?.includes('Save timeout')) {
-          onSuccess?.('Note updated locally - will sync to cloud when connection improves')
-          return true
-        }
         throw new Error(result.error || 'Failed to update note')
       }
     } catch (error) {

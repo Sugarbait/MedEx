@@ -42,13 +42,8 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
 
       console.log('🚀 ChatNotes: Starting optimized notes load for chatId:', chatId)
 
-      // Add timeout to prevent infinite loading
-      const loadPromise = notesService.getNotes(chatId, 'sms')
-      const timeoutPromise = new Promise<any>((_, reject) =>
-        setTimeout(() => reject(new Error('Notes loading timeout - using localStorage only')), 8000)
-      )
-
-      const result = await Promise.race([loadPromise, timeoutPromise])
+      // Load notes without aggressive timeouts
+      const result = await notesService.getNotes(chatId, 'sms')
       if (result.success && result.notes) {
         console.log('✅ ChatNotes: Notes loaded successfully:', result.notes.length, 'notes')
         setNotes(result.notes)
@@ -87,19 +82,13 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
       setIsSaving(true)
       setError(null)
 
-      // Add timeout to prevent hanging save
-      const savePromise = notesService.createNote({
+      // Save note with optimistic approach
+      const result = await notesService.createNote({
         reference_id: chatId,
         reference_type: 'sms',
         content: newNoteContent.trim(),
         content_type: 'plain'
       })
-
-      const timeoutPromise = new Promise<any>((_, reject) =>
-        setTimeout(() => reject(new Error('Save operation timeout')), 10000)
-      )
-
-      const result = await Promise.race([savePromise, timeoutPromise])
 
       if (result.success) {
         // Immediately add the new note to local state for instant UI update
@@ -118,11 +107,7 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
       }
     } catch (err) {
       console.error('Error saving note:', err)
-      if (err instanceof Error && err.message.includes('timeout')) {
-        setError('Save timeout - note may have been saved locally')
-      } else {
-        setError('Failed to save note')
-      }
+      setError('Failed to save note')
     } finally {
       setIsSaving(false)
     }
@@ -139,17 +124,11 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
       setIsSaving(true)
       setError(null)
 
-      // Add timeout to prevent hanging update
-      const updatePromise = notesService.updateNote(editingNoteId, {
+      // Update note with optimistic approach
+      const result = await notesService.updateNote(editingNoteId, {
         content: editingContent.trim(),
         content_type: 'plain'
       })
-
-      const timeoutPromise = new Promise<any>((_, reject) =>
-        setTimeout(() => reject(new Error('Update operation timeout')), 10000)
-      )
-
-      const result = await Promise.race([updatePromise, timeoutPromise])
 
       if (result.success) {
         // Immediately update the note in local state for instant UI update
@@ -171,11 +150,7 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
       }
     } catch (err) {
       console.error('Error updating note:', err)
-      if (err instanceof Error && err.message.includes('timeout')) {
-        setError('Update timeout - changes may have been saved locally')
-      } else {
-        setError('Failed to update note')
-      }
+      setError('Failed to update note')
     } finally {
       setIsSaving(false)
     }
