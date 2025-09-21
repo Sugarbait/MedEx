@@ -347,17 +347,27 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
 
     const calculateMetrics = () => {
-      // Calculate SMS segments first using consistent helper function
+      // Calculate SMS segments using accurate modal data when available
       let calculatedTotalSegments = 0
-      console.log(`📊 Calculating SMS segments for ${allFilteredChats.length} chats using consistent helper method`)
+      let chatsWithAccurateData = 0
+      console.log(`📊 Calculating SMS segments for ${allFilteredChats.length} chats using fullDataSegmentCache priority`)
 
       allFilteredChats.forEach((chat, index) => {
-        const segments = calculateChatSMSSegments(chat)
-        console.log(`Chat ${index + 1} (${chat.chat_id}): ${segments} segments`)
-        calculatedTotalSegments += segments
+        // Priority: Use accurate data from modal if available
+        const accurateSegments = fullDataSegmentCache.get(chat.chat_id)
+        if (accurateSegments !== undefined) {
+          calculatedTotalSegments += accurateSegments
+          chatsWithAccurateData++
+          console.log(`Chat ${index + 1} (${chat.chat_id}): ${accurateSegments} segments (ACCURATE from modal)`)
+        } else {
+          // Fallback to basic calculation only when no accurate data available
+          const fallbackSegments = calculateChatSMSSegments(chat)
+          calculatedTotalSegments += fallbackSegments
+          console.log(`Chat ${index + 1} (${chat.chat_id}): ${fallbackSegments} segments (fallback)`)
+        }
       })
 
-      console.log(`📊 Total SMS segments calculated: ${calculatedTotalSegments}`)
+      console.log(`📊 Total SMS segments calculated: ${calculatedTotalSegments} (${chatsWithAccurateData}/${allFilteredChats.length} from accurate modal data)`)
       setTotalSegments(calculatedTotalSegments)
 
       // Calculate total cost from calculated segments (more accurate than individual chat costs)
@@ -412,8 +422,8 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         peakHour = `${hour12}:00 ${ampm}`
       }
 
-      // Update metrics with calculated SMS segments
-      console.log(`💰 Updating metrics with totalSMSSegments: ${calculatedTotalSegments}`)
+      // Update metrics with calculated SMS segments (prioritizing accurate modal data)
+      console.log(`💰 Updating metrics with totalSMSSegments: ${calculatedTotalSegments} (${chatsWithAccurateData}/${allFilteredChats.length} from accurate modal data)`)
 
       setMetrics(prevMetrics => {
         const updatedMetrics = {
@@ -431,7 +441,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
 
     calculateMetrics()
-  }, [allFilteredChats, smsCostManager.costs, calculateChatSMSSegments, segmentCache, segmentUpdateTrigger])
+  }, [allFilteredChats, smsCostManager.costs, calculateChatSMSSegments, segmentCache, segmentUpdateTrigger, fullDataSegmentCache])
 
   // Simplified chat fetching following CallsPage pattern
   const fetchChatsOptimized = useCallback(async (retryCount = 0) => {
@@ -1114,7 +1124,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                                 {smsCostManager.getChatCost(chat.chat_id).loading ? (
                                   <span className="text-blue-600">Loading...</span>
                                 ) : (
-                                  `${calculateChatSMSSegments(chat)} segments`
+                                  "SMS cost"
                                 )}
                               </div>
                             </div>
