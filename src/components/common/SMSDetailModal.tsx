@@ -50,12 +50,15 @@ export const SMSDetailModal: React.FC<SMSDetailModalProps> = ({ message, isOpen,
 
   // Generate Patient ID based on phone number when modal opens
   useEffect(() => {
+    console.log('SMS Modal useEffect triggered:', { isOpen, phone_number: message.phone_number, message })
     if (isOpen && message.phone_number) {
       const patientId = patientIdService.getPatientId(message.phone_number)
       const record = patientIdService.getPatientRecord(message.phone_number)
       setGeneratedPatientId(patientId)
       setPatientRecord(record)
       console.log(`SMS Modal: Generated Patient ID ${patientId} for phone ${message.phone_number}`)
+    } else {
+      console.log('SMS Modal: Conditions not met for Patient ID generation:', { isOpen, hasPhone: !!message.phone_number })
     }
   }, [isOpen, message.phone_number])
 
