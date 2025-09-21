@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   MessageSquareIcon,
   SendIcon,
@@ -11,10 +11,12 @@ import {
   PhoneIcon,
   DownloadIcon,
   TrendingUpIcon,
-  AlertCircleIcon
+  AlertCircleIcon,
+  IdCardIcon
 } from 'lucide-react'
 import { EnhancedChatNotes } from '@/components/common/EnhancedChatNotes'
 import { twilioCostService } from '@/services/twilioCostService'
+import { patientIdService } from '@/services/patientIdService'
 
 interface SMSDetailModalProps {
   message: {
@@ -43,6 +45,20 @@ interface SMSDetailModalProps {
 }
 
 export const SMSDetailModal: React.FC<SMSDetailModalProps> = ({ message, isOpen, onClose }) => {
+  const [generatedPatientId, setGeneratedPatientId] = useState<string>('')
+  const [patientRecord, setPatientRecord] = useState<any>(null)
+
+  // Generate Patient ID based on phone number when modal opens
+  useEffect(() => {
+    if (isOpen && message.phone_number) {
+      const patientId = patientIdService.getPatientId(message.phone_number)
+      const record = patientIdService.getPatientRecord(message.phone_number)
+      setGeneratedPatientId(patientId)
+      setPatientRecord(record)
+      console.log(`SMS Modal: Generated Patient ID ${patientId} for phone ${message.phone_number}`)
+    }
+  }, [isOpen, message.phone_number])
+
   if (!isOpen) return null
 
   const formatDateTime = (timestamp: string) => {
@@ -281,7 +297,20 @@ export const SMSDetailModal: React.FC<SMSDetailModalProps> = ({ message, isOpen,
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Patient ID</label>
-                  <p className="text-gray-900 dark:text-gray-100">{message.patient_id}</p>
+                  <div className="flex items-center gap-2">
+                    <IdCardIcon className="w-4 h-4 text-blue-600" />
+                    <p className="text-gray-900 dark:text-gray-100 font-mono font-semibold">{generatedPatientId}</p>
+                    {patientRecord && (
+                      <span className="text-xs text-gray-500 dark:text-gray-400">
+                        (Phone-based)
+                      </span>
+                    )}
+                  </div>
+                  {patientRecord && (
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                      Created: {new Date(patientRecord.createdAt).toLocaleDateString()}
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Message Type</label>
@@ -293,6 +322,43 @@ export const SMSDetailModal: React.FC<SMSDetailModalProps> = ({ message, isOpen,
                     <p className="text-gray-900 dark:text-gray-100 font-mono text-sm">{message.metadata.chat_id}</p>
                   </div>
                 )}
+              </div>
+            </div>
+
+            {/* Call History Matching */}
+            <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-700">
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 flex items-center gap-2">
+                <PhoneIcon className="w-5 h-5 text-blue-600" />
+                Phone Number Matching
+              </h3>
+              <div className="space-y-3">
+                <div className="bg-white dark:bg-gray-800 rounded p-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                        Patient ID for this phone number:
+                      </p>
+                      <p className="text-lg font-bold text-blue-600 font-mono">
+                        {generatedPatientId}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Consistent across all platforms
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        Phone: {message.phone_number}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-sm text-gray-600 dark:text-gray-400">
+                  <p>✓ This Patient ID will be the same for all SMS messages and calls from this phone number</p>
+                  <p>✓ Patient records are automatically linked across SMS and Call systems</p>
+                  {patientRecord && (
+                    <p>✓ Patient record created: {new Date(patientRecord.createdAt).toLocaleDateString()}</p>
+                  )}
+                </div>
               </div>
             </div>
 

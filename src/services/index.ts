@@ -8,6 +8,7 @@ import { avatarStorageService } from './avatarStorageService'
 import { currencyService } from './currencyService'
 import { twilioCostService } from './twilioCostService'
 import { pdfExportService } from './pdfExportService'
+import { patientIdService } from './patientIdService'
 
 // Create singleton instances
 export const userSettingsService = new UserSettingsService()
@@ -15,7 +16,7 @@ export const auditService = new AuditService()
 export const realtimeService = new RealtimeService()
 
 // Export services
-export { retellService, chatService, avatarStorageService, currencyService, twilioCostService, pdfExportService }
+export { retellService, chatService, avatarStorageService, currencyService, twilioCostService, pdfExportService, patientIdService }
 
 // Export classes for direct usage
 export { UserSettingsService, AuditService, RealtimeService }
