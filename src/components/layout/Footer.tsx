@@ -17,13 +17,13 @@ export const Footer: React.FC<FooterProps> = ({ variant = 'default' }) => {
         <div className="flex items-center gap-3 text-gray-400 dark:text-gray-500">
           {/* Light mode logo */}
           <img
-            src="https://phaetonai.ca/clients/nexasync/images/NexaSync-logo.png"
+            src="https://nexasync.ca/images/NexaSync-logo.png"
             alt="NexaSync Logo"
             className="h-4 w-auto object-contain opacity-60 dark:hidden"
           />
           {/* Dark mode logo */}
           <img
-            src="https://phaetonai.ca/clients/nexasync/images/nexasync-white.png"
+            src="https://nexasync.ca/images/nexasync-white.png"
             alt="NexaSync Logo"
             className="h-4 w-auto object-contain opacity-60 hidden dark:block"
           />

@@ -499,7 +499,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
         <div className="text-center mb-8">
           <img
-            src="https://carexps.nexasync.ca/images/Logo.png"
+            src="https://nexasync.ca/images/Logo.png"
             alt="CareXPS Logo"
             className="max-h-16 w-auto mx-auto mb-4 object-contain"
             onError={(e) => {

@@ -540,7 +540,7 @@ class PDFExportService {
   private async addLogoToPDF(centerX: number, y: number): Promise<void> {
     try {
       // Load the logo from the URL
-      const logoUrl = 'https://carexps.nexasync.ca/images/Logo.png'
+      const logoUrl = 'https://nexasync.ca/images/Logo.png'
       const response = await fetch(logoUrl)
 
       if (!response.ok) {
