@@ -359,6 +359,15 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   const loadAccurateSegmentsForAllChats = useCallback(async () => {
     if (!allFilteredChats || allFilteredChats.length === 0) return
 
+    // Add debugging to verify we're processing the correct chats for this date range
+    console.log(`🔍 loadAccurateSegmentsForAllChats called for ${selectedDateRange} with ${allFilteredChats.length} chats`)
+    console.log(`📊 Current date range: ${selectedDateRange}`)
+    console.log(`📅 Sample chat dates:`, allFilteredChats.slice(0, 3).map(chat => ({
+      id: chat.chat_id,
+      created: chat.created_at,
+      date: new Date(chat.created_at).toLocaleDateString()
+    })))
+
     const chatsToProcess = allFilteredChats.filter(chat => !fullDataSegmentCache.has(chat.chat_id))
     const cachedCount = allFilteredChats.length - chatsToProcess.length
 
@@ -368,6 +377,15 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
 
     console.log(`🚀 Loading accurate segment data for ${chatsToProcess.length} chats (${cachedCount} already cached)...`)
+    console.log(`⚠️ WARNING: Processing ${chatsToProcess.length} chats for ${selectedDateRange} - verify this is correct!`)
+
+    // Safety check: If processing too many chats for "today", something is wrong
+    if (selectedDateRange === 'today' && chatsToProcess.length > 50) {
+      console.error(`🚨 SAFETY ABORT: Attempting to process ${chatsToProcess.length} chats for "today" - this seems wrong! Aborting to prevent server overload.`)
+      console.error(`🚨 Expected ~10 chats for today, got ${allFilteredChats.length} total chats`)
+      console.error(`🚨 This suggests the allFilteredChats contains data from wrong date range`)
+      return
+    }
 
     // Start loading state
     setIsLoadingSegments(true)
