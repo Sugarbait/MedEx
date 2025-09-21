@@ -18,6 +18,8 @@ interface CallDetailModalProps {
     call_id: string
     patient_id?: string
     phone_number?: string
+    from_number?: string
+    to_number?: string
     call_status: string
     start_timestamp: number
     end_timestamp?: number
@@ -157,7 +159,7 @@ export const CallDetailModal: React.FC<CallDetailModalProps> = ({ call, isOpen, 
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Phone Number</label>
-                  <p className="text-gray-900 dark:text-gray-100">{call.phone_number || 'N/A'}</p>
+                  <p className="text-gray-900 dark:text-gray-100">{call.from_number || call.to_number || call.phone_number || 'N/A'}</p>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Call Type</label>
