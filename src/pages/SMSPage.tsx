@@ -190,7 +190,8 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
 
   // Helper function to calculate SMS segments for a chat (prioritizes modal's accurate data)
-  const calculateChatSMSSegments = useCallback((chat: Chat): number => {
+  // Note: This function should NOT update caches during metrics calculation to prevent circular dependencies
+  const calculateChatSMSSegments = useCallback((chat: Chat, shouldCache: boolean = true): number => {
     try {
       // Priority 1: Check full data cache first (populated by modal with accurate data)
       const fullDataCached = fullDataSegmentCache.get(chat.chat_id)
@@ -243,11 +244,13 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         console.log(`📊 Chat ${chat.chat_id}: Using fallback ${segments} segment (no content available)`)
       }
 
-      // Cache the result
-      setSegmentCache(prev => {
-        const newCache = new Map(prev.set(chat.chat_id, segments))
-        return newCache
-      })
+      // Only cache the result if explicitly requested (prevents circular dependencies in metrics calculation)
+      if (shouldCache) {
+        setSegmentCache(prev => {
+          const newCache = new Map(prev.set(chat.chat_id, segments))
+          return newCache
+        })
+      }
       return segments
 
     } catch (error) {
@@ -270,11 +273,13 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
           console.log(`🆘 Emergency fallback using transcript for ${chat.chat_id}: ${fallbackSegments} segments`)
 
-          // Cache this emergency fallback
-          setSegmentCache(prev => {
-            const newCache = new Map(prev.set(chat.chat_id, fallbackSegments))
-            return newCache
-          })
+          // Only cache this emergency fallback if explicitly requested
+          if (shouldCache) {
+            setSegmentCache(prev => {
+              const newCache = new Map(prev.set(chat.chat_id, fallbackSegments))
+              return newCache
+            })
+          }
 
           return fallbackSegments
         }
@@ -544,7 +549,8 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           console.log(`Chat ${index + 1} (${chat.chat_id}): ${accurateSegments} segments (ACCURATE from modal)`)
         } else {
           // Fallback to basic calculation only when no accurate data available
-          const fallbackSegments = calculateChatSMSSegments(chat)
+          // Use shouldCache: false to prevent circular dependency during metrics calculation
+          const fallbackSegments = calculateChatSMSSegments(chat, false)
           calculatedTotalSegments += fallbackSegments
           console.log(`Chat ${index + 1} (${chat.chat_id}): ${fallbackSegments} segments (fallback)`)
         }
@@ -624,7 +630,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
 
     calculateMetrics()
-  }, [allFilteredChats, smsCostManager.costs, calculateChatSMSSegments, segmentCache, segmentUpdateTrigger, fullDataSegmentCache])
+  }, [allFilteredChats, smsCostManager.costs, segmentUpdateTrigger, fullDataSegmentCache])
 
   // Simplified chat fetching following CallsPage pattern
   const fetchChatsOptimized = useCallback(async (retryCount = 0) => {
