@@ -46,6 +46,66 @@ export type NotesSubscriptionCallback = (notes: Note[]) => void
 class NotesService {
   private subscriptions: Map<string, RealtimeChannel> = new Map()
   private callbacks: Map<string, NotesSubscriptionCallback> = new Map()
+  private isSupabaseAvailable: boolean = true
+
+  constructor() {
+    // Test Supabase availability on initialization
+    this.testSupabaseConnection()
+  }
+
+  /**
+   * Test if Supabase connection is available
+   */
+  private async testSupabaseConnection(): Promise<boolean> {
+    try {
+      // Simple test query to check connection
+      const { error } = await supabase.from('notes').select('id').limit(1).maybeSingle()
+      this.isSupabaseAvailable = !error
+
+      if (error) {
+        console.log('🔌 Supabase connection unavailable, using localStorage mode:', error.message)
+      } else {
+        console.log('✅ Supabase connection available for notes')
+      }
+
+      return this.isSupabaseAvailable
+    } catch (error) {
+      console.log('🔌 Supabase connection test failed, using localStorage mode:', error instanceof Error ? error.message : 'Unknown error')
+      this.isSupabaseAvailable = false
+      return false
+    }
+  }
+
+  /**
+   * LocalStorage fallback methods for when Supabase is not available
+   */
+  private getLocalStorageKey(referenceId: string, referenceType: 'call' | 'sms'): string {
+    return `notes_${referenceType}_${referenceId}`
+  }
+
+  private saveNotesToLocalStorage(referenceId: string, referenceType: 'call' | 'sms', notes: Note[]): void {
+    try {
+      const key = this.getLocalStorageKey(referenceId, referenceType)
+      localStorage.setItem(key, JSON.stringify(notes))
+    } catch (error) {
+      console.error('Failed to save notes to localStorage:', error)
+    }
+  }
+
+  private getNotesFromLocalStorage(referenceId: string, referenceType: 'call' | 'sms'): Note[] {
+    try {
+      const key = this.getLocalStorageKey(referenceId, referenceType)
+      const stored = localStorage.getItem(key)
+      return stored ? JSON.parse(stored) : []
+    } catch (error) {
+      console.error('Failed to load notes from localStorage:', error)
+      return []
+    }
+  }
+
+  private generateLocalNoteId(): string {
+    return `local_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  }
 
   /**
    * Get current user information for note attribution
@@ -113,28 +173,66 @@ class NotesService {
         metadata: data.metadata || {}
       }
 
-      console.log('Creating note with UUID user_id:', noteData)
+      // Try Supabase first if available
+      if (await this.testSupabaseConnection()) {
+        console.log('Creating note with Supabase:', noteData)
 
-      const { data: note, error } = await supabase
-        .from('notes')
-        .insert(noteData)
-        .select()
-        .single()
+        const { data: note, error } = await supabase
+          .from('notes')
+          .insert(noteData)
+          .select()
+          .single()
 
-      if (error) {
-        console.error('Supabase error creating note:', error)
-        return { success: false, error: error.message }
+        if (error) {
+          console.error('Supabase error creating note, falling back to localStorage:', error)
+          // Fall back to localStorage
+          return this.createNoteLocalStorage(data, userInfo)
+        }
+
+        console.log('Note created successfully in Supabase:', note)
+        return { success: true, note }
+      } else {
+        // Use localStorage fallback
+        console.log('Using localStorage for note creation')
+        return this.createNoteLocalStorage(data, userInfo)
+      }
+    } catch (error) {
+      console.error('Error creating note, falling back to localStorage:', error)
+      const userInfo = await this.getCurrentUserInfo()
+      return this.createNoteLocalStorage(data, userInfo)
+    }
+  }
+
+  /**
+   * Create note using localStorage fallback
+   */
+  private async createNoteLocalStorage(data: CreateNoteData, userInfo: any): Promise<{ success: boolean; note?: Note; error?: string }> {
+    try {
+      const note: Note = {
+        id: this.generateLocalNoteId(),
+        reference_id: data.reference_id,
+        reference_type: data.reference_type,
+        content: data.content,
+        content_type: data.content_type || 'plain',
+        created_by: userInfo.id,
+        created_by_name: userInfo.name,
+        created_by_email: userInfo.email,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        is_edited: false,
+        metadata: data.metadata || {}
       }
 
-      console.log('Note created successfully:', note)
+      // Get existing notes and add the new one
+      const existingNotes = this.getNotesFromLocalStorage(data.reference_id, data.reference_type)
+      const updatedNotes = [...existingNotes, note]
+      this.saveNotesToLocalStorage(data.reference_id, data.reference_type, updatedNotes)
+
+      console.log('Note created successfully in localStorage:', note)
       return { success: true, note }
     } catch (error) {
-      console.error('Error creating note:', error)
-      // Gracefully handle connection failures
-      if (error instanceof Error && error.message.includes('Failed to fetch')) {
-        return { success: false, error: 'Notes service unavailable - Supabase not connected' }
-      }
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+      console.error('Error creating note in localStorage:', error)
+      return { success: false, error: 'Failed to save note locally' }
     }
   }
 
@@ -208,39 +306,37 @@ class NotesService {
     try {
       console.log('Fetching notes for:', referenceType, referenceId)
 
-      const { data: notes, error } = await supabase
-        .from('notes')
-        .select('*')
-        .eq('reference_id', referenceId)
-        .eq('reference_type', referenceType)
-        .order('created_at', { ascending: true })
+      // Try Supabase first if available
+      if (await this.testSupabaseConnection()) {
+        const { data: notes, error } = await supabase
+          .from('notes')
+          .select('*')
+          .eq('reference_id', referenceId)
+          .eq('reference_type', referenceType)
+          .order('created_at', { ascending: true })
 
-      if (error) {
-        console.error('Supabase error fetching notes:', error)
-        // Return empty notes instead of failing for most database errors
-        if (error.message.includes('Failed to fetch') ||
-            error.message.includes('network') ||
-            error.message.includes('connection')) {
-          console.log('Network/connection error, returning empty notes')
-          return { success: true, notes: [] }
+        if (error) {
+          console.error('Supabase error fetching notes, falling back to localStorage:', error)
+          // Fall back to localStorage
+          const localNotes = this.getNotesFromLocalStorage(referenceId, referenceType)
+          return { success: true, notes: localNotes }
         }
-        return { success: false, error: error.message }
-      }
 
-      console.log('Notes fetched successfully:', notes?.length || 0)
-      return { success: true, notes: notes || [] }
-    } catch (error) {
-      console.error('Error fetching notes:', error)
-      // Gracefully handle all connection failures - return empty notes array
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
-      if (errorMessage.includes('Failed to fetch') ||
-          errorMessage.includes('network') ||
-          errorMessage.includes('connection') ||
-          errorMessage.includes('TypeError')) {
-        console.log('Connection error, returning empty notes to prevent UI breakage')
-        return { success: true, notes: [] }
+        console.log('Notes fetched successfully from Supabase:', notes?.length || 0)
+        return { success: true, notes: notes || [] }
+      } else {
+        // Use localStorage fallback
+        console.log('Using localStorage for notes retrieval')
+        const localNotes = this.getNotesFromLocalStorage(referenceId, referenceType)
+        console.log('Notes fetched successfully from localStorage:', localNotes.length)
+        return { success: true, notes: localNotes }
       }
-      return { success: false, error: errorMessage }
+    } catch (error) {
+      console.error('Error fetching notes, falling back to localStorage:', error)
+      // Gracefully handle all connection failures - return localStorage notes
+      const localNotes = this.getNotesFromLocalStorage(referenceId, referenceType)
+      console.log('Connection error, returning localStorage notes to prevent UI breakage')
+      return { success: true, notes: localNotes }
     }
   }
 
@@ -258,39 +354,46 @@ class NotesService {
       // Clean up existing subscription if any
       await this.unsubscribeFromNotes(referenceId, referenceType)
 
-      console.log('Setting up real-time subscription for notes:', subscriptionKey)
-
-      const channel = supabase
-        .channel(`notes_${subscriptionKey}`)
-        .on(
-          'postgres_changes',
-          {
-            event: '*',
-            schema: 'public',
-            table: 'notes',
-            filter: `reference_id=eq.${referenceId},reference_type=eq.${referenceType}`
-          },
-          async (payload) => {
-            console.log('Real-time note update received:', payload)
-
-            // Fetch all notes for this reference to ensure consistency
-            const result = await this.getNotes(referenceId, referenceType)
-            if (result.success && result.notes) {
-              callback(result.notes)
-            }
-          }
-        )
-        .subscribe((status) => {
-          console.log('Notes subscription status:', status)
-          if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-            console.log('Notes realtime subscription failed - continuing with manual refresh only')
-          }
-        })
-
-      this.subscriptions.set(subscriptionKey, channel)
+      // Store callback for localStorage updates
       this.callbacks.set(subscriptionKey, callback)
 
-      // Initial fetch
+      // If Supabase is available, set up real-time subscription
+      if (await this.testSupabaseConnection()) {
+        console.log('Setting up real-time subscription for notes:', subscriptionKey)
+
+        const channel = supabase
+          .channel(`notes_${subscriptionKey}`)
+          .on(
+            'postgres_changes',
+            {
+              event: '*',
+              schema: 'public',
+              table: 'notes',
+              filter: `reference_id=eq.${referenceId},reference_type=eq.${referenceType}`
+            },
+            async (payload) => {
+              console.log('Real-time note update received:', payload)
+
+              // Fetch all notes for this reference to ensure consistency
+              const result = await this.getNotes(referenceId, referenceType)
+              if (result.success && result.notes) {
+                callback(result.notes)
+              }
+            }
+          )
+          .subscribe((status) => {
+            console.log('Notes subscription status:', status)
+            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+              console.log('Notes realtime subscription failed - continuing with localStorage only')
+            }
+          })
+
+        this.subscriptions.set(subscriptionKey, channel)
+      } else {
+        console.log('Supabase not available - using localStorage mode only for notes')
+      }
+
+      // Initial fetch (works with both Supabase and localStorage)
       const result = await this.getNotes(referenceId, referenceType)
       if (result.success && result.notes) {
         callback(result.notes)
@@ -411,6 +514,62 @@ class NotesService {
     } catch (error) {
       console.error('Error checking for notes:', error)
       return false
+    }
+  }
+
+  /**
+   * Sync localStorage notes to Supabase when connection becomes available
+   */
+  async syncLocalNotesToSupabase(): Promise<{ success: boolean; syncedCount: number; error?: string }> {
+    try {
+      if (!(await this.testSupabaseConnection())) {
+        return { success: false, syncedCount: 0, error: 'Supabase not available' }
+      }
+
+      let syncedCount = 0
+      const localStorage = window.localStorage
+      const keys = Object.keys(localStorage).filter(key => key.startsWith('notes_'))
+
+      for (const key of keys) {
+        try {
+          const notes: Note[] = JSON.parse(localStorage.getItem(key) || '[]')
+          const localNotes = notes.filter(note => note.id.startsWith('local_'))
+
+          for (const note of localNotes) {
+            // Try to create the note in Supabase
+            const { data: createdNote, error } = await supabase
+              .from('notes')
+              .insert({
+                reference_id: note.reference_id,
+                reference_type: note.reference_type,
+                content: note.content,
+                content_type: note.content_type,
+                created_by: note.created_by,
+                created_by_name: note.created_by_name,
+                created_by_email: note.created_by_email,
+                metadata: note.metadata
+              })
+              .select()
+              .single()
+
+            if (!error && createdNote) {
+              // Remove the local note and replace with Supabase note
+              const updatedNotes = notes.filter(n => n.id !== note.id).concat([createdNote])
+              this.saveNotesToLocalStorage(note.reference_id, note.reference_type, updatedNotes)
+              syncedCount++
+              console.log('Synced local note to Supabase:', note.id, '->', createdNote.id)
+            }
+          }
+        } catch (error) {
+          console.error('Error syncing notes for key:', key, error)
+        }
+      }
+
+      console.log(`Successfully synced ${syncedCount} local notes to Supabase`)
+      return { success: true, syncedCount }
+    } catch (error) {
+      console.error('Error syncing local notes to Supabase:', error)
+      return { success: false, syncedCount: 0, error: error instanceof Error ? error.message : 'Unknown error' }
     }
   }
 

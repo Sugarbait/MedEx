@@ -1,12 +1,27 @@
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '@/types/supabase'
 
+// Get environment variables and debug their values
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
 const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
 const supabaseServiceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY
 
+// Debug logging to identify configuration issues
+console.log('🔧 Supabase Configuration Debug:')
+console.log('- VITE_SUPABASE_URL:', supabaseUrl ? `${supabaseUrl.substring(0, 30)}...` : 'MISSING')
+console.log('- VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'MISSING')
+console.log('- Environment mode:', import.meta.env.MODE)
+console.log('- All env vars:', Object.keys(import.meta.env).filter(key => key.startsWith('VITE_')))
+
+// Check for localhost URLs that could cause CSP violations
+if (supabaseUrl && supabaseUrl.includes('localhost')) {
+  console.error('🚨 DETECTED LOCALHOST SUPABASE URL! This will violate CSP policy.')
+  console.error('Current URL:', supabaseUrl)
+  console.error('This suggests a development server is running or environment variables are not loaded correctly.')
+}
+
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Supabase configuration missing or invalid. Application will operate in localStorage-only mode.')
+  console.warn('⚠️ Supabase configuration missing or invalid. Application will operate in localStorage-only mode.')
   console.warn('To enable Supabase integration, set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env.local file')
 }
 
@@ -14,8 +29,18 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // Create a fallback client if configuration is invalid
 const createSupabaseClient = () => {
   try {
-    if (!supabaseUrl || !supabaseAnonKey || supabaseUrl.includes('example.') || supabaseUrl === 'your_url_here') {
-      console.warn('Using fallback Supabase configuration for localStorage-only mode')
+    // Enhanced validation to prevent localhost URLs and ensure proper configuration
+    if (!supabaseUrl ||
+        !supabaseAnonKey ||
+        supabaseUrl.includes('example.') ||
+        supabaseUrl === 'your_url_here' ||
+        supabaseUrl.includes('localhost') ||
+        supabaseUrl.includes('127.0.0.1') ||
+        !supabaseUrl.includes('supabase.co')) {
+
+      console.warn('🔄 Using fallback Supabase configuration for localStorage-only mode')
+      console.warn('Reason: Invalid, missing, or localhost URL detected')
+
       // Create a minimal client that will fail gracefully
       return createClient<Database>('https://placeholder.supabase.co', 'dummy-key', {
         auth: {
@@ -29,6 +54,8 @@ const createSupabaseClient = () => {
         }
       })
     }
+
+    console.log('✅ Creating Supabase client with production URL:', supabaseUrl.substring(0, 30) + '...')
 
     return createClient<Database>(supabaseUrl, supabaseAnonKey, {
       auth: {
