@@ -383,16 +383,37 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }, 3000)
   }, [allFilteredChats, fullDataSegmentCache, updateFullDataSegmentCache])
 
-  // Auto-load accurate segments when chats are loaded
+  // Auto-load accurate segments when chats are loaded (only if there are uncached chats)
   useEffect(() => {
     if (allFilteredChats.length > 0) {
-      // Delay to ensure component is stable
-      const timer = setTimeout(() => {
-        loadAccurateSegmentsForAllChats()
-      }, 2000)
-      return () => clearTimeout(timer)
+      // Check how many chats need processing before triggering bulk load
+      const chatsToProcess = allFilteredChats.filter(chat => !fullDataSegmentCache.has(chat.chat_id))
+      const cachedCount = allFilteredChats.length - chatsToProcess.length
+
+      console.log(`📊 Date range changed: ${allFilteredChats.length} chats total, ${cachedCount} already cached, ${chatsToProcess.length} need processing`)
+
+      // Only trigger bulk loading if there are uncached chats AND it's worth processing
+      // (avoid triggering for small numbers of chats or when most are cached)
+      if (chatsToProcess.length > 0) {
+        const cacheHitRate = cachedCount / allFilteredChats.length
+        console.log(`💾 Cache hit rate: ${(cacheHitRate * 100).toFixed(1)}% (${cachedCount}/${allFilteredChats.length})`)
+
+        // Only auto-load if cache hit rate is less than 80% or if there are 3+ uncached chats
+        if (cacheHitRate < 0.8 || chatsToProcess.length >= 3) {
+          console.log(`🚀 Auto-triggering bulk load for ${chatsToProcess.length} uncached chats`)
+          // Delay to ensure component is stable
+          const timer = setTimeout(() => {
+            loadAccurateSegmentsForAllChats()
+          }, 2000)
+          return () => clearTimeout(timer)
+        } else {
+          console.log(`✨ Cache hit rate is good (${(cacheHitRate * 100).toFixed(1)}%), skipping auto-load. Use manual refresh if needed.`)
+        }
+      } else {
+        console.log(`💾 All ${allFilteredChats.length} chats already cached - no bulk loading needed!`)
+      }
     }
-  }, [allFilteredChats, loadAccurateSegmentsForAllChats])
+  }, [allFilteredChats, fullDataSegmentCache, loadAccurateSegmentsForAllChats])
 
   // Debounced search and filters
   const { debouncedValue: debouncedSearchTerm } = useDebounce(searchTerm, 500, {
@@ -1042,6 +1063,29 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                 💾 {fullDataSegmentCache.size} chats now cached • Future loads will be faster
               </div>
             </div>
+          )}
+
+          {/* Manual Refresh Button (show when there are uncached chats but auto-load was skipped) */}
+          {!isLoadingSegments && !segmentLoadingComplete && allFilteredChats.length > 0 && (
+            (() => {
+              const chatsToProcess = allFilteredChats.filter(chat => !fullDataSegmentCache.has(chat.chat_id))
+              const cachedCount = allFilteredChats.length - chatsToProcess.length
+              const cacheHitRate = cachedCount / allFilteredChats.length
+
+              // Show button if there are uncached chats but auto-load was skipped
+              return chatsToProcess.length > 0 && (cacheHitRate >= 0.8 && chatsToProcess.length < 3) ? (
+                <div className="mt-2 mb-1">
+                  <button
+                    onClick={() => loadAccurateSegmentsForAllChats()}
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] bg-blue-50 hover:bg-blue-100 text-blue-600 rounded border border-blue-200 transition-colors"
+                    title={`Calculate accurate segments for ${chatsToProcess.length} uncached chats`}
+                  >
+                    <RefreshCwIcon className="w-3 h-3" />
+                    <span>Calculate {chatsToProcess.length} uncached</span>
+                  </button>
+                </div>
+              ) : null
+            })()
           )}
 
           <div className="text-xs text-gray-500">
