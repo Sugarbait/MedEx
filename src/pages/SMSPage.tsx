@@ -329,10 +329,26 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
   }, [updateFullDataSegmentCache])
 
-  // Clear full data cache when date range changes
+  // Smart cache management for date range changes
+  // Only clear cache if the date range actually changed (not initial mount)
+  const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false)
+  const [lastDateRange, setLastDateRange] = useState<DateRange>(selectedDateRange)
+
   useEffect(() => {
-    setFullDataSegmentCache(new Map())
-  }, [selectedDateRange])
+    // Skip clearing cache on initial mount - preserve loaded cache
+    if (!hasInitiallyLoaded) {
+      setHasInitiallyLoaded(true)
+      setLastDateRange(selectedDateRange)
+      return
+    }
+
+    // Only clear cache if date range actually changed
+    if (lastDateRange !== selectedDateRange) {
+      console.log(`📅 Date range changed from ${lastDateRange} to ${selectedDateRange}, clearing segment cache`)
+      setFullDataSegmentCache(new Map())
+      setLastDateRange(selectedDateRange)
+    }
+  }, [selectedDateRange, hasInitiallyLoaded, lastDateRange])
 
   // Function to bulk load accurate segment data for all visible chats
   const loadAccurateSegmentsForAllChats = useCallback(async () => {
@@ -383,37 +399,42 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }, 3000)
   }, [allFilteredChats, fullDataSegmentCache, updateFullDataSegmentCache])
 
-  // Auto-load accurate segments when chats are loaded (only if there are uncached chats)
+  // Smart auto-load segments with proper cache synchronization
   useEffect(() => {
-    if (allFilteredChats.length > 0) {
-      // Check how many chats need processing before triggering bulk load
-      const chatsToProcess = allFilteredChats.filter(chat => !fullDataSegmentCache.has(chat.chat_id))
-      const cachedCount = allFilteredChats.length - chatsToProcess.length
+    if (allFilteredChats.length === 0) return
 
-      console.log(`📊 Date range changed: ${allFilteredChats.length} chats total, ${cachedCount} already cached, ${chatsToProcess.length} need processing`)
-
-      // Only trigger bulk loading if there are uncached chats AND it's worth processing
-      // (avoid triggering for small numbers of chats or when most are cached)
-      if (chatsToProcess.length > 0) {
-        const cacheHitRate = cachedCount / allFilteredChats.length
-        console.log(`💾 Cache hit rate: ${(cacheHitRate * 100).toFixed(1)}% (${cachedCount}/${allFilteredChats.length})`)
-
-        // Only auto-load if cache hit rate is less than 80% or if there are 3+ uncached chats
-        if (cacheHitRate < 0.8 || chatsToProcess.length >= 3) {
-          console.log(`🚀 Auto-triggering bulk load for ${chatsToProcess.length} uncached chats`)
-          // Delay to ensure component is stable
-          const timer = setTimeout(() => {
-            loadAccurateSegmentsForAllChats()
-          }, 2000)
-          return () => clearTimeout(timer)
-        } else {
-          console.log(`✨ Cache hit rate is good (${(cacheHitRate * 100).toFixed(1)}%), skipping auto-load. Use manual refresh if needed.`)
-        }
-      } else {
-        console.log(`💾 All ${allFilteredChats.length} chats already cached - no bulk loading needed!`)
-      }
+    // Wait for cache to be properly initialized on mount
+    if (!hasInitiallyLoaded) {
+      console.log(`⏳ Waiting for initial cache load to complete before processing ${allFilteredChats.length} chats`)
+      return
     }
-  }, [allFilteredChats, fullDataSegmentCache, loadAccurateSegmentsForAllChats])
+
+    // Check how many chats need processing after cache is ready
+    const chatsToProcess = allFilteredChats.filter(chat => !fullDataSegmentCache.has(chat.chat_id))
+    const cachedCount = allFilteredChats.length - chatsToProcess.length
+
+    console.log(`📊 Chats loaded: ${allFilteredChats.length} total, ${cachedCount} already cached, ${chatsToProcess.length} need processing`)
+
+    // Only trigger bulk loading if there are uncached chats AND it's worth processing
+    if (chatsToProcess.length > 0) {
+      const cacheHitRate = cachedCount / allFilteredChats.length
+      console.log(`💾 Cache hit rate: ${(cacheHitRate * 100).toFixed(1)}% (${cachedCount}/${allFilteredChats.length})`)
+
+      // More conservative auto-loading to prevent unnecessary API calls
+      if (cacheHitRate < 0.7 || chatsToProcess.length >= 5) {
+        console.log(`🚀 Auto-triggering bulk load for ${chatsToProcess.length} uncached chats (cache hit rate: ${(cacheHitRate * 100).toFixed(1)}%)`)
+        // Smaller delay since cache synchronization is now handled properly
+        const timer = setTimeout(() => {
+          loadAccurateSegmentsForAllChats()
+        }, 1000)
+        return () => clearTimeout(timer)
+      } else {
+        console.log(`✨ Cache hit rate is good (${(cacheHitRate * 100).toFixed(1)}%), skipping auto-load. Use manual refresh if needed.`)
+      }
+    } else {
+      console.log(`💾 All ${allFilteredChats.length} chats already cached - no bulk loading needed!`)
+    }
+  }, [allFilteredChats, fullDataSegmentCache, loadAccurateSegmentsForAllChats, hasInitiallyLoaded])
 
   // Debounced search and filters
   const { debouncedValue: debouncedSearchTerm } = useDebounce(searchTerm, 500, {
@@ -449,15 +470,22 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   // Fetch chats when component mounts or date range changes
   useEffect(() => {
     setCurrentPage(1)
-    smsCostManager.clearCosts() // Clear costs when date range changes
-    setSegmentCache(new Map()) // Clear segment cache for new date range
-    setLoadingFullChats(new Set()) // Clear loading state for new date range
-    setTotalSegments(0) // Reset segments count for new date range
-    setSegmentUpdateTrigger(0) // Reset segment update trigger
+
+    // Only clear other caches if not initial load (preserve persistent segment cache)
+    if (hasInitiallyLoaded) {
+      smsCostManager.clearCosts() // Clear costs when date range changes
+      setSegmentCache(new Map()) // Clear segment cache for new date range
+      setLoadingFullChats(new Set()) // Clear loading state for new date range
+      setTotalSegments(0) // Reset segments count for new date range
+      setSegmentUpdateTrigger(0) // Reset segment update trigger
+      console.log('📅 Date range changed, cleared non-persistent caches and reset state')
+    } else {
+      console.log('📅 Initial mount, preserving cached segment data')
+    }
+
     setIsSmartRefreshing(false) // Reset smart refresh state to prevent infinite spinning
-    console.log('📅 Date range changed, cleared all caches and reset state')
     debouncedFetchChats.debouncedCallback(true)
-  }, [selectedDateRange])
+  }, [selectedDateRange, hasInitiallyLoaded])
 
   // Fetch when page changes (no debouncing for pagination)
   useEffect(() => {
@@ -920,7 +948,9 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
               setLoadingFullChats(new Set()) // Clear loading state
               setSegmentUpdateTrigger(0) // Reset segment update trigger
               setError('')
-              console.log('🔄 Manual refresh: cleared all caches including segments')
+              // Note: We preserve fullDataSegmentCache as it contains persistent data
+              // It will be validated against new chat data automatically
+              console.log('🔄 Manual refresh: cleared temporary caches, preserving persistent segment cache')
               fetchChatsOptimized()
             }}
             disabled={loading || isSmartRefreshing}
