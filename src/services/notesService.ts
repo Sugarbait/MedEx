@@ -227,11 +227,11 @@ class NotesService {
         metadata: data.metadata || {}
       }
 
-      // Try Supabase first with timeout
+      // Fast path: Try Supabase directly without connection test
       try {
-        console.log('Creating note with Supabase:', noteData)
+        console.log('✨ Fast path: Creating note with Supabase:', noteData)
 
-        // Add timeout to prevent hanging
+        // Extended timeout for better reliability
         const insertPromise = supabase
           .from('notes')
           .insert(noteData)
@@ -239,7 +239,7 @@ class NotesService {
           .single()
 
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Supabase operation timeout')), 5000)
+          setTimeout(() => reject(new Error('Supabase operation timeout')), 8000)
         )
 
         const { data: note, error } = await Promise.race([insertPromise, timeoutPromise]) as any

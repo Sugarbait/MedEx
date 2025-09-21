@@ -5,9 +5,16 @@ import { envValidator } from '@/utils/envValidator'
 // Reset and validate environment configuration
 envValidator.reset()
 const envConfig = envValidator.getConfig()
-const supabaseUrl = envConfig.supabaseUrl
-const supabaseAnonKey = envConfig.supabaseAnonKey
-const supabaseServiceRoleKey = envConfig.supabaseServiceRoleKey
+
+// Force use of real Supabase configuration
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || envConfig.supabaseUrl
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || envConfig.supabaseAnonKey
+const supabaseServiceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || envConfig.supabaseServiceRoleKey
+
+console.log('🔧 Direct environment check:')
+console.log('- URL:', supabaseUrl ? supabaseUrl.substring(0, 30) + '...' : 'missing')
+console.log('- Anon Key:', supabaseAnonKey ? supabaseAnonKey.substring(0, 20) + '...' : 'missing')
+console.log('- Validator result:', envConfig.isValid, envConfig.errors)
 
 // Check for localhost URLs that could cause CSP violations
 if (supabaseUrl && supabaseUrl.includes('localhost')) {
@@ -25,8 +32,12 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // Create a fallback client if configuration is invalid
 const createSupabaseClient = () => {
   try {
-    // Use environment validator results
-    if (!envConfig.isValid) {
+    // Bypass validator if we have direct environment variables
+    const hasDirectCredentials = supabaseUrl && supabaseAnonKey &&
+                                supabaseUrl.includes('.supabase.co') &&
+                                supabaseAnonKey.length > 100
+
+    if (!hasDirectCredentials && !envConfig.isValid) {
       console.warn('🔄 Using fallback Supabase configuration for localStorage-only mode')
       console.warn('Validation errors:', envConfig.errors)
 
