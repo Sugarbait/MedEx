@@ -673,6 +673,9 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
       // Get date range for filtering
       const { start, end } = getDateRangeFromSelection(selectedDateRange)
+      console.log(`🔍 fetchChatsOptimized: selectedDateRange = "${selectedDateRange}"`)
+      console.log(`📅 Date range for filtering: ${start.toLocaleString()} to ${end.toLocaleString()}`)
+      console.log(`⏰ Current time: ${new Date().toLocaleString()}`)
 
       // Fetch with retry logic for rate limiting - same as Calls page
       let allChatsResponse
@@ -708,11 +711,30 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       const startMs = start.getTime()
       const endMs = end.getTime()
 
+      console.log(`🔍 Total chats received from API: ${allChatsResponse.chats.length}`)
+      console.log(`📅 Filtering range: ${startMs} to ${endMs}`)
+
       const finalFiltered = allChatsResponse.chats.filter(chat => {
         const timestamp = chat.start_timestamp
         const chatTimeMs = timestamp.toString().length <= 10 ? timestamp * 1000 : timestamp
-        return chatTimeMs >= startMs && chatTimeMs <= endMs
+        const isInRange = chatTimeMs >= startMs && chatTimeMs <= endMs
+
+        // Debug first few chats
+        if (allChatsResponse.chats.indexOf(chat) < 3) {
+          console.log(`Chat ${chat.chat_id}: timestamp=${timestamp}, chatTimeMs=${chatTimeMs}, date=${new Date(chatTimeMs).toLocaleString()}, inRange=${isInRange}`)
+        }
+
+        return isInRange
       })
+
+      console.log(`📊 After filtering: ${finalFiltered.length} chats match "${selectedDateRange}" date range`)
+
+      // If "today" has many chats, show warning
+      if (selectedDateRange === 'today' && finalFiltered.length > 20) {
+        console.warn(`⚠️ WARNING: "today" date range contains ${finalFiltered.length} chats - this seems high!`)
+        console.warn(`📅 Today range: ${start.toLocaleString()} to ${end.toLocaleString()}`)
+        console.warn(`⏰ Current time: ${new Date().toLocaleString()}`)
+      }
 
       setTotalChatsCount(finalFiltered.length)
       setAllFilteredChats(finalFiltered)
