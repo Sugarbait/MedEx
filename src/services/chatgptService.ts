@@ -28,14 +28,30 @@ class ChatGPTService {
 
   constructor() {
     // Get API key from environment variables for security
-    this.apiKey = import.meta.env.VITE_OPENAI_API_KEY || ''
+    let apiKey = import.meta.env.VITE_OPENAI_API_KEY || ''
+
+    // Environment variable debugging - ensure .env.local is loaded
+    if (!apiKey) {
+      console.warn('🚨 VITE_OPENAI_API_KEY not found in environment variables')
+      console.warn('🚨 Make sure .env.local exists and contains: VITE_OPENAI_API_KEY=your_key_here')
+      console.warn('🚨 Restart the development server after adding the key')
+    }
+
+    this.apiKey = apiKey
 
     // Debug: Check if API key is loaded
-    console.log('ChatGPT Service initialized')
-    console.log('API Key loaded:', this.apiKey ? `Yes (${this.apiKey.substring(0, 10)}...)` : 'No')
+    console.log('🔍 ChatGPT Service initialized')
+    console.log('🔍 Environment check:', {
+      hasViteEnv: !!import.meta.env,
+      envKeys: Object.keys(import.meta.env || {}),
+      apiKeyExists: !!this.apiKey,
+      apiKeyLength: this.apiKey.length,
+      apiKeyPreview: this.apiKey ? `${this.apiKey.substring(0, 10)}...` : 'NONE'
+    })
 
     if (!this.apiKey) {
       console.error('❌ ChatGPT API key not configured. Please add VITE_OPENAI_API_KEY to .env.local file')
+      console.error('❌ Available env vars:', Object.keys(import.meta.env || {}))
     } else {
       console.log('✅ ChatGPT API key loaded successfully')
     }
@@ -85,8 +101,16 @@ When users ask about statistics, patterns, or historical data, provide comprehen
    */
   async sendMessage(userMessage: string, conversationHistory: ChatGPTMessage[] = []): Promise<ChatGPTResponse> {
     try {
+      console.log('🚀 ChatGPT sendMessage called with:', {
+        message: userMessage,
+        historyLength: conversationHistory.length,
+        hasApiKey: !!this.apiKey,
+        apiKeyLength: this.apiKey.length
+      })
+
       // Check if API key is configured
       if (!this.apiKey) {
+        console.error('❌ No API key found in sendMessage')
         return {
           success: false,
           error: 'ChatGPT service not configured. Using fallback responses.'
