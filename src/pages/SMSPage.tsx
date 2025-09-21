@@ -6,7 +6,7 @@ import { useSMSCostManager } from '@/hooks/useSMSCostManager'
 import { useNotesCount } from '@/hooks/useNotesCount'
 import { DateRangePicker, DateRange, getDateRangeFromSelection } from '@/components/common/DateRangePicker'
 import { ChatDetailModal } from '@/components/common/ChatDetailModal'
-import { APIOptimizationDebugPanel } from '@/components/common/APIOptimizationDebugPanel'
+import { SiteHelpChatbot } from '@/components/common/SiteHelpChatbot'
 import { chatService, type Chat, type ChatListOptions } from '@/services/chatService'
 import { optimizedChatService } from '@/services/optimizedChatService'
 import { retellService } from '@/services'
@@ -151,7 +151,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   // Optimization state
   const [lastDataFetch, setLastDataFetch] = useState<number>(0)
   const [isSmartRefreshing, setIsSmartRefreshing] = useState(false)
-  const [showDebugPanel, setShowDebugPanel] = useState(false)
+  const [showHelpChatbot, setShowHelpChatbot] = useState(false)
   const mountedRef = useRef(true)
   const [metrics, setMetrics] = useState<ChatMetrics>({
     totalChats: 0,
@@ -1717,10 +1717,10 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           />
         )}
 
-        {/* API Optimization Debug Panel */}
-        <APIOptimizationDebugPanel
-          isVisible={showDebugPanel}
-          onToggle={() => setShowDebugPanel(!showDebugPanel)}
+        {/* Site Help Chatbot - NO PHI ACCESS */}
+        <SiteHelpChatbot
+          isVisible={showHelpChatbot}
+          onToggle={() => setShowHelpChatbot(!showHelpChatbot)}
         />
 
     </div>

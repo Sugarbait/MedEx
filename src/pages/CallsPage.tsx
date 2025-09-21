@@ -3,6 +3,7 @@ import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { useNotesCount } from '@/hooks/useNotesCount'
 import { DateRangePicker, DateRange, getDateRangeFromSelection } from '@/components/common/DateRangePicker'
 import { CallDetailModal } from '@/components/common/CallDetailModal'
+import { SiteHelpChatbot } from '@/components/common/SiteHelpChatbot'
 import { RetellWebClient } from 'retell-client-js-sdk'
 import { retellService, type RetellCall, currencyService, twilioCostService } from '@/services'
 import { notesService } from '@/services/notesService'
@@ -104,6 +105,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
   })
   const [selectedCall, setSelectedCall] = useState<Call | null>(null)
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
+  const [showHelpChatbot, setShowHelpChatbot] = useState(false)
 
   // Use the new notes count hook for cross-device accessible note icons
   const {
@@ -1031,6 +1033,12 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
             onNotesChanged={() => refetchNotesCount()}
           />
         )}
+
+        {/* Site Help Chatbot - NO PHI ACCESS */}
+        <SiteHelpChatbot
+          isVisible={showHelpChatbot}
+          onToggle={() => setShowHelpChatbot(!showHelpChatbot)}
+        />
 
     </div>
   )
