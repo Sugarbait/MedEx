@@ -347,6 +347,8 @@ export const useNotesWithOfflineSync = (options: UseNotesWithOfflineSyncOptions)
   const deleteNote = async (noteId: string): Promise<boolean> => {
     try {
       if (isOffline) {
+        // Optimistically remove from UI immediately for offline mode
+        setNotes(prev => prev.filter(note => note.id !== noteId))
         addToOfflineQueue({ type: 'delete', data: { id: noteId } })
         onSuccess?.('Note deleted offline, will sync when online')
         return true
@@ -354,6 +356,14 @@ export const useNotesWithOfflineSync = (options: UseNotesWithOfflineSyncOptions)
 
       const result = await notesService.deleteNote(noteId)
       if (result.success) {
+        // Immediately update the UI state to remove the deleted note
+        setNotes(prev => prev.filter(note => note.id !== noteId))
+        // Also clear any draft for this note
+        setDraftNotes(prev => {
+          const updated = { ...prev }
+          delete updated[noteId]
+          return updated
+        })
         onSuccess?.('Note deleted successfully')
         return true
       } else {
@@ -362,6 +372,8 @@ export const useNotesWithOfflineSync = (options: UseNotesWithOfflineSyncOptions)
     } catch (error) {
       console.error('Delete note error:', error)
       if (isOffline) {
+        // Optimistically remove from UI immediately for offline fallback
+        setNotes(prev => prev.filter(note => note.id !== noteId))
         addToOfflineQueue({ type: 'delete', data: { id: noteId } })
         onSuccess?.('Note deleted offline, will sync when online')
         return true
