@@ -35,6 +35,70 @@ import {
   EyeIcon
 } from 'lucide-react'
 
+// Persistent cache utilities for SMS segments
+const SMS_SEGMENT_CACHE_KEY = 'sms_segment_cache_v2'
+const CACHE_EXPIRY_HOURS = 12 // Cache expires after 12 hours
+
+interface CachedSegmentData {
+  chatId: string
+  segments: number
+  timestamp: number
+  content?: string // Optional: store content hash for validation
+}
+
+interface SegmentCache {
+  data: CachedSegmentData[]
+  lastUpdated: number
+}
+
+const loadSegmentCache = (): Map<string, number> => {
+  try {
+    const cached = localStorage.getItem(SMS_SEGMENT_CACHE_KEY)
+    if (!cached) return new Map()
+
+    const cacheData: SegmentCache = JSON.parse(cached)
+    const now = Date.now()
+    const expiryTime = CACHE_EXPIRY_HOURS * 60 * 60 * 1000
+
+    // Check if cache is expired
+    if (now - cacheData.lastUpdated > expiryTime) {
+      console.log('📅 SMS segment cache expired, clearing old data')
+      localStorage.removeItem(SMS_SEGMENT_CACHE_KEY)
+      return new Map()
+    }
+
+    // Filter out expired individual entries and convert to Map
+    const validEntries = cacheData.data.filter(entry => {
+      return now - entry.timestamp < expiryTime
+    })
+
+    console.log(`💾 Loaded ${validEntries.length} cached SMS segment calculations`)
+    return new Map(validEntries.map(entry => [entry.chatId, entry.segments]))
+  } catch (error) {
+    console.error('Failed to load SMS segment cache:', error)
+    return new Map()
+  }
+}
+
+const saveSegmentCache = (cache: Map<string, number>) => {
+  try {
+    const now = Date.now()
+    const cacheData: SegmentCache = {
+      data: Array.from(cache.entries()).map(([chatId, segments]) => ({
+        chatId,
+        segments,
+        timestamp: now
+      })),
+      lastUpdated: now
+    }
+
+    localStorage.setItem(SMS_SEGMENT_CACHE_KEY, JSON.stringify(cacheData))
+    console.log(`💾 Saved ${cache.size} SMS segment calculations to cache`)
+  } catch (error) {
+    console.error('Failed to save SMS segment cache:', error)
+  }
+}
+
 interface SMSPageProps {
   user: any
 }
@@ -111,10 +175,18 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   // Cache for SMS segment calculations to avoid repeated API calls
   const [segmentCache, setSegmentCache] = useState<Map<string, number>>(new Map())
   const [loadingFullChats, setLoadingFullChats] = useState<Set<string>>(new Set())
-  // Cache for accurate segment calculations from full chat data (used by modal)
-  const [fullDataSegmentCache, setFullDataSegmentCache] = useState<Map<string, number>>(new Map())
+  // Cache for accurate segment calculations from full chat data (used by modal) with persistent storage
+  const [fullDataSegmentCache, setFullDataSegmentCache] = useState<Map<string, number>>(() => {
+    // Load cached data on initial mount
+    return loadSegmentCache()
+  })
   // Force re-render trigger for segment updates
   const [segmentUpdateTrigger, setSegmentUpdateTrigger] = useState(0)
+
+  // Progress tracking for bulk segment loading
+  const [isLoadingSegments, setIsLoadingSegments] = useState(false)
+  const [segmentLoadingProgress, setSegmentLoadingProgress] = useState({ completed: 0, total: 0 })
+  const [segmentLoadingComplete, setSegmentLoadingComplete] = useState(false)
 
 
   // Helper function to calculate SMS segments for a chat (prioritizes modal's accurate data)
@@ -231,9 +303,11 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
         console.log(`🎯 Modal calculated accurate segments for chat ${chatId}: ${accurateSegments} segments`)
 
-        // Update the full data cache
+        // Update the full data cache and persist to localStorage
         setFullDataSegmentCache(prev => {
           const newCache = new Map(prev.set(chatId, accurateSegments))
+          // Save updated cache to localStorage
+          saveSegmentCache(newCache)
           return newCache
         })
 
@@ -264,27 +338,49 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   const loadAccurateSegmentsForAllChats = useCallback(async () => {
     if (!allFilteredChats || allFilteredChats.length === 0) return
 
-    console.log(`🚀 Loading accurate segment data for ${allFilteredChats.length} chats...`)
+    const chatsToProcess = allFilteredChats.filter(chat => !fullDataSegmentCache.has(chat.chat_id))
+    const cachedCount = allFilteredChats.length - chatsToProcess.length
 
-    for (const chat of allFilteredChats) {
-      // Skip if we already have accurate data for this chat
-      if (fullDataSegmentCache.has(chat.chat_id)) {
-        continue
-      }
+    if (chatsToProcess.length === 0) {
+      console.log(`💾 All ${allFilteredChats.length} chats already have cached segment data - no processing needed!`)
+      return
+    }
 
+    console.log(`🚀 Loading accurate segment data for ${chatsToProcess.length} chats (${cachedCount} already cached)...`)
+
+    // Start loading state
+    setIsLoadingSegments(true)
+    setSegmentLoadingProgress({ completed: 0, total: chatsToProcess.length })
+    setSegmentLoadingComplete(false)
+
+    let completed = 0
+    for (const chat of chatsToProcess) {
       try {
         const fullChatDetails = await chatService.getChatById(chat.chat_id)
         if (fullChatDetails) {
           updateFullDataSegmentCache(chat.chat_id, fullChatDetails)
-          // Small delay to prevent rate limiting
-          await new Promise(resolve => setTimeout(resolve, 100))
         }
+        completed++
+        setSegmentLoadingProgress({ completed, total: chatsToProcess.length })
+
+        // Small delay to prevent rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100))
       } catch (error) {
         console.error(`Failed to load accurate segments for chat ${chat.chat_id}:`, error)
+        completed++
+        setSegmentLoadingProgress({ completed, total: chatsToProcess.length })
       }
     }
 
+    // Finish loading state
+    setIsLoadingSegments(false)
+    setSegmentLoadingComplete(true)
     console.log(`✅ Finished loading accurate segment data`)
+
+    // Hide completion message after 3 seconds
+    setTimeout(() => {
+      setSegmentLoadingComplete(false)
+    }, 3000)
   }, [allFilteredChats, fullDataSegmentCache, updateFullDataSegmentCache])
 
   // Auto-load accurate segments when chats are loaded
@@ -908,6 +1004,46 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           <div className="text-3xl font-black text-blue-600 mb-1">
             <span className="numeric-data">{loading ? '...' : metrics.totalSMSSegments}</span>
           </div>
+
+          {/* Progress Indicator */}
+          {isLoadingSegments && (
+            <div className="mt-2 mb-1">
+              <div className="flex items-center gap-2 text-xs text-blue-600">
+                <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <span>Calculating accurate segments... ({segmentLoadingProgress.completed}/{segmentLoadingProgress.total})</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                <div
+                  className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+                  style={{
+                    width: segmentLoadingProgress.total > 0
+                      ? `${(segmentLoadingProgress.completed / segmentLoadingProgress.total) * 100}%`
+                      : '0%'
+                  }}
+                ></div>
+              </div>
+              {/* Cache info */}
+              <div className="text-[10px] text-gray-500 mt-1">
+                💾 {fullDataSegmentCache.size} chats cached • Only processing uncached chats
+              </div>
+            </div>
+          )}
+
+          {/* Completion Message */}
+          {segmentLoadingComplete && !isLoadingSegments && (
+            <div className="mt-2 mb-1">
+              <div className="flex items-center gap-2 text-xs text-green-600">
+                <div className="w-3 h-3 bg-green-600 rounded-full flex items-center justify-center">
+                  <span className="text-white text-[8px] font-bold">✓</span>
+                </div>
+                <span>✅ Calculation complete!</span>
+              </div>
+              <div className="text-[10px] text-gray-500 mt-1">
+                💾 {fullDataSegmentCache.size} chats now cached • Future loads will be faster
+              </div>
+            </div>
+          )}
+
           <div className="text-xs text-gray-500">
             Total segments for date range
           </div>
