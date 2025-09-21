@@ -9,7 +9,6 @@ interface MFAGateProps {
 }
 
 export const MFAGate: React.FC<MFAGateProps> = ({ onSuccess, user }) => {
-  const { logout } = useAuth()
   const [mfaCode, setMfaCode] = useState('')
   const [isVerifying, setIsVerifying] = useState(false)
   const [error, setError] = useState('')
@@ -48,9 +47,21 @@ export const MFAGate: React.FC<MFAGateProps> = ({ onSuccess, user }) => {
 
   const handleLogout = async () => {
     try {
-      await logout()
+      // For MFA page, we want a simple logout that doesn't open Microsoft account picker
+      // Just clear local state and redirect to login
+      console.log('MFA logout: Clearing session and redirecting to login')
+
+      // Clear any local storage or session data
+      localStorage.removeItem('currentUser')
+      localStorage.removeItem('user_settings')
+      sessionStorage.clear()
+
+      // Redirect to the login page by reloading the application
+      window.location.href = window.location.origin
     } catch (error) {
       console.error('Logout error:', error)
+      // Fallback: still redirect even if there's an error
+      window.location.href = window.location.origin
     }
   }
 
