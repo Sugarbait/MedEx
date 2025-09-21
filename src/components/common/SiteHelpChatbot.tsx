@@ -13,8 +13,7 @@ import {
   MinimizeIcon,
   XIcon,
   BotIcon,
-  UserIcon,
-  HelpCircleIcon
+  UserIcon
 } from 'lucide-react'
 import { chatgptService, type ChatGPTMessage } from '@/services/chatgptService'
 
@@ -38,7 +37,7 @@ export const SiteHelpChatbot: React.FC<SiteHelpChatbotProps> = ({
     {
       id: '1',
       type: 'bot',
-      content: 'Hello! I\'m here to help you navigate and use the CareXPS platform. I can assist with questions about features, navigation, and general support. I have NO access to patient data or PHI. How can I help you today?',
+      content: 'Hello! I\'m your CareXPS Assistant powered by ChatGPT. I can help you navigate the platform, understand features, and answer questions about using the system. I have NO access to any patient data or PHI - I only know about platform features and functionality. How can I help you today?',
       timestamp: new Date()
     }
   ])
@@ -137,7 +136,7 @@ export const SiteHelpChatbot: React.FC<SiteHelpChatbotProps> = ({
       {
         id: '1',
         type: 'bot',
-        content: 'Chat cleared! I\'m here to help you navigate and use the CareXPS platform. I have NO access to patient data or PHI. How can I help you today?',
+        content: 'Chat cleared! I\'m your CareXPS Assistant powered by ChatGPT. I can help you navigate the platform, understand features, and answer questions about using the system. I have NO access to any patient data or PHI. How can I help you today?',
         timestamp: new Date()
       }
     ])
@@ -161,17 +160,26 @@ export const SiteHelpChatbot: React.FC<SiteHelpChatbotProps> = ({
 
   return (
     <div className={`fixed bottom-4 right-4 bg-white border border-gray-200 rounded-lg shadow-xl z-50 transition-all duration-200 ${
-      isMinimized ? 'w-80 h-12' : 'w-80 h-96'
+      isMinimized ? 'w-80 h-12' : 'w-80 h-[500px]'
     }`}>
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-blue-50 rounded-t-lg">
         <div className="flex items-center gap-2">
-          <div className="p-1 bg-blue-600 rounded-full">
-            <BotIcon className="w-4 h-4 text-white" />
-          </div>
+          <img
+            src="https://nexasync.ca/images/favixps.png"
+            alt="CareXPS"
+            className="w-6 h-6"
+            onError={(e) => {
+              // Fallback to a simple colored dot if image fails to load
+              const target = e.target as HTMLImageElement;
+              target.style.display = 'none';
+              const fallback = document.createElement('div');
+              fallback.className = 'w-6 h-6 bg-blue-600 rounded-full';
+              target.parentNode?.insertBefore(fallback, target);
+            }}
+          />
           <div>
-            <h3 className="font-semibold text-gray-900 text-sm">Site Help</h3>
-            <p className="text-xs text-gray-600">Non-PHI Assistant</p>
+            <h3 className="font-semibold text-gray-900 text-sm">CareXPS Assistant</h3>
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -195,7 +203,7 @@ export const SiteHelpChatbot: React.FC<SiteHelpChatbotProps> = ({
       {!isMinimized && (
         <>
           {/* Messages */}
-          <div className="h-64 overflow-y-auto p-3 space-y-3">
+          <div className="h-80 overflow-y-auto p-3 space-y-3">
             {messages.map((message) => (
               <div key={message.id} className={`flex gap-2 ${message.type === 'user' ? 'flex-row-reverse' : ''}`}>
                 <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${
@@ -204,7 +212,19 @@ export const SiteHelpChatbot: React.FC<SiteHelpChatbotProps> = ({
                   {message.type === 'user' ? (
                     <UserIcon className="w-3 h-3 text-white" />
                   ) : (
-                    <HelpCircleIcon className="w-3 h-3 text-white" />
+                    <img
+                      src="https://nexasync.ca/images/favixps.png"
+                      alt="CareXPS"
+                      className="w-3 h-3"
+                      onError={(e) => {
+                        const target = e.target as HTMLImageElement;
+                        target.style.display = 'none';
+                        const icon = document.createElement('div');
+                        icon.innerHTML = '🤖';
+                        icon.className = 'text-xs';
+                        target.parentNode?.appendChild(icon);
+                      }}
+                    />
                   )}
                 </div>
                 <div className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
@@ -225,7 +245,19 @@ export const SiteHelpChatbot: React.FC<SiteHelpChatbotProps> = ({
             {isTyping && (
               <div className="flex gap-2">
                 <div className="flex-shrink-0 w-6 h-6 rounded-full bg-gray-400 flex items-center justify-center">
-                  <HelpCircleIcon className="w-3 h-3 text-white" />
+                  <img
+                    src="https://nexasync.ca/images/favixps.png"
+                    alt="CareXPS"
+                    className="w-3 h-3"
+                    onError={(e) => {
+                      const target = e.target as HTMLImageElement;
+                      target.style.display = 'none';
+                      const icon = document.createElement('div');
+                      icon.innerHTML = '🤖';
+                      icon.className = 'text-xs';
+                      target.parentNode?.appendChild(icon);
+                    }}
+                  />
                 </div>
                 <div className="bg-gray-100 px-3 py-2 rounded-lg text-sm">
                   <div className="flex space-x-1">
@@ -241,7 +273,7 @@ export const SiteHelpChatbot: React.FC<SiteHelpChatbotProps> = ({
 
           {/* Input */}
           <div className="p-3 border-t border-gray-200">
-            <div className="flex gap-2">
+            <div className="flex gap-2 mb-2">
               <input
                 ref={inputRef}
                 type="text"
@@ -260,14 +292,17 @@ export const SiteHelpChatbot: React.FC<SiteHelpChatbotProps> = ({
                 <SendIcon className="w-4 h-4" />
               </button>
             </div>
-            <div className="flex justify-between items-center mt-2">
+            <div className="flex justify-between items-center">
               <button
                 onClick={clearChat}
-                className="text-xs text-gray-500 hover:text-gray-700 transition-colors"
+                className="text-xs text-blue-600 hover:text-blue-700 transition-colors font-medium"
               >
                 Clear chat
               </button>
-              <span className="text-xs text-gray-400">No PHI access</span>
+              <div className="flex items-center gap-1">
+                <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                <span className="text-xs text-gray-500">No PHI access • Secure</span>
+              </div>
             </div>
           </div>
         </>
