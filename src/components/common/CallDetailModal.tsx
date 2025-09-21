@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import {
   PhoneIcon,
   DownloadIcon,
@@ -9,9 +9,11 @@ import {
   CheckCircleIcon,
   XIcon,
   PhoneCallIcon,
-  TrendingUpIcon
+  TrendingUpIcon,
+  IdCardIcon
 } from 'lucide-react'
 import { CallNotes } from './CallNotes'
+import { patientIdService } from '@/services/patientIdService'
 
 interface CallDetailModalProps {
   call: {
@@ -44,6 +46,27 @@ interface CallDetailModalProps {
 }
 
 export const CallDetailModal: React.FC<CallDetailModalProps> = ({ call, isOpen, onClose, onNotesChanged }) => {
+  const [generatedPatientId, setGeneratedPatientId] = useState<string>('')
+  const [patientRecord, setPatientRecord] = useState<any>(null)
+
+  // Generate Patient ID based on phone number when modal opens
+  useEffect(() => {
+    if (isOpen && call) {
+      // Extract phone number from various possible fields
+      const phoneNumber = call.phone_number || call.from_number || call.to_number
+
+      if (phoneNumber) {
+        const patientId = patientIdService.getPatientId(phoneNumber)
+        const record = patientIdService.getPatientRecord(phoneNumber)
+        setGeneratedPatientId(patientId)
+        setPatientRecord(record)
+      } else {
+        setGeneratedPatientId('PT00000000')
+        setPatientRecord(null)
+      }
+    }
+  }, [isOpen, call])
+
   if (!isOpen) return null
 
   const formatDuration = (seconds?: number) => {
@@ -92,10 +115,10 @@ export const CallDetailModal: React.FC<CallDetailModalProps> = ({ call, isOpen, 
             </div>
             <div>
               <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                {call.metadata?.patient_name || `Patient ${call.patient_id}`}
+                {call.metadata?.patient_name || 'Caller'}
               </h2>
               <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-                <span>ID: {call.patient_id}</span>
+                <span>ID: {generatedPatientId || 'PT00000000'}</span>
                 <span className="flex items-center gap-1">
                   <CalendarIcon className="w-4 h-4" />
                   {date} at {time}
@@ -167,7 +190,15 @@ export const CallDetailModal: React.FC<CallDetailModalProps> = ({ call, isOpen, 
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Patient ID</label>
-                  <p className="text-gray-900 dark:text-gray-100">{call.patient_id || 'N/A'}</p>
+                  <div className="flex items-center gap-2">
+                    <IdCardIcon className="w-4 h-4 text-blue-600" />
+                    <p className="text-gray-900 dark:text-gray-100 font-mono font-semibold">
+                      {generatedPatientId || 'PT00000000'}
+                    </p>
+                    {patientRecord && (
+                      <span className="text-xs text-gray-500 dark:text-gray-400">(Phone-based)</span>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
