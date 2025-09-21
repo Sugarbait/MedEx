@@ -87,9 +87,15 @@ export class EnvironmentValidator {
       const parsed = new URL(url)
       return (
         parsed.protocol === 'https:' &&
-        parsed.hostname.includes('supabase.co') &&
+        (
+          // Standard Supabase URL format: https://xxx.supabase.co
+          parsed.hostname.endsWith('.supabase.co') ||
+          // Allow supabase.co domains
+          parsed.hostname.includes('supabase.co')
+        ) &&
         !parsed.hostname.includes('localhost') &&
-        !parsed.hostname.includes('example')
+        !parsed.hostname.includes('example') &&
+        !parsed.hostname.includes('placeholder')
       )
     } catch {
       return false

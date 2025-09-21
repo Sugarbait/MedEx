@@ -2,7 +2,8 @@ import { createClient } from '@supabase/supabase-js'
 import { Database } from '@/types/supabase'
 import { envValidator } from '@/utils/envValidator'
 
-// Validate environment configuration
+// Reset and validate environment configuration
+envValidator.reset()
 const envConfig = envValidator.getConfig()
 const supabaseUrl = envConfig.supabaseUrl
 const supabaseAnonKey = envConfig.supabaseAnonKey
