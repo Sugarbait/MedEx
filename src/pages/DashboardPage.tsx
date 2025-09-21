@@ -36,8 +36,8 @@ interface SegmentCache {
   lastUpdated: number
 }
 
-// Constants for caching (same as SMS page)
-const SMS_SEGMENT_CACHE_KEY = 'sms_segment_cache_v2'
+// Constants for caching (separate from SMS page to prevent modal interference)
+const DASHBOARD_SEGMENT_CACHE_KEY = 'dashboard_segment_cache_v1'
 const CACHE_EXPIRY_HOURS = 12
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
@@ -114,16 +114,16 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
   const [retellStatus, setRetellStatus] = useState<'checking' | 'connected' | 'error' | 'not-configured'>('checking')
   const [chatCosts, setChatCosts] = useState<Map<string, number>>(new Map())
 
-  // Load segment cache from localStorage (same as SMS page)
+  // Load segment cache from localStorage (isolated from SMS page)
   const loadSegmentCache = (): Map<string, number> => {
     try {
-      const cached = localStorage.getItem(SMS_SEGMENT_CACHE_KEY)
+      const cached = localStorage.getItem(DASHBOARD_SEGMENT_CACHE_KEY)
       if (!cached) return new Map()
       const cacheData: SegmentCache = JSON.parse(cached)
       const now = Date.now()
       const expiryTime = CACHE_EXPIRY_HOURS * 60 * 60 * 1000
       if (now - cacheData.lastUpdated > expiryTime) {
-        localStorage.removeItem(SMS_SEGMENT_CACHE_KEY)
+        localStorage.removeItem(DASHBOARD_SEGMENT_CACHE_KEY)
         return new Map()
       }
       const validEntries = cacheData.data.filter(entry => {
@@ -147,7 +147,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
         })),
         lastUpdated: now
       }
-      localStorage.setItem(SMS_SEGMENT_CACHE_KEY, JSON.stringify(cacheData))
+      localStorage.setItem(DASHBOARD_SEGMENT_CACHE_KEY, JSON.stringify(cacheData))
     } catch (error) {
       console.error('Failed to save segment cache:', error)
     }
