@@ -111,14 +111,23 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   // Cache for SMS segment calculations to avoid repeated API calls
   const [segmentCache, setSegmentCache] = useState<Map<string, number>>(new Map())
   const [loadingFullChats, setLoadingFullChats] = useState<Set<string>>(new Set())
+  // Cache for accurate segment calculations from full chat data (used by modal)
+  const [fullDataSegmentCache, setFullDataSegmentCache] = useState<Map<string, number>>(new Map())
   // Force re-render trigger for segment updates
   const [segmentUpdateTrigger, setSegmentUpdateTrigger] = useState(0)
 
 
-  // Helper function to calculate SMS segments for a chat (simplified and more reliable)
+  // Helper function to calculate SMS segments for a chat (prioritizes modal's accurate data)
   const calculateChatSMSSegments = useCallback((chat: Chat): number => {
     try {
-      // Check cache first
+      // Priority 1: Check full data cache first (populated by modal with accurate data)
+      const fullDataCached = fullDataSegmentCache.get(chat.chat_id)
+      if (fullDataCached !== undefined) {
+        console.log(`✅ Using accurate segment count from modal: ${fullDataCached} segments for chat ${chat.chat_id}`)
+        return fullDataCached
+      }
+
+      // Priority 2: Check regular cache
       const cached = segmentCache.get(chat.chat_id)
       if (cached !== undefined) {
         return cached
@@ -204,8 +213,52 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       // Final fallback - use 1 instead of 2 for more realistic base cost
       return 1
     }
-  }, [segmentCache])
+  }, [segmentCache, fullDataSegmentCache])
 
+  // Function for modals to register accurate segment calculations from full chat data
+  const updateFullDataSegmentCache = useCallback((chatId: string, fullChatData: any) => {
+    try {
+      if (!fullChatData?.message_with_tool_calls || !Array.isArray(fullChatData.message_with_tool_calls)) {
+        console.log(`⚠️ No full message data available for chat ${chatId}`)
+        return
+      }
+
+      const messagesWithContent = fullChatData.message_with_tool_calls.filter(m => m.content && m.content.trim().length > 0)
+
+      if (messagesWithContent.length > 0) {
+        const breakdown = twilioCostService.getDetailedSMSBreakdown(messagesWithContent)
+        const accurateSegments = Math.max(breakdown.segmentCount, 1)
+
+        console.log(`🎯 Modal calculated accurate segments for chat ${chatId}: ${accurateSegments} segments`)
+
+        // Update the full data cache
+        setFullDataSegmentCache(prev => {
+          const newCache = new Map(prev.set(chatId, accurateSegments))
+          return newCache
+        })
+
+        // Trigger re-render to update cost column
+        setSegmentUpdateTrigger(prev => prev + 1)
+
+        return accurateSegments
+      }
+    } catch (error) {
+      console.error(`❌ Error calculating accurate segments for chat ${chatId}:`, error)
+    }
+  }, [])
+
+  // Expose the function globally so modals can access it
+  useEffect(() => {
+    (window as any).updateSMSSegments = updateFullDataSegmentCache
+    return () => {
+      delete (window as any).updateSMSSegments
+    }
+  }, [updateFullDataSegmentCache])
+
+  // Clear full data cache when date range changes
+  useEffect(() => {
+    setFullDataSegmentCache(new Map())
+  }, [selectedDateRange])
 
   // Debounced search and filters
   const { debouncedValue: debouncedSearchTerm } = useDebounce(searchTerm, 500, {

@@ -53,6 +53,13 @@ export const ChatDetailModal: React.FC<ChatDetailModalProps> = ({ chat, isOpen, 
       const fullChatDetails = await chatService.getChatById(chat.chat_id)
       console.log('Full chat details loaded:', fullChatDetails)
       setFullChat(fullChatDetails)
+
+      // Update the SMS page cache with accurate segment calculation from full data
+      if ((window as any).updateSMSSegments && fullChatDetails) {
+        console.log('🔄 Updating SMS page cache with modal data for chat:', chat.chat_id)
+        const accurateSegments = (window as any).updateSMSSegments(chat.chat_id, fullChatDetails)
+        console.log(`✅ SMS segments synchronized: ${accurateSegments} segments for chat ${chat.chat_id}`)
+      }
     } catch (error) {
       console.error('Failed to load full chat details:', error)
       setTranscriptError('Failed to load full transcript. Using available data.')
