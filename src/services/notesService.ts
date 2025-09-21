@@ -47,67 +47,39 @@ class NotesService {
   private subscriptions: Map<string, RealtimeChannel> = new Map()
   private callbacks: Map<string, NotesSubscriptionCallback> = new Map()
   private isSupabaseAvailable: boolean = true
-  private connectionTestPromise: Promise<boolean> | null = null
-  private lastConnectionTest: number = 0
-  private readonly CONNECTION_TEST_CACHE_MS = 30000 // Cache for 30 seconds
-
+  // Remove connection testing entirely for faster operation
   constructor() {
-    // Test Supabase availability on initialization (cached)
-    this.testSupabaseConnection()
+    // Start with Supabase available by default for fast path
+    this.isSupabaseAvailable = true
   }
 
   /**
-   * Test if Supabase connection is available (with caching)
+   * Fast connection check without blocking operations
    */
-  private async testSupabaseConnection(): Promise<boolean> {
-    const now = Date.now()
-
-    // Return cached result if recent
-    if (now - this.lastConnectionTest < this.CONNECTION_TEST_CACHE_MS) {
-      return this.isSupabaseAvailable
+  private async quickConnectionCheck(): Promise<boolean> {
+    if (!this.isSupabaseAvailable) {
+      return false
     }
-
-    // If there's already a test in progress, return that promise
-    if (this.connectionTestPromise) {
-      return this.connectionTestPromise
-    }
-
-    // Start new connection test
-    this.connectionTestPromise = this.performConnectionTest()
 
     try {
-      const result = await this.connectionTestPromise
-      this.lastConnectionTest = now
-      return result
-    } finally {
-      this.connectionTestPromise = null
-    }
-  }
-
-  /**
-   * Perform the actual connection test with timeout
-   */
-  private async performConnectionTest(): Promise<boolean> {
-    try {
-      // Create a promise with timeout to prevent hanging
+      // Quick test with very short timeout
       const testPromise = supabase.from('notes').select('id').limit(1).maybeSingle()
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Connection test timeout')), 3000)
+        setTimeout(() => reject(new Error('Quick test timeout')), 1500)
       )
 
       const { error } = await Promise.race([testPromise, timeoutPromise]) as any
-      this.isSupabaseAvailable = !error
 
       if (error) {
-        console.log('🔌 Supabase connection unavailable, using localStorage mode:', error.message)
-      } else {
-        console.log('✅ Supabase connection available for notes')
+        this.isSupabaseAvailable = false
+        console.log('🔌 Supabase connection test failed, switching to localStorage mode')
+        return false
       }
 
-      return this.isSupabaseAvailable
+      return true
     } catch (error) {
-      console.log('🔌 Supabase connection test failed, using localStorage mode:', error instanceof Error ? error.message : 'Unknown error')
       this.isSupabaseAvailable = false
+      console.log('🔌 Supabase connection failed, switching to localStorage mode')
       return false
     }
   }
@@ -231,7 +203,7 @@ class NotesService {
       try {
         console.log('✨ Fast path: Creating note with Supabase:', noteData)
 
-        // Extended timeout for better reliability
+        // Short timeout for immediate feedback
         const insertPromise = supabase
           .from('notes')
           .insert(noteData)
@@ -239,7 +211,7 @@ class NotesService {
           .single()
 
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Supabase operation timeout')), 8000)
+          setTimeout(() => reject(new Error('Save timeout - note may have been saved locally')), 3000)
         )
 
         const { data: note, error } = await Promise.race([insertPromise, timeoutPromise]) as any
@@ -247,12 +219,15 @@ class NotesService {
         if (!error && note) {
           console.log('Note created successfully in Supabase:', note)
           this.isSupabaseAvailable = true
-          this.lastConnectionTest = Date.now()
           return { success: true, note }
         }
 
         // If Supabase fails, fall back to localStorage
-        console.error('Supabase error creating note, falling back to localStorage:', error)
+        if (error.message?.includes('Save timeout')) {
+          console.log('Note save timed out, but may have been saved. Using localStorage as backup.')
+        } else {
+          console.error('Supabase error creating note, falling back to localStorage:', error)
+        }
         this.isSupabaseAvailable = false
       } catch (error) {
         console.error('Supabase connection failed during note creation, falling back to localStorage:', error)
@@ -412,7 +387,7 @@ class NotesService {
           .single()
 
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Supabase operation timeout')), 5000)
+          setTimeout(() => reject(new Error('Save timeout - note may have been saved locally')), 3000)
         )
 
         const { data: note, error } = await Promise.race([updatePromise, timeoutPromise]) as any
@@ -420,12 +395,15 @@ class NotesService {
         if (!error && note) {
           console.log('Note updated successfully in Supabase:', note)
           this.isSupabaseAvailable = true
-          this.lastConnectionTest = Date.now()
           return { success: true, note }
         }
 
         // If Supabase fails, fall back to localStorage
-        console.error('Supabase error updating note, falling back to localStorage:', error)
+        if (error.message?.includes('Save timeout')) {
+          console.log('Note update timed out, but may have been saved. Using localStorage as backup.')
+        } else {
+          console.error('Supabase error updating note, falling back to localStorage:', error)
+        }
         this.isSupabaseAvailable = false
       } catch (error) {
         console.error('Supabase connection failed during note update, falling back to localStorage:', error)
@@ -459,7 +437,6 @@ class NotesService {
         if (!error) {
           console.log('Note deleted successfully from Supabase')
           this.isSupabaseAvailable = true
-          this.lastConnectionTest = Date.now()
           return { success: true }
         }
 
@@ -498,7 +475,7 @@ class NotesService {
           .order('created_at', { ascending: true })
 
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Supabase operation timeout')), 5000)
+          setTimeout(() => reject(new Error('Load timeout - using local data')), 3000)
         )
 
         const { data: notes, error } = await Promise.race([fetchPromise, timeoutPromise]) as any
@@ -506,7 +483,6 @@ class NotesService {
         if (!error) {
           console.log('Notes fetched successfully from Supabase:', notes?.length || 0)
           this.isSupabaseAvailable = true
-          this.lastConnectionTest = Date.now()
           return { success: true, notes: notes || [] }
         }
 
@@ -550,8 +526,8 @@ class NotesService {
       // Store callback for localStorage updates
       this.callbacks.set(subscriptionKey, callback)
 
-      // If Supabase is available, set up real-time subscription
-      if (await this.testSupabaseConnection()) {
+      // Set up real-time subscription if Supabase is available
+      if (await this.quickConnectionCheck()) {
         console.log('Setting up real-time subscription for notes:', subscriptionKey)
 
         const channel = supabase
@@ -715,7 +691,7 @@ class NotesService {
    */
   async syncLocalNotesToSupabase(): Promise<{ success: boolean; syncedCount: number; error?: string }> {
     try {
-      if (!(await this.testSupabaseConnection())) {
+      if (!this.isSupabaseAvailable || !(await this.quickConnectionCheck())) {
         return { success: false, syncedCount: 0, error: 'Supabase not available' }
       }
 
