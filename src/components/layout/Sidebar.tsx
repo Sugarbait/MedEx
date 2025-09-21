@@ -119,7 +119,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, user }) => {
           <div className="flex items-center gap-3">
             <NavLink to="/dashboard" className="hover:opacity-80 transition-opacity">
               <img
-                src="https://carexps.nexasync.ca/images/Logo.png"
+                src="https://nexasync.ca/images/Logo.png"
                 alt="CareXPS Logo"
                 className="h-10 w-auto object-contain cursor-pointer"
               />

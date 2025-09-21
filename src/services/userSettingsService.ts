@@ -1,663 +1,529 @@
-import { supabase } from '@/config/supabase'
-import { UserSettingsService as BaseUserSettingsService } from './supabaseService'
-import { EnhancedUserSettingsService } from './userSettingsServiceEnhanced'
-import { UserSettings, ServiceResponse, RealtimePayload } from '@/types/supabase'
-import { Database } from '@/types/supabase'
-import { encryptPHI, decryptPHI } from '@/utils/encryption'
-
-type UserSettingsRow = Database['public']['Tables']['user_settings']['Row']
-
 /**
- * Enhanced user settings service with cross-device synchronization
+ * User Settings Service for Cross-Device Synchronization
+ *
+ * Implements Supabase-first approach for user preferences and settings
+ * with localStorage as cache/fallback. Provides real-time sync across devices.
  */
-export class UserSettingsService extends BaseUserSettingsService {
-  private static syncListeners = new Map<string, ((settings: UserSettings) => void)[]>()
-  private static realtimeSubscription: any = null
+
+import { supabase } from '@/config/supabase'
+import { Database, UserSettings, ServiceResponse, RealtimeChannel } from '@/types/supabase'
+import { encryptionService } from './encryption'
+import { auditLogger } from './auditLogger'
+import { RealtimeChannel as SupabaseRealtimeChannel } from '@supabase/supabase-js'
+
+type DatabaseUserSettings = Database['public']['Tables']['user_settings']['Row']
+
+export interface UserSettingsData {
+  theme: 'light' | 'dark' | 'auto'
+  notifications: {
+    email: boolean
+    sms: boolean
+    push: boolean
+    in_app: boolean
+    call_alerts: boolean
+    sms_alerts: boolean
+    security_alerts: boolean
+  }
+  security_preferences: {
+    session_timeout: number
+    require_mfa: boolean
+    password_expiry_reminder: boolean
+    login_notifications: boolean
+  }
+  dashboard_layout?: {
+    widgets?: Array<{
+      id: string
+      type: string
+      position: { x: number; y: number }
+      size: { width: number; height: number }
+      config?: Record<string, any>
+    }>
+  }
+  communication_preferences: {
+    default_method: 'phone' | 'sms' | 'email'
+    auto_reply_enabled: boolean
+    business_hours: {
+      enabled: boolean
+      start: string
+      end: string
+      timezone: string
+    }
+  }
+  accessibility_settings: {
+    high_contrast: boolean
+    large_text: boolean
+    screen_reader: boolean
+    keyboard_navigation: boolean
+  }
+  retell_config?: {
+    api_key?: string
+    call_agent_id?: string
+    sms_agent_id?: string
+  }
+  device_sync_enabled: boolean
+  [key: string]: any
+}
+
+class UserSettingsServiceClass {
+  private cache = new Map<string, { data: UserSettingsData; timestamp: number }>()
+  private readonly CACHE_TTL = 2 * 60 * 1000 // 2 minutes (aggressive sync)
+  private realtimeChannels = new Map<string, SupabaseRealtimeChannel>()
+  private subscriptionCallbacks = new Map<string, (settings: UserSettingsData) => void>()
 
   /**
-   * Initialize real-time sync for user settings (Enhanced Version)
+   * Get user settings with Supabase-first approach
    */
-  static initializeSync(): void {
-    console.log('Initializing enhanced real-time sync')
+  async getUserSettings(userId: string): Promise<UserSettingsData> {
+    try {
+      // Check cache first
+      const cached = this.cache.get(userId)
+      if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
+        console.log('📱 Using cached user settings')
+        return cached.data
+      }
 
-    // Initialize the enhanced service
-    EnhancedUserSettingsService.initialize()
+      // PRIORITY 1: Try Supabase for cross-device sync
+      let supabaseData: UserSettingsData | null = null
+      try {
+        const { data: settings, error } = await supabase
+          .from('user_settings')
+          .select('*')
+          .eq('user_id', userId)
+          .single()
 
-    // Keep legacy subscription for backward compatibility
-    if (this.realtimeSubscription) return
+        if (!error && settings) {
+          supabaseData = await this.transformSupabaseToLocal(settings)
+          console.log('✅ User settings loaded from Supabase (cross-device sync)')
 
-    this.realtimeSubscription = supabase
-      .channel('user_settings_sync_legacy')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'user_settings'
-        },
-        (payload: RealtimePayload<UserSettingsRow>) => {
-          this.handleRealtimeUpdate(payload)
+          // Cache the result
+          this.cache.set(userId, { data: supabaseData, timestamp: Date.now() })
+
+          // Store in localStorage as cache
+          this.storeLocalSettings(userId, supabaseData)
+
+          return supabaseData
+        } else if (error.code !== 'PGRST116') {
+          console.warn('⚠️ Supabase settings query failed:', error.message)
         }
-      )
-      .subscribe((status) => {
-        if (status === 'SUBSCRIBED') {
-          console.log('Legacy real-time sync initialized')
+      } catch (supabaseError) {
+        console.warn('⚠️ Supabase unavailable, trying localStorage fallback:', supabaseError)
+      }
+
+      // PRIORITY 2: Fallback to localStorage
+      const localData = this.getLocalSettings(userId)
+      if (localData) {
+        console.log('⚠️ Using localStorage fallback (offline mode)')
+
+        // Try to background sync to Supabase
+        this.backgroundSyncToSupabase(userId, localData).catch(error => {
+          console.warn('Background sync to Supabase failed:', error)
+        })
+
+        return localData
+      }
+
+      // PRIORITY 3: Return default settings and create them
+      const defaultSettings = this.getDefaultSettings()
+      console.log('📋 No existing settings found, creating defaults')
+
+      // Try to save defaults to Supabase immediately
+      await this.updateUserSettings(userId, defaultSettings)
+
+      return defaultSettings
+
+    } catch (error) {
+      console.error('❌ Error getting user settings:', error)
+
+      // Return defaults as last resort
+      return this.getDefaultSettings()
+    }
+  }
+
+  /**
+   * Update user settings with immediate cross-device sync
+   */
+  async updateUserSettings(userId: string, updates: Partial<UserSettingsData>): Promise<UserSettingsData> {
+    try {
+      // Get current settings
+      const currentSettings = await this.getUserSettings(userId)
+      const newSettings = { ...currentSettings, ...updates }
+
+      // PRIORITY 1: Save to Supabase for cross-device sync
+      let supabaseSuccess = false
+      try {
+        const supabaseData = await this.transformLocalToSupabase(userId, newSettings)
+        const { error } = await supabase
+          .from('user_settings')
+          .upsert(supabaseData, { onConflict: 'user_id' })
+
+        if (!error) {
+          console.log('✅ Settings saved to Supabase (cross-device sync)')
+          supabaseSuccess = true
+        } else {
+          console.warn('⚠️ Supabase save failed:', error.message)
         }
+      } catch (supabaseError) {
+        console.warn('⚠️ Supabase unavailable for settings save:', supabaseError)
+      }
+
+      // PRIORITY 2: Save to localStorage as cache/fallback
+      try {
+        this.storeLocalSettings(userId, newSettings)
+        console.log(supabaseSuccess ? '✅ Settings cached locally' : '⚠️ Settings saved to localStorage fallback')
+      } catch (localError) {
+        console.error('❌ localStorage save failed:', localError)
+        if (!supabaseSuccess) {
+          throw new Error('Failed to save settings - both Supabase and localStorage failed')
+        }
+      }
+
+      // Update cache
+      this.cache.set(userId, { data: newSettings, timestamp: Date.now() })
+
+      // Audit log
+      await auditLogger.logSecurityEvent('USER_SETTINGS_UPDATE', 'user_settings', true, {
+        userId,
+        updatedFields: Object.keys(updates),
+        syncedToSupabase: supabaseSuccess
       })
-  }
 
-  /**
-   * Cleanup real-time sync (Enhanced Version)
-   */
-  static cleanupSync(): void {
-    // Cleanup enhanced service
-    EnhancedUserSettingsService.cleanupSync()
+      console.log('✅ User settings updated successfully')
+      return newSettings
 
-    // Cleanup legacy subscription
-    if (this.realtimeSubscription) {
-      supabase.removeChannel(this.realtimeSubscription)
-      this.realtimeSubscription = null
-    }
-    this.syncListeners.clear()
-  }
-
-  /**
-   * Encrypt retell_config for secure storage
-   */
-  private static async encryptRetellConfig(config: {
-    api_key?: string
-    call_agent_id?: string
-    sms_agent_id?: string
-  }): Promise<any> {
-    try {
-      const result: any = {
-        call_agent_id: config.call_agent_id,
-        sms_agent_id: config.sms_agent_id
-      }
-
-      if (config.api_key) {
-        try {
-          const encryptedKey = encryptPHI(config.api_key)
-          result.api_key = encryptedKey
-        } catch (encryptError) {
-          // If encryption fails, store the key as-is with a marker
-          console.warn('Encryption not available, storing API key with basic encoding')
-          // Use basic base64 encoding as fallback (not secure, but better than plaintext)
-          result.api_key = btoa(config.api_key)
-          result.api_key_encoded = true
-        }
-      }
-
-      return result
     } catch (error) {
-      console.error('Failed to process retell config:', error)
-      // Return the config as-is if encryption completely fails
-      return config
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      console.error('❌ Error updating user settings:', errorMessage)
+
+      await auditLogger.logSecurityEvent('USER_SETTINGS_UPDATE_FAILED', 'user_settings', false, {
+        userId,
+        error: errorMessage
+      })
+
+      throw error
     }
   }
 
   /**
-   * Decrypt retell_config for use
+   * Subscribe to real-time settings changes for cross-device sync
    */
-  private static async decryptRetellConfig(encryptedConfig: any): Promise<{
-    api_key?: string
-    call_agent_id?: string
-    sms_agent_id?: string
-  } | null> {
+  subscribeToSettings(userId: string, callback: (settings: UserSettingsData) => void): void {
     try {
-      if (!encryptedConfig) return null
+      // Store callback
+      this.subscriptionCallbacks.set(userId, callback)
 
-      const result: any = {
-        call_agent_id: encryptedConfig.call_agent_id,
-        sms_agent_id: encryptedConfig.sms_agent_id
-      }
+      // Create realtime channel
+      const channel = supabase
+        .channel(`user-settings-${userId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'user_settings',
+            filter: `user_id=eq.${userId}`
+          },
+          async (payload) => {
+            console.log('🔄 Real-time settings change detected:', payload.eventType)
 
-      if (encryptedConfig.api_key) {
-        try {
-          // Check if it's base64 encoded (fallback method)
-          if (encryptedConfig.api_key_encoded) {
-            result.api_key = atob(encryptedConfig.api_key)
-          } else {
-            // Try to decrypt using the encryption service
-            result.api_key = decryptPHI(encryptedConfig.api_key)
-          }
-        } catch (decryptError) {
-          console.warn('Failed to decrypt API key, using as-is')
-          // If decryption fails, check if it's base64 encoded
-          try {
-            // Try base64 decode as last resort
-            const decoded = atob(encryptedConfig.api_key)
-            // Quick check if decode worked (should contain recognizable characters)
-            if (decoded && decoded.length > 0) {
-              result.api_key = decoded
-            } else {
-              result.api_key = encryptedConfig.api_key
+            if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+              try {
+                const newSettings = await this.transformSupabaseToLocal(payload.new as DatabaseUserSettings)
+
+                // Update cache
+                this.cache.set(userId, { data: newSettings, timestamp: Date.now() })
+
+                // Update localStorage cache
+                this.storeLocalSettings(userId, newSettings)
+
+                // Notify callback
+                callback(newSettings)
+
+                console.log('✅ Settings synced from real-time update')
+              } catch (error) {
+                console.error('❌ Error processing real-time settings update:', error)
+              }
             }
-          } catch {
-            // If all fails, use as-is (might be plaintext)
-            result.api_key = encryptedConfig.api_key
           }
-        }
+        )
+        .subscribe((status) => {
+          console.log('📡 Real-time settings subscription status:', status)
+          if (status === 'SUBSCRIBED') {
+            console.log('✅ Real-time settings sync active')
+          }
+        })
+
+      // Store channel reference
+      this.realtimeChannels.set(userId, channel)
+
+    } catch (error) {
+      console.error('❌ Failed to setup real-time settings subscription:', error)
+    }
+  }
+
+  /**
+   * Unsubscribe from real-time settings changes
+   */
+  unsubscribeFromSettings(userId?: string): void {
+    if (userId) {
+      // Unsubscribe specific user
+      const channel = this.realtimeChannels.get(userId)
+      if (channel) {
+        supabase.removeChannel(channel)
+        this.realtimeChannels.delete(userId)
+        this.subscriptionCallbacks.delete(userId)
+        console.log('🔇 Unsubscribed from settings for user:', userId)
+      }
+    } else {
+      // Unsubscribe all
+      this.realtimeChannels.forEach((channel, userId) => {
+        supabase.removeChannel(channel)
+      })
+      this.realtimeChannels.clear()
+      this.subscriptionCallbacks.clear()
+      console.log('🔇 Unsubscribed from all settings subscriptions')
+    }
+  }
+
+  /**
+   * Force sync settings from Supabase (for login scenarios)
+   */
+  async forceSyncFromSupabase(userId: string): Promise<UserSettingsData | null> {
+    try {
+      console.log('🔄 Force syncing settings from Supabase...')
+
+      const { data: settings, error } = await supabase
+        .from('user_settings')
+        .select('*')
+        .eq('user_id', userId)
+        .single()
+
+      if (!error && settings) {
+        const localSettings = await this.transformSupabaseToLocal(settings)
+
+        // Update cache and localStorage
+        this.cache.set(userId, { data: localSettings, timestamp: Date.now() })
+        this.storeLocalSettings(userId, localSettings)
+
+        console.log('✅ Settings force-synced from Supabase')
+        return localSettings
+      } else if (error.code !== 'PGRST116') {
+        console.warn('⚠️ Force sync failed:', error.message)
       }
 
-      return result
+      return null
     } catch (error) {
-      console.error('Failed to decrypt retell config:', error)
+      console.error('❌ Force sync from Supabase failed:', error)
       return null
     }
   }
 
   /**
-   * Enhanced subscription to settings changes with cross-device support
+   * Get default settings
    */
-  static subscribeToUserSettings(
-    userId: string,
-    callback: (settings: UserSettings) => void
-  ): () => void {
-    // Subscribe to enhanced service for real-time updates
-    const enhancedUnsubscribe = EnhancedUserSettingsService.subscribeToUserSettings(userId, callback)
-
-    // Also maintain legacy listeners for backward compatibility
-    if (!this.syncListeners.has(userId)) {
-      this.syncListeners.set(userId, [])
-    }
-
-    this.syncListeners.get(userId)!.push(callback)
-
-    // Return combined unsubscribe function
-    return () => {
-      // Unsubscribe from enhanced service
-      enhancedUnsubscribe()
-
-      // Unsubscribe from legacy listeners
-      const listeners = this.syncListeners.get(userId)
-      if (listeners) {
-        const index = listeners.indexOf(callback)
-        if (index > -1) {
-          listeners.splice(index, 1)
-        }
-        if (listeners.length === 0) {
-          this.syncListeners.delete(userId)
-        }
-      }
-    }
-  }
-
-  /**
-   * Handle real-time updates from Supabase
-   */
-  private static handleRealtimeUpdate(payload: RealtimePayload<UserSettingsRow>): void {
-    const { eventType, new: newRecord, old: oldRecord } = payload
-
-    let userId: string | undefined
-    let settings: UserSettings | null = null
-
-    switch (eventType) {
-      case 'INSERT':
-      case 'UPDATE':
-        if (newRecord) {
-          userId = newRecord.user_id
-          settings = newRecord as UserSettings
-        }
-        break
-      case 'DELETE':
-        if (oldRecord) {
-          userId = oldRecord.user_id
-        }
-        break
-    }
-
-    if (userId && settings) {
-      const listeners = this.syncListeners.get(userId)
-      if (listeners) {
-        listeners.forEach(callback => callback(settings!))
-      }
-    }
-  }
-
-  /**
-   * Enhanced getUserSettings with cross-device support
-   */
-  static async getUserSettings(userId: string): Promise<ServiceResponse<UserSettings | null>> {
-    try {
-      console.log('Using enhanced settings service for getUserSettings')
-
-      // Use enhanced service for robust retrieval
-      const result = await EnhancedUserSettingsService.getUserSettings(userId)
-
-      if (result.status === 'success' && result.data) {
-        // Log security event for audit trail
-        await this.logSecurityEvent('SETTINGS_ACCESSED', 'user_settings', true, {
-          userId,
-          method: 'enhanced'
-        })
-      }
-
-      return result
-    } catch (error: any) {
-      console.warn('Enhanced service failed, falling back to base service')
-      return super.getUserSettings(userId)
-    }
-  }
-
-  /**
-   * Get user settings with caching and decryption
-   */
-  static async getUserSettingsWithCache(userId: string): Promise<ServiceResponse<UserSettings | null>> {
-    try {
-      // Try to get from cache first (localStorage for demo, could use IndexedDB)
-      const cacheKey = `user_settings_${userId}`
-      const cached = localStorage.getItem(cacheKey)
-
-      if (cached) {
-        const { data: cachedSettings, timestamp } = JSON.parse(cached)
-
-        // Check if cache is still valid (5 minutes)
-        if (Date.now() - timestamp < 5 * 60 * 1000) {
-          return { status: 'success', data: cachedSettings }
-        }
-      }
-
-      // Fetch from database with decryption
-      const response = await this.getUserSettings(userId)
-
-      if (response.status === 'success' && response.data) {
-        // Cache the decrypted settings
-        localStorage.setItem(cacheKey, JSON.stringify({
-          data: response.data,
-          timestamp: Date.now()
-        }))
-      }
-
-      return response
-    } catch (error: any) {
-      return this.handleError(error, 'getUserSettingsWithCache')
-    }
-  }
-
-  /**
-   * Override updateUserSettings to handle encryption
-   */
-  static async updateUserSettings(
-    userId: string,
-    settings: Partial<UserSettings>
-  ): Promise<ServiceResponse<UserSettings>> {
-    try {
-      // Prepare settings for database storage
-      const settingsToSave = { ...settings }
-
-      // Encrypt retell_config if it exists
-      if (settingsToSave.retell_config) {
-        const encryptedConfig = await this.encryptRetellConfig(settingsToSave.retell_config)
-        settingsToSave.retell_config = encryptedConfig
-      }
-
-      // Save to database with encryption
-      const baseResponse = await super.updateUserSettings(userId, settingsToSave as any)
-
-      if (baseResponse.status === 'error') {
-        return baseResponse as ServiceResponse<UserSettings>
-      }
-
-      // Return decrypted settings for use
-      const decryptedSettings = baseResponse.data as UserSettings
-      if (decryptedSettings.retell_config) {
-        const decryptedConfig = await this.decryptRetellConfig(decryptedSettings.retell_config)
-        decryptedSettings.retell_config = decryptedConfig
-      }
-
-      return { status: 'success', data: decryptedSettings }
-    } catch (error: any) {
-      return this.handleError(error, 'updateUserSettings')
-    }
-  }
-
-  /**
-   * Update user settings with cross-device synchronization via enhanced service
-   */
-  static async updateUserSettingsSync(
-    userId: string,
-    settings: Partial<UserSettings>,
-    optimistic: boolean = true
-  ): Promise<ServiceResponse<UserSettings>> {
-    try {
-      console.log('Using enhanced settings service for cross-device sync')
-
-      // Use the enhanced service for robust sync
-      const result = await EnhancedUserSettingsService.updateUserSettings(userId, settings, optimistic)
-
-      if (result.status === 'success') {
-        // Log security event for audit trail
-        await this.logSecurityEvent('SETTINGS_UPDATED', 'user_settings', true, {
-          userId,
-          syncMethod: 'enhanced',
-          fields: Object.keys(settings)
-        })
-
-        // Notify real-time listeners
-        const listeners = this.syncListeners.get(userId)
-        if (listeners && result.data) {
-          listeners.forEach(callback => callback(result.data!))
-        }
-      }
-
-      return result
-    } catch (error: any) {
-      console.error('Error in enhanced updateUserSettingsSync:', error)
-      return this.handleError(error, 'updateUserSettingsSync')
-    }
-  }
-
-  /**
-   * Merge settings objects with conflict resolution
-   */
-  private static mergeSettings(
-    current: Partial<UserSettings>,
-    updates: Partial<UserSettings>
-  ): Partial<UserSettings> {
-    const merged = { ...current, ...updates }
-
-    // Deep merge for nested objects
-    if (current.notifications && updates.notifications) {
-      merged.notifications = { ...current.notifications, ...updates.notifications }
-    }
-
-    if (current.security_preferences && updates.security_preferences) {
-      merged.security_preferences = {
-        ...current.security_preferences,
-        ...updates.security_preferences
-      }
-    }
-
-    if (current.dashboard_layout && updates.dashboard_layout) {
-      merged.dashboard_layout = {
-        ...current.dashboard_layout,
-        ...updates.dashboard_layout
-      }
-    }
-
-    if (current.communication_preferences && updates.communication_preferences) {
-      merged.communication_preferences = {
-        ...current.communication_preferences,
-        ...updates.communication_preferences
-      }
-    }
-
-    if (current.accessibility_settings && updates.accessibility_settings) {
-      merged.accessibility_settings = {
-        ...current.accessibility_settings,
-        ...updates.accessibility_settings
-      }
-    }
-
-    if (current.retell_config && updates.retell_config) {
-      merged.retell_config = {
-        ...current.retell_config,
-        ...updates.retell_config
-      }
-    }
-
-    return merged
-  }
-
-  /**
-   * Enhanced cross-device sync
-   */
-  static async syncAcrossDevices(userId: string): Promise<ServiceResponse<UserSettings>> {
-    try {
-      console.log('Force syncing settings across devices')
-
-      // Use enhanced service for force sync
-      const result = await EnhancedUserSettingsService.forceSyncAcrossDevices(userId)
-
-      if (result.status === 'success') {
-        await this.logSecurityEvent('SETTINGS_FORCE_SYNCED', 'user_settings', true, {
-          userId,
-          method: 'enhanced'
-        })
-      }
-
-      return result
-    } catch (error: any) {
-      return this.handleError(error, 'syncAcrossDevices')
-    }
-  }
-
-  /**
-   * Enhanced sync status with online/offline support
-   */
-  static async getSyncStatus(userId: string): Promise<ServiceResponse<{
-    lastSynced: string | null
-    needsSync: boolean
-    deviceCount?: number
-    isOnline: boolean
-    hasPendingChanges: boolean
-  }>> {
-    try {
-      // Get enhanced sync status
-      const enhancedStatus = await EnhancedUserSettingsService.getSyncStatus(userId)
-
-      if (enhancedStatus.status === 'success') {
-        // Add device count information
-        const { data: sessions } = await supabase
-          .from('user_sessions')
-          .select('device_info')
-          .eq('user_id', userId)
-          .eq('is_active', true)
-
-        const deviceCount = sessions?.length || 0
-
-        return {
-          status: 'success',
-          data: {
-            ...enhancedStatus.data,
-            deviceCount
-          }
-        }
-      }
-
-      return enhancedStatus
-    } catch (error: any) {
-      return this.handleError(error, 'getSyncStatus')
-    }
-  }
-
-  /**
-   * Import settings from another device/backup
-   */
-  static async importSettings(
-    userId: string,
-    settingsData: Partial<UserSettings>,
-    overwrite: boolean = false
-  ): Promise<ServiceResponse<UserSettings>> {
-    try {
-      let finalSettings = settingsData
-
-      if (!overwrite) {
-        // Merge with existing settings
-        const currentResponse = await this.getUserSettings(userId)
-        if (currentResponse.status === 'success' && currentResponse.data) {
-          finalSettings = this.mergeSettings(currentResponse.data, settingsData)
-        }
-      }
-
-      const response = await this.updateUserSettings(userId, finalSettings)
-
-      if (response.status === 'success') {
-        await this.logSecurityEvent('SETTINGS_IMPORTED', 'user_settings', true, {
-          userId,
-          overwrite,
-          importedFields: Object.keys(settingsData)
-        })
-      }
-
-      return response
-    } catch (error: any) {
-      return this.handleError(error, 'importSettings')
-    }
-  }
-
-  /**
-   * Export settings for backup or transfer
-   */
-  static async exportSettings(userId: string): Promise<ServiceResponse<{
-    settings: UserSettings
-    exportDate: string
-    version: string
-  }>> {
-    try {
-      const response = await this.getUserSettings(userId)
-
-      if (response.status === 'error' || !response.data) {
-        return { status: 'error', error: 'Could not retrieve settings for export' }
-      }
-
-      const exportData = {
-        settings: response.data,
-        exportDate: new Date().toISOString(),
-        version: '1.0.0'
-      }
-
-      await this.logSecurityEvent('SETTINGS_EXPORTED', 'user_settings', true, { userId })
-
-      return { status: 'success', data: exportData }
-    } catch (error: any) {
-      return this.handleError(error, 'exportSettings')
-    }
-  }
-
-  /**
-   * Reset settings to defaults
-   */
-  static async resetToDefaults(userId: string): Promise<ServiceResponse<UserSettings>> {
-    try {
-      // Get current settings for audit log
-      const currentResponse = await this.getUserSettings(userId)
-      const currentSettings = currentResponse.data
-
-      // Delete current settings (will trigger default creation)
-      await supabase
-        .from('user_settings')
-        .delete()
-        .eq('user_id', userId)
-
-      // Create new default settings
-      const response = await this.createDefaultSettings(userId)
-
-      if (response.status === 'success') {
-        // Clear cache
-        const cacheKey = `user_settings_${userId}`
-        localStorage.removeItem(cacheKey)
-
-        await this.logSecurityEvent('SETTINGS_RESET', 'user_settings', true, {
-          userId,
-          previousSettings: currentSettings ? '[REDACTED]' : null
-        })
-      }
-
-      return response
-    } catch (error: any) {
-      return this.handleError(error, 'resetToDefaults')
-    }
-  }
-
-  /**
-   * Validate settings data
-   */
-  static validateSettings(settings: Partial<UserSettings>): { isValid: boolean; errors: string[] } {
-    const errors: string[] = []
-
-    // Validate theme
-    if (settings.theme && !['light', 'dark', 'auto'].includes(settings.theme)) {
-      errors.push('Invalid theme value')
-    }
-
-    // Validate session timeout
-    if (settings.security_preferences?.session_timeout) {
-      const timeout = settings.security_preferences.session_timeout
-      if (timeout < 1 || timeout > 480) { // 1 minute to 8 hours
-        errors.push('Session timeout must be between 1 and 480 minutes')
-      }
-    }
-
-    // Validate business hours
-    if (settings.communication_preferences?.business_hours) {
-      const { start, end } = settings.communication_preferences.business_hours
-      const timeRegex = /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/
-
-      if (start && !timeRegex.test(start)) {
-        errors.push('Invalid business hours start time format')
-      }
-
-      if (end && !timeRegex.test(end)) {
-        errors.push('Invalid business hours end time format')
-      }
-    }
-
+  private getDefaultSettings(): UserSettingsData {
     return {
-      isValid: errors.length === 0,
-      errors
+      theme: 'light',
+      notifications: {
+        email: true,
+        sms: true,
+        push: true,
+        in_app: true,
+        call_alerts: true,
+        sms_alerts: true,
+        security_alerts: true
+      },
+      security_preferences: {
+        session_timeout: 15, // minutes
+        require_mfa: true,
+        password_expiry_reminder: true,
+        login_notifications: true
+      },
+      dashboard_layout: {
+        widgets: []
+      },
+      communication_preferences: {
+        default_method: 'phone',
+        auto_reply_enabled: false,
+        business_hours: {
+          enabled: false,
+          start: '09:00',
+          end: '17:00',
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        }
+      },
+      accessibility_settings: {
+        high_contrast: false,
+        large_text: false,
+        screen_reader: false,
+        keyboard_navigation: false
+      },
+      device_sync_enabled: true
     }
   }
 
   /**
-   * Repair user settings by cleaning up duplicates and ensuring data integrity
-   * This is a utility method for troubleshooting duplicate settings issues
+   * Store settings in localStorage (cache/fallback)
    */
-  static async repairUserSettings(userId: string): Promise<ServiceResponse<{
-    duplicatesFound: number
-    duplicatesRemoved: number
-    settingsRepaired: boolean
-  }>> {
+  private storeLocalSettings(userId: string, settings: UserSettingsData): void {
     try {
-      console.log(`Starting user settings repair for user: ${userId}`)
-
-      // Step 1: Clean up duplicates using base service method
-      const cleanupResult = await super.cleanupDuplicateSettings(userId)
-
-      let duplicatesFound = 0
-      let duplicatesRemoved = 0
-
-      if (cleanupResult.status === 'success') {
-        duplicatesRemoved = cleanupResult.data.cleanedCount
-        duplicatesFound = duplicatesRemoved > 0 ? duplicatesRemoved + 1 : 0 // +1 for the kept row
+      const storageKey = `user_settings_${userId}`
+      const dataToStore = {
+        ...settings,
+        cachedAt: new Date().toISOString(),
+        deviceFingerprint: this.generateDeviceFingerprint()
       }
 
-      // Step 2: Verify settings exist, create if not
-      const settingsResponse = await this.getUserSettings(userId)
-      let settingsRepaired = false
-
-      if (settingsResponse.status === 'error' || !settingsResponse.data) {
-        console.log(`No settings found for user ${userId}, creating defaults...`)
-        const createResult = await super.createDefaultSettings(userId)
-        settingsRepaired = createResult.status === 'success'
-      } else {
-        console.log(`Settings exist for user ${userId}`)
-        settingsRepaired = true
-      }
-
-      // Step 3: Clear cache to force fresh data
-      const cacheKey = `user_settings_${userId}`
-      localStorage.removeItem(cacheKey)
-
-      console.log(`User settings repair completed for user ${userId}:`, {
-        duplicatesFound,
-        duplicatesRemoved,
-        settingsRepaired
-      })
-
-      return {
-        status: 'success',
-        data: {
-          duplicatesFound,
-          duplicatesRemoved,
-          settingsRepaired
-        }
-      }
-    } catch (error: any) {
-      console.error('Error in repairUserSettings:', error)
-      return this.handleError(error, 'repairUserSettings')
+      localStorage.setItem(storageKey, JSON.stringify(dataToStore))
+      console.log('💾 Settings stored in localStorage cache')
+    } catch (error) {
+      console.error('❌ Failed to store settings in localStorage:', error)
     }
   }
 
+  /**
+   * Get settings from localStorage
+   */
+  private getLocalSettings(userId: string): UserSettingsData | null {
+    try {
+      const storageKey = `user_settings_${userId}`
+      const stored = localStorage.getItem(storageKey)
+
+      if (stored) {
+        const parsed = JSON.parse(stored)
+        console.log('📱 Settings retrieved from localStorage')
+        return parsed
+      }
+
+      return null
+    } catch (error) {
+      console.error('❌ Failed to get settings from localStorage:', error)
+      return null
+    }
+  }
+
+  /**
+   * Background sync to Supabase
+   */
+  private async backgroundSyncToSupabase(userId: string, settings: UserSettingsData): Promise<void> {
+    try {
+      console.log('🔄 Background syncing settings to Supabase...')
+      const supabaseData = await this.transformLocalToSupabase(userId, settings)
+
+      const { error } = await supabase
+        .from('user_settings')
+        .upsert(supabaseData, { onConflict: 'user_id' })
+
+      if (!error) {
+        console.log('✅ Background sync to Supabase completed')
+      } else {
+        console.warn('⚠️ Background sync failed:', error.message)
+      }
+    } catch (error) {
+      console.warn('⚠️ Background sync to Supabase failed:', error)
+    }
+  }
+
+  /**
+   * Transform Supabase data to local format
+   */
+  private async transformSupabaseToLocal(settings: DatabaseUserSettings): Promise<UserSettingsData> {
+    const localSettings: UserSettingsData = {
+      theme: settings.theme,
+      notifications: settings.notifications as UserSettingsData['notifications'],
+      security_preferences: settings.security_preferences as UserSettingsData['security_preferences'],
+      dashboard_layout: settings.dashboard_layout as UserSettingsData['dashboard_layout'],
+      communication_preferences: settings.communication_preferences as UserSettingsData['communication_preferences'],
+      accessibility_settings: settings.accessibility_settings as UserSettingsData['accessibility_settings'],
+      device_sync_enabled: settings.device_sync_enabled
+    }
+
+    // Decrypt sensitive data
+    if (settings.retell_config) {
+      const config = settings.retell_config as any
+      try {
+        localSettings.retell_config = {
+          api_key: config.api_key ? await encryptionService.decrypt(config.api_key) : undefined,
+          call_agent_id: config.call_agent_id,
+          sms_agent_id: config.sms_agent_id
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to decrypt retell config, skipping:', error)
+      }
+    }
+
+    return localSettings
+  }
+
+  /**
+   * Transform local data to Supabase format
+   */
+  private async transformLocalToSupabase(userId: string, settings: UserSettingsData): Promise<Database['public']['Tables']['user_settings']['Insert']> {
+    const supabaseData: Database['public']['Tables']['user_settings']['Insert'] = {
+      user_id: userId,
+      theme: settings.theme,
+      notifications: settings.notifications,
+      security_preferences: settings.security_preferences,
+      dashboard_layout: settings.dashboard_layout || null,
+      communication_preferences: settings.communication_preferences,
+      accessibility_settings: settings.accessibility_settings,
+      device_sync_enabled: settings.device_sync_enabled,
+      updated_at: new Date().toISOString(),
+      last_synced: new Date().toISOString()
+    }
+
+    // Encrypt sensitive data
+    if (settings.retell_config) {
+      try {
+        supabaseData.retell_config = {
+          api_key: settings.retell_config.api_key ? await encryptionService.encrypt(settings.retell_config.api_key) : undefined,
+          call_agent_id: settings.retell_config.call_agent_id,
+          sms_agent_id: settings.retell_config.sms_agent_id
+        }
+      } catch (error) {
+        console.warn('⚠️ Failed to encrypt retell config, saving without encryption:', error)
+        supabaseData.retell_config = settings.retell_config
+      }
+    }
+
+    return supabaseData
+  }
+
+  /**
+   * Generate device fingerprint for tracking
+   */
+  private generateDeviceFingerprint(): string {
+    try {
+      const fingerprint = [
+        navigator.userAgent,
+        navigator.language,
+        screen.width + 'x' + screen.height,
+        new Date().getTimezoneOffset()
+      ].join('|')
+
+      let hash = 0
+      for (let i = 0; i < fingerprint.length; i++) {
+        const char = fingerprint.charCodeAt(i)
+        hash = ((hash << 5) - hash) + char
+        hash = hash & hash
+      }
+
+      return Math.abs(hash).toString(36)
+    } catch (error) {
+      return 'unknown-device'
+    }
+  }
+
+  /**
+   * Clear cache (useful for logout)
+   */
+  clearCache(userId?: string): void {
+    if (userId) {
+      this.cache.delete(userId)
+    } else {
+      this.cache.clear()
+    }
+  }
 }
+
+// Export singleton instance
+export const userSettingsService = new UserSettingsServiceClass()

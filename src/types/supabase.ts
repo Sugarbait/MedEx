@@ -495,6 +495,62 @@ export interface Database {
           reason?: string | null
         }
       }
+      user_mfa_configs: {
+        Row: {
+          id: string
+          user_id: string
+          encrypted_secret: string
+          encrypted_backup_codes: Json
+          is_active: boolean
+          is_verified: boolean
+          temporarily_disabled: boolean
+          registered_devices: Json
+          created_at: string
+          updated_at: string
+          verified_at: string | null
+          disabled_at: string | null
+          last_used_at: string | null
+          created_by_device_fingerprint: string | null
+          last_used_device_fingerprint: string | null
+          metadata: Json
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          encrypted_secret: string
+          encrypted_backup_codes?: Json
+          is_active?: boolean
+          is_verified?: boolean
+          temporarily_disabled?: boolean
+          registered_devices?: Json
+          created_at?: string
+          updated_at?: string
+          verified_at?: string | null
+          disabled_at?: string | null
+          last_used_at?: string | null
+          created_by_device_fingerprint?: string | null
+          last_used_device_fingerprint?: string | null
+          metadata?: Json
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          encrypted_secret?: string
+          encrypted_backup_codes?: Json
+          is_active?: boolean
+          is_verified?: boolean
+          temporarily_disabled?: boolean
+          registered_devices?: Json
+          created_at?: string
+          updated_at?: string
+          verified_at?: string | null
+          disabled_at?: string | null
+          last_used_at?: string | null
+          created_by_device_fingerprint?: string | null
+          last_used_device_fingerprint?: string | null
+          metadata?: Json
+        }
+      }
       data_retention_policies: {
         Row: {
           id: string

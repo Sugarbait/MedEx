@@ -498,13 +498,22 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       <div className="max-w-sm mx-auto pt-20">
 
         <div className="text-center mb-8">
+          {/* Light mode logo */}
           <img
-            src="https://nexasync.ca/images/Logo.png"
+            src="https://nexasync.ca/images/NexaSync-logo.png"
             alt="CareXPS Logo"
-            className="max-h-20 w-auto mx-auto mb-4 object-contain"
+            className="max-h-20 w-auto mx-auto mb-4 object-contain dark:hidden"
             onError={(e) => {
-              console.error('Logo failed to load from:', e.currentTarget.src)
-              // Don't hide on error, just log it for debugging
+              console.error('Light mode logo failed to load from:', e.currentTarget.src)
+            }}
+          />
+          {/* Dark mode logo */}
+          <img
+            src="https://nexasync.ca/images/nexasync-white.png"
+            alt="CareXPS Logo"
+            className="max-h-20 w-auto mx-auto mb-4 object-contain hidden dark:block"
+            onError={(e) => {
+              console.error('Dark mode logo failed to load from:', e.currentTarget.src)
             }}
           />
           <p className="text-gray-600 text-sm">Healthcare CRM</p>

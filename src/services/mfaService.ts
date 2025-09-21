@@ -323,9 +323,13 @@ class TOTPMFAService {
         this.activeSessions.set(session.sessionToken, session)
         this.saveSessionsToStorage() // Persist to localStorage
 
-        // Mark MFA as verified for this user
+        // Mark MFA as verified for this user and sync immediately across devices
         mfaData.verified = true
+        mfaData.verifiedAt = new Date().toISOString()
+        mfaData.lastUsedAt = new Date().toISOString()
         await this.storeMFAData(userId, mfaData)
+
+        console.log('✅ MFA verified and synced across devices for user:', userId)
 
         await auditLogger.logPHIAccess(
           AuditAction.LOGIN,
@@ -977,7 +981,7 @@ class TOTPMFAService {
   }
 
   /**
-   * Store MFA data with cross-device persistence (Supabase + localStorage)
+   * Store MFA data with cross-device persistence (Supabase-first approach)
    */
   private async storeMFAData(userId: string, data: any): Promise<void> {
     const timestamp = new Date().toISOString()
@@ -991,17 +995,25 @@ class TOTPMFAService {
       lastAccessedAt: timestamp
     }
 
-    // Store locally first for immediate access - this is critical for localStorage-only mode
-    this.storeLocalMFAData(userId, persistentData)
-    console.log('MFA data stored locally for user:', userId)
-
-    // Try to store in Supabase for cross-device persistence (but don't fail if it's not available)
+    // PRIORITY 1: Store in Supabase for cross-device persistence
+    let supabaseSuccess = false
     try {
       await this.storeCloudMFAData(userId, persistentData, deviceFingerprint)
-      console.log('MFA data also stored in cloud for cross-device access')
+      console.log('✅ MFA data stored in Supabase for cross-device access')
+      supabaseSuccess = true
     } catch (error) {
-      console.warn('Cloud storage failed, continuing with localStorage-only mode:', error)
-      // This is OK - the app can function with localStorage only
+      console.warn('⚠️ Supabase storage failed, falling back to localStorage:', error)
+    }
+
+    // PRIORITY 2: Store locally as cache/fallback
+    try {
+      this.storeLocalMFAData(userId, persistentData)
+      console.log(supabaseSuccess ? '✅ MFA data cached locally' : '⚠️ MFA data stored in localStorage fallback mode')
+    } catch (localError) {
+      console.error('❌ Both Supabase and localStorage storage failed:', localError)
+      if (!supabaseSuccess) {
+        throw new Error('Failed to store MFA data - both cloud and local storage failed')
+      }
     }
   }
 
@@ -1112,36 +1124,38 @@ class TOTPMFAService {
   }
 
   /**
-   * Get MFA data with cross-device fallback mechanisms
+   * Get MFA data with Supabase-first approach for cross-device sync
    */
   private async getMFAData(userId: string): Promise<any> {
     try {
-      // Try local storage first (fastest)
+      // PRIORITY 1: Try Supabase first for most up-to-date cross-device data
+      try {
+        const cloudData = await this.syncFromCloud(userId)
+        if (cloudData) {
+          console.log('✅ MFA data retrieved from Supabase (cross-device sync)')
+          return cloudData
+        }
+      } catch (supabaseError) {
+        console.warn('⚠️ Supabase access failed, trying localStorage fallback:', supabaseError)
+      }
+
+      // PRIORITY 2: Fallback to local storage if Supabase unavailable
       const localData = this.getLocalMFAData(userId)
       if (localData) {
-        // Check if we should sync from cloud (if local data is old)
-        const shouldSync = this.shouldSyncFromCloud(localData)
-        if (shouldSync) {
-          // Async sync from cloud but return local data immediately
-          this.syncFromCloud(userId).catch(error => {
-            console.warn('Background cloud sync failed:', error)
-          })
-        }
+        console.log('⚠️ Using localStorage fallback (offline mode)')
+
+        // Try to background sync to Supabase for future cross-device access
+        this.backgroundSyncToCloud(userId, localData).catch(error => {
+          console.warn('Background sync to cloud failed:', error)
+        })
+
         return localData
       }
 
-      // No local data found - try to sync from cloud
-      console.log('No local MFA data found, attempting cloud sync for user:', userId)
-      const cloudData = await this.syncFromCloud(userId)
-      if (cloudData) {
-        console.log('MFA data retrieved from cloud and synced locally')
-        return cloudData
-      }
-
-      console.log('No MFA data found locally or in cloud for user:', userId)
+      console.log('❌ No MFA data found in Supabase or localStorage for user:', userId)
       return null
     } catch (error) {
-      console.error('Error retrieving MFA data:', error)
+      console.error('❌ Error retrieving MFA data:', error)
       return null
     }
   }
@@ -1197,17 +1211,36 @@ class TOTPMFAService {
   }
 
   /**
-   * Check if we should sync from cloud based on local data age
+   * Background sync local data to Supabase (for when user was offline)
    */
-  private shouldSyncFromCloud(localData: any): boolean {
-    if (!localData.lastAccessedAt) return true
+  private async backgroundSyncToCloud(userId: string, localData: any): Promise<void> {
+    try {
+      console.log('🔄 Background syncing local MFA data to Supabase...')
+      const deviceFingerprint = this.generateUserAgentFingerprint()
+      await this.storeCloudMFAData(userId, localData, deviceFingerprint)
+      console.log('✅ Background sync to Supabase completed')
+    } catch (error) {
+      console.warn('⚠️ Background sync to Supabase failed:', error)
+    }
+  }
 
-    const lastAccessed = new Date(localData.lastAccessedAt)
-    const now = new Date()
-    const hoursSinceLastAccess = (now.getTime() - lastAccessed.getTime()) / (1000 * 60 * 60)
-
-    // Sync from cloud if local data is older than 1 hour
-    return hoursSinceLastAccess > 1
+  /**
+   * Force immediate sync from Supabase (for cross-device login scenarios)
+   */
+  async forceCloudSync(userId: string): Promise<boolean> {
+    try {
+      console.log('🔄 Force syncing MFA data from Supabase...')
+      const cloudData = await this.syncFromCloud(userId)
+      if (cloudData) {
+        console.log('✅ Force sync completed - MFA data available from Supabase')
+        return true
+      }
+      console.log('⚠️ No MFA data found in Supabase during force sync')
+      return false
+    } catch (error) {
+      console.error('❌ Force sync from Supabase failed:', error)
+      return false
+    }
   }
 
   /**

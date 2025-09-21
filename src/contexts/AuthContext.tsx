@@ -3,7 +3,8 @@ import { useMsal, useIsAuthenticated } from '@azure/msal-react'
 import type { User, MFAChallenge, SessionInfo } from '@/types'
 import { authService } from '@/services/authService'
 import { useSupabase } from './SupabaseContext'
-import { userSettingsService } from '@/services'
+import { userSettingsService } from '@/services/userSettingsService'
+import { mfaService } from '@/services/mfaService'
 import { secureStorage } from '@/services/secureStorage'
 import { secureLogger } from '@/services/secureLogger'
 
@@ -81,19 +82,42 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             // Store user data securely
             await secureStorage.setSessionData('current_user', userProfile)
 
-            // Load user settings from Supabase
-            if (supabase && userProfile.id) {
-              const settings = await userSettingsService.getUserSettings(userProfile.id)
-              setUserSettings(settings)
+            // Load user settings from Supabase (cross-device sync)
+            if (userProfile.id) {
+              try {
+                console.log('🔄 Loading user settings and MFA state for cross-device sync...')
 
-              // Store settings securely
-              await secureStorage.setUserPreference('user_settings', settings, false)
+                // Force sync settings from Supabase on login
+                const settings = await userSettingsService.forceSyncFromSupabase(userProfile.id) ||
+                                await userSettingsService.getUserSettings(userProfile.id)
+                setUserSettings(settings)
 
-              // Subscribe to settings changes for cross-device sync
-              userSettingsService.subscribeToSettings(userProfile.id, async (newSettings) => {
-                setUserSettings(newSettings)
-                await secureStorage.setUserPreference('user_settings', newSettings, false)
-              })
+                // Force sync MFA data from Supabase on login
+                await mfaService.forceCloudSync(userProfile.id)
+
+                // Store settings securely
+                await secureStorage.setUserPreference('user_settings', settings, false)
+
+                // Subscribe to real-time settings changes for cross-device sync
+                userSettingsService.subscribeToSettings(userProfile.id, async (newSettings) => {
+                  console.log('📱 Real-time settings update received from another device')
+                  setUserSettings(newSettings)
+                  await secureStorage.setUserPreference('user_settings', newSettings, false)
+
+                  // Dispatch event for UI updates
+                  window.dispatchEvent(new CustomEvent('settingsUpdated', {
+                    detail: newSettings
+                  }))
+                })
+
+                console.log('✅ Cross-device sync setup completed')
+              } catch (syncError) {
+                console.warn('⚠️ Cross-device sync setup failed, using local fallback:', syncError)
+
+                // Fallback to local-only mode
+                const fallbackSettings = await userSettingsService.getUserSettings(userProfile.id)
+                setUserSettings(fallbackSettings)
+              }
             }
 
             logger.info('Authentication successful', userProfile.id, session.sessionId)
@@ -124,12 +148,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setMfaChallenge(null)
         setUserSettings(null)
 
+        // Clean up cross-device subscriptions and cache
+        userSettingsService.unsubscribeFromSettings()
+        userSettingsService.clearCache()
+
         // Clear secure storage
         await secureStorage.removeItem('current_user')
         await secureStorage.removeItem('user_settings')
-
-        // Unsubscribe from settings when logged out
-        userSettingsService.unsubscribeFromSettings()
 
         logger.debug('Session cleanup completed')
       }
@@ -164,6 +189,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         await authService.invalidateSession(sessionInfo.sessionId)
       }
 
+      // Clean up cross-device subscriptions
+      userSettingsService.unsubscribeFromSettings()
+      userSettingsService.clearCache()
+
       // Clear all secure storage
       secureStorage.clear()
 
@@ -177,6 +206,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setMfaRequired(false)
       setMfaChallenge(null)
       setUserSettings(null)
+
+      console.log('🔇 Cross-device sync cleaned up')
 
       logger.info('Logout completed')
     } catch (error) {
@@ -243,10 +274,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     if (!user?.id) return
 
     try {
+      console.log('🔄 Updating settings with cross-device sync...', Object.keys(settings))
       const updatedSettings = await userSettingsService.updateUserSettings(user.id, settings)
       setUserSettings(updatedSettings)
+
+      // Update secure storage
+      await secureStorage.setUserPreference('user_settings', updatedSettings, false)
+
+      console.log('✅ Settings updated and synced across devices')
     } catch (error) {
-      console.error('Failed to update settings:', error)
+      console.error('❌ Failed to update settings:', error)
       throw error
     }
   }
