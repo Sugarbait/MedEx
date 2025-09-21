@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { useDebounce, useDebouncedCallback } from '@/hooks/useDebounce'
 import { useSMSCostManager } from '@/hooks/useSMSCostManager'
+import { useNotesCount } from '@/hooks/useNotesCount'
 import { DateRangePicker, DateRange, getDateRangeFromSelection } from '@/components/common/DateRangePicker'
 import { ChatDetailModal } from '@/components/common/ChatDetailModal'
 import { APIOptimizationDebugPanel } from '@/components/common/APIOptimizationDebugPanel'
@@ -32,7 +33,8 @@ import {
   BotIcon,
   PlayCircleIcon,
   StopCircleIcon,
-  EyeIcon
+  EyeIcon,
+  StickyNoteIcon
 } from 'lucide-react'
 
 // Persistent cache utilities for SMS segments
@@ -198,6 +200,16 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   const [segmentLoadingProgress, setSegmentLoadingProgress] = useState({ completed: 0, total: 0 })
   const [segmentLoadingComplete, setSegmentLoadingComplete] = useState(false)
 
+  // Use the notes count hook for cross-device accessible note icons
+  const {
+    hasNotes,
+    getNoteCount,
+    refetch: refetchNotesCount
+  } = useNotesCount({
+    referenceType: 'sms',
+    referenceIds: chats.map(chat => chat.chat_id),
+    enabled: chats.length > 0
+  })
 
   // Helper function to calculate SMS segments for a chat (prioritizes modal's accurate data)
   // Note: This function should NOT update caches during metrics calculation to prevent circular dependencies
@@ -1431,8 +1443,16 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                             {/* Patient Info */}
                             <div className="col-span-3">
                               <div>
-                                <div className="font-medium text-gray-900">
+                                <div className="font-medium text-gray-900 flex items-center gap-2">
                                   {patientName}
+                                  {hasNotes(chat.chat_id) && (
+                                    <div className="flex items-center gap-1">
+                                      <StickyNoteIcon className="h-4 w-4 text-blue-500" />
+                                      <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                                        {getNoteCount(chat.chat_id)}
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
                                 <div className="text-sm text-gray-500">
                                   {phoneNumber || 'No phone number'}
@@ -1692,6 +1712,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
               setSelectedChat(null)
             }}
             onEndChat={endChat}
+            onNotesChanged={() => refetchNotesCount()}
           />
         )}
 

@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { useAutoRefresh } from '@/hooks/useAutoRefresh'
+import { useNotesCount } from '@/hooks/useNotesCount'
 import { DateRangePicker, DateRange, getDateRangeFromSelection } from '@/components/common/DateRangePicker'
 import { CallDetailModal } from '@/components/common/CallDetailModal'
 import { RetellWebClient } from 'retell-client-js-sdk'
@@ -102,33 +103,18 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
     totalMinutes: 0
   })
   const [selectedCall, setSelectedCall] = useState<Call | null>(null)
-  const [notesCount, setNotesCount] = useState<Record<string, number>>({})
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false)
 
-  // Function to refresh notes count for a specific call
-  const refreshNotesCount = async (callId: string) => {
-    try {
-      console.log('CallsPage: Refreshing notes count for callId:', callId)
-      // Small delay to ensure database operation completes
-      await new Promise(resolve => setTimeout(resolve, 100))
-      const notesCountData = await notesService.getNotesCount([callId], 'call')
-      console.log('CallsPage: Got notes count data:', notesCountData)
-      setNotesCount(prev => {
-        const updated = { ...prev, ...notesCountData }
-        // If the call has no notes, remove it from the count object
-        if (!notesCountData[callId] || notesCountData[callId] === 0) {
-          console.log('CallsPage: Removing callId from notes count (no notes):', callId)
-          delete updated[callId]
-        } else {
-          console.log('CallsPage: Updated notes count for callId:', callId, 'count:', notesCountData[callId])
-        }
-        console.log('CallsPage: New notes count state:', updated)
-        return updated
-      })
-    } catch (error) {
-      console.error('Error refreshing notes count:', error)
-    }
-  }
+  // Use the new notes count hook for cross-device accessible note icons
+  const {
+    hasNotes,
+    getNoteCount,
+    refetch: refetchNotesCount
+  } = useNotesCount({
+    referenceType: 'call',
+    referenceIds: calls.map(call => call.call_id),
+    enabled: calls.length > 0
+  })
   const [currentPage, setCurrentPage] = useState(1)
   const [totalCallsCount, setTotalCallsCount] = useState(0)
   const recordsPerPage = 50
@@ -830,11 +816,11 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
                           <div>
                             <div className="font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
                               {call.metadata?.patient_name || `Patient ${call.patient_id}`}
-                              {notesCount[call.call_id] && (
+                              {hasNotes(call.call_id) && (
                                 <div className="flex items-center gap-1">
                                   <StickyNoteIcon className="h-4 w-4 text-blue-500" />
                                   <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
-                                    {notesCount[call.call_id]}
+                                    {getNoteCount(call.call_id)}
                                   </span>
                                 </div>
                               )}
@@ -1042,7 +1028,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
               setIsDetailModalOpen(false)
               setSelectedCall(null)
             }}
-            onNotesChanged={() => refreshNotesCount(selectedCall.call_id)}
+            onNotesChanged={() => refetchNotesCount()}
           />
         )}
 
