@@ -78,9 +78,22 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
       return
     }
 
+    let saveInProgress = false
+    let timeoutId: NodeJS.Timeout | null = null
+
     try {
       setIsSaving(true)
+      saveInProgress = true
       setError(null)
+
+      console.log('ChatNotes: Starting note save operation')
+
+      // Safety timeout to reset saving state after 10 seconds
+      timeoutId = setTimeout(() => {
+        console.warn('ChatNotes: Save operation timed out, resetting state')
+        setIsSaving(false)
+        setError('Save operation timed out. Please try again.')
+      }, 10000)
 
       // Save note with optimistic approach
       const result = await notesService.createNote({
@@ -89,6 +102,14 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
         content: newNoteContent.trim(),
         content_type: 'plain'
       })
+
+      // Clear timeout since operation completed
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+        timeoutId = null
+      }
+
+      console.log('ChatNotes: Note save result:', result)
 
       if (result.success) {
         // Immediately add the new note to local state for instant UI update
@@ -109,7 +130,13 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
       console.error('Error saving note:', err)
       setError('Failed to save note')
     } finally {
-      setIsSaving(false)
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+      if (saveInProgress) {
+        console.log('ChatNotes: Resetting save state')
+        setIsSaving(false)
+      }
     }
   }
 
@@ -120,15 +147,36 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
       return
     }
 
+    let saveInProgress = false
+    let timeoutId: NodeJS.Timeout | null = null
+
     try {
       setIsSaving(true)
+      saveInProgress = true
       setError(null)
+
+      console.log('ChatNotes: Starting note update operation')
+
+      // Safety timeout to reset saving state after 10 seconds
+      timeoutId = setTimeout(() => {
+        console.warn('ChatNotes: Update operation timed out, resetting state')
+        setIsSaving(false)
+        setError('Update operation timed out. Please try again.')
+      }, 10000)
 
       // Update note with optimistic approach
       const result = await notesService.updateNote(editingNoteId, {
         content: editingContent.trim(),
         content_type: 'plain'
       })
+
+      // Clear timeout since operation completed
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+        timeoutId = null
+      }
+
+      console.log('ChatNotes: Note update result:', result)
 
       if (result.success) {
         // Immediately update the note in local state for instant UI update
@@ -152,7 +200,13 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
       console.error('Error updating note:', err)
       setError('Failed to update note')
     } finally {
-      setIsSaving(false)
+      if (timeoutId) {
+        clearTimeout(timeoutId)
+      }
+      if (saveInProgress) {
+        console.log('ChatNotes: Resetting update state')
+        setIsSaving(false)
+      }
     }
   }
 
@@ -162,14 +216,21 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
       return
     }
 
+    let deleteInProgress = false
     try {
       setIsSaving(true)
+      deleteInProgress = true
       setError(null)
 
+      console.log('ChatNotes: Starting note delete operation')
+
       // Immediately remove the note from local state for instant UI update
+      const noteToDelete = notes.find(note => note.id === noteId)
       setNotes(prevNotes => prevNotes.filter(note => note.id !== noteId))
 
       const result = await notesService.deleteNote(noteId)
+
+      console.log('ChatNotes: Note delete result:', result)
 
       if (result.success) {
         setSuccessMessage('Note deleted successfully')
@@ -179,9 +240,8 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
         onNotesChanged?.()
       } else {
         // If deletion failed, restore the note to local state
-        const noteToRestore = notes.find(note => note.id === noteId)
-        if (noteToRestore) {
-          setNotes(prevNotes => [...prevNotes, noteToRestore].sort((a, b) =>
+        if (noteToDelete) {
+          setNotes(prevNotes => [...prevNotes, noteToDelete].sort((a, b) =>
             new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
           ))
         }
@@ -198,7 +258,10 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
       }
       setError('Failed to delete note')
     } finally {
-      setIsSaving(false)
+      if (deleteInProgress) {
+        console.log('ChatNotes: Resetting delete state')
+        setIsSaving(false)
+      }
     }
   }
 
