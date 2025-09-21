@@ -5,6 +5,8 @@ import { auditLogger, AuditAction, ResourceType, AuditOutcome } from './services
 import { userProfileService } from './services/userProfileService'
 import { mfaService } from './services/mfaService'
 import { retellService } from './services/retellService'
+import { AuthProvider } from './contexts/AuthContext'
+import { SupabaseProvider } from './contexts/SupabaseContext'
 
 // Import SMS cost test for validation
 import './test/smsCostCalculationTest'
@@ -721,19 +723,23 @@ const App: React.FC = () => {
   }
 
   return (
-    <Router>
-      <SPARedirectHandler />
-      <AppContent
-        user={user}
-        mfaRequired={mfaRequired}
-        setMfaRequired={setMfaRequired}
-        sidebarOpen={sidebarOpen}
-        setSidebarOpen={setSidebarOpen}
-        hipaaMode={hipaaMode}
-        handleMFASuccess={handleMFASuccess}
-        handleLogout={handleLogout}
-      />
-    </Router>
+    <SupabaseProvider>
+      <AuthProvider>
+        <Router>
+          <SPARedirectHandler />
+          <AppContent
+            user={user}
+            mfaRequired={mfaRequired}
+            setMfaRequired={setMfaRequired}
+            sidebarOpen={sidebarOpen}
+            setSidebarOpen={setSidebarOpen}
+            hipaaMode={hipaaMode}
+            handleMFASuccess={handleMFASuccess}
+            handleLogout={handleLogout}
+          />
+        </Router>
+      </AuthProvider>
+    </SupabaseProvider>
   )
 }
 

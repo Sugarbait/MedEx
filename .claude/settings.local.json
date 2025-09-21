@@ -104,7 +104,13 @@
       "Bash(npm start)",
       "Bash(npm run:*)",
       "Bash(start http://localhost:3014)",
-      "Bash(del \"I:\\Apps Back Up\\CareXPS CRM\\test-supabase.js\")"
+      "Bash(del \"I:\\Apps Back Up\\CareXPS CRM\\test-supabase.js\")",
+      "Bash(start http://localhost:3015)",
+      "Bash(echo:*)",
+      "Bash(start http://localhost:3020)",
+      "Bash(start http://localhost:3021)",
+      "Bash(start http://localhost:3022)",
+      "WebFetch(domain:nexasync.ca)"
     ],
     "deny": [],
     "ask": []

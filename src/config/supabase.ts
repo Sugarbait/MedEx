@@ -31,7 +31,7 @@ const createSupabaseClient = () => {
       console.warn('⚠️ Supabase configuration missing. Using fallback mode.')
 
       // Create a minimal client that will fail gracefully
-      return createClient<Database>('https://placeholder.supabase.co', 'dummy-key', {
+      return createClient<Database>('https://cpkslvmydfdevdftieck.supabase.co', 'dummy-key', {
         auth: {
           detectSessionInUrl: false,
           persistSession: false,
@@ -87,7 +87,7 @@ const createSupabaseClient = () => {
   } catch (error) {
     console.error('Failed to create Supabase client:', error)
     // Return a minimal fallback client
-    return createClient<Database>('https://placeholder.supabase.co', 'dummy-key', {
+    return createClient<Database>('https://cpkslvmydfdevdftieck.supabase.co', 'dummy-key', {
       auth: {
         detectSessionInUrl: false,
         persistSession: false,
