@@ -26,8 +26,14 @@ class ChatGPTService {
     // Get API key from environment variables for security
     this.apiKey = import.meta.env.VITE_OPENAI_API_KEY || ''
 
+    // Debug: Check if API key is loaded
+    console.log('ChatGPT Service initialized')
+    console.log('API Key loaded:', this.apiKey ? `Yes (${this.apiKey.substring(0, 10)}...)` : 'No')
+
     if (!this.apiKey) {
-      console.warn('ChatGPT API key not configured. Chatbot will use fallback responses only.')
+      console.error('❌ ChatGPT API key not configured. Please add VITE_OPENAI_API_KEY to .env.local file')
+    } else {
+      console.log('✅ ChatGPT API key loaded successfully')
     }
   }
 
@@ -85,7 +91,24 @@ Keep responses helpful, concise, and focused on platform usage. Always maintain 
         { role: 'user', content: userMessage }
       ]
 
-      console.log('Sending request to ChatGPT (NO PHI data):', { messageCount: messages.length })
+      console.log('Sending request to ChatGPT (NO PHI data):', {
+        messageCount: messages.length,
+        apiUrl: this.apiUrl,
+        model: this.model,
+        hasApiKey: !!this.apiKey
+      })
+
+      const requestBody = {
+        model: this.model,
+        messages: messages,
+        max_tokens: 500, // Limit response length
+        temperature: 0.7, // Balanced creativity
+        top_p: 1,
+        frequency_penalty: 0,
+        presence_penalty: 0
+      }
+
+      console.log('Request body:', JSON.stringify(requestBody, null, 2))
 
       const response = await fetch(this.apiUrl, {
         method: 'POST',
@@ -93,16 +116,10 @@ Keep responses helpful, concise, and focused on platform usage. Always maintain 
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${this.apiKey}`
         },
-        body: JSON.stringify({
-          model: this.model,
-          messages: messages,
-          max_tokens: 500, // Limit response length
-          temperature: 0.7, // Balanced creativity
-          top_p: 1,
-          frequency_penalty: 0,
-          presence_penalty: 0
-        })
+        body: JSON.stringify(requestBody)
       })
+
+      console.log('ChatGPT API Response status:', response.status, response.statusText)
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))

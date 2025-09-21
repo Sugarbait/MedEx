@@ -30,6 +30,7 @@ import { UserSettings } from '@/types/supabase'
 import { avatarStorageService } from '@/services/avatarStorageService'
 import { SimpleUserManager } from '@/components/settings/SimpleUserManager'
 import { ThemeManager } from '@/utils/themeManager'
+import { SiteHelpChatbot } from '@/components/common/SiteHelpChatbot'
 
 interface User {
   id: string
@@ -66,6 +67,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [syncStatus, setSyncStatus] = useState<'synced' | 'syncing' | 'offline' | 'error'>('synced')
   const [retryQueueSize, setRetryQueueSize] = useState(0)
+  const [isChatbotVisible, setIsChatbotVisible] = useState(false)
   const [userSettings, setUserSettings] = useState<LocalUserSettings>({
     // Don't set default theme - let it load from storage
     mfaEnabled: false,
@@ -1711,6 +1713,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
           onCancel={() => setShowMFASetup(false)}
         />
       )}
+
+      {/* Site Help Chatbot */}
+      <SiteHelpChatbot
+        isVisible={isChatbotVisible}
+        onToggle={() => setIsChatbotVisible(!isChatbotVisible)}
+      />
     </div>
   )
 }

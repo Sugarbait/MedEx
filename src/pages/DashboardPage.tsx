@@ -4,6 +4,7 @@ import { DateRangePicker, DateRange, getDateRangeFromSelection } from '@/compone
 import { retellService, currencyService, twilioCostService, chatService } from '@/services'
 import { pdfExportService } from '@/services/pdfExportService'
 import { userSettingsService } from '@/services'
+import { SiteHelpChatbot } from '@/components/common/SiteHelpChatbot'
 import {
   PhoneIcon,
   MessageSquareIcon,
@@ -43,6 +44,7 @@ const CACHE_EXPIRY_HOURS = 12
 export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
   const [isLoading, setIsLoading] = useState(false)
   const [selectedDateRange, setSelectedDateRange] = useState<DateRange>('today')
+  const [isChatbotVisible, setIsChatbotVisible] = useState(false)
 
   // State for custom date range
   const [customStartDate, setCustomStartDate] = useState<Date | undefined>(() => {
@@ -1101,6 +1103,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
           </div>
         </div>
       </div>
+
+      {/* Site Help Chatbot */}
+      <SiteHelpChatbot
+        isVisible={isChatbotVisible}
+        onToggle={() => setIsChatbotVisible(!isChatbotVisible)}
+      />
     </div>
   )
 }
