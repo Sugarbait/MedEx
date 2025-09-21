@@ -47,16 +47,47 @@ class NotesService {
   private subscriptions: Map<string, RealtimeChannel> = new Map()
   private callbacks: Map<string, NotesSubscriptionCallback> = new Map()
   private isSupabaseAvailable: boolean = true
+  private connectionTestPromise: Promise<boolean> | null = null
+  private lastConnectionTest: number = 0
+  private readonly CONNECTION_TEST_CACHE_MS = 30000 // Cache for 30 seconds
 
   constructor() {
-    // Test Supabase availability on initialization
+    // Test Supabase availability on initialization (cached)
     this.testSupabaseConnection()
   }
 
   /**
-   * Test if Supabase connection is available
+   * Test if Supabase connection is available (with caching)
    */
   private async testSupabaseConnection(): Promise<boolean> {
+    const now = Date.now()
+
+    // Return cached result if recent
+    if (now - this.lastConnectionTest < this.CONNECTION_TEST_CACHE_MS) {
+      return this.isSupabaseAvailable
+    }
+
+    // If there's already a test in progress, return that promise
+    if (this.connectionTestPromise) {
+      return this.connectionTestPromise
+    }
+
+    // Start new connection test
+    this.connectionTestPromise = this.performConnectionTest()
+
+    try {
+      const result = await this.connectionTestPromise
+      this.lastConnectionTest = now
+      return result
+    } finally {
+      this.connectionTestPromise = null
+    }
+  }
+
+  /**
+   * Perform the actual connection test
+   */
+  private async performConnectionTest(): Promise<boolean> {
     try {
       // Simple test query to check connection
       const { error } = await supabase.from('notes').select('id').limit(1).maybeSingle()
@@ -173,8 +204,8 @@ class NotesService {
         metadata: data.metadata || {}
       }
 
-      // Try Supabase first if available
-      if (await this.testSupabaseConnection()) {
+      // Try Supabase first (fast path - no connection test)
+      try {
         console.log('Creating note with Supabase:', noteData)
 
         const { data: note, error } = await supabase
@@ -183,19 +214,25 @@ class NotesService {
           .select()
           .single()
 
-        if (error) {
-          console.error('Supabase error creating note, falling back to localStorage:', error)
-          // Fall back to localStorage
-          return this.createNoteLocalStorage(data, userInfo)
+        if (!error) {
+          console.log('Note created successfully in Supabase:', note)
+          this.isSupabaseAvailable = true
+          this.lastConnectionTest = Date.now()
+          return { success: true, note }
         }
 
-        console.log('Note created successfully in Supabase:', note)
-        return { success: true, note }
-      } else {
-        // Use localStorage fallback
-        console.log('Using localStorage for note creation')
-        return this.createNoteLocalStorage(data, userInfo)
+        // If Supabase fails, fall back to localStorage
+        console.error('Supabase error creating note, falling back to localStorage:', error)
+        this.isSupabaseAvailable = false
+      } catch (error) {
+        console.error('Supabase connection failed during note creation, falling back to localStorage:', error)
+        this.isSupabaseAvailable = false
       }
+
+      // Use localStorage fallback
+      console.log('Using localStorage for note creation')
+      return this.createNoteLocalStorage(data, userInfo)
+
     } catch (error) {
       console.error('Error creating note, falling back to localStorage:', error)
       const userInfo = await this.getCurrentUserInfo()
@@ -334,8 +371,8 @@ class NotesService {
 
       console.log('Updating note:', noteId, updateData)
 
-      // Try Supabase first if available
-      if (await this.testSupabaseConnection()) {
+      // Try Supabase first (fast path - no connection test)
+      try {
         const { data: note, error } = await supabase
           .from('notes')
           .update(updateData)
@@ -343,19 +380,24 @@ class NotesService {
           .select()
           .single()
 
-        if (error) {
-          console.error('Supabase error updating note, falling back to localStorage:', error)
-          // Fall back to localStorage
-          return this.updateNoteLocalStorage(noteId, data, userInfo)
+        if (!error) {
+          console.log('Note updated successfully in Supabase:', note)
+          this.isSupabaseAvailable = true
+          this.lastConnectionTest = Date.now()
+          return { success: true, note }
         }
 
-        console.log('Note updated successfully in Supabase:', note)
-        return { success: true, note }
-      } else {
-        // Use localStorage fallback
-        console.log('Using localStorage for note update')
-        return this.updateNoteLocalStorage(noteId, data, userInfo)
+        // If Supabase fails, fall back to localStorage
+        console.error('Supabase error updating note, falling back to localStorage:', error)
+        this.isSupabaseAvailable = false
+      } catch (error) {
+        console.error('Supabase connection failed during note update, falling back to localStorage:', error)
+        this.isSupabaseAvailable = false
       }
+
+      // Use localStorage fallback
+      console.log('Using localStorage for note update')
+      return this.updateNoteLocalStorage(noteId, data, userInfo)
     } catch (error) {
       console.error('Error updating note, falling back to localStorage:', error)
       const userInfo = await this.getCurrentUserInfo()
@@ -370,26 +412,31 @@ class NotesService {
     try {
       console.log('Deleting note:', noteId)
 
-      // Try Supabase first if available
-      if (await this.testSupabaseConnection()) {
+      // Try Supabase first (fast path - no connection test)
+      try {
         const { error } = await supabase
           .from('notes')
           .delete()
           .eq('id', noteId)
 
-        if (error) {
-          console.error('Supabase error deleting note, falling back to localStorage:', error)
-          // Fall back to localStorage
-          return this.deleteNoteLocalStorage(noteId)
+        if (!error) {
+          console.log('Note deleted successfully from Supabase')
+          this.isSupabaseAvailable = true
+          this.lastConnectionTest = Date.now()
+          return { success: true }
         }
 
-        console.log('Note deleted successfully from Supabase')
-        return { success: true }
-      } else {
-        // Use localStorage fallback
-        console.log('Using localStorage for note deletion')
-        return this.deleteNoteLocalStorage(noteId)
+        // If Supabase fails, fall back to localStorage
+        console.error('Supabase error deleting note, falling back to localStorage:', error)
+        this.isSupabaseAvailable = false
+      } catch (error) {
+        console.error('Supabase connection failed, falling back to localStorage:', error)
+        this.isSupabaseAvailable = false
       }
+
+      // Use localStorage fallback
+      console.log('Using localStorage for note deletion')
+      return this.deleteNoteLocalStorage(noteId)
     } catch (error) {
       console.error('Error deleting note, falling back to localStorage:', error)
       return this.deleteNoteLocalStorage(noteId)
@@ -403,8 +450,8 @@ class NotesService {
     try {
       console.log('Fetching notes for:', referenceType, referenceId)
 
-      // Try Supabase first if available
-      if (await this.testSupabaseConnection()) {
+      // Try Supabase first (fast path - no connection test)
+      try {
         const { data: notes, error } = await supabase
           .from('notes')
           .select('*')
@@ -412,22 +459,27 @@ class NotesService {
           .eq('reference_type', referenceType)
           .order('created_at', { ascending: true })
 
-        if (error) {
-          console.error('Supabase error fetching notes, falling back to localStorage:', error)
-          // Fall back to localStorage
-          const localNotes = this.getNotesFromLocalStorage(referenceId, referenceType)
-          return { success: true, notes: localNotes }
+        if (!error) {
+          console.log('Notes fetched successfully from Supabase:', notes?.length || 0)
+          this.isSupabaseAvailable = true
+          this.lastConnectionTest = Date.now()
+          return { success: true, notes: notes || [] }
         }
 
-        console.log('Notes fetched successfully from Supabase:', notes?.length || 0)
-        return { success: true, notes: notes || [] }
-      } else {
-        // Use localStorage fallback
-        console.log('Using localStorage for notes retrieval')
-        const localNotes = this.getNotesFromLocalStorage(referenceId, referenceType)
-        console.log('Notes fetched successfully from localStorage:', localNotes.length)
-        return { success: true, notes: localNotes }
+        // If Supabase fails, fall back to localStorage
+        console.error('Supabase error fetching notes, falling back to localStorage:', error)
+        this.isSupabaseAvailable = false
+      } catch (error) {
+        console.error('Supabase connection failed, falling back to localStorage:', error)
+        this.isSupabaseAvailable = false
       }
+
+      // Use localStorage fallback
+      console.log('Using localStorage for notes retrieval')
+      const localNotes = this.getNotesFromLocalStorage(referenceId, referenceType)
+      console.log('Notes fetched successfully from localStorage:', localNotes.length)
+      return { success: true, notes: localNotes }
+
     } catch (error) {
       console.error('Error fetching notes, falling back to localStorage:', error)
       // Gracefully handle all connection failures - return localStorage notes
