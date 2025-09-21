@@ -1,20 +1,14 @@
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '@/types/supabase'
-import { envValidator } from '@/utils/envValidator'
 
-// Reset and validate environment configuration
-envValidator.reset()
-const envConfig = envValidator.getConfig()
-
-// Force use of real Supabase configuration
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || envConfig.supabaseUrl
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || envConfig.supabaseAnonKey
-const supabaseServiceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY || envConfig.supabaseServiceRoleKey
+// Force use of direct environment variables - BYPASS VALIDATOR COMPLETELY
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+const supabaseServiceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY
 
 console.log('🔧 Direct environment check:')
 console.log('- URL:', supabaseUrl ? supabaseUrl.substring(0, 30) + '...' : 'missing')
 console.log('- Anon Key:', supabaseAnonKey ? supabaseAnonKey.substring(0, 20) + '...' : 'missing')
-console.log('- Validator result:', envConfig.isValid, envConfig.errors)
 
 // Check for localhost URLs that could cause CSP violations
 if (supabaseUrl && supabaseUrl.includes('localhost')) {
@@ -32,16 +26,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // Create a fallback client if configuration is invalid
 const createSupabaseClient = () => {
   try {
-    // Bypass validator if we have direct environment variables
-    const hasDirectCredentials = supabaseUrl && supabaseAnonKey &&
-                                supabaseUrl.includes('.supabase.co') &&
-                                supabaseAnonKey.length > 100
+    // Check if we have the required environment variables
+    if (!supabaseUrl || !supabaseAnonKey) {
+      console.warn('⚠️ Supabase configuration missing. Using fallback mode.')
 
-    if (!hasDirectCredentials && !envConfig.isValid) {
-      console.warn('🔄 Using fallback Supabase configuration for localStorage-only mode')
-      console.warn('Validation errors:', envConfig.errors)
-
-      // Create a minimal client that will fail gracefully with fast timeouts
+      // Create a minimal client that will fail gracefully
       return createClient<Database>('https://placeholder.supabase.co', 'dummy-key', {
         auth: {
           detectSessionInUrl: false,
@@ -50,23 +39,12 @@ const createSupabaseClient = () => {
           storageKey: 'carexps-auth-fallback'
         },
         global: {
-          fetch: (url, options = {}) => {
-            // Fast timeout to prevent hanging
-            const controller = new AbortController()
-            const timeoutId = setTimeout(() => controller.abort(), 1000) // 1 second timeout
-
-            return Promise.race([
-              fetch(url, { ...options, signal: controller.signal }),
-              new Promise((_, reject) =>
-                setTimeout(() => reject(new Error('Supabase not configured - using localStorage mode')), 500)
-              )
-            ]).finally(() => clearTimeout(timeoutId))
-          }
+          fetch: () => Promise.reject(new Error('Supabase not configured - using localStorage mode'))
         }
       })
     }
 
-    console.log('✅ Creating Supabase client with validated URL:', supabaseUrl!.substring(0, 30) + '...')
+    console.log('✅ Creating Supabase client with URL:', supabaseUrl.substring(0, 30) + '...')
 
     return createClient<Database>(supabaseUrl!, supabaseAnonKey!, {
       auth: {
@@ -126,7 +104,7 @@ const createSupabaseClient = () => {
 export const supabase = createSupabaseClient()
 
 // Service role client for admin operations (use server-side only)
-export const supabaseAdmin = supabaseServiceRoleKey
+export const supabaseAdmin = supabaseServiceRoleKey && supabaseUrl
   ? createClient<Database>(supabaseUrl, supabaseServiceRoleKey, {
       auth: {
         autoRefreshToken: false,
