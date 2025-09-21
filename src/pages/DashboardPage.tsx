@@ -37,8 +37,8 @@ interface SegmentCache {
   lastUpdated: number
 }
 
-// Constants for caching (separate from SMS page to prevent modal interference)
-const DASHBOARD_SEGMENT_CACHE_KEY = 'dashboard_segment_cache_v1'
+// Use the same cache key as SMS page for consistency
+const SMS_SEGMENT_CACHE_KEY = 'sms_segment_cache_v2'
 const CACHE_EXPIRY_HOURS = 12
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
@@ -127,28 +127,37 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
   const [retellStatus, setRetellStatus] = useState<'checking' | 'connected' | 'error' | 'not-configured'>('checking')
   const [chatCosts, setChatCosts] = useState<Map<string, number>>(new Map())
 
-  // Load segment cache from localStorage (isolated from SMS page)
+  // Load segment cache from localStorage (shared with SMS page)
   const loadSegmentCache = (): Map<string, number> => {
     try {
-      const cached = localStorage.getItem(DASHBOARD_SEGMENT_CACHE_KEY)
+      const cached = localStorage.getItem(SMS_SEGMENT_CACHE_KEY)
       if (!cached) return new Map()
+
       const cacheData: SegmentCache = JSON.parse(cached)
       const now = Date.now()
       const expiryTime = CACHE_EXPIRY_HOURS * 60 * 60 * 1000
+
+      // Check if cache is expired
       if (now - cacheData.lastUpdated > expiryTime) {
-        localStorage.removeItem(DASHBOARD_SEGMENT_CACHE_KEY)
+        console.log('📅 SMS segment cache expired, clearing old data')
+        localStorage.removeItem(SMS_SEGMENT_CACHE_KEY)
         return new Map()
       }
+
+      // Filter out expired individual entries and convert to Map
       const validEntries = cacheData.data.filter(entry => {
         return now - entry.timestamp < expiryTime
       })
+
+      console.log(`💾 Loaded ${validEntries.length} cached SMS segment calculations`)
       return new Map(validEntries.map(entry => [entry.chatId, entry.segments]))
     } catch (error) {
+      console.error('Failed to load SMS segment cache:', error)
       return new Map()
     }
   }
 
-  // Save segment cache to localStorage (same as SMS page)
+  // Save segment cache to localStorage (shared with SMS page)
   const saveSegmentCache = useCallback((cache: Map<string, number>) => {
     try {
       const now = Date.now()
@@ -160,9 +169,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
         })),
         lastUpdated: now
       }
-      localStorage.setItem(DASHBOARD_SEGMENT_CACHE_KEY, JSON.stringify(cacheData))
+
+      localStorage.setItem(SMS_SEGMENT_CACHE_KEY, JSON.stringify(cacheData))
+      console.log(`💾 Saved ${cache.size} SMS segment calculations to cache`)
     } catch (error) {
-      console.error('Failed to save segment cache:', error)
+      console.error('Failed to save SMS segment cache:', error)
     }
   }, [])
 
@@ -205,6 +216,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
       if (shouldCache) {
         setFullDataSegmentCache(prev => {
           const newCache = new Map(prev.set(chat.chat_id, segments))
+          // Save updated cache to localStorage
+          saveSegmentCache(newCache)
           return newCache
         })
       }
@@ -241,6 +254,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
       const segments = twilioCostService.calculateSMSSegments(messages)
       setFullDataSegmentCache(prev => {
         const newCache = new Map(prev.set(chatId, segments))
+        // Save updated cache to localStorage
+        saveSegmentCache(newCache)
         return newCache
       })
 
