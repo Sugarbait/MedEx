@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { CalendarIcon, ChevronDownIcon } from 'lucide-react'
 
-export type DateRange = 'today' | 'thisWeek' | 'thisMonth' | 'thisYear' | 'custom'
+export type DateRange = 'today' | 'thisWeek' | 'lastWeek' | 'thisMonth' | 'thisYear' | 'custom'
 
 interface DateRangePickerProps {
   selectedRange: DateRange
@@ -22,6 +22,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   const dateRangeOptions = [
     { value: 'today' as DateRange, label: 'Today' },
     { value: 'thisWeek' as DateRange, label: 'This Week' },
+    { value: 'lastWeek' as DateRange, label: 'Last Week' },
     { value: 'thisMonth' as DateRange, label: 'This Month' },
     { value: 'thisYear' as DateRange, label: 'This Year' },
     { value: 'custom' as DateRange, label: 'Custom' }
@@ -186,6 +187,14 @@ export const getDateRangeFromSelection = (range: DateRange, customStart?: Date, 
       endOfWeek.setDate(startOfWeek.getDate() + 6)
       endOfWeek.setHours(23, 59, 59, 999)
       return { start: startOfWeek, end: endOfWeek }
+    case 'lastWeek':
+      const startOfLastWeek = new Date(today)
+      startOfLastWeek.setDate(today.getDate() - today.getDay() - 7) // Go back 7 days from start of this week
+      startOfLastWeek.setHours(0, 0, 0, 0)
+      const endOfLastWeek = new Date(startOfLastWeek)
+      endOfLastWeek.setDate(startOfLastWeek.getDate() + 6)
+      endOfLastWeek.setHours(23, 59, 59, 999)
+      return { start: startOfLastWeek, end: endOfLastWeek }
 
     case 'thisMonth':
       const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1)
