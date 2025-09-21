@@ -49,22 +49,46 @@ export const ChatDetailModal: React.FC<ChatDetailModalProps> = ({ chat, isOpen, 
   // Generate Patient ID based on phone number when modal opens
   useEffect(() => {
     if (isOpen && chat) {
-      // Try to find phone number from various possible fields
-      const phoneNumber = chat.phone_number ||
+      // Use the same phone number extraction logic as the display (around line 441)
+      const phoneNumber = chat.chat_analysis?.custom_analysis_data?.phone_number ||
+                         chat.chat_analysis?.custom_analysis_data?.customer_phone_number ||
+                         chat.chat_analysis?.custom_analysis_data?.phone ||
+                         chat.chat_analysis?.custom_analysis_data?.contact_number ||
                          chat.metadata?.phone_number ||
                          chat.metadata?.customer_phone_number ||
                          chat.metadata?.from_phone_number ||
                          chat.metadata?.to_phone_number ||
                          chat.collected_dynamic_variables?.phone_number ||
-                         chat.collected_dynamic_variables?.customer_phone_number
+                         chat.collected_dynamic_variables?.customer_phone_number ||
+                         chat.phone_number
 
-      if (phoneNumber) {
+      console.log('ChatDetailModal: Phone number detection:', {
+        chat_id: chat.chat_id,
+        phoneNumber,
+        sources: {
+          analysis_phone: chat.chat_analysis?.custom_analysis_data?.phone_number,
+          analysis_customer: chat.chat_analysis?.custom_analysis_data?.customer_phone_number,
+          analysis_phone_short: chat.chat_analysis?.custom_analysis_data?.phone,
+          analysis_contact: chat.chat_analysis?.custom_analysis_data?.contact_number,
+          metadata_phone: chat.metadata?.phone_number,
+          metadata_customer: chat.metadata?.customer_phone_number,
+          metadata_from: chat.metadata?.from_phone_number,
+          metadata_to: chat.metadata?.to_phone_number,
+          dynamic_phone: chat.collected_dynamic_variables?.phone_number,
+          dynamic_customer: chat.collected_dynamic_variables?.customer_phone_number,
+          direct: chat.phone_number
+        }
+      })
+
+      if (phoneNumber && phoneNumber !== 'Unknown Number') {
         const patientId = patientIdService.getPatientId(phoneNumber)
         const record = patientIdService.getPatientRecord(phoneNumber)
+        console.log('ChatDetailModal: Generated Patient ID:', patientId, 'for phone:', phoneNumber)
         setGeneratedPatientId(patientId)
         setPatientRecord(record)
       } else {
-        setGeneratedPatientId('')
+        console.log('ChatDetailModal: No valid phone number found - setting fallback')
+        setGeneratedPatientId('PT00000000')
         setPatientRecord(null)
       }
     }
@@ -584,7 +608,9 @@ export const ChatDetailModal: React.FC<ChatDetailModalProps> = ({ chat, isOpen, 
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Patient ID</label>
                   <div className="flex items-center gap-2">
                     <IdCardIcon className="w-4 h-4 text-blue-600" />
-                    <p className="text-gray-900 dark:text-gray-100 font-mono font-semibold">{generatedPatientId}</p>
+                    <p className="text-gray-900 dark:text-gray-100 font-mono font-semibold">
+                      {generatedPatientId || 'PT00000000'}
+                    </p>
                     {patientRecord && (
                       <span className="text-xs text-gray-500 dark:text-gray-400">(Phone-based)</span>
                     )}
