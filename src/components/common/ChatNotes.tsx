@@ -22,7 +22,7 @@ interface ChatNotesProps {
 
 export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false, onNotesChanged }) => {
   const [notes, setNotes] = useState<Note[]>([])
-  const [isLoading, setIsLoading] = useState(true)
+  const [isLoading, setIsLoading] = useState(false) // Start false for instant UI render
   const [isEditing, setIsEditing] = useState(false)
   const [isSaving, setIsSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -33,27 +33,50 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Load notes
+  // Load notes with optimized loading strategy and timeout
   const loadNotes = async () => {
     try {
+      // Set loading but don't block the UI render
       setIsLoading(true)
       setError(null)
 
-      const result = await notesService.getNotes(chatId, 'sms')
+      console.log('🚀 ChatNotes: Starting optimized notes load for chatId:', chatId)
+
+      // Add timeout to prevent infinite loading
+      const loadPromise = notesService.getNotes(chatId, 'sms')
+      const timeoutPromise = new Promise<any>((_, reject) =>
+        setTimeout(() => reject(new Error('Notes loading timeout - using localStorage only')), 8000)
+      )
+
+      const result = await Promise.race([loadPromise, timeoutPromise])
       if (result.success && result.notes) {
+        console.log('✅ ChatNotes: Notes loaded successfully:', result.notes.length, 'notes')
         setNotes(result.notes)
       } else {
+        console.warn('⚠️ ChatNotes: Notes load warning:', result.error)
         setError(result.error || 'Failed to load notes')
       }
     } catch (err) {
-      console.error('Error loading notes:', err)
-      setError('Failed to load notes')
+      console.error('❌ ChatNotes: Error loading notes:', err)
+      // If timeout or error, try to load from localStorage directly
+      try {
+        const localNotes = JSON.parse(localStorage.getItem(`notes_sms_${chatId}`) || '[]')
+        if (localNotes.length > 0) {
+          console.log('💾 ChatNotes: Loaded notes from localStorage fallback:', localNotes.length)
+          setNotes(localNotes)
+          setError('Loading from local storage (offline mode)')
+        } else {
+          setError('Failed to load notes')
+        }
+      } catch (localError) {
+        setError('Failed to load notes')
+      }
     } finally {
       setIsLoading(false)
     }
   }
 
-  // Save new note
+  // Save new note with timeout
   const handleAddNote = async () => {
     if (!newNoteContent.trim()) {
       setError('Note content cannot be empty')
@@ -64,12 +87,19 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
       setIsSaving(true)
       setError(null)
 
-      const result = await notesService.createNote({
+      // Add timeout to prevent hanging save
+      const savePromise = notesService.createNote({
         reference_id: chatId,
         reference_type: 'sms',
         content: newNoteContent.trim(),
         content_type: 'plain'
       })
+
+      const timeoutPromise = new Promise<any>((_, reject) =>
+        setTimeout(() => reject(new Error('Save operation timeout')), 10000)
+      )
+
+      const result = await Promise.race([savePromise, timeoutPromise])
 
       if (result.success) {
         // Immediately add the new note to local state for instant UI update
@@ -88,13 +118,17 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
       }
     } catch (err) {
       console.error('Error saving note:', err)
-      setError('Failed to save note')
+      if (err instanceof Error && err.message.includes('timeout')) {
+        setError('Save timeout - note may have been saved locally')
+      } else {
+        setError('Failed to save note')
+      }
     } finally {
       setIsSaving(false)
     }
   }
 
-  // Update existing note
+  // Update existing note with timeout
   const handleUpdateNote = async () => {
     if (!editingNoteId || !editingContent.trim()) {
       setError('Note content cannot be empty')
@@ -105,10 +139,17 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
       setIsSaving(true)
       setError(null)
 
-      const result = await notesService.updateNote(editingNoteId, {
+      // Add timeout to prevent hanging update
+      const updatePromise = notesService.updateNote(editingNoteId, {
         content: editingContent.trim(),
         content_type: 'plain'
       })
+
+      const timeoutPromise = new Promise<any>((_, reject) =>
+        setTimeout(() => reject(new Error('Update operation timeout')), 10000)
+      )
+
+      const result = await Promise.race([updatePromise, timeoutPromise])
 
       if (result.success) {
         // Immediately update the note in local state for instant UI update
@@ -130,7 +171,11 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
       }
     } catch (err) {
       console.error('Error updating note:', err)
-      setError('Failed to update note')
+      if (err instanceof Error && err.message.includes('timeout')) {
+        setError('Update timeout - changes may have been saved locally')
+      } else {
+        setError('Failed to update note')
+      }
     } finally {
       setIsSaving(false)
     }
@@ -223,20 +268,30 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
     target.style.height = `${target.scrollHeight}px`
   }
 
-  // Set up notes loading and real-time subscription
+  // Set up notes loading and real-time subscription with performance optimization
   useEffect(() => {
+    console.log('🔄 ChatNotes: Effect triggered for chatId:', chatId)
+
+    // Start loading notes immediately
     loadNotes()
 
-    // Subscribe to real-time updates
+    // Subscribe to real-time updates (async to not block initial load)
     const subscribeToUpdates = async () => {
-      await notesService.subscribeToNotes(chatId, 'sms', (updatedNotes) => {
-        setNotes(updatedNotes)
-      })
+      try {
+        await notesService.subscribeToNotes(chatId, 'sms', (updatedNotes) => {
+          console.log('🔄 ChatNotes: Real-time update received:', updatedNotes.length, 'notes')
+          setNotes(updatedNotes)
+        })
+      } catch (error) {
+        console.warn('⚠️ ChatNotes: Real-time subscription failed (continuing with manual refresh):', error)
+      }
     }
 
+    // Don't await subscription setup to keep notes loading fast
     subscribeToUpdates()
 
     return () => {
+      console.log('🧹 ChatNotes: Cleaning up subscription for chatId:', chatId)
       notesService.unsubscribeFromNotes(chatId, 'sms')
     }
   }, [chatId])
@@ -249,16 +304,8 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
     }
   }, [newNoteContent, editingContent])
 
-  if (isLoading) {
-    return (
-      <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-        <div className="flex items-center justify-center py-8">
-          <LoaderIcon className="w-6 h-6 text-blue-600 animate-spin mr-2" />
-          <span className="text-gray-600 dark:text-gray-400">Loading notes...</span>
-        </div>
-      </div>
-    )
-  }
+  // Show immediate UI with minimal loading state for better perceived performance
+  const showLoadingSpinner = isLoading && notes.length === 0
 
   const formatDateTime = (dateString: string) => {
     const date = new Date(dateString)
@@ -275,6 +322,9 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
           <StickyNoteIcon className="w-5 h-5 text-blue-600" />
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Chat Notes</h3>
           <span className="text-sm text-gray-500 dark:text-gray-400">({notes.length})</span>
+          {isLoading && notes.length > 0 && (
+            <LoaderIcon className="w-4 h-4 text-blue-600 animate-spin ml-1" />
+          )}
         </div>
 
         {!isReadonly && !isEditing && (
@@ -427,8 +477,16 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
         </div>
       )}
 
+      {/* Loading State for Initial Load */}
+      {showLoadingSpinner && (
+        <div className="flex items-center justify-center py-8">
+          <LoaderIcon className="w-6 h-6 text-blue-600 animate-spin mr-2" />
+          <span className="text-gray-600 dark:text-gray-400">Loading notes...</span>
+        </div>
+      )}
+
       {/* Empty State */}
-      {notes.length === 0 && !isEditing && (
+      {notes.length === 0 && !isEditing && !showLoadingSpinner && (
         <div className="text-center py-8">
           <StickyNoteIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
           <p className="text-gray-500 dark:text-gray-400 mb-4">No notes for this chat yet.</p>

@@ -85,12 +85,17 @@ class NotesService {
   }
 
   /**
-   * Perform the actual connection test
+   * Perform the actual connection test with timeout
    */
   private async performConnectionTest(): Promise<boolean> {
     try {
-      // Simple test query to check connection
-      const { error } = await supabase.from('notes').select('id').limit(1).maybeSingle()
+      // Create a promise with timeout to prevent hanging
+      const testPromise = supabase.from('notes').select('id').limit(1).maybeSingle()
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Connection test timeout')), 3000)
+      )
+
+      const { error } = await Promise.race([testPromise, timeoutPromise]) as any
       this.isSupabaseAvailable = !error
 
       if (error) {
@@ -117,7 +122,20 @@ class NotesService {
   private saveNotesToLocalStorage(referenceId: string, referenceType: 'call' | 'sms', notes: Note[]): void {
     try {
       const key = this.getLocalStorageKey(referenceId, referenceType)
-      localStorage.setItem(key, JSON.stringify(notes))
+      // Sort notes before saving for consistent ordering
+      const sortedNotes = notes.sort((a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      )
+      localStorage.setItem(key, JSON.stringify(sortedNotes))
+
+      // Update the cache timestamp
+      const cacheInfo = {
+        timestamp: Date.now(),
+        count: sortedNotes.length
+      }
+      localStorage.setItem(`${key}_cache_info`, JSON.stringify(cacheInfo))
+
+      console.log(`💾 Saved ${sortedNotes.length} notes to localStorage for ${referenceType}:${referenceId}`)
     } catch (error) {
       console.error('Failed to save notes to localStorage:', error)
     }
@@ -127,7 +145,12 @@ class NotesService {
     try {
       const key = this.getLocalStorageKey(referenceId, referenceType)
       const stored = localStorage.getItem(key)
-      return stored ? JSON.parse(stored) : []
+      const notes = stored ? JSON.parse(stored) : []
+
+      // Sort notes by creation date for consistent ordering
+      return notes.sort((a: Note, b: Note) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      )
     } catch (error) {
       console.error('Failed to load notes from localStorage:', error)
       return []
@@ -204,17 +227,24 @@ class NotesService {
         metadata: data.metadata || {}
       }
 
-      // Try Supabase first (fast path - no connection test)
+      // Try Supabase first with timeout
       try {
         console.log('Creating note with Supabase:', noteData)
 
-        const { data: note, error } = await supabase
+        // Add timeout to prevent hanging
+        const insertPromise = supabase
           .from('notes')
           .insert(noteData)
           .select()
           .single()
 
-        if (!error) {
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Supabase operation timeout')), 5000)
+        )
+
+        const { data: note, error } = await Promise.race([insertPromise, timeoutPromise]) as any
+
+        if (!error && note) {
           console.log('Note created successfully in Supabase:', note)
           this.isSupabaseAvailable = true
           this.lastConnectionTest = Date.now()
@@ -371,16 +401,23 @@ class NotesService {
 
       console.log('Updating note:', noteId, updateData)
 
-      // Try Supabase first (fast path - no connection test)
+      // Try Supabase first with timeout
       try {
-        const { data: note, error } = await supabase
+        // Add timeout to prevent hanging
+        const updatePromise = supabase
           .from('notes')
           .update(updateData)
           .eq('id', noteId)
           .select()
           .single()
 
-        if (!error) {
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Supabase operation timeout')), 5000)
+        )
+
+        const { data: note, error } = await Promise.race([updatePromise, timeoutPromise]) as any
+
+        if (!error && note) {
           console.log('Note updated successfully in Supabase:', note)
           this.isSupabaseAvailable = true
           this.lastConnectionTest = Date.now()
@@ -450,14 +487,21 @@ class NotesService {
     try {
       console.log('Fetching notes for:', referenceType, referenceId)
 
-      // Try Supabase first (fast path - no connection test)
+      // Try Supabase first with timeout
       try {
-        const { data: notes, error } = await supabase
+        // Add timeout to prevent hanging
+        const fetchPromise = supabase
           .from('notes')
           .select('*')
           .eq('reference_id', referenceId)
           .eq('reference_type', referenceType)
           .order('created_at', { ascending: true })
+
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Supabase operation timeout')), 5000)
+        )
+
+        const { data: notes, error } = await Promise.race([fetchPromise, timeoutPromise]) as any
 
         if (!error) {
           console.log('Notes fetched successfully from Supabase:', notes?.length || 0)

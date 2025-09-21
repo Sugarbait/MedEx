@@ -153,7 +153,7 @@ export class ChatService {
   private smsAgentId: string = ''
   private isDemoMode: boolean = false
   private lastRequestTime: number = 0
-  private minRequestInterval: number = 1000 // 1 second between requests (more reasonable)
+  private minRequestInterval: number = 200 // 200ms between requests (faster but still safe)
   private chatCache: Map<string, { data: any; timestamp: number }> = new Map()
   private cacheExpiry: number = 60000 // 1 minute cache for better performance
   private requestQueue: Promise<any>[] = [] // Queue to handle concurrent requests
@@ -235,10 +235,14 @@ export class ChatService {
 
     if (timeSinceLastRequest < this.minRequestInterval) {
       const waitTime = this.minRequestInterval - timeSinceLastRequest
-      console.log(`Rate limiting: waiting ${waitTime}ms before next request`)
-      await new Promise(resolve => setTimeout(resolve, waitTime))
+      // Only wait if it's a reasonable amount (prevent infinite loops)
+      if (waitTime > 0 && waitTime < 5000) {
+        console.log(`Rate limiting: waiting ${waitTime}ms before next request`)
+        await new Promise(resolve => setTimeout(resolve, waitTime))
+      }
     }
 
+    // Always update the last request time to prevent loops
     this.lastRequestTime = Date.now()
   }
 

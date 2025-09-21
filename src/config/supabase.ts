@@ -1,17 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '@/types/supabase'
+import { envValidator } from '@/utils/envValidator'
 
-// Get environment variables and debug their values
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
-const supabaseServiceRoleKey = import.meta.env.VITE_SUPABASE_SERVICE_ROLE_KEY
-
-// Debug logging to identify configuration issues
-console.log('🔧 Supabase Configuration Debug:')
-console.log('- VITE_SUPABASE_URL:', supabaseUrl ? `${supabaseUrl.substring(0, 30)}...` : 'MISSING')
-console.log('- VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'MISSING')
-console.log('- Environment mode:', import.meta.env.MODE)
-console.log('- All env vars:', Object.keys(import.meta.env).filter(key => key.startsWith('VITE_')))
+// Validate environment configuration
+const envConfig = envValidator.getConfig()
+const supabaseUrl = envConfig.supabaseUrl
+const supabaseAnonKey = envConfig.supabaseAnonKey
+const supabaseServiceRoleKey = envConfig.supabaseServiceRoleKey
 
 // Check for localhost URLs that could cause CSP violations
 if (supabaseUrl && supabaseUrl.includes('localhost')) {
@@ -29,19 +24,12 @@ if (!supabaseUrl || !supabaseAnonKey) {
 // Create a fallback client if configuration is invalid
 const createSupabaseClient = () => {
   try {
-    // Enhanced validation to prevent localhost URLs and ensure proper configuration
-    if (!supabaseUrl ||
-        !supabaseAnonKey ||
-        supabaseUrl.includes('example.') ||
-        supabaseUrl === 'your_url_here' ||
-        supabaseUrl.includes('localhost') ||
-        supabaseUrl.includes('127.0.0.1') ||
-        !supabaseUrl.includes('supabase.co')) {
-
+    // Use environment validator results
+    if (!envConfig.isValid) {
       console.warn('🔄 Using fallback Supabase configuration for localStorage-only mode')
-      console.warn('Reason: Invalid, missing, or localhost URL detected')
+      console.warn('Validation errors:', envConfig.errors)
 
-      // Create a minimal client that will fail gracefully
+      // Create a minimal client that will fail gracefully with fast timeouts
       return createClient<Database>('https://placeholder.supabase.co', 'dummy-key', {
         auth: {
           detectSessionInUrl: false,
@@ -50,14 +38,25 @@ const createSupabaseClient = () => {
           storageKey: 'carexps-auth-fallback'
         },
         global: {
-          fetch: () => Promise.reject(new Error('Supabase not configured - using localStorage mode'))
+          fetch: (url, options = {}) => {
+            // Fast timeout to prevent hanging
+            const controller = new AbortController()
+            const timeoutId = setTimeout(() => controller.abort(), 1000) // 1 second timeout
+
+            return Promise.race([
+              fetch(url, { ...options, signal: controller.signal }),
+              new Promise((_, reject) =>
+                setTimeout(() => reject(new Error('Supabase not configured - using localStorage mode')), 500)
+              )
+            ]).finally(() => clearTimeout(timeoutId))
+          }
         }
       })
     }
 
-    console.log('✅ Creating Supabase client with production URL:', supabaseUrl.substring(0, 30) + '...')
+    console.log('✅ Creating Supabase client with validated URL:', supabaseUrl!.substring(0, 30) + '...')
 
-    return createClient<Database>(supabaseUrl, supabaseAnonKey, {
+    return createClient<Database>(supabaseUrl!, supabaseAnonKey!, {
       auth: {
         // Use Azure AD integration - disable built-in auth since we use Azure AD
         detectSessionInUrl: false,
@@ -82,11 +81,11 @@ const createSupabaseClient = () => {
         },
         // Add reconnection settings for better resilience
         reconnectAfterMs: (tries) => {
-          // Exponential backoff with max delay of 30 seconds
-          return Math.min(1000 * Math.pow(2, tries), 30000)
+          // Exponential backoff with max delay of 10 seconds for faster failover
+          return Math.min(1000 * Math.pow(2, tries), 10000)
         },
-        maxReconnectAttempts: 5,
-        timeout: 10000
+        maxReconnectAttempts: 3, // Reduced for faster fallback
+        timeout: 5000 // Reduced timeout for faster error detection
       },
       global: {
         headers: {

@@ -397,25 +397,51 @@ class HIPAAAuditLogger {
       const { error } = await supabase
         .from('audit_logs')
         .insert([{
-          id: encryptedEntry.id,
-          user_id: encryptedEntry.userId,
+          user_id: encryptedEntry.user_id,
           action: encryptedEntry.action,
-          resource_type: encryptedEntry.resourceType,
-          resource_id: encryptedEntry.resourceId,
+          resource_type: encryptedEntry.resource_type,
+          resource_id: encryptedEntry.resource_id,
           outcome: encryptedEntry.outcome,
           timestamp: encryptedEntry.timestamp,
-          ip_address: encryptedEntry.ipAddress,
-          user_agent: encryptedEntry.userAgent,
-          session_id: encryptedEntry.sessionId,
-          encrypted_details: encryptedEntry.encryptedDetails,
-          phi_accessed: encryptedEntry.phiAccessed || false,
-          compliance_flags: encryptedEntry.complianceFlags || [],
-          severity: encryptedEntry.severity || 'INFO',
+          source_ip: encryptedEntry.source_ip,
+          user_agent: encryptedEntry.user_agent,
+          session_id: encryptedEntry.session_id,
+          additional_info: encryptedEntry.additional_info,
+          phi_accessed: encryptedEntry.phi_accessed || false,
+          failure_reason: encryptedEntry.failure_reason,
+          severity: 'INFO',
           created_at: new Date().toISOString()
         }])
 
       if (error) {
         console.error('Supabase audit log error:', error)
+
+        // Check if it's a missing table error
+        if (error.message?.includes('relation "public.audit_logs" does not exist') ||
+            error.code === 'PGRST116') {
+          console.warn('⚠️  audit_logs table does not exist in Supabase. Please create it manually.')
+          console.warn('📋 SQL to create the table:')
+          console.warn(`
+CREATE TABLE IF NOT EXISTS public.audit_logs (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id TEXT,
+  action TEXT NOT NULL,
+  resource_type TEXT NOT NULL,
+  resource_id TEXT,
+  phi_accessed BOOLEAN DEFAULT false,
+  source_ip TEXT,
+  user_agent TEXT,
+  session_id TEXT,
+  outcome TEXT NOT NULL,
+  failure_reason TEXT,
+  additional_info JSONB,
+  timestamp TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+          `)
+          throw new Error('Audit logs table missing - using localStorage fallback')
+        }
+
         throw new Error(`HIPAA audit storage failed: ${error.message}`)
       }
 
