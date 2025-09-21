@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { DateRangePicker, DateRange, getDateRangeFromSelection } from '@/components/common/DateRangePicker'
 import { retellService, currencyService, twilioCostService, chatService } from '@/services'
@@ -24,11 +24,38 @@ interface DashboardPageProps {
   user: any
 }
 
+// SMS Segment Cache interfaces (same as SMS page)
+interface SegmentCacheEntry {
+  chatId: string
+  segments: number
+  timestamp: number
+}
+
+interface SegmentCache {
+  data: SegmentCacheEntry[]
+  lastUpdated: number
+}
+
+// Constants for caching (same as SMS page)
+const SMS_SEGMENT_CACHE_KEY = 'sms_segment_cache_v2'
+const CACHE_EXPIRY_HOURS = 12
+
 export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
   const [isLoading, setIsLoading] = useState(false)
   const [selectedDateRange, setSelectedDateRange] = useState<DateRange>('today')
   const [error, setError] = useState('')
   const [isExporting, setIsExporting] = useState(false)
+
+  // SMS Segment caching state (copied from SMS page)
+  const [fullDataSegmentCache, setFullDataSegmentCache] = useState<Map<string, number>>(new Map())
+  const [segmentCalculationProgress, setSegmentCalculationProgress] = useState<{
+    isCalculating: boolean
+    current: number
+    total: number
+    cacheHits: number
+    newCalculations: number
+  }>({ isCalculating: false, current: 0, total: 0, cacheHits: 0, newCalculations: 0 })
+  const [lastDateRange, setLastDateRange] = useState<DateRange | null>(null)
 
   // Helper function to add Twilio costs to call metrics
   const addTwilioCostsToCallMetrics = (baseMetrics: any, calls: any[]) => {
@@ -81,10 +108,64 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
     avgMessagesPerChat: 0,
     avgCostPerMessage: 0,
     messageDeliveryRate: 0,
-    totalSMSCost: 0
+    totalSMSCost: 0,
+    totalSegments: 0
   })
   const [retellStatus, setRetellStatus] = useState<'checking' | 'connected' | 'error' | 'not-configured'>('checking')
   const [chatCosts, setChatCosts] = useState<Map<string, number>>(new Map())
+
+  // Load segment cache from localStorage (same as SMS page)
+  const loadSegmentCache = (): Map<string, number> => {
+    try {
+      const cached = localStorage.getItem(SMS_SEGMENT_CACHE_KEY)
+      if (!cached) return new Map()
+      const cacheData: SegmentCache = JSON.parse(cached)
+      const now = Date.now()
+      const expiryTime = CACHE_EXPIRY_HOURS * 60 * 60 * 1000
+      if (now - cacheData.lastUpdated > expiryTime) {
+        localStorage.removeItem(SMS_SEGMENT_CACHE_KEY)
+        return new Map()
+      }
+      const validEntries = cacheData.data.filter(entry => {
+        return now - entry.timestamp < expiryTime
+      })
+      return new Map(validEntries.map(entry => [entry.chatId, entry.segments]))
+    } catch (error) {
+      return new Map()
+    }
+  }
+
+  // Save segment cache to localStorage (same as SMS page)
+  const saveSegmentCache = useCallback((cache: Map<string, number>) => {
+    try {
+      const now = Date.now()
+      const cacheData: SegmentCache = {
+        data: Array.from(cache.entries()).map(([chatId, segments]) => ({
+          chatId,
+          segments,
+          timestamp: now
+        })),
+        lastUpdated: now
+      }
+      localStorage.setItem(SMS_SEGMENT_CACHE_KEY, JSON.stringify(cacheData))
+    } catch (error) {
+      console.error('Failed to save segment cache:', error)
+    }
+  }, [])
+
+  // Load cache on component mount
+  useEffect(() => {
+    const cachedSegments = loadSegmentCache()
+    setFullDataSegmentCache(cachedSegments)
+    console.log(`📁 Dashboard loaded ${cachedSegments.size} cached segments from localStorage`)
+  }, [])
+
+  // Save cache when it changes
+  useEffect(() => {
+    if (fullDataSegmentCache.size > 0) {
+      saveSegmentCache(fullDataSegmentCache)
+    }
+  }, [fullDataSegmentCache, saveSegmentCache])
 
   // Auto-refresh functionality
   const { formatLastRefreshTime } = useAutoRefresh({
@@ -96,7 +177,33 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
     }
   })
 
-  // Fetch full chat details and calculate SMS cost (copied from SMS page)
+  // Calculate chat SMS segments (exact same logic as SMS page)
+  const calculateChatSMSSegments = useCallback((chat: any, shouldCache: boolean = true): number => {
+    try {
+      let messages = []
+      if (chat.message_with_tool_calls && Array.isArray(chat.message_with_tool_calls)) {
+        messages = chat.message_with_tool_calls
+      } else if (chat.transcript) {
+        messages = [{ content: chat.transcript, role: 'user' }]
+      }
+
+      const segments = twilioCostService.calculateSMSSegments(messages)
+
+      if (shouldCache) {
+        setFullDataSegmentCache(prev => {
+          const newCache = new Map(prev.set(chat.chat_id, segments))
+          return newCache
+        })
+      }
+
+      return segments
+    } catch (error) {
+      console.error('Error calculating segments for chat:', chat.chat_id, error)
+      return 2
+    }
+  }, [fullDataSegmentCache])
+
+  // Fetch full chat details and calculate SMS cost with caching
   const fetchChatCost = async (chatId: string): Promise<number> => {
     try {
       // Check if we already have the cost cached
@@ -116,6 +223,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
       }
 
       const cost = twilioCostService.getSMSCostCAD(messages)
+
+      // Also calculate and cache segments while we have the full data
+      const segments = twilioCostService.calculateSMSSegments(messages)
+      setFullDataSegmentCache(prev => {
+        const newCache = new Map(prev.set(chatId, segments))
+        return newCache
+      })
 
       // Cache the result
       setChatCosts(prev => new Map(prev).set(chatId, cost))
@@ -186,8 +300,13 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
     }
   }
 
-  // Load dashboard data
+  // Handle date range changes with cache preservation
   useEffect(() => {
+    if (lastDateRange !== selectedDateRange) {
+      console.log(`📅 Dashboard date range changed from ${lastDateRange} to ${selectedDateRange}, keeping persistent segment cache`)
+      console.log(`💾 Persistent cache contains ${fullDataSegmentCache.size} entries that will be preserved`)
+      setLastDateRange(selectedDateRange)
+    }
     fetchDashboardData()
   }, [selectedDateRange])
 
@@ -448,11 +567,69 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
       const baseCallMetrics = retellService.calculateCallMetrics(callsResponse.calls)
       const enhancedCallMetrics = addTwilioCostsToCallMetrics(baseCallMetrics, callsResponse.calls)
 
-      // Calculate SMS costs using exact same logic as SMS page
+      // Calculate SMS costs using exact same logic as SMS page with caching
       const filteredChats = chatsResponse.chats
 
       // Store filtered chats for cost recalculation
       setFilteredChatsForCosts(filteredChats)
+
+      // Check cache hit rate and start segment calculation if needed
+      const cacheHits = filteredChats.filter(chat => fullDataSegmentCache.has(chat.chat_id)).length
+      const missingChats = filteredChats.filter(chat => !fullDataSegmentCache.has(chat.chat_id))
+      const cacheHitRate = filteredChats.length > 0 ? (cacheHits / filteredChats.length) * 100 : 100
+
+      console.log(`📊 Dashboard SMS Cache Analysis:`, {
+        totalChats: filteredChats.length,
+        cacheHits,
+        missingChats: missingChats.length,
+        cacheHitRate: `${cacheHitRate.toFixed(1)}%`
+      })
+
+      // Start segment calculation with progress tracking if we have missing chats
+      if (missingChats.length > 0) {
+        console.log(`🔄 Dashboard starting segment calculation for ${missingChats.length} missing chats`)
+        setSegmentCalculationProgress({
+          isCalculating: true,
+          current: 0,
+          total: missingChats.length,
+          cacheHits,
+          newCalculations: 0
+        })
+
+        // Calculate segments with progress tracking
+        const calculateMissingSegments = async () => {
+          for (let i = 0; i < missingChats.length; i++) {
+            const chat = missingChats[i]
+            try {
+              // Add delay to prevent overwhelming the API
+              if (i > 0 && i % 5 === 0) {
+                await new Promise(resolve => setTimeout(resolve, 100))
+              }
+
+              await fetchChatCost(chat.chat_id)
+
+              setSegmentCalculationProgress(prev => ({
+                ...prev,
+                current: i + 1,
+                newCalculations: i + 1
+              }))
+
+            } catch (error) {
+              console.error(`Dashboard error calculating segments for chat ${chat.chat_id}:`, error)
+            }
+          }
+
+          setSegmentCalculationProgress(prev => ({
+            ...prev,
+            isCalculating: false
+          }))
+
+          console.log(`✅ Dashboard completed segment calculation for ${missingChats.length} chats`)
+        }
+
+        // Start calculation in background
+        calculateMissingSegments()
+      }
 
       // Fetch costs for all filtered chats asynchronously
       const fetchAllChatCosts = async () => {
@@ -474,6 +651,16 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
         }
         // Fallback calculation if not cached yet
         return sum + calculateChatSMSCost(chat)
+      }, 0)
+
+      // Calculate total segments for display
+      const totalSegments = filteredChats.reduce((sum, chat) => {
+        const cachedSegments = fullDataSegmentCache.get(chat.chat_id)
+        if (cachedSegments !== undefined) {
+          return sum + cachedSegments
+        }
+        // Fallback to calculated segments
+        return sum + calculateChatSMSSegments(chat)
       }, 0)
 
       // Calculate chat metrics using exact same logic as SMS page
@@ -521,7 +708,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
         avgMessagesPerChat: chatMetrics.avgMessagesPerChat,
         avgCostPerMessage: chatMetrics.avgCostPerChat,
         messageDeliveryRate: chatMetrics.successRate,
-        totalSMSCost: totalSMSCost
+        totalSMSCost: totalSMSCost,
+        totalSegments: totalSegments
       })
 
     } catch (error) {
@@ -727,19 +915,59 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
 
       </div>
 
+      {/* SMS Progress Indicator */}
+      {segmentCalculationProgress.isCalculating && (
+        <div className="mb-6 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-600 rounded-lg p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+              <span className="text-sm font-medium text-blue-800 dark:text-blue-200">
+                Calculating accurate SMS segments... ({segmentCalculationProgress.current}/{segmentCalculationProgress.total})
+              </span>
+            </div>
+            <span className="text-sm text-blue-600 dark:text-blue-400">
+              {segmentCalculationProgress.total > 0 ? Math.round((segmentCalculationProgress.current / segmentCalculationProgress.total) * 100) : 0}%
+            </span>
+          </div>
+          <div className="w-full bg-blue-200 dark:bg-blue-800 rounded-full h-2 mb-2">
+            <div
+              className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+              style={{
+                width: `${segmentCalculationProgress.total > 0 ? (segmentCalculationProgress.current / segmentCalculationProgress.total) * 100 : 0}%`
+              }}
+            />
+          </div>
+          <div className="flex justify-between text-xs text-blue-600 dark:text-blue-400">
+            <span>Cache hits: {segmentCalculationProgress.cacheHits}</span>
+            <span>New calculations: {segmentCalculationProgress.newCalculations}</span>
+          </div>
+        </div>
+      )}
+
       {/* SMS Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total Messages */}
+        {/* Total SMS Segments */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600 dark:text-gray-400">Total Messages</span>
+            <span className="text-sm text-gray-600 dark:text-gray-400">Total SMS Segments</span>
             <MessageSquareIcon className="w-4 h-4 text-gray-400" />
           </div>
           <div className="text-3xl font-black text-blue-600 mb-1 numeric-data">
-            {isLoading ? '...' : metrics.totalMessages}
+            {segmentCalculationProgress.isCalculating ? (
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                <span>{metrics.totalSegments || '...'}</span>
+              </div>
+            ) : (
+              metrics.totalSegments || 0
+            )}
           </div>
           <div className="text-xs text-gray-500">
-            No messages sent
+            {segmentCalculationProgress.isCalculating ? (
+              `Calculating... (${segmentCalculationProgress.current}/${segmentCalculationProgress.total})`
+            ) : (
+              `${metrics.totalMessages} conversations`
+            )}
           </div>
         </div>
 
