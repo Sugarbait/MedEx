@@ -347,10 +347,11 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       return
     }
 
-    // Only clear cache if date range actually changed
+    // Only update tracking if date range actually changed
+    // Note: We do NOT clear fullDataSegmentCache as it contains persistent data that should survive date range changes
     if (lastDateRange !== selectedDateRange) {
-      console.log(`📅 Date range changed from ${lastDateRange} to ${selectedDateRange}, clearing segment cache`)
-      setFullDataSegmentCache(new Map())
+      console.log(`📅 Date range changed from ${lastDateRange} to ${selectedDateRange}, keeping persistent segment cache`)
+      console.log(`💾 Persistent cache contains ${fullDataSegmentCache.size} entries that will be preserved`)
       setLastDateRange(selectedDateRange)
     }
   }, [selectedDateRange, hasInitiallyLoaded, lastDateRange])
