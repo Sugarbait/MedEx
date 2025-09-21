@@ -232,8 +232,9 @@ class SMSCostCacheService {
 
     console.log(`[SMSCostCache] Loading ${chatsToLoad.length} of ${chats.length} chat costs (${Object.keys(results).length} cached)`)
 
-    // Load costs with controlled concurrency (5 at a time to avoid overwhelming the API)
-    const BATCH_SIZE = 5
+    // Load costs with controlled concurrency (adjust batch size based on total chats)
+    // Larger batches for big date ranges, smaller for safety
+    const BATCH_SIZE = chatsToLoad.length > 100 ? 8 : 5
     for (let i = 0; i < chatsToLoad.length; i += BATCH_SIZE) {
       const batch = chatsToLoad.slice(i, i + BATCH_SIZE)
 

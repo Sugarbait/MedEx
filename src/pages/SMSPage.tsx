@@ -388,14 +388,21 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
 
     console.log(`🚀 Loading accurate segment data for ${chatsToProcess.length} chats (${cachedCount} already cached)...`)
-    console.log(`⚠️ WARNING: Processing ${chatsToProcess.length} chats for ${selectedDateRange} - verify this is correct!`)
+    console.log(`📊 Processing ${chatsToProcess.length} chats for ${selectedDateRange} date range (Total: ${allFilteredChats.length} chats)`)
+    console.log(`📅 Date range: ${selectedDateRange} - Expected large batches for extended ranges like "year"`)
 
     // Safety check: If processing too many chats for "today", something is wrong
+    // But allow larger ranges like "year" to process all chats
     if (selectedDateRange === 'today' && chatsToProcess.length > 50) {
       console.error(`🚨 SAFETY ABORT: Attempting to process ${chatsToProcess.length} chats for "today" - this seems wrong! Aborting to prevent server overload.`)
       console.error(`🚨 Expected ~10 chats for today, got ${allFilteredChats.length} total chats`)
       console.error(`🚨 This suggests the allFilteredChats contains data from wrong date range`)
       return
+    }
+
+    // For larger date ranges (year, etc.), allow processing but with warning
+    if (chatsToProcess.length > 500) {
+      console.warn(`⚠️ Processing ${chatsToProcess.length} chats for ${selectedDateRange} - this is a large batch but expected for extended date ranges`)
     }
 
     // Start loading state
@@ -454,16 +461,16 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       const cacheHitRate = cachedCount / allFilteredChats.length
       console.log(`💾 Cache hit rate: ${(cacheHitRate * 100).toFixed(1)}% (${cachedCount}/${allFilteredChats.length})`)
 
-      // More conservative auto-loading to prevent unnecessary API calls
-      if (cacheHitRate < 0.7 || chatsToProcess.length >= 5) {
-        console.log(`🚀 Auto-triggering bulk load for ${chatsToProcess.length} uncached chats (cache hit rate: ${(cacheHitRate * 100).toFixed(1)}%)`)
-        // Smaller delay since cache synchronization is now handled properly
+      // For full date range coverage, always auto-load if there are uncached chats
+      // Only skip if very few chats need processing to avoid unnecessary API calls
+      if (chatsToProcess.length >= 2) {
+        console.log(`🚀 Auto-triggering bulk load for ${chatsToProcess.length} uncached chats (cache hit rate: ${(cacheHitRate * 100).toFixed(1)}%) - ensuring complete date range coverage`)
         const timer = setTimeout(() => {
           loadAccurateSegmentsForAllChats()
         }, 1000)
         return () => clearTimeout(timer)
       } else {
-        console.log(`✨ Cache hit rate is good (${(cacheHitRate * 100).toFixed(1)}%), skipping auto-load. Use manual refresh if needed.`)
+        console.log(`✨ Only ${chatsToProcess.length} chat(s) need processing (cache hit rate: ${(cacheHitRate * 100).toFixed(1)}%), will load on demand.`)
       }
     } else {
       console.log(`💾 All ${allFilteredChats.length} chats already cached - no bulk loading needed!`)
@@ -568,6 +575,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       let calculatedTotalSegments = 0
       let chatsWithAccurateData = 0
       console.log(`📊 Calculating SMS segments for ${allFilteredChats.length} chats using fullDataSegmentCache priority`)
+      console.log(`📅 Date range: ${selectedDateRange} - Processing ${allFilteredChats.length} total chats for segment calculation`)
 
       allFilteredChats.forEach((chat, index) => {
         // Priority: Use accurate data from modal if available
@@ -575,17 +583,24 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         if (accurateSegments !== undefined) {
           calculatedTotalSegments += accurateSegments
           chatsWithAccurateData++
-          console.log(`Chat ${index + 1} (${chat.chat_id}): ${accurateSegments} segments (ACCURATE from modal)`)
+          // Only log every 50th chat to avoid console spam for large date ranges
+          if (index % 50 === 0 || index < 10 || index >= allFilteredChats.length - 5) {
+            console.log(`Chat ${index + 1} (${chat.chat_id}): ${accurateSegments} segments (ACCURATE from modal)`)
+          }
         } else {
           // Fallback to basic calculation only when no accurate data available
           // Use shouldCache: false to prevent circular dependency during metrics calculation
           const fallbackSegments = calculateChatSMSSegments(chat, false)
           calculatedTotalSegments += fallbackSegments
-          console.log(`Chat ${index + 1} (${chat.chat_id}): ${fallbackSegments} segments (fallback)`)
+          // Only log every 50th chat to avoid console spam for large date ranges
+          if (index % 50 === 0 || index < 10 || index >= allFilteredChats.length - 5) {
+            console.log(`Chat ${index + 1} (${chat.chat_id}): ${fallbackSegments} segments (fallback)`)
+          }
         }
       })
 
-      console.log(`📊 Total SMS segments calculated: ${calculatedTotalSegments} (${chatsWithAccurateData}/${allFilteredChats.length} from accurate modal data)`)
+      console.log(`📊 ✅ COMPLETE: Total SMS segments calculated: ${calculatedTotalSegments} (${chatsWithAccurateData}/${allFilteredChats.length} from accurate modal data)`)
+      console.log(`📈 Segment breakdown: ${chatsWithAccurateData} accurate + ${allFilteredChats.length - chatsWithAccurateData} fallback = ${calculatedTotalSegments} total segments`)
       setTotalSegments(calculatedTotalSegments)
 
       // Calculate total cost from calculated segments (more accurate than individual chat costs)
@@ -700,7 +715,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
         // Fetch chats using standard service - same pattern as Calls page
         allChatsResponse = await chatService.getChatHistory({
-          limit: 300, // Reduced limit for faster initial load
+          limit: 2000, // Increased limit to handle full year range data
           sort_order: 'descending'
         })
       } catch (error: any) {
@@ -722,8 +737,14 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       const startMs = start.getTime()
       const endMs = end.getTime()
 
-      console.log(`🔍 Total chats received from API: ${allChatsResponse.chats.length}`)
+      console.log(`🔍 Total chats received from API: ${allChatsResponse.chats.length} (requested up to 2000 chats)`)
       console.log(`📅 Filtering range: ${startMs} to ${endMs}`)
+
+      // Warn if we hit the API limit - might need multiple requests for very large date ranges
+      if (allChatsResponse.chats.length >= 2000) {
+        console.warn(`⚠️ WARNING: Received maximum API limit (2000 chats). Some chats from ${selectedDateRange} may be missing!`)
+        console.warn(`📋 Consider implementing pagination for date ranges with >2000 chats`)
+      }
 
       const finalFiltered = allChatsResponse.chats.filter(chat => {
         const timestamp = chat.start_timestamp
@@ -1175,8 +1196,8 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
               const cachedCount = allFilteredChats.length - chatsToProcess.length
               const cacheHitRate = cachedCount / allFilteredChats.length
 
-              // Show button if there are uncached chats but auto-load was skipped
-              return chatsToProcess.length > 0 && (cacheHitRate >= 0.8 && chatsToProcess.length < 3) ? (
+              // Show button if there are uncached chats
+              return chatsToProcess.length > 0 ? (
                 <div className="mt-2 mb-1">
                   <button
                     onClick={() => loadAccurateSegmentsForAllChats()}
