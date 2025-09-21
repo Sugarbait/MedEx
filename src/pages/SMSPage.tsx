@@ -134,6 +134,16 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     return (saved as DateRange) || 'thisMonth'
   })
 
+  // State for custom date range
+  const [customStartDate, setCustomStartDate] = useState<Date | undefined>(() => {
+    const saved = localStorage.getItem('sms_page_custom_start_date')
+    return saved ? new Date(saved) : undefined
+  })
+  const [customEndDate, setCustomEndDate] = useState<Date | undefined>(() => {
+    const saved = localStorage.getItem('sms_page_custom_end_date')
+    return saved ? new Date(saved) : undefined
+  })
+
   // Optimization state
   const [lastDataFetch, setLastDataFetch] = useState<number>(0)
   const [isSmartRefreshing, setIsSmartRefreshing] = useState(false)
@@ -509,7 +519,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
     setIsSmartRefreshing(false) // Reset smart refresh state to prevent infinite spinning
     debouncedFetchChats.debouncedCallback(true)
-  }, [selectedDateRange, hasInitiallyLoaded])
+  }, [selectedDateRange, customStartDate, customEndDate, hasInitiallyLoaded])
 
   // Fetch when page changes (no debouncing for pagination)
   useEffect(() => {
@@ -673,7 +683,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       }
 
       // Get date range for filtering
-      const { start, end } = getDateRangeFromSelection(selectedDateRange)
+      const { start, end } = getDateRangeFromSelection(selectedDateRange, customStartDate, customEndDate)
       console.log(`🔍 fetchChatsOptimized: selectedDateRange = "${selectedDateRange}"`)
       console.log(`📅 Date range for filtering: ${start.toLocaleString()} to ${end.toLocaleString()}`)
       console.log(`⏰ Current time: ${new Date().toLocaleString()}`)
@@ -775,7 +785,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         setLoading(false)
       }
     }
-  }, [selectedDateRange, currentPage, lastDataFetch])
+  }, [selectedDateRange, customStartDate, customEndDate, currentPage, lastDataFetch])
 
 
 
@@ -980,8 +990,24 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
             setSelectedDateRange(range)
             // Save selected date range to localStorage
             localStorage.setItem('sms_page_date_range', range)
+
+            // Handle custom date range
+            if (range === 'custom' && customStart && customEnd) {
+              setCustomStartDate(customStart)
+              setCustomEndDate(customEnd)
+              // Save custom dates to localStorage
+              localStorage.setItem('sms_page_custom_start_date', customStart.toISOString())
+              localStorage.setItem('sms_page_custom_end_date', customEnd.toISOString())
+            } else if (range !== 'custom') {
+              // Clear custom dates when switching to non-custom range
+              setCustomStartDate(undefined)
+              setCustomEndDate(undefined)
+              localStorage.removeItem('sms_page_custom_start_date')
+              localStorage.removeItem('sms_page_custom_end_date')
+            }
+
             const { start, end } = getDateRangeFromSelection(range, customStart, customEnd)
-            console.log('SMS date range changed:', { range, start, end })
+            console.log('SMS date range changed:', { range, start, end, customStart, customEnd })
           }}
         />
         <div className="flex items-center gap-3">

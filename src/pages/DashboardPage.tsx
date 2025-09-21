@@ -43,6 +43,17 @@ const CACHE_EXPIRY_HOURS = 12
 export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
   const [isLoading, setIsLoading] = useState(false)
   const [selectedDateRange, setSelectedDateRange] = useState<DateRange>('today')
+
+  // State for custom date range
+  const [customStartDate, setCustomStartDate] = useState<Date | undefined>(() => {
+    const saved = localStorage.getItem('dashboard_custom_start_date')
+    return saved ? new Date(saved) : undefined
+  })
+  const [customEndDate, setCustomEndDate] = useState<Date | undefined>(() => {
+    const saved = localStorage.getItem('dashboard_custom_end_date')
+    return saved ? new Date(saved) : undefined
+  })
+
   const [error, setError] = useState('')
   const [isExporting, setIsExporting] = useState(false)
 
@@ -308,7 +319,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
       setLastDateRange(selectedDateRange)
     }
     fetchDashboardData()
-  }, [selectedDateRange])
+  }, [selectedDateRange, customStartDate, customEndDate])
 
   // State to store filtered chats for cost recalculation
   const [filteredChatsForCosts, setFilteredChatsForCosts] = useState<any[]>([])
@@ -388,7 +399,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
       setRetellStatus('connected')
 
       // Get date range
-      const { start, end } = getDateRangeFromSelection(selectedDateRange)
+      const { start, end } = getDateRangeFromSelection(selectedDateRange, customStartDate, customEndDate)
       console.log('Date range for API:', {
         start: start.toISOString(),
         end: end.toISOString(),
@@ -724,7 +735,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
   const handleExportPDF = async () => {
     setIsExporting(true)
     try {
-      const { start, end } = getDateRangeFromSelection(selectedDateRange)
+      const { start, end } = getDateRangeFromSelection(selectedDateRange, customStartDate, customEndDate)
 
       await pdfExportService.generateDashboardReport(metrics, {
         dateRange: selectedDateRange,
@@ -748,8 +759,24 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
           selectedRange={selectedDateRange}
           onRangeChange={(range, customStart, customEnd) => {
             setSelectedDateRange(range)
+
+            // Handle custom date range
+            if (range === 'custom' && customStart && customEnd) {
+              setCustomStartDate(customStart)
+              setCustomEndDate(customEnd)
+              // Save custom dates to localStorage
+              localStorage.setItem('dashboard_custom_start_date', customStart.toISOString())
+              localStorage.setItem('dashboard_custom_end_date', customEnd.toISOString())
+            } else if (range !== 'custom') {
+              // Clear custom dates when switching to non-custom range
+              setCustomStartDate(undefined)
+              setCustomEndDate(undefined)
+              localStorage.removeItem('dashboard_custom_start_date')
+              localStorage.removeItem('dashboard_custom_end_date')
+            }
+
             const { start, end } = getDateRangeFromSelection(range, customStart, customEnd)
-            console.log('Dashboard date range changed:', { range, start, end })
+            console.log('Dashboard date range changed:', { range, start, end, customStart, customEnd })
           }}
         />
         <div className="flex items-center gap-3">

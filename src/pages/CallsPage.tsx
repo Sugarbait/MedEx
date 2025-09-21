@@ -79,6 +79,16 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
   const [statusFilter, setStatusFilter] = useState('all')
   const [sentimentFilter, setSentimentFilter] = useState('all')
   const [selectedDateRange, setSelectedDateRange] = useState<DateRange>('today')
+
+  // State for custom date range
+  const [customStartDate, setCustomStartDate] = useState<Date | undefined>(() => {
+    const saved = localStorage.getItem('calls_page_custom_start_date')
+    return saved ? new Date(saved) : undefined
+  })
+  const [customEndDate, setCustomEndDate] = useState<Date | undefined>(() => {
+    const saved = localStorage.getItem('calls_page_custom_end_date')
+    return saved ? new Date(saved) : undefined
+  })
   const [metrics, setMetrics] = useState<CallMetrics>({
     totalCalls: 0,
     avgDuration: '0:00',
@@ -173,7 +183,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
   useEffect(() => {
     setCurrentPage(1) // Reset to first page when date range changes
     fetchCalls()
-  }, [selectedDateRange])
+  }, [selectedDateRange, customStartDate, customEndDate])
 
   useEffect(() => {
     fetchCalls()
@@ -209,7 +219,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
       }
 
       // Get date range
-      const { start, end } = getDateRangeFromSelection(selectedDateRange)
+      const { start, end } = getDateRangeFromSelection(selectedDateRange, customStartDate, customEndDate)
 
       // Fetch with retry logic for rate limiting
       let allCallsResponse
@@ -501,8 +511,24 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
           selectedRange={selectedDateRange}
           onRangeChange={(range, customStart, customEnd) => {
             setSelectedDateRange(range)
+
+            // Handle custom date range
+            if (range === 'custom' && customStart && customEnd) {
+              setCustomStartDate(customStart)
+              setCustomEndDate(customEnd)
+              // Save custom dates to localStorage
+              localStorage.setItem('calls_page_custom_start_date', customStart.toISOString())
+              localStorage.setItem('calls_page_custom_end_date', customEnd.toISOString())
+            } else if (range !== 'custom') {
+              // Clear custom dates when switching to non-custom range
+              setCustomStartDate(undefined)
+              setCustomEndDate(undefined)
+              localStorage.removeItem('calls_page_custom_start_date')
+              localStorage.removeItem('calls_page_custom_end_date')
+            }
+
             const { start, end } = getDateRangeFromSelection(range, customStart, customEnd)
-            console.log('Calls date range changed:', { range, start, end })
+            console.log('Calls date range changed:', { range, start, end, customStart, customEnd })
           }}
         />
         <div className="flex items-center gap-3">
