@@ -15,11 +15,13 @@ import {
   StopCircleIcon,
   PlayCircleIcon,
   MessageSquareIcon,
-  RefreshCwIcon
+  RefreshCwIcon,
+  IdCardIcon
 } from 'lucide-react'
 import { Chat, chatService } from '@/services/chatService'
 import { ChatNotes } from './ChatNotes'
 import { twilioCostService } from '@/services/twilioCostService'
+import { patientIdService } from '@/services/patientIdService'
 import jsPDF from 'jspdf'
 
 interface ChatDetailModalProps {
@@ -34,6 +36,8 @@ export const ChatDetailModal: React.FC<ChatDetailModalProps> = ({ chat, isOpen, 
   const [fullChat, setFullChat] = useState<Chat | null>(null)
   const [loadingFullTranscript, setLoadingFullTranscript] = useState(false)
   const [transcriptError, setTranscriptError] = useState<string | null>(null)
+  const [generatedPatientId, setGeneratedPatientId] = useState<string>('')
+  const [patientRecord, setPatientRecord] = useState<any>(null)
 
   // Load full chat details when modal opens
   useEffect(() => {
@@ -41,6 +45,30 @@ export const ChatDetailModal: React.FC<ChatDetailModalProps> = ({ chat, isOpen, 
       loadFullChatDetails()
     }
   }, [isOpen, chat?.chat_id])
+
+  // Generate Patient ID based on phone number when modal opens
+  useEffect(() => {
+    if (isOpen && chat) {
+      // Try to find phone number from various possible fields
+      const phoneNumber = chat.phone_number ||
+                         chat.metadata?.phone_number ||
+                         chat.metadata?.customer_phone_number ||
+                         chat.metadata?.from_phone_number ||
+                         chat.metadata?.to_phone_number ||
+                         chat.collected_dynamic_variables?.phone_number ||
+                         chat.collected_dynamic_variables?.customer_phone_number
+
+      if (phoneNumber) {
+        const patientId = patientIdService.getPatientId(phoneNumber)
+        const record = patientIdService.getPatientRecord(phoneNumber)
+        setGeneratedPatientId(patientId)
+        setPatientRecord(record)
+      } else {
+        setGeneratedPatientId('')
+        setPatientRecord(null)
+      }
+    }
+  }, [isOpen, chat])
 
   const loadFullChatDetails = async () => {
     if (!chat?.chat_id) return
@@ -551,6 +579,16 @@ export const ChatDetailModal: React.FC<ChatDetailModalProps> = ({ chat, isOpen, 
                 <div>
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Phone Number</label>
                   <p className="text-gray-900 dark:text-gray-100">{phoneNumber}</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Patient ID</label>
+                  <div className="flex items-center gap-2">
+                    <IdCardIcon className="w-4 h-4 text-blue-600" />
+                    <p className="text-gray-900 dark:text-gray-100 font-mono font-semibold">{generatedPatientId}</p>
+                    {patientRecord && (
+                      <span className="text-xs text-gray-500 dark:text-gray-400">(Phone-based)</span>
+                    )}
+                  </div>
                 </div>
                 <div>
                   <label className="text-sm font-medium text-gray-700 dark:text-gray-300">Agent ID</label>
