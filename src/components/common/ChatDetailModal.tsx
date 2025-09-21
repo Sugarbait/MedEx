@@ -354,19 +354,10 @@ export const ChatDetailModal: React.FC<ChatDetailModalProps> = ({ chat, isOpen, 
   }
 
   const formatDateTime = (timestamp: number) => {
-    const date = new Date(timestamp * 1000) // Convert from seconds to milliseconds
+    const date = new Date(timestamp)
     return {
-      date: date.toLocaleDateString('en-US', {
-        month: 'short',
-        day: 'numeric',
-        year: 'numeric'
-      }),
-      time: date.toLocaleTimeString('en-US', {
-        hour: 'numeric',
-        minute: '2-digit',
-        second: '2-digit',
-        hour12: true
-      })
+      date: date.toLocaleDateString(),
+      time: date.toLocaleTimeString()
     }
   }
 
