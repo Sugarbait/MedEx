@@ -1,6 +1,7 @@
 import React, { useState } from 'react'
-import { ShieldCheckIcon, KeyIcon, AlertTriangleIcon } from 'lucide-react'
+import { ShieldCheckIcon, KeyIcon, AlertTriangleIcon, LogOutIcon } from 'lucide-react'
 import { mfaService } from '@/services/mfaService'
+import { useAuth } from '@/contexts/AuthContext'
 
 interface MFAGateProps {
   onSuccess: () => void
@@ -8,6 +9,7 @@ interface MFAGateProps {
 }
 
 export const MFAGate: React.FC<MFAGateProps> = ({ onSuccess, user }) => {
+  const { logout } = useAuth()
   const [mfaCode, setMfaCode] = useState('')
   const [isVerifying, setIsVerifying] = useState(false)
   const [error, setError] = useState('')
@@ -41,6 +43,14 @@ export const MFAGate: React.FC<MFAGateProps> = ({ onSuccess, user }) => {
     } finally {
       setIsVerifying(false)
       setMfaCode('')
+    }
+  }
+
+  const handleLogout = async () => {
+    try {
+      await logout()
+    } catch (error) {
+      console.error('Logout error:', error)
     }
   }
 
@@ -104,6 +114,15 @@ export const MFAGate: React.FC<MFAGateProps> = ({ onSuccess, user }) => {
               ) : (
                 'Verify Code'
               )}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleLogout}
+              className="group relative w-full flex justify-center items-center py-3 px-4 border border-gray-300 text-sm font-medium rounded-lg text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500"
+            >
+              <LogOutIcon className="w-4 h-4 mr-2" />
+              Sign Out
             </button>
 
           </div>
