@@ -501,16 +501,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           <img
             src="https://nexasync.ca/images/Logo.png"
             alt="CareXPS Logo"
-            className="max-h-16 w-auto mx-auto mb-4 object-contain"
+            className="max-h-20 w-auto mx-auto mb-4 object-contain"
             onError={(e) => {
-              e.currentTarget.style.display = 'none'
-              const parent = e.currentTarget.parentElement
-              if (parent && !parent.querySelector('.logo-fallback')) {
-                const fallback = document.createElement('div')
-                fallback.className = 'logo-fallback text-2xl font-bold text-blue-600'
-                fallback.textContent = 'CareXPS'
-                parent.appendChild(fallback)
-              }
+              console.error('Logo failed to load from:', e.currentTarget.src)
+              // Don't hide on error, just log it for debugging
             }}
           />
           <p className="text-gray-600 text-sm">Healthcare CRM</p>
