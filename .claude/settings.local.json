@@ -102,7 +102,9 @@
       "WebFetch(domain:www.twilio.com)",
       "Bash(npm run test:sms:*)",
       "Bash(npm start)",
-      "Bash(npm run:*)"
+      "Bash(npm run:*)",
+      "Bash(start http://localhost:3014)",
+      "Bash(del \"I:\\Apps Back Up\\CareXPS CRM\\test-supabase.js\")"
     ],
     "deny": [],
     "ask": []

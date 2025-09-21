@@ -237,6 +237,86 @@ class NotesService {
   }
 
   /**
+   * Update note using localStorage fallback
+   */
+  private async updateNoteLocalStorage(noteId: string, data: UpdateNoteData, userInfo: any): Promise<{ success: boolean; note?: Note; error?: string }> {
+    try {
+      // Find the note across all localStorage entries
+      const localStorage = window.localStorage
+      const keys = Object.keys(localStorage).filter(key => key.startsWith('notes_'))
+
+      for (const key of keys) {
+        try {
+          const notes: Note[] = JSON.parse(localStorage.getItem(key) || '[]')
+          const noteIndex = notes.findIndex(note => note.id === noteId)
+
+          if (noteIndex !== -1) {
+            // Update the note
+            const updatedNote: Note = {
+              ...notes[noteIndex],
+              content: data.content,
+              content_type: data.content_type || notes[noteIndex].content_type,
+              last_edited_by: userInfo.id,
+              last_edited_by_name: userInfo.name,
+              last_edited_at: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+              is_edited: true,
+              metadata: { ...notes[noteIndex].metadata, ...data.metadata }
+            }
+
+            notes[noteIndex] = updatedNote
+            localStorage.setItem(key, JSON.stringify(notes))
+
+            console.log('Note updated successfully in localStorage:', updatedNote)
+            return { success: true, note: updatedNote }
+          }
+        } catch (parseError) {
+          console.error('Error parsing localStorage notes for key:', key, parseError)
+        }
+      }
+
+      return { success: false, error: 'Note not found in localStorage' }
+    } catch (error) {
+      console.error('Error updating note in localStorage:', error)
+      return { success: false, error: 'Failed to update note locally' }
+    }
+  }
+
+  /**
+   * Delete note using localStorage fallback
+   */
+  private deleteNoteLocalStorage(noteId: string): { success: boolean; error?: string } {
+    try {
+      // Find the note across all localStorage entries
+      const localStorage = window.localStorage
+      const keys = Object.keys(localStorage).filter(key => key.startsWith('notes_'))
+
+      for (const key of keys) {
+        try {
+          const notes: Note[] = JSON.parse(localStorage.getItem(key) || '[]')
+          const noteIndex = notes.findIndex(note => note.id === noteId)
+
+          if (noteIndex !== -1) {
+            // Remove the note
+            notes.splice(noteIndex, 1)
+            localStorage.setItem(key, JSON.stringify(notes))
+
+            console.log('Note deleted successfully from localStorage:', noteId)
+            return { success: true }
+          }
+        } catch (parseError) {
+          console.error('Error parsing localStorage notes for key:', key, parseError)
+        }
+      }
+
+      return { success: false, error: 'Note not found in localStorage' }
+    } catch (error) {
+      console.error('Error deleting note from localStorage:', error)
+      return { success: false, error: 'Failed to delete note locally' }
+    }
+  }
+
+  /**
    * Update an existing note
    */
   async updateNote(noteId: string, data: UpdateNoteData): Promise<{ success: boolean; note?: Note; error?: string }> {
@@ -254,23 +334,32 @@ class NotesService {
 
       console.log('Updating note:', noteId, updateData)
 
-      const { data: note, error } = await supabase
-        .from('notes')
-        .update(updateData)
-        .eq('id', noteId)
-        .select()
-        .single()
+      // Try Supabase first if available
+      if (await this.testSupabaseConnection()) {
+        const { data: note, error } = await supabase
+          .from('notes')
+          .update(updateData)
+          .eq('id', noteId)
+          .select()
+          .single()
 
-      if (error) {
-        console.error('Supabase error updating note:', error)
-        return { success: false, error: error.message }
+        if (error) {
+          console.error('Supabase error updating note, falling back to localStorage:', error)
+          // Fall back to localStorage
+          return this.updateNoteLocalStorage(noteId, data, userInfo)
+        }
+
+        console.log('Note updated successfully in Supabase:', note)
+        return { success: true, note }
+      } else {
+        // Use localStorage fallback
+        console.log('Using localStorage for note update')
+        return this.updateNoteLocalStorage(noteId, data, userInfo)
       }
-
-      console.log('Note updated successfully:', note)
-      return { success: true, note }
     } catch (error) {
-      console.error('Error updating note:', error)
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+      console.error('Error updating note, falling back to localStorage:', error)
+      const userInfo = await this.getCurrentUserInfo()
+      return this.updateNoteLocalStorage(noteId, data, userInfo)
     }
   }
 
@@ -281,21 +370,29 @@ class NotesService {
     try {
       console.log('Deleting note:', noteId)
 
-      const { error } = await supabase
-        .from('notes')
-        .delete()
-        .eq('id', noteId)
+      // Try Supabase first if available
+      if (await this.testSupabaseConnection()) {
+        const { error } = await supabase
+          .from('notes')
+          .delete()
+          .eq('id', noteId)
 
-      if (error) {
-        console.error('Supabase error deleting note:', error)
-        return { success: false, error: error.message }
+        if (error) {
+          console.error('Supabase error deleting note, falling back to localStorage:', error)
+          // Fall back to localStorage
+          return this.deleteNoteLocalStorage(noteId)
+        }
+
+        console.log('Note deleted successfully from Supabase')
+        return { success: true }
+      } else {
+        // Use localStorage fallback
+        console.log('Using localStorage for note deletion')
+        return this.deleteNoteLocalStorage(noteId)
       }
-
-      console.log('Note deleted successfully')
-      return { success: true }
     } catch (error) {
-      console.error('Error deleting note:', error)
-      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' }
+      console.error('Error deleting note, falling back to localStorage:', error)
+      return this.deleteNoteLocalStorage(noteId)
     }
   }
 
