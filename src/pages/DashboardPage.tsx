@@ -3,7 +3,7 @@ import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { DateRangePicker, DateRange, getDateRangeFromSelection } from '@/components/common/DateRangePicker'
 import { retellService, currencyService, twilioCostService, chatService } from '@/services'
 import { pdfExportService } from '@/services/pdfExportService'
-import { UserSettingsService } from '@/services/userSettingsService'
+import { userSettingsService } from '@/services'
 import {
   PhoneIcon,
   MessageSquareIcon,
@@ -501,9 +501,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
 
         if (currentUser.id) {
           try {
-            const settingsResponse = await UserSettingsService.getUserSettings(currentUser.id)
-            if (settingsResponse.status === 'success' && settingsResponse.data?.retell_config) {
-              SMS_AGENT_ID = settingsResponse.data.retell_config.sms_agent_id || null
+            const settingsData = await userSettingsService.getUserSettings(currentUser.id)
+            if (settingsData?.retell_config) {
+              SMS_AGENT_ID = settingsData.retell_config.sms_agent_id || null
             }
           } catch (error) {
             console.log('Supabase connection failed, falling back to localStorage settings')

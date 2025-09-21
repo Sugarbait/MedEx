@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import { useAuth } from '@/contexts/AuthContext'
 import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { useDebounce, useDebouncedCallback } from '@/hooks/useDebounce'
 import { useSMSCostManager } from '@/hooks/useSMSCostManager'
@@ -11,7 +12,7 @@ import { optimizedChatService } from '@/services/optimizedChatService'
 import { retellService } from '@/services'
 import { twilioCostService } from '@/services/twilioCostService'
 import { currencyService } from '@/services/currencyService'
-import { UserSettingsService } from '@/services/userSettingsService'
+import { userSettingsService } from '@/services'
 import {
   MessageSquareIcon,
   SendIcon,
@@ -124,6 +125,7 @@ interface ChatMetrics {
 
 
 export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
+  const { user: currentUser } = useAuth()
   const [chats, setChats] = useState<Chat[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -954,7 +956,6 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     const loadSMSAgentConfig = async () => {
       try {
         // Load from user settings
-        const currentUser = UserSettingsService.getCurrentUser()
         if (currentUser?.id) {
           const settings = JSON.parse(localStorage.getItem(`settings_${currentUser.id}`) || '{}')
           const agentId = settings.smsAgentId || ''
