@@ -260,6 +260,44 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     setFullDataSegmentCache(new Map())
   }, [selectedDateRange])
 
+  // Function to bulk load accurate segment data for all visible chats
+  const loadAccurateSegmentsForAllChats = useCallback(async () => {
+    if (!allFilteredChats || allFilteredChats.length === 0) return
+
+    console.log(`🚀 Loading accurate segment data for ${allFilteredChats.length} chats...`)
+
+    for (const chat of allFilteredChats) {
+      // Skip if we already have accurate data for this chat
+      if (fullDataSegmentCache.has(chat.chat_id)) {
+        continue
+      }
+
+      try {
+        const fullChatDetails = await chatService.getChatById(chat.chat_id)
+        if (fullChatDetails) {
+          updateFullDataSegmentCache(chat.chat_id, fullChatDetails)
+          // Small delay to prevent rate limiting
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
+      } catch (error) {
+        console.error(`Failed to load accurate segments for chat ${chat.chat_id}:`, error)
+      }
+    }
+
+    console.log(`✅ Finished loading accurate segment data`)
+  }, [allFilteredChats, fullDataSegmentCache, updateFullDataSegmentCache])
+
+  // Auto-load accurate segments when chats are loaded
+  useEffect(() => {
+    if (allFilteredChats.length > 0) {
+      // Delay to ensure component is stable
+      const timer = setTimeout(() => {
+        loadAccurateSegmentsForAllChats()
+      }, 2000)
+      return () => clearTimeout(timer)
+    }
+  }, [allFilteredChats, loadAccurateSegmentsForAllChats])
+
   // Debounced search and filters
   const { debouncedValue: debouncedSearchTerm } = useDebounce(searchTerm, 500, {
     leading: false,
