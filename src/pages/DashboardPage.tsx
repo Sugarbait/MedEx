@@ -503,17 +503,26 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
   const [filteredChatsForCosts, setFilteredChatsForCosts] = useState<any[]>([])
 
   // ==================================================================================
-  // 🔒 LOCKED CODE: SMS SEGMENTS METRICS CALCULATION - PRODUCTION READY - NO MODIFICATIONS
+  // 🔓 TEMPORARILY UNLOCKED: SMS SEGMENTS METRICS CALCULATION - DEBUGGING RACE CONDITION
   // ==================================================================================
-  // This useEffect handles the SMS segments totaling and is now working perfectly.
-  // Issue resolved: Total now shows correct segment counts (16 segments confirmed)
-  // Locked on: 2025-09-21 after successful debugging and verification
-  // Status: PRODUCTION LOCKED - ABSOLUTELY NO MODIFICATIONS ALLOWED
+  // Issue: Dashboard shows 16 segments initially then drops to 3 for "today" range
+  // Debugging: Need to fix race condition between initial cache and recalculation
+  // Status: TEMPORARILY UNLOCKED FOR CRITICAL BUG FIX
   // ==================================================================================
 
   // Optimized metrics calculation with consolidated SMS segments calculation
   useEffect(() => {
+    console.log(`🔄 Dashboard useEffect TRIGGERED:`, {
+      allFilteredChatsLength: allFilteredChats.length,
+      chatCostsSize: chatCosts.size,
+      segmentUpdateTrigger,
+      fullDataSegmentCacheSize: fullDataSegmentCache.size,
+      selectedDateRange,
+      timestamp: new Date().toLocaleTimeString()
+    })
+
     if (allFilteredChats.length === 0) {
+      console.log(`⚠️ Dashboard: No chats to process, resetting segments to 0`)
       // Reset everything when no chats
       setMetrics(prevMetrics => ({
         ...prevMetrics,
@@ -525,6 +534,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
     }
 
     const calculateMetrics = () => {
+      console.log(`🧮 Dashboard: Starting metrics calculation for ${allFilteredChats.length} chats`)
       // Calculate SMS segments using accurate modal data when available
       let calculatedTotalSegments = 0
       let chatsWithAccurateData = 0
@@ -592,13 +602,33 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
       console.log(`💰 Dashboard Updating metrics with totalSegments: ${calculatedTotalSegments} (${chatsWithAccurateData}/${allFilteredChats.length} from accurate modal data)`)
 
       setMetrics(prevMetrics => {
+        console.log(`🔄 Dashboard setMetrics called:`, {
+          previousTotalSegments: prevMetrics.totalSegments,
+          newCalculatedSegments: calculatedTotalSegments,
+          willChange: prevMetrics.totalSegments !== calculatedTotalSegments,
+          timestamp: new Date().toLocaleTimeString()
+        })
+
         const updatedMetrics = {
           ...prevMetrics,
           totalSMSCost: finalTotalCost, // Use segments-based calculation
           avgCostPerMessage: avgCostPerChat,
           totalSegments: calculatedTotalSegments
         }
+
         console.log(`💰 Dashboard Updated metrics: Total SMS Segments = ${updatedMetrics.totalSegments}, Total SMS Cost = $${updatedMetrics.totalSMSCost.toFixed(4)} CAD`)
+
+        if (prevMetrics.totalSegments === 16 && calculatedTotalSegments === 3) {
+          console.error(`🚨 FOUND THE DROP: Segments dropped from 16 to 3!`, {
+            allFilteredChatsLength: allFilteredChats.length,
+            chatsWithAccurateData,
+            fullDataSegmentCacheSize: fullDataSegmentCache.size,
+            chatCostsSize: chatCosts.size,
+            selectedDateRange,
+            segmentUpdateTrigger
+          })
+        }
+
         return updatedMetrics
       })
     }
