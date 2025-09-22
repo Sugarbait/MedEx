@@ -1478,64 +1478,61 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
               </h2>
 
               <div className="space-y-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-medium text-gray-900 dark:text-gray-100">Call Notifications</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">
-                      Get notified about incoming and missed calls
-                    </p>
+                {/* Email Notifications - Coming Soon */}
+                <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 opacity-60">
+                  <div className="flex items-center justify-between mb-3">
+                    <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Email Notifications</h3>
+                    <span className="px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 rounded-full">
+                      Coming Soon
+                    </span>
                   </div>
-                  <button
-                    onClick={() => handleNotificationChange('calls', !userSettings?.notifications?.calls)}
-                    disabled={isLoading}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      userSettings?.notifications?.calls ? 'bg-blue-500' : 'bg-gray-300'
-                    }`}
-                  >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      userSettings?.notifications?.calls ? 'translate-x-6' : 'translate-x-1'
-                    }`} />
-                  </button>
-                </div>
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-medium text-gray-900 dark:text-gray-100">SMS Notifications</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">
-                      Get notified about new SMS messages
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => handleNotificationChange('sms', !userSettings?.notifications?.sms)}
-                    disabled={isLoading}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      userSettings?.notifications?.sms ? 'bg-blue-500' : 'bg-gray-300'
-                    }`}
-                  >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      userSettings?.notifications?.sms ? 'translate-x-6' : 'translate-x-1'
-                    }`} />
-                  </button>
-                </div>
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium text-gray-500 dark:text-gray-400">Call Notifications</h4>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Get email alerts about incoming and missed calls
+                        </p>
+                      </div>
+                      <button
+                        disabled={true}
+                        className="relative inline-flex h-6 w-11 items-center rounded-full bg-gray-300 dark:bg-gray-600 cursor-not-allowed"
+                      >
+                        <span className="inline-block h-4 w-4 transform rounded-full bg-white translate-x-1" />
+                      </button>
+                    </div>
 
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="font-medium text-gray-900 dark:text-gray-100">System Alerts</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">
-                      Get notified about system maintenance and security alerts
-                    </p>
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium text-gray-500 dark:text-gray-400">SMS Notifications</h4>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Get email summaries of new SMS conversations
+                        </p>
+                      </div>
+                      <button
+                        disabled={true}
+                        className="relative inline-flex h-6 w-11 items-center rounded-full bg-gray-300 dark:bg-gray-600 cursor-not-allowed"
+                      >
+                        <span className="inline-block h-4 w-4 transform rounded-full bg-white translate-x-1" />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium text-gray-500 dark:text-gray-400">System Alerts</h4>
+                        <p className="text-sm text-gray-500 dark:text-gray-400">
+                          Get email alerts about system maintenance and security updates
+                        </p>
+                      </div>
+                      <button
+                        disabled={true}
+                        className="relative inline-flex h-6 w-11 items-center rounded-full bg-gray-300 dark:bg-gray-600 cursor-not-allowed"
+                      >
+                        <span className="inline-block h-4 w-4 transform rounded-full bg-white translate-x-1" />
+                      </button>
+                    </div>
                   </div>
-                  <button
-                    onClick={() => handleNotificationChange('system', !userSettings?.notifications?.system)}
-                    disabled={isLoading}
-                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                      userSettings?.notifications?.system ? 'bg-blue-500' : 'bg-gray-300'
-                    }`}
-                  >
-                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      userSettings?.notifications?.system ? 'translate-x-6' : 'translate-x-1'
-                    }`} />
-                  </button>
                 </div>
 
                 {/* Toast Notifications Section */}
