@@ -1199,17 +1199,38 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
       if (result.hasChanges && mountedRef.current) {
         console.log('✅ Smart refresh detected changes, updating data')
-        // Don't call fetchChatsOptimized to avoid recursion, just use the result data
+        // Use the fresh data from smart refresh if available
         if (result.chats) {
           setChats(result.chats)
           setLastDataFetch(Date.now())
+        } else {
+          // If no fresh data, do a full fetch
+          await fetchChatsOptimized()
         }
       } else {
         console.log('✅ Smart refresh: no changes detected')
+
+        // For auto-refresh, if no changes are detected, that's fine
+        // But for manual refresh, we should still update the last refresh time
+        // so the user knows the refresh actually happened
+        if (mountedRef.current) {
+          setLastDataFetch(Date.now())
+        }
       }
     } catch (error) {
       console.warn('❌ Smart refresh failed:', error)
-      // Don't do fallback refresh to avoid infinite loops
+
+      // If smart refresh fails completely, fall back to a simple data fetch
+      // but only for auto-refresh scenarios to avoid infinite loops
+      if (mountedRef.current) {
+        console.log('🔄 Smart refresh failed, attempting fallback refresh...')
+        try {
+          await fetchChatsOptimized()
+          console.log('✅ Fallback refresh completed successfully')
+        } catch (fallbackError) {
+          console.error('❌ Fallback refresh also failed:', fallbackError)
+        }
+      }
     } finally {
       // Always ensure we reset the smart refreshing state
       if (mountedRef.current) {
@@ -1217,7 +1238,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         setIsSmartRefreshing(false)
       }
     }
-  }, [chats, loading, isSmartRefreshing, smsAgentConfigured, smsAgentId])
+  }, [chats, loading, isSmartRefreshing, smsAgentConfigured, smsAgentId, recordsPerPage, fetchChatsOptimized])
 
   // Load SMS agent configuration on mount
   useEffect(() => {

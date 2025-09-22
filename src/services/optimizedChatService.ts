@@ -178,42 +178,75 @@ export class OptimizedChatService {
   async smartRefresh(
     currentChats: Chat[],
     options: ChatListOptions = {}
-  ): Promise<{ hasChanges: boolean; newChats?: Chat[]; changedChats?: Chat[] }> {
+  ): Promise<{ hasChanges: boolean; chats?: Chat[]; newChats?: Chat[]; changedChats?: Chat[] }> {
     try {
-      // First, do a lightweight check for new chats
-      const newChatsCheck = await this.checkForNewChats(options)
+      console.log('[OptimizedChatService] Starting smart refresh...')
 
-      if (newChatsCheck.hasNewChats) {
-        console.log('[OptimizedChatService] New chats detected, performing refresh')
-        const response = await this.getOptimizedChats({
-          ...options,
-          priority: 'medium',
-          backgroundRequest: true
-        })
+      // For better reliability, always do a fresh fetch but with a smaller limit
+      // This ensures we get the most recent data while being efficient
+      const refreshOptions = {
+        ...options,
+        limit: Math.min(options.limit || 50, 100), // Limit to max 100 for refresh
+        priority: 'medium' as const,
+        backgroundRequest: true
+      }
 
-        return {
-          hasChanges: true,
-          newChats: response.chats
+      console.log('[OptimizedChatService] Fetching fresh chat data for comparison...')
+      const response = await this.getOptimizedChats(refreshOptions)
+
+      if (!response.chats || response.chats.length === 0) {
+        console.log('[OptimizedChatService] No chats returned from refresh')
+        return { hasChanges: false }
+      }
+
+      // Simple but effective change detection: compare chat count and recent chat IDs
+      const newChatIds = new Set(response.chats.map(chat => chat.chat_id))
+      const currentChatIds = new Set(currentChats.map(chat => chat.chat_id))
+
+      // Check for new chats (in response but not in current)
+      const newChats = response.chats.filter(chat => !currentChatIds.has(chat.chat_id))
+
+      // Check for different chat count or new chats
+      const hasNewChats = newChats.length > 0
+      const countChanged = response.chats.length !== currentChats.length
+
+      // Check if any of the recent chats have different status or content
+      let hasUpdatedChats = false
+      const recentResponseChats = response.chats.slice(0, 10) // Check first 10 chats
+
+      for (const newChat of recentResponseChats) {
+        const existingChat = currentChats.find(c => c.chat_id === newChat.chat_id)
+        if (existingChat) {
+          // Compare key fields that might change
+          if (
+            existingChat.chat_status !== newChat.chat_status ||
+            existingChat.end_timestamp !== newChat.end_timestamp ||
+            (existingChat.message_with_tool_calls?.length || 0) !== (newChat.message_with_tool_calls?.length || 0)
+          ) {
+            hasUpdatedChats = true
+            break
+          }
         }
       }
 
-      // Check for updates to existing chats
-      const updatedChats = await this.checkForUpdatedChats(currentChats)
+      const hasChanges = hasNewChats || countChanged || hasUpdatedChats
 
-      if (updatedChats.length > 0) {
-        console.log(`[OptimizedChatService] ${updatedChats.length} chats have updates`)
+      if (hasChanges) {
+        console.log(`[OptimizedChatService] Changes detected - new: ${newChats.length}, count changed: ${countChanged}, updates: ${hasUpdatedChats}`)
         return {
           hasChanges: true,
-          changedChats: updatedChats
+          chats: response.chats, // Return the fresh data
+          newChats: newChats.length > 0 ? newChats : undefined
         }
+      } else {
+        console.log('[OptimizedChatService] No significant changes detected in smart refresh')
+        return { hasChanges: false }
       }
-
-      console.log('[OptimizedChatService] No changes detected in smart refresh')
-      return { hasChanges: false }
 
     } catch (error) {
       console.error('[OptimizedChatService] Smart refresh failed:', error)
-      return { hasChanges: false }
+      // Return hasChanges: true to trigger a fallback refresh
+      return { hasChanges: true }
     }
   }
 
