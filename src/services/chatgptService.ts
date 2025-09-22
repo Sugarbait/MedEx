@@ -22,39 +22,17 @@ export interface ChatGPTResponse {
 }
 
 class ChatGPTService {
-  private readonly apiKey: string
-  private readonly apiUrl = 'https://api.openai.com/v1/chat/completions'
+  private readonly apiUrl: string
   private readonly model = 'gpt-3.5-turbo' // Best suited for this application - fast and cost-effective
 
   constructor() {
-    // Get API key from environment variables for security
-    let apiKey = import.meta.env.VITE_OPENAI_API_KEY || ''
+    // Use Azure Function API proxy instead of direct OpenAI API
+    const baseUrl = import.meta.env.VITE_APP_URL || window.location.origin
+    this.apiUrl = `${baseUrl}/api/chatgpt`
 
-    // Environment variable debugging - ensure .env.local is loaded
-    if (!apiKey) {
-      console.warn('🚨 VITE_OPENAI_API_KEY not found in environment variables')
-      console.warn('🚨 Make sure .env.local exists and contains: VITE_OPENAI_API_KEY=your_key_here')
-      console.warn('🚨 Restart the development server after adding the key')
-    }
-
-    this.apiKey = apiKey
-
-    // Debug: Check if API key is loaded
-    console.log('🔍 ChatGPT Service initialized')
-    console.log('🔍 Environment check:', {
-      hasViteEnv: !!import.meta.env,
-      envKeys: Object.keys(import.meta.env || {}),
-      apiKeyExists: !!this.apiKey,
-      apiKeyLength: this.apiKey.length,
-      apiKeyPreview: this.apiKey ? `${this.apiKey.substring(0, 10)}...` : 'NONE'
-    })
-
-    if (!this.apiKey) {
-      console.error('❌ ChatGPT API key not configured. Please add VITE_OPENAI_API_KEY to .env.local file')
-      console.error('❌ Available env vars:', Object.keys(import.meta.env || {}))
-    } else {
-      console.log('✅ ChatGPT API key loaded successfully')
-    }
+    console.log('🔍 ChatGPT Service initialized with Azure Function proxy')
+    console.log('🔍 API URL:', this.apiUrl)
+    console.log('✅ Using secure server-side API key management')
   }
 
   /**
@@ -96,26 +74,16 @@ When users ask about statistics, patterns, or historical data, provide comprehen
   }
 
   /**
-   * Send a message to ChatGPT and get a response
+   * Send a message to ChatGPT and get a response via Azure Function proxy
    * This method ensures no PHI data is sent by design
    */
   async sendMessage(userMessage: string, conversationHistory: ChatGPTMessage[] = []): Promise<ChatGPTResponse> {
     try {
-      console.log('🚀 ChatGPT sendMessage called with:', {
+      console.log('🚀 ChatGPT sendMessage called with Azure Function proxy:', {
         message: userMessage,
         historyLength: conversationHistory.length,
-        hasApiKey: !!this.apiKey,
-        apiKeyLength: this.apiKey.length
+        apiUrl: this.apiUrl
       })
-
-      // Check if API key is configured
-      if (!this.apiKey) {
-        console.error('❌ No API key found in sendMessage')
-        return {
-          success: false,
-          error: 'ChatGPT service not configured. Using fallback responses.'
-        }
-      }
 
       // Validate that the message doesn't contain potential PHI indicators
       if (this.containsPotentialPHI(userMessage)) {
@@ -159,39 +127,33 @@ When users ask about statistics, patterns, or historical data, provide comprehen
         { role: 'user', content: enhancedUserMessage }
       ]
 
-      console.log('Sending request to ChatGPT (NO PHI data):', {
+      console.log('Sending request to Azure Function proxy (NO PHI data):', {
         messageCount: messages.length,
         apiUrl: this.apiUrl,
-        model: this.model,
-        hasApiKey: !!this.apiKey
+        model: this.model
       })
 
       const requestBody = {
         model: this.model,
         messages: messages,
-        max_tokens: 1000, // Increased for longer analytics responses
-        temperature: 0.7, // Balanced creativity
-        top_p: 1,
-        frequency_penalty: 0,
-        presence_penalty: 0
+        max_tokens: 1000 // Increased for longer analytics responses
       }
 
-      console.log('Request body:', JSON.stringify(requestBody, null, 2))
+      console.log('Request body for Azure Function:', JSON.stringify(requestBody, null, 2))
 
       const response = await fetch(this.apiUrl, {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${this.apiKey}`
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(requestBody)
       })
 
-      console.log('ChatGPT API Response status:', response.status, response.statusText)
+      console.log('Azure Function API Response status:', response.status, response.statusText)
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
-        console.error('ChatGPT API error:', response.status, errorData)
+        console.error('Azure Function API error:', response.status, errorData)
 
         if (response.status === 401) {
           return { success: false, error: 'Authentication failed. Please check API configuration.' }
@@ -204,21 +166,18 @@ When users ask about statistics, patterns, or historical data, provide comprehen
 
       const data = await response.json()
 
-      if (data.choices && data.choices.length > 0) {
-        const assistantMessage = data.choices[0].message?.content?.trim()
-
-        if (assistantMessage) {
-          console.log('ChatGPT response received successfully')
-          return {
-            success: true,
-            message: assistantMessage
-          }
+      // Azure Function returns { success: true, message: "..." } format
+      if (data.success && data.message) {
+        console.log('ChatGPT response received successfully via Azure Function')
+        return {
+          success: true,
+          message: data.message
         }
       }
 
       return {
         success: false,
-        error: 'No response generated. Please try rephrasing your question.'
+        error: data.error || 'No response generated. Please try rephrasing your question.'
       }
 
     } catch (error) {

@@ -54,6 +54,10 @@
     {
       "route": "/api/*",
       "allowedRoles": ["anonymous"]
+    },
+    {
+      "route": "/api/chatgpt",
+      "allowedRoles": ["anonymous"]
     }
   ],
   "mimeTypes": {
