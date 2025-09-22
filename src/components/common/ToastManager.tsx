@@ -8,7 +8,7 @@ interface ToastManagerProps {
 
 export const ToastManager: React.FC<ToastManagerProps> = ({ userId }) => {
   const [toasts, setToasts] = useState<ToastNotificationData[]>([])
-  const [preferences, setPreferences] = useState(toastNotificationService.getPreferences())
+  const [preferences] = useState(toastNotificationService.getPreferences())
 
   useEffect(() => {
     if (!userId) return

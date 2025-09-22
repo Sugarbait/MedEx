@@ -145,7 +145,7 @@ export const ToastNotification: React.FC<ToastNotificationProps> = ({
         />
       </div>
 
-      <style jsx>{`
+      <style>{`
         @keyframes shrink {
           from {
             width: 100%;
