@@ -1,9 +1,6 @@
 /**
- * Site Help Chatbot Component
- *
- * Provides assistance with using the site and answering general questions.
- * IMPORTANT: This chatbot has NO access to PHI data and cannot access any patient information.
- * It only provides help with site navigation, features, and general support.
+ * Simple Site Help Chatbot - Fresh Start
+ * Direct OpenAI integration with clean implementation
  */
 
 import React, { useState, useRef, useEffect } from 'react'
@@ -12,10 +9,9 @@ import {
   SendIcon,
   MinimizeIcon,
   XIcon,
-  BotIcon,
   UserIcon
 } from 'lucide-react'
-import { chatgptService, type ChatGPTMessage } from '@/services/chatgptService'
+import { simpleChatService } from '@/services/simpleChatService'
 
 interface ChatMessage {
   id: string
@@ -37,11 +33,10 @@ export const SiteHelpChatbot: React.FC<SiteHelpChatbotProps> = ({
     {
       id: '1',
       type: 'bot',
-      content: 'Hello! I\'m your CareXPS Assistant powered by ChatGPT. I can help you navigate the platform, understand features, and answer questions about using the system. I have NO access to any patient data or PHI - I only know about platform features and functionality. How can I help you today?',
+      content: 'Hello! I\'m your CareXPS Assistant. I can help you navigate the platform and answer questions about using the system. How can I help you today?',
       timestamp: new Date()
     }
   ])
-  const [conversationHistory, setConversationHistory] = useState<ChatGPTMessage[]>([])
   const [inputMessage, setInputMessage] = useState('')
   const [isMinimized, setIsMinimized] = useState(false)
   const [isTyping, setIsTyping] = useState(false)
@@ -55,31 +50,6 @@ export const SiteHelpChatbot: React.FC<SiteHelpChatbotProps> = ({
   useEffect(() => {
     scrollToBottom()
   }, [messages])
-
-  const generateBotResponse = async (userMessage: string): Promise<string> => {
-    try {
-      console.log('Generating response with ChatGPT (NO PHI data):', userMessage)
-
-      const response = await chatgptService.sendMessage(userMessage, conversationHistory)
-
-      if (response.success && response.message) {
-        // Update conversation history for context
-        setConversationHistory(prev => [
-          ...prev,
-          { role: 'user', content: userMessage },
-          { role: 'assistant', content: response.message! }
-        ].slice(-20)) // Keep last 20 messages for context
-
-        return response.message
-      } else {
-        console.warn('ChatGPT service error, using fallback:', response.error)
-        return chatgptService.getFallbackResponse(userMessage)
-      }
-    } catch (error) {
-      console.error('Error generating response:', error)
-      return chatgptService.getFallbackResponse(userMessage)
-    }
-  }
 
   const handleSendMessage = async () => {
     if (!inputMessage.trim()) return
@@ -97,19 +67,19 @@ export const SiteHelpChatbot: React.FC<SiteHelpChatbotProps> = ({
     setIsTyping(true)
 
     try {
-      // Get response from ChatGPT
-      const botResponseContent = await generateBotResponse(currentMessage)
+      console.log('Sending message to ChatGPT:', currentMessage)
+      const response = await simpleChatService.sendMessage(currentMessage)
 
       const botResponse: ChatMessage = {
         id: (Date.now() + 1).toString(),
         type: 'bot',
-        content: botResponseContent,
+        content: response.success ? response.message! : 'Sorry, I\'m having trouble responding right now. Please try again.',
         timestamp: new Date()
       }
 
       setMessages(prev => [...prev, botResponse])
     } catch (error) {
-      console.error('Error in handleSendMessage:', error)
+      console.error('Error sending message:', error)
 
       const errorResponse: ChatMessage = {
         id: (Date.now() + 1).toString(),
@@ -136,21 +106,20 @@ export const SiteHelpChatbot: React.FC<SiteHelpChatbotProps> = ({
       {
         id: '1',
         type: 'bot',
-        content: 'Chat cleared! I\'m your CareXPS Assistant powered by ChatGPT. I can help you navigate the platform, understand features, and answer questions about using the system. I have NO access to any patient data or PHI. How can I help you today?',
+        content: 'Chat cleared! I\'m your CareXPS Assistant. How can I help you today?',
         timestamp: new Date()
       }
     ])
-    setConversationHistory([]) // Clear ChatGPT conversation history too
   }
 
   if (!isVisible) {
     return (
       <button
         onClick={onToggle}
-        className="fixed bottom-4 right-4 bg-blue-600 text-white p-3 rounded-full shadow-lg hover:bg-blue-700 transition-all duration-200 z-50 group"
+        className="fixed bottom-4 right-4 bg-blue-600 text-white p-4 rounded-full shadow-lg hover:bg-blue-700 transition-all duration-200 z-50 group"
         title="Get Help"
       >
-        <MessageCircleIcon className="w-5 h-5" />
+        <MessageCircleIcon className="w-6 h-6" />
         <div className="absolute -top-10 right-0 bg-gray-800 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
           Need help? Click to chat!
         </div>
@@ -165,19 +134,9 @@ export const SiteHelpChatbot: React.FC<SiteHelpChatbotProps> = ({
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b border-gray-200 bg-blue-50 rounded-t-lg">
         <div className="flex items-center gap-2">
-          <img
-            src="https://nexasync.ca/images/favixps.png"
-            alt="CareXPS"
-            className="w-6 h-6"
-            onError={(e) => {
-              // Fallback to a simple colored dot if image fails to load
-              const target = e.target as HTMLImageElement;
-              target.style.display = 'none';
-              const fallback = document.createElement('div');
-              fallback.className = 'w-6 h-6 bg-blue-600 rounded-full';
-              target.parentNode?.insertBefore(fallback, target);
-            }}
-          />
+          <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center">
+            <span className="text-white text-xs font-bold">AI</span>
+          </div>
           <div>
             <h3 className="font-semibold text-gray-900 text-sm">CareXPS Assistant</h3>
           </div>
@@ -207,24 +166,12 @@ export const SiteHelpChatbot: React.FC<SiteHelpChatbotProps> = ({
             {messages.map((message) => (
               <div key={message.id} className={`flex gap-2 ${message.type === 'user' ? 'flex-row-reverse' : ''}`}>
                 <div className={`flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center ${
-                  message.type === 'user' ? 'bg-blue-600' : 'bg-gray-400'
+                  message.type === 'user' ? 'bg-blue-600' : 'bg-green-600'
                 }`}>
                   {message.type === 'user' ? (
                     <UserIcon className="w-3 h-3 text-white" />
                   ) : (
-                    <img
-                      src="https://nexasync.ca/images/favixps.png"
-                      alt="CareXPS"
-                      className="w-3 h-3"
-                      onError={(e) => {
-                        const target = e.target as HTMLImageElement;
-                        target.style.display = 'none';
-                        const icon = document.createElement('div');
-                        icon.innerHTML = '🤖';
-                        icon.className = 'text-xs';
-                        target.parentNode?.appendChild(icon);
-                      }}
-                    />
+                    <span className="text-white text-xs font-bold">AI</span>
                   )}
                 </div>
                 <div className={`max-w-xs px-3 py-2 rounded-lg text-sm ${
@@ -244,20 +191,8 @@ export const SiteHelpChatbot: React.FC<SiteHelpChatbotProps> = ({
 
             {isTyping && (
               <div className="flex gap-2">
-                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-gray-400 flex items-center justify-center">
-                  <img
-                    src="https://nexasync.ca/images/favixps.png"
-                    alt="CareXPS"
-                    className="w-3 h-3"
-                    onError={(e) => {
-                      const target = e.target as HTMLImageElement;
-                      target.style.display = 'none';
-                      const icon = document.createElement('div');
-                      icon.innerHTML = '🤖';
-                      icon.className = 'text-xs';
-                      target.parentNode?.appendChild(icon);
-                    }}
-                  />
+                <div className="flex-shrink-0 w-6 h-6 rounded-full bg-green-600 flex items-center justify-center">
+                  <span className="text-white text-xs font-bold">AI</span>
                 </div>
                 <div className="bg-gray-100 px-3 py-2 rounded-lg text-sm">
                   <div className="flex space-x-1">
@@ -280,7 +215,7 @@ export const SiteHelpChatbot: React.FC<SiteHelpChatbotProps> = ({
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Ask about site features..."
+                placeholder="Ask me anything about CareXPS..."
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 disabled={isTyping}
               />
@@ -301,7 +236,7 @@ export const SiteHelpChatbot: React.FC<SiteHelpChatbotProps> = ({
               </button>
               <div className="flex items-center gap-1">
                 <div className="w-2 h-2 bg-green-500 rounded-full"></div>
-                <span className="text-xs text-gray-500">No PHI access • Secure</span>
+                <span className="text-xs text-gray-500">Connected to AI</span>
               </div>
             </div>
           </div>
