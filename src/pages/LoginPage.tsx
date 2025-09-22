@@ -664,7 +664,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
         <div className="text-center mt-6">
           <img
-            src="https://phaetonai.ca/clients/nexasync/images/nexasync-white.png"
+            src="https://nexasync.ca/images/NexaSync-logo.png"
             alt="NexaSync Logo"
             className="h-6 w-auto mx-auto mb-2 opacity-70"
             onError={(e) => {

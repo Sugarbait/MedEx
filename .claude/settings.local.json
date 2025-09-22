@@ -125,7 +125,8 @@
       "Bash(func --version)",
       "Bash(start http://localhost:3007)",
       "Bash(start http://localhost:3008)",
-      "Bash(del:*)"
+      "Bash(del:*)",
+      "Bash(npx playwright install:*)"
     ],
     "deny": [],
     "ask": []
