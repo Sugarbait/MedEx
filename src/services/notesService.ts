@@ -47,10 +47,36 @@ class NotesService {
   private subscriptions: Map<string, RealtimeChannel> = new Map()
   private callbacks: Map<string, NotesSubscriptionCallback> = new Map()
   private isSupabaseAvailable: boolean = true
-  // Remove connection testing entirely for faster operation
+  // In-memory cache for immediate cross-device access
+  private notesCache: Map<string, { notes: Note[], timestamp: number }> = new Map()
+  private readonly CACHE_DURATION = 30000 // 30 seconds
+
   constructor() {
     // Start with Supabase available by default for fast path
     this.isSupabaseAvailable = true
+
+    // Initialize cross-device sync check on startup
+    this.initializeCrossDeviceSync()
+  }
+
+  /**
+   * Initialize cross-device synchronization capabilities
+   */
+  private async initializeCrossDeviceSync(): Promise<void> {
+    try {
+      // Quick test to ensure Supabase is available for cross-device sync
+      const { error } = await supabase.from('notes').select('id').limit(1).maybeSingle()
+      if (error) {
+        console.log('⚠️ Cross-device sync limited: Supabase connection issue')
+        this.isSupabaseAvailable = false
+      } else {
+        console.log('✅ Cross-device sync ready: Supabase connected')
+        this.isSupabaseAvailable = true
+      }
+    } catch (error) {
+      console.log('⚠️ Cross-device sync limited: Connection error')
+      this.isSupabaseAvailable = false
+    }
   }
 
   /**
@@ -192,11 +218,12 @@ class NotesService {
   }
 
   /**
-   * Create a new note
+   * Create a new note with cross-device sync priority
    */
   async createNote(data: CreateNoteData): Promise<{ success: boolean; note?: Note; error?: string }> {
     try {
       const userInfo = await this.getCurrentUserInfo()
+      const cacheKey = `${data.reference_type}_${data.reference_id}`
 
       const noteData = {
         reference_id: data.reference_id,
@@ -209,54 +236,74 @@ class NotesService {
         metadata: data.metadata || {}
       }
 
-      // Try direct Supabase save first, fall back to optimistic if it fails
-      try {
-        console.log('✨ Direct path: Creating note with Supabase:', noteData)
+      console.log('🚀 Creating note with cross-device sync priority:', noteData)
 
-        // Try direct Supabase save with reasonable timeout
-        const supabasePromise = supabase
-          .from('notes')
-          .insert(noteData)
-          .select()
-          .single()
-
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Save timeout')), 8000)
-        )
-
-        const { data: supabaseNote, error } = await Promise.race([supabasePromise, timeoutPromise]) as any
-
-        if (!error && supabaseNote) {
-          console.log('Note created successfully in Supabase')
-          this.isSupabaseAvailable = true
-          return { success: true, note: supabaseNote }
-        }
-
-        // If Supabase fails, fall back to optimistic approach
-        console.log('Supabase save failed, using optimistic approach:', error)
-        throw new Error('Fallback to optimistic')
-      } catch (error) {
-        console.log('Using optimistic approach for note creation:', error instanceof Error ? error.message : 'Unknown error')
-
-        // Optimistic UI approach: save to localStorage first, then sync to Supabase
-        const localNote = await this.createNoteLocalStorage(data, userInfo)
-        if (!localNote.success) {
-          throw new Error(localNote.error || 'Failed to create local note')
-        }
-
-        // Background sync to Supabase (no timeout, no blocking)
-        this.backgroundSyncNote(localNote.note!, 'create').catch(error => {
-          console.log('Background sync failed, note remains in localStorage:', error)
-        })
-
-        console.log('Note created successfully with optimistic approach')
-        return { success: true, note: localNote.note }
+      // OPTIMISTIC APPROACH for immediate UI response
+      const localNote = await this.createNoteLocalStorage(data, userInfo)
+      if (!localNote.success) {
+        throw new Error(localNote.error || 'Failed to create local note')
       }
 
+      // Clear cache to force refresh
+      this.notesCache.delete(cacheKey)
+
+      // Background cross-device sync to Supabase (immediate, no blocking)
+      if (this.isSupabaseAvailable) {
+        this.backgroundCreateNoteInSupabase(localNote.note!, noteData)
+          .then(syncedNote => {
+            if (syncedNote) {
+              console.log('📱 Cross-device sync: Note created successfully in cloud')
+              // Replace local note with synced note in localStorage
+              const notes = this.getNotesFromLocalStorage(data.reference_id, data.reference_type)
+              const updatedNotes = notes.map(n => n.id === localNote.note!.id ? syncedNote : n)
+              this.saveNotesToLocalStorage(data.reference_id, data.reference_type, updatedNotes)
+
+              // Update cache and notify UI
+              this.notesCache.set(cacheKey, { notes: updatedNotes, timestamp: Date.now() })
+              const callback = this.callbacks.get(cacheKey)
+              if (callback) {
+                callback(updatedNotes)
+              }
+            }
+          })
+          .catch(error => {
+            console.log('📱 Cross-device sync failed (note saved locally):', error.message)
+          })
+      }
+
+      console.log('✅ Note created immediately (cross-device sync in background)')
+      return { success: true, note: localNote.note }
+
     } catch (error) {
-      console.error('Error creating note, falling back to localStorage:', error)
+      console.error('Error creating note:', error)
       const userInfo = await this.getCurrentUserInfo()
       return this.createNoteLocalStorage(data, userInfo)
+    }
+  }
+
+  /**
+   * Background creation in Supabase for cross-device sync
+   */
+  private async backgroundCreateNoteInSupabase(localNote: Note, noteData: any): Promise<Note | null> {
+    try {
+      const { data: supabaseNote, error } = await supabase
+        .from('notes')
+        .insert(noteData)
+        .select()
+        .single()
+
+      if (!error && supabaseNote) {
+        this.isSupabaseAvailable = true
+        return supabaseNote
+      } else {
+        console.log('Background sync to Supabase failed:', error)
+        this.isSupabaseAvailable = false
+        return null
+      }
+    } catch (error) {
+      console.log('Background Supabase creation failed:', error)
+      this.isSupabaseAvailable = false
+      return null
     }
   }
 
@@ -553,62 +600,129 @@ class NotesService {
   }
 
   /**
-   * Get all notes for a specific call or SMS
+   * Get all notes for a specific call or SMS with immediate cache response
    */
   async getNotes(referenceId: string, referenceType: 'call' | 'sms'): Promise<{ success: boolean; notes?: Note[]; error?: string }> {
     try {
-      console.log('Fetching notes for:', referenceType, referenceId)
+      const cacheKey = `${referenceType}_${referenceId}`
+      console.log('🚀 Fetching notes with cross-device priority for:', referenceType, referenceId)
 
-      // Try Supabase first with timeout
-      try {
-        // Try Supabase with reasonable timeout, but no user-facing errors
-        const fetchPromise = supabase
-          .from('notes')
-          .select('*')
-          .eq('reference_id', referenceId)
-          .eq('reference_type', referenceType)
-          .order('created_at', { ascending: true })
-
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Internal timeout')), 15000) // Increased from 10s to 15s
-        )
-
-        const { data: notes, error } = await Promise.race([fetchPromise, timeoutPromise]) as any
-
-        if (!error && notes) {
-          console.log('Notes fetched successfully from Supabase:', notes.length)
-          this.isSupabaseAvailable = true
-          // Merge with localStorage to ensure no data loss
-          const localNotes = this.getNotesFromLocalStorage(referenceId, referenceType)
-          const mergedNotes = this.mergeNotesPreferringSupabase(notes, localNotes)
-          return { success: true, notes: mergedNotes }
-        }
-
-        // If Supabase fails, use localStorage without showing errors
-        console.log('Supabase fetch failed, using localStorage data')
-        this.isSupabaseAvailable = false
-      } catch (error) {
-        console.error('Supabase connection failed, falling back to localStorage:', error)
-        this.isSupabaseAvailable = false
+      // STEP 1: Check in-memory cache first for immediate response
+      const cached = this.notesCache.get(cacheKey)
+      if (cached && (Date.now() - cached.timestamp) < this.CACHE_DURATION) {
+        console.log('⚡ Immediate cache hit for notes:', cached.notes.length)
+        // Still do background refresh for cross-device updates
+        this.backgroundRefreshNotes(referenceId, referenceType)
+        return { success: true, notes: cached.notes }
       }
 
-      // Use localStorage fallback
-      console.log('Using localStorage for notes retrieval')
+      // STEP 2: Load from localStorage for immediate display
       const localNotes = this.getNotesFromLocalStorage(referenceId, referenceType)
-      console.log('Notes fetched successfully from localStorage:', localNotes.length)
+      if (localNotes.length > 0) {
+        console.log('💾 Immediate localStorage response:', localNotes.length, 'notes')
+        // Cache for next time
+        this.notesCache.set(cacheKey, { notes: localNotes, timestamp: Date.now() })
+      }
+
+      // STEP 3: Background sync with Supabase for cross-device updates
+      if (this.isSupabaseAvailable) {
+        this.backgroundSyncWithSupabase(referenceId, referenceType, localNotes)
+          .then(mergedNotes => {
+            if (mergedNotes) {
+              // Update cache with cross-device synchronized notes
+              this.notesCache.set(cacheKey, { notes: mergedNotes, timestamp: Date.now() })
+              // Trigger real-time callbacks for UI updates
+              const callback = this.callbacks.get(cacheKey)
+              if (callback) {
+                callback(mergedNotes)
+              }
+            }
+          })
+          .catch(error => {
+            console.log('📱 Cross-device sync failed (local notes still available):', error.message)
+          })
+      }
+
+      console.log('✅ Notes loaded immediately:', localNotes.length, 'notes')
       return { success: true, notes: localNotes }
 
     } catch (error) {
-      console.error('Error fetching notes, falling back to localStorage:', error)
-      // Gracefully handle all connection failures - return localStorage notes
+      console.error('Error in getNotes, using localStorage fallback:', error)
+      // Always return something to keep UI working
       const localNotes = this.getNotesFromLocalStorage(referenceId, referenceType)
-      console.log('Connection error, returning localStorage notes to prevent UI breakage')
       return { success: true, notes: localNotes }
     }
   }
 
   /**
-   * Subscribe to real-time updates for notes of a specific reference
+   * Background refresh from cache for immediate responses
+   */
+  private async backgroundRefreshNotes(referenceId: string, referenceType: 'call' | 'sms'): Promise<void> {
+    const cacheKey = `${referenceType}_${referenceId}`
+    try {
+      const localNotes = this.getNotesFromLocalStorage(referenceId, referenceType)
+      const mergedNotes = await this.backgroundSyncWithSupabase(referenceId, referenceType, localNotes)
+
+      if (mergedNotes) {
+        // Update cache with latest cross-device data
+        this.notesCache.set(cacheKey, { notes: mergedNotes, timestamp: Date.now() })
+
+        // Notify UI of updates
+        const callback = this.callbacks.get(cacheKey)
+        if (callback) {
+          callback(mergedNotes)
+        }
+      }
+    } catch (error) {
+      console.log('Background refresh failed:', error)
+    }
+  }
+
+  /**
+   * Background sync with Supabase for cross-device functionality
+   */
+  private async backgroundSyncWithSupabase(referenceId: string, referenceType: 'call' | 'sms', localNotes: Note[]): Promise<Note[] | null> {
+    try {
+      console.log('🔄 Background cross-device sync for:', referenceType, referenceId)
+
+      const fetchPromise = supabase
+        .from('notes')
+        .select('*')
+        .eq('reference_id', referenceId)
+        .eq('reference_type', referenceType)
+        .order('created_at', { ascending: true })
+
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Cross-device sync timeout')), 10000)
+      )
+
+      const { data: supabaseNotes, error } = await Promise.race([fetchPromise, timeoutPromise]) as any
+
+      if (!error && supabaseNotes) {
+        console.log('📱 Cross-device sync successful:', supabaseNotes.length, 'notes from cloud')
+        this.isSupabaseAvailable = true
+
+        // Merge with local notes (prioritizing Supabase for cross-device consistency)
+        const mergedNotes = this.mergeNotesPreferringSupabase(supabaseNotes, localNotes)
+
+        // Update localStorage with cross-device synchronized data
+        this.saveNotesToLocalStorage(referenceId, referenceType, mergedNotes)
+
+        return mergedNotes
+      } else {
+        console.log('📱 Cross-device sync failed, using local notes:', error?.message || 'unknown error')
+        this.isSupabaseAvailable = false
+        return null
+      }
+    } catch (error) {
+      console.log('📱 Cross-device sync error:', error instanceof Error ? error.message : 'unknown')
+      this.isSupabaseAvailable = false
+      return null
+    }
+  }
+
+  /**
+   * Subscribe to real-time cross-device updates for notes
    */
   async subscribeToNotes(
     referenceId: string,
@@ -617,19 +731,26 @@ class NotesService {
   ): Promise<{ success: boolean; error?: string }> {
     try {
       const subscriptionKey = `${referenceType}_${referenceId}`
+      console.log('🔄 Setting up cross-device real-time sync for:', subscriptionKey)
 
       // Clean up existing subscription if any
       await this.unsubscribeFromNotes(referenceId, referenceType)
 
-      // Store callback for localStorage updates
+      // Store callback for both localStorage and cross-device updates
       this.callbacks.set(subscriptionKey, callback)
 
-      // Set up real-time subscription if Supabase is available
-      if (await this.quickConnectionCheck()) {
-        console.log('Setting up real-time subscription for notes:', subscriptionKey)
+      // Immediate fetch with cache-first strategy
+      const result = await this.getNotes(referenceId, referenceType)
+      if (result.success && result.notes) {
+        callback(result.notes)
+      }
+
+      // Set up cross-device real-time subscription if Supabase is available
+      if (this.isSupabaseAvailable) {
+        console.log('📱 Enabling cross-device real-time updates for:', subscriptionKey)
 
         const channel = supabase
-          .channel(`notes_${subscriptionKey}`)
+          .channel(`notes_crossdevice_${subscriptionKey}`)
           .on(
             'postgres_changes',
             {
@@ -639,42 +760,43 @@ class NotesService {
               filter: `reference_id=eq.${referenceId},reference_type=eq.${referenceType}`
             },
             async (payload) => {
-              console.log('Real-time note update received:', payload)
+              console.log('📱 Cross-device update received:', payload.eventType, payload.new || payload.old)
 
-              // Fetch all notes for this reference to ensure consistency
-              const result = await this.getNotes(referenceId, referenceType)
-              if (result.success && result.notes) {
-                callback(result.notes)
+              // Clear cache to force fresh data
+              this.notesCache.delete(subscriptionKey)
+
+              // Fetch latest notes for cross-device consistency
+              const latestResult = await this.getNotes(referenceId, referenceType)
+              if (latestResult.success && latestResult.notes) {
+                console.log('📱 Cross-device sync: Broadcasting updated notes to UI')
+                callback(latestResult.notes)
               }
             }
           )
           .subscribe((status) => {
-            console.log('Notes subscription status:', status)
-            if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-              console.log('Notes realtime subscription failed - continuing with localStorage only')
+            console.log('📱 Cross-device subscription status:', status)
+            if (status === 'SUBSCRIBED') {
+              console.log('✅ Cross-device real-time sync active')
+            } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+              console.log('⚠️ Cross-device sync limited - using local mode')
+              this.isSupabaseAvailable = false
             }
           })
 
         this.subscriptions.set(subscriptionKey, channel)
       } else {
-        console.log('Supabase not available - using localStorage mode only for notes')
-      }
-
-      // Initial fetch (works with both Supabase and localStorage)
-      const result = await this.getNotes(referenceId, referenceType)
-      if (result.success && result.notes) {
-        callback(result.notes)
+        console.log('⚠️ Cross-device sync unavailable - using local storage only')
       }
 
       return { success: true }
     } catch (error) {
-      console.error('Error setting up notes subscription:', error)
-      // Gracefully handle connection failures - still do initial fetch
+      console.error('Error setting up cross-device subscription:', error)
+      // Always try to provide initial data even if real-time fails
       const result = await this.getNotes(referenceId, referenceType)
       if (result.success && result.notes) {
         callback(result.notes)
       }
-      return { success: false, error: error instanceof Error ? error.message : 'Subscription unavailable' }
+      return { success: false, error: error instanceof Error ? error.message : 'Cross-device sync unavailable' }
     }
   }
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react'
+import React, { useState, useEffect, useRef, useCallback } from 'react'
 import {
   StickyNoteIcon,
   PlusIcon,
@@ -20,6 +20,25 @@ interface ChatNotesProps {
   onNotesChanged?: () => void
 }
 
+// Custom hook for debounced auto-save
+const useDebounce = (callback: () => void, delay: number, deps: any[]) => {
+  const timeoutRef = useRef<NodeJS.Timeout>()
+
+  useEffect(() => {
+    if (timeoutRef.current) {
+      clearTimeout(timeoutRef.current)
+    }
+
+    timeoutRef.current = setTimeout(callback, delay)
+
+    return () => {
+      if (timeoutRef.current) {
+        clearTimeout(timeoutRef.current)
+      }
+    }
+  }, deps)
+}
+
 export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false, onNotesChanged }) => {
   const [notes, setNotes] = useState<Note[]>([])
   const [isLoading, setIsLoading] = useState(false) // Start false for instant UI render
@@ -30,168 +49,210 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
   const [newNoteContent, setNewNoteContent] = useState('')
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null)
   const [editingContent, setEditingContent] = useState('')
+  const [inlineEditId, setInlineEditId] = useState<string | null>(null)
+  const [inlineContent, setInlineContent] = useState('')
+  const [autoSaveDraft, setAutoSaveDraft] = useState('')
+  const [showAutoSave, setShowAutoSave] = useState(false)
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const inlineTextareaRef = useRef<HTMLTextAreaElement>(null)
 
-  // Load notes with optimized loading strategy and timeout
-  const loadNotes = async () => {
+  // Auto-save draft functionality
+  useDebounce(
+    () => {
+      if (newNoteContent.trim() && newNoteContent !== autoSaveDraft) {
+        setAutoSaveDraft(newNoteContent)
+        setShowAutoSave(true)
+        localStorage.setItem(`draft_sms_${chatId}`, newNoteContent)
+        setTimeout(() => setShowAutoSave(false), 2000)
+      }
+    },
+    1000,
+    [newNoteContent, chatId, autoSaveDraft]
+  )
+
+  // Load notes with cross-device sync priority
+  const loadNotes = useCallback(async () => {
     try {
-      // Set loading but don't block the UI render
-      setIsLoading(true)
+      console.log('🚀 ChatNotes: Starting cross-device load for chatId:', chatId)
       setError(null)
 
-      console.log('🚀 ChatNotes: Starting optimized notes load for chatId:', chatId)
-
-      // Load notes without aggressive timeouts
+      // The enhanced notesService now handles:
+      // 1. Immediate cache response
+      // 2. localStorage fallback
+      // 3. Background cross-device sync
       const result = await notesService.getNotes(chatId, 'sms')
       if (result.success && result.notes) {
-        console.log('✅ ChatNotes: Notes loaded successfully:', result.notes.length, 'notes')
+        console.log('✅ ChatNotes: Notes loaded (cross-device ready):', result.notes.length)
         setNotes(result.notes)
+        setIsLoading(false)
       } else {
-        console.warn('⚠️ ChatNotes: Notes load warning:', result.error)
         setError(result.error || 'Failed to load notes')
+        setIsLoading(false)
       }
     } catch (err) {
       console.error('❌ ChatNotes: Error loading notes:', err)
-      // If timeout or error, try to load from localStorage directly
-      try {
-        const localNotes = JSON.parse(localStorage.getItem(`notes_sms_${chatId}`) || '[]')
-        if (localNotes.length > 0) {
-          console.log('💾 ChatNotes: Loaded notes from localStorage fallback:', localNotes.length)
-          setNotes(localNotes)
-          setError('Loading from local storage (offline mode)')
-        } else {
-          setError('Failed to load notes')
-        }
-      } catch (localError) {
-        setError('Failed to load notes')
-      }
-    } finally {
+      setError('Failed to load notes')
       setIsLoading(false)
     }
-  }
+  }, [chatId])
 
-  // Save new note with improved timeout handling
+  // Save new note with optimistic UI updates
   const handleAddNote = async () => {
     if (!newNoteContent.trim()) {
       setError('Note content cannot be empty')
       return
     }
 
-    let saveInProgress = false
+    const tempNote = {
+      id: `temp_${Date.now()}`,
+      reference_id: chatId,
+      reference_type: 'sms' as const,
+      content: newNoteContent.trim(),
+      content_type: 'plain' as const,
+      created_by: 'current-user',
+      created_by_name: 'You',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      is_edited: false
+    }
 
     try {
       setIsSaving(true)
-      saveInProgress = true
       setError(null)
 
-      console.log('ChatNotes: Starting note save operation')
+      console.log('ChatNotes: Starting optimistic note save')
 
-      // Save note with optimistic approach - let the service handle timeouts
+      // Optimistic update - add note immediately
+      setNotes(prevNotes => [...prevNotes, tempNote])
+      setNewNoteContent('')
+      setIsEditing(false)
+
+      // Clear draft
+      localStorage.removeItem(`draft_sms_${chatId}`)
+      setAutoSaveDraft('')
+
       const result = await notesService.createNote({
         reference_id: chatId,
         reference_type: 'sms',
-        content: newNoteContent.trim(),
+        content: tempNote.content,
         content_type: 'plain'
       })
 
       console.log('ChatNotes: Note save result:', result)
 
-      if (result.success) {
-        // Immediately add the new note to local state for instant UI update
-        if (result.note) {
-          setNotes(prevNotes => [...prevNotes, result.note!])
-        }
-        setNewNoteContent('')
-        setIsEditing(false)
+      if (result.success && result.note) {
+        // Replace temp note with real note
+        setNotes(prevNotes =>
+          prevNotes.map(note => note.id === tempNote.id ? result.note! : note)
+        )
         setSuccessMessage('Note added successfully')
         setTimeout(() => setSuccessMessage(null), 3000)
-        // Notify parent that notes changed
-        console.log('ChatNotes: Note added - notifying parent for chatId:', chatId)
         onNotesChanged?.()
       } else {
+        // Remove temp note and show error
+        setNotes(prevNotes => prevNotes.filter(note => note.id !== tempNote.id))
         setError(result.error || 'Failed to save note')
+        setNewNoteContent(tempNote.content) // Restore content
+        setIsEditing(true)
       }
     } catch (err) {
       console.error('Error saving note:', err)
+      // Remove temp note and restore editing state
+      setNotes(prevNotes => prevNotes.filter(note => note.id !== tempNote.id))
       setError('Failed to save note')
+      setNewNoteContent(tempNote.content)
+      setIsEditing(true)
     } finally {
-      if (saveInProgress) {
-        console.log('ChatNotes: Resetting save state')
-        setIsSaving(false)
-      }
+      setIsSaving(false)
     }
   }
 
-  // Update existing note with improved timeout handling
-  const handleUpdateNote = async () => {
-    if (!editingNoteId || !editingContent.trim()) {
+  // Update existing note with optimistic updates
+  const handleUpdateNote = async (noteId: string, content: string) => {
+    if (!content.trim()) {
       setError('Note content cannot be empty')
       return
     }
 
-    let saveInProgress = false
+    const originalNote = notes.find(note => note.id === noteId)
+    if (!originalNote) return
 
     try {
       setIsSaving(true)
-      saveInProgress = true
       setError(null)
 
-      console.log('ChatNotes: Starting note update operation')
+      console.log('ChatNotes: Starting optimistic note update')
 
-      // Update note with optimistic approach - let the service handle timeouts
-      const result = await notesService.updateNote(editingNoteId, {
-        content: editingContent.trim(),
+      // Optimistic update
+      const updatedNote = {
+        ...originalNote,
+        content: content.trim(),
+        last_edited_by_name: 'You',
+        last_edited_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        is_edited: true
+      }
+
+      setNotes(prevNotes =>
+        prevNotes.map(note => note.id === noteId ? updatedNote : note)
+      )
+
+      setEditingNoteId(null)
+      setEditingContent('')
+      setInlineEditId(null)
+      setInlineContent('')
+
+      const result = await notesService.updateNote(noteId, {
+        content: content.trim(),
         content_type: 'plain'
       })
 
       console.log('ChatNotes: Note update result:', result)
 
-      if (result.success) {
-        // Immediately update the note in local state for instant UI update
-        if (result.note) {
-          setNotes(prevNotes =>
-            prevNotes.map(note =>
-              note.id === editingNoteId ? result.note! : note
-            )
-          )
-        }
-        setEditingNoteId(null)
-        setEditingContent('')
+      if (result.success && result.note) {
+        // Update with server response
+        setNotes(prevNotes =>
+          prevNotes.map(note => note.id === noteId ? result.note! : note)
+        )
         setSuccessMessage('Note updated successfully')
         setTimeout(() => setSuccessMessage(null), 3000)
-        // Notify parent that notes changed
         onNotesChanged?.()
       } else {
+        // Revert optimistic update
+        setNotes(prevNotes =>
+          prevNotes.map(note => note.id === noteId ? originalNote : note)
+        )
         setError(result.error || 'Failed to update note')
       }
     } catch (err) {
       console.error('Error updating note:', err)
+      // Revert optimistic update
+      setNotes(prevNotes =>
+        prevNotes.map(note => note.id === noteId ? originalNote : note)
+      )
       setError('Failed to update note')
     } finally {
-      if (saveInProgress) {
-        console.log('ChatNotes: Resetting update state')
-        setIsSaving(false)
-      }
+      setIsSaving(false)
     }
   }
 
-  // Delete note
+  // Delete note with optimistic updates
   const handleDeleteNote = async (noteId: string) => {
     if (!window.confirm('Are you sure you want to delete this note? This action cannot be undone.')) {
       return
     }
 
-    let deleteInProgress = false
+    const noteToDelete = notes.find(note => note.id === noteId)
+    if (!noteToDelete) return
+
     try {
       setIsSaving(true)
-      deleteInProgress = true
       setError(null)
 
-      console.log('ChatNotes: Starting note delete operation')
+      console.log('ChatNotes: Starting optimistic note delete')
 
-      // Immediately remove the note from local state for instant UI update
-      const noteToDelete = notes.find(note => note.id === noteId)
+      // Optimistic update - remove immediately
       setNotes(prevNotes => prevNotes.filter(note => note.id !== noteId))
 
       const result = await notesService.deleteNote(noteId)
@@ -201,43 +262,57 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
       if (result.success) {
         setSuccessMessage('Note deleted successfully')
         setTimeout(() => setSuccessMessage(null), 3000)
-        // Notify parent that notes changed
-        console.log('ChatNotes: Note deleted - notifying parent for chatId:', chatId)
         onNotesChanged?.()
       } else {
-        // If deletion failed, restore the note to local state
-        if (noteToDelete) {
-          setNotes(prevNotes => [...prevNotes, noteToDelete].sort((a, b) =>
-            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-          ))
-        }
+        // Restore note if deletion failed
+        setNotes(prevNotes => [...prevNotes, noteToDelete].sort((a, b) =>
+          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+        ))
         setError(result.error || 'Failed to delete note')
       }
     } catch (err) {
       console.error('Error deleting note:', err)
-      // If error occurred, restore the note to local state
-      const noteToRestore = notes.find(note => note.id === noteId)
-      if (noteToRestore) {
-        setNotes(prevNotes => [...prevNotes, noteToRestore].sort((a, b) =>
-          new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-        ))
-      }
+      // Restore note on error
+      setNotes(prevNotes => [...prevNotes, noteToDelete].sort((a, b) =>
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      ))
       setError('Failed to delete note')
     } finally {
-      if (deleteInProgress) {
-        console.log('ChatNotes: Resetting delete state')
-        setIsSaving(false)
-      }
+      setIsSaving(false)
     }
   }
 
-  // Start editing a note
+  // Start editing a note (full edit mode)
   const handleEditNote = (note: Note) => {
     setEditingNoteId(note.id)
     setEditingContent(note.content)
+    setInlineEditId(null) // Close any inline editing
     setTimeout(() => {
       textareaRef.current?.focus()
     }, 100)
+  }
+
+  // Start inline editing (quick edit)
+  const handleInlineEdit = (note: Note) => {
+    setInlineEditId(note.id)
+    setInlineContent(note.content)
+    setEditingNoteId(null) // Close any full editing
+    setTimeout(() => {
+      inlineTextareaRef.current?.focus()
+    }, 100)
+  }
+
+  // Save inline edit
+  const handleSaveInlineEdit = () => {
+    if (inlineEditId && inlineContent.trim()) {
+      handleUpdateNote(inlineEditId, inlineContent)
+    }
+  }
+
+  // Cancel inline edit
+  const handleCancelInlineEdit = () => {
+    setInlineEditId(null)
+    setInlineContent('')
   }
 
   // Start adding new note
@@ -272,33 +347,39 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
     target.style.height = `${target.scrollHeight}px`
   }
 
-  // Set up notes loading and real-time subscription with performance optimization
+  // Set up cross-device notes loading and real-time subscription
   useEffect(() => {
-    console.log('🔄 ChatNotes: Effect triggered for chatId:', chatId)
+    console.log('🔄 ChatNotes: Setting up cross-device sync for chatId:', chatId)
 
-    // Start loading notes immediately
-    loadNotes()
+    // Load any existing draft
+    const existingDraft = localStorage.getItem(`draft_sms_${chatId}`)
+    if (existingDraft) {
+      setNewNoteContent(existingDraft)
+      setAutoSaveDraft(existingDraft)
+    }
 
-    // Subscribe to real-time updates (async to not block initial load)
+    // Subscribe to cross-device real-time updates
     const subscribeToUpdates = async () => {
       try {
         await notesService.subscribeToNotes(chatId, 'sms', (updatedNotes) => {
-          console.log('🔄 ChatNotes: Real-time update received:', updatedNotes.length, 'notes')
+          console.log('📱 ChatNotes: Cross-device update received:', updatedNotes.length)
           setNotes(updatedNotes)
+          setIsLoading(false)
         })
       } catch (error) {
-        console.warn('⚠️ ChatNotes: Real-time subscription failed (continuing with manual refresh):', error)
+        console.warn('⚠️ ChatNotes: Cross-device subscription failed:', error)
+        // Fallback to manual load
+        loadNotes()
       }
     }
 
-    // Don't await subscription setup to keep notes loading fast
     subscribeToUpdates()
 
     return () => {
-      console.log('🧹 ChatNotes: Cleaning up subscription for chatId:', chatId)
+      console.log('🧹 ChatNotes: Cleaning up cross-device sync for chatId:', chatId)
       notesService.unsubscribeFromNotes(chatId, 'sms')
     }
-  }, [chatId])
+  }, [chatId, loadNotes])
 
   // Clear error and success messages when user starts typing
   useEffect(() => {
@@ -328,6 +409,9 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
           <span className="text-sm text-gray-500 dark:text-gray-400">({notes.length})</span>
           {isLoading && notes.length > 0 && (
             <LoaderIcon className="w-4 h-4 text-blue-600 animate-spin ml-1" />
+          )}
+          {showAutoSave && (
+            <span className="text-xs text-green-600 ml-2">Draft saved</span>
           )}
         </div>
 
@@ -364,6 +448,7 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
           {notes.map((note) => (
             <div key={note.id} className="bg-white dark:bg-gray-800 rounded-lg border p-4">
               {editingNoteId === note.id ? (
+                // Full edit mode
                 <div className="space-y-3">
                   <textarea
                     ref={textareaRef}
@@ -381,7 +466,7 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
                       <XIcon className="w-4 h-4" />
                     </button>
                     <button
-                      onClick={handleUpdateNote}
+                      onClick={() => handleUpdateNote(note.id, editingContent)}
                       disabled={isSaving || !editingContent.trim()}
                       className="flex items-center gap-2 px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                     >
@@ -393,9 +478,59 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
                     </button>
                   </div>
                 </div>
+              ) : inlineEditId === note.id ? (
+                // Inline edit mode
+                <div className="space-y-3">
+                  <textarea
+                    ref={inlineTextareaRef}
+                    value={inlineContent}
+                    onChange={(e) => {
+                      setInlineContent(e.target.value)
+                      // Auto-resize
+                      e.target.style.height = 'auto'
+                      e.target.style.height = `${e.target.scrollHeight}px`
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                        handleSaveInlineEdit()
+                      } else if (e.key === 'Escape') {
+                        handleCancelInlineEdit()
+                      }
+                    }}
+                    className="w-full min-h-[60px] p-2 border border-blue-300 dark:border-blue-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 resize-none bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100"
+                    disabled={isSaving}
+                    placeholder="Ctrl+Enter to save, Esc to cancel"
+                  />
+                  <div className="flex items-center justify-end gap-2">
+                    <button
+                      onClick={handleCancelInlineEdit}
+                      className="px-2 py-1 text-xs text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-600 rounded hover:bg-gray-200 dark:hover:bg-gray-500 transition-colors"
+                      disabled={isSaving}
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={handleSaveInlineEdit}
+                      disabled={isSaving || !inlineContent.trim()}
+                      className="flex items-center gap-1 px-2 py-1 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    >
+                      {isSaving ? (
+                        <LoaderIcon className="w-3 h-3 animate-spin" />
+                      ) : (
+                        <SaveIcon className="w-3 h-3" />
+                      )}
+                      Save
+                    </button>
+                  </div>
+                </div>
               ) : (
+                // Display mode
                 <div>
-                  <div className="whitespace-pre-wrap text-gray-800 dark:text-gray-200 leading-relaxed mb-3">
+                  <div
+                    className="whitespace-pre-wrap text-gray-800 dark:text-gray-200 leading-relaxed mb-3 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-700 p-2 rounded transition-colors"
+                    onClick={() => !isReadonly && handleInlineEdit(note)}
+                    title={!isReadonly ? "Click to edit quickly" : ""}
+                  >
                     {note.content}
                   </div>
 
@@ -425,7 +560,7 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
                         <button
                           onClick={() => handleEditNote(note)}
                           className="p-1 text-blue-600 bg-blue-50 rounded hover:bg-blue-100 transition-colors"
-                          title="Edit note"
+                          title="Full edit mode"
                         >
                           <EditIcon className="w-3 h-3" />
                         </button>
