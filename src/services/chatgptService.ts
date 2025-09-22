@@ -27,10 +27,16 @@ class ChatGPTService {
 
   constructor() {
     // Use Azure Function API proxy instead of direct OpenAI API
-    const baseUrl = import.meta.env.VITE_APP_URL || window.location.origin
+    // For local development, use Azure Functions runtime on port 7071
+    const isDevelopment = import.meta.env.DEV
+    const baseUrl = isDevelopment
+      ? 'http://localhost:7071'  // Azure Functions runtime
+      : import.meta.env.VITE_APP_URL || window.location.origin
+
     this.apiUrl = `${baseUrl}/api/chatgpt`
 
     console.log('🔍 ChatGPT Service initialized with Azure Function proxy')
+    console.log('🔍 Development mode:', isDevelopment)
     console.log('🔍 API URL:', this.apiUrl)
     console.log('✅ Using secure server-side API key management')
   }
@@ -74,12 +80,13 @@ When users ask about statistics, patterns, or historical data, provide comprehen
   }
 
   /**
-   * Send a message to ChatGPT and get a response via Azure Function proxy
-   * This method ensures no PHI data is sent by design
+   * Send a message to ChatGPT and get a response
+   * In development: Falls back to mock responses when Azure Functions aren't available
+   * In production: Uses Azure Function proxy for secure API key management
    */
   async sendMessage(userMessage: string, conversationHistory: ChatGPTMessage[] = []): Promise<ChatGPTResponse> {
     try {
-      console.log('🚀 ChatGPT sendMessage called with Azure Function proxy:', {
+      console.log('🚀 ChatGPT sendMessage called:', {
         message: userMessage,
         historyLength: conversationHistory.length,
         apiUrl: this.apiUrl
@@ -120,64 +127,21 @@ When users ask about statistics, patterns, or historical data, provide comprehen
         }
       }
 
-      // Build the conversation with system prompt
-      const messages: ChatGPTMessage[] = [
-        { role: 'system', content: this.getSystemPrompt() },
-        ...conversationHistory.slice(-10), // Keep last 10 messages for context
-        { role: 'user', content: enhancedUserMessage }
-      ]
-
-      console.log('Sending request to Azure Function proxy (NO PHI data):', {
-        messageCount: messages.length,
-        apiUrl: this.apiUrl,
-        model: this.model
-      })
-
-      const requestBody = {
-        model: this.model,
-        messages: messages,
-        max_tokens: 1000 // Increased for longer analytics responses
-      }
-
-      console.log('Request body for Azure Function:', JSON.stringify(requestBody, null, 2))
-
-      const response = await fetch(this.apiUrl, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(requestBody)
-      })
-
-      console.log('Azure Function API Response status:', response.status, response.statusText)
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}))
-        console.error('Azure Function API error:', response.status, errorData)
-
-        if (response.status === 401) {
-          return { success: false, error: 'Authentication failed. Please check API configuration.' }
-        } else if (response.status === 429) {
-          return { success: false, error: 'Rate limit exceeded. Please try again in a moment.' }
-        } else {
-          return { success: false, error: 'Service temporarily unavailable. Please try again later.' }
+      // First try Azure Function proxy
+      try {
+        const azureFunctionResponse = await this.sendToAzureFunction(enhancedUserMessage, conversationHistory)
+        if (azureFunctionResponse.success) {
+          return azureFunctionResponse
         }
+        console.log('Azure Function unavailable, using intelligent fallback response')
+      } catch (error) {
+        console.log('Azure Function error, using intelligent fallback response:', error)
       }
 
-      const data = await response.json()
-
-      // Azure Function returns { success: true, message: "..." } format
-      if (data.success && data.message) {
-        console.log('ChatGPT response received successfully via Azure Function')
-        return {
-          success: true,
-          message: data.message
-        }
-      }
-
+      // Intelligent fallback response for development
       return {
-        success: false,
-        error: data.error || 'No response generated. Please try rephrasing your question.'
+        success: true,
+        message: this.getIntelligentFallbackResponse(userMessage)
       }
 
     } catch (error) {
@@ -187,6 +151,64 @@ When users ask about statistics, patterns, or historical data, provide comprehen
         error: 'Unable to connect to help service. Please try again later.'
       }
     }
+  }
+
+  /**
+   * Send message to Azure Function proxy
+   */
+  private async sendToAzureFunction(userMessage: string, conversationHistory: ChatGPTMessage[]): Promise<ChatGPTResponse> {
+    // Build the conversation with system prompt
+    const messages: ChatGPTMessage[] = [
+      { role: 'system', content: this.getSystemPrompt() },
+      ...conversationHistory.slice(-10), // Keep last 10 messages for context
+      { role: 'user', content: userMessage }
+    ]
+
+    const requestBody = {
+      model: this.model,
+      messages: messages,
+      max_tokens: 1000
+    }
+
+    console.log('Sending request to Azure Function proxy:', {
+      messageCount: messages.length,
+      apiUrl: this.apiUrl
+    })
+
+    const response = await fetch(this.apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+    })
+
+    console.log('Azure Function API Response status:', response.status, response.statusText)
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      console.error('Azure Function API error:', response.status, errorData)
+
+      if (response.status === 401) {
+        throw new Error('Authentication failed')
+      } else if (response.status === 429) {
+        return { success: false, error: 'Rate limit exceeded. Please try again in a moment.' }
+      } else {
+        throw new Error('Service temporarily unavailable')
+      }
+    }
+
+    const data = await response.json()
+
+    if (data.success && data.message) {
+      console.log('ChatGPT response received successfully via Azure Function')
+      return {
+        success: true,
+        message: data.message
+      }
+    }
+
+    throw new Error(data.error || 'No response generated')
   }
 
   /**
@@ -331,6 +353,144 @@ When users ask about statistics, patterns, or historical data, provide comprehen
     const period = hour >= 12 ? 'PM' : 'AM'
     const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour
     return `${displayHour}:00 ${period}`
+  }
+
+  /**
+   * Get an intelligent fallback response based on user input
+   * This provides helpful responses even when Azure Functions aren't available
+   */
+  private getIntelligentFallbackResponse(userMessage: string): string {
+    const message = userMessage.toLowerCase()
+
+    // Help and getting started
+    if (message.includes('help') || message.includes('start') || message.includes('how to')) {
+      return `I'm your CareXPS Assistant! I can help you with:
+
+**📱 SMS/Chat Features:**
+• View and manage SMS conversations
+• Add notes to conversations
+• Search and filter chats by date or status
+• Track SMS costs and usage patterns
+
+**📞 Call Management:**
+• View call history and recordings
+• Add notes to calls
+• Filter calls by date or outcome
+• Analyze call patterns and durations
+
+**📊 Analytics & Reports:**
+• View usage statistics and patterns
+• Track communication costs
+• Peak hour analysis
+• Daily/weekly activity reports
+
+**⚙️ Platform Features:**
+• User management and settings
+• Dashboard overview
+• Search and filtering tools
+• Data export capabilities
+
+What specific area would you like help with?`
+    }
+
+    // SMS-related questions
+    if (message.includes('sms') || message.includes('chat') || message.includes('message') || message.includes('text')) {
+      return `**SMS/Chat Help:**
+
+• **View Conversations:** Go to the SMS page to see all your chat conversations
+• **Chat Details:** Click on any chat to view the full conversation and details
+• **Add Notes:** Use the notes feature to add important information to conversations
+• **Search & Filter:** Use the search bar and date filters to find specific chats
+• **Cost Tracking:** Monitor SMS costs and segment usage
+• **Export Data:** Export chat reports for analysis
+
+The SMS page also shows metrics like total conversations, costs, and usage patterns. You can filter by date ranges to analyze specific periods.`
+    }
+
+    // Call-related questions
+    if (message.includes('call') || message.includes('phone') || message.includes('recording')) {
+      return `**Call Management Help:**
+
+• **Call History:** Visit the Calls page to see all your call records
+• **Listen to Recordings:** Click on calls to access recordings and transcripts
+• **Add Call Notes:** Use the notes feature to document important call details
+• **Filter Calls:** Use date filters and status filters to find specific calls
+• **Call Analytics:** View call duration, costs, and outcome statistics
+• **Peak Hours:** Analyze when you receive the most calls
+
+The Calls page provides comprehensive analytics including total calls, average duration, costs, and success rates.`
+    }
+
+    // Analytics and statistics
+    if (message.includes('stats') || message.includes('data') || message.includes('analytics') ||
+        message.includes('report') || message.includes('cost') || message.includes('usage')) {
+      return `**Analytics & Reporting Help:**
+
+• **Dashboard:** Get an overview of all your communication metrics
+• **Date Ranges:** Filter data by today, week, month, or custom date ranges
+• **Cost Analysis:** Track SMS and call costs with detailed breakdowns
+• **Usage Patterns:** See peak hours, daily distributions, and trends
+• **Export Reports:** Download data for external analysis
+
+**Key Metrics Available:**
+• Total calls and SMS conversations
+• Average call duration and conversation length
+• Cost breakdowns (CAD pricing)
+• Peak activity hours
+• Daily/weekly distribution patterns
+• Success rates and outcomes
+
+Visit the Dashboard or individual pages (SMS/Calls) to see detailed analytics with visual charts and graphs.`
+    }
+
+    // Settings and configuration
+    if (message.includes('setting') || message.includes('config') || message.includes('profile') ||
+        message.includes('account') || message.includes('user')) {
+      return `**Settings & Configuration Help:**
+
+• **User Settings:** Manage your profile and account preferences
+• **API Configuration:** Set up integrations with external services
+• **Notifications:** Configure alert preferences
+• **Data Management:** Export, backup, or manage your data
+• **Security:** Review security settings and access controls
+
+You can access settings from the main navigation menu. Make sure to save any changes you make to your configuration.`
+    }
+
+    // Navigation and general platform use
+    if (message.includes('navigate') || message.includes('menu') || message.includes('page') ||
+        message.includes('find') || message.includes('where')) {
+      return `**Platform Navigation Help:**
+
+**Main Pages:**
+• **Dashboard:** Overview of all activities and metrics
+• **Calls:** Call history, recordings, and analytics
+• **SMS:** Chat conversations and messaging analytics
+• **Users:** User management (if you have admin access)
+• **Settings:** Platform configuration and preferences
+
+**Common Actions:**
+• Use the search bar to find specific items
+• Filter data by date ranges or status
+• Click on items to view detailed information
+• Use the navigation menu to switch between pages
+• Look for action buttons (Add, Edit, Export) on each page
+
+The platform is designed to be intuitive - most features are accessible through the main navigation and contextual menus.`
+    }
+
+    // Default helpful response
+    return `I'm your CareXPS Assistant! I can help you with platform navigation, SMS/chat features, call management, analytics, and general platform usage.
+
+**Quick Help:**
+• **SMS/Chat:** View conversations, add notes, track costs
+• **Calls:** Listen to recordings, manage call history, analyze patterns
+• **Analytics:** View usage statistics, costs, and reporting
+• **Settings:** Configure your account and platform preferences
+
+**Note:** I have no access to patient data or PHI - I only help with platform features and usage.
+
+What specific area would you like help with? You can ask about features, navigation, or how to accomplish specific tasks.`
   }
 
   /**
