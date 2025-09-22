@@ -611,6 +611,24 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
   }, [chats, smsCostManager])
 
+  // Auto-clear cache every 4 hours
+  useEffect(() => {
+    console.log('🕐 Setting up automatic cache clearing every 4 hours...')
+
+    const FOUR_HOURS_MS = 4 * 60 * 60 * 1000 // 4 hours in milliseconds
+
+    const interval = setInterval(() => {
+      console.log('🕐 4-hour timer triggered - automatically clearing SMS segment caches...')
+      clearAllSegmentCaches(true) // Pass true to indicate automatic clearing
+    }, FOUR_HOURS_MS)
+
+    // Cleanup interval on component unmount
+    return () => {
+      console.log('🕐 Cleaning up automatic cache clearing timer')
+      clearInterval(interval)
+    }
+  }, [clearAllSegmentCaches])
+
   // ==================================================================================
   // 🔓 TEMPORARILY UNLOCKED: SMS SEGMENTS METRICS CALCULATION - FIXING YEAR VIEW
   // ==================================================================================
@@ -869,8 +887,11 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   }, [fullDataSegmentCache, saveSegmentCache])
 
   // Clear all segment caches function
-  const clearAllSegmentCaches = useCallback(() => {
-    console.log('🗑️ Clearing all segment caches...')
+  const clearAllSegmentCaches = useCallback((isAutomatic = false) => {
+    const timestamp = new Date().toLocaleString()
+    const triggerType = isAutomatic ? '🕐 AUTOMATIC (4-hour timer)' : '🗑️ MANUAL (button click)'
+
+    console.log(`${triggerType} - Clearing all segment caches at ${timestamp}`)
 
     // Clear in-memory caches
     setSegmentCache(new Map())
@@ -882,7 +903,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     // Reset segment update trigger to force recalculation
     setSegmentUpdateTrigger(prev => prev + 1)
 
-    console.log('✅ All segment caches cleared successfully')
+    console.log(`✅ All segment caches cleared successfully (${isAutomatic ? 'automatic' : 'manual'})`)
   }, [])
 
   // Simplified chat fetching following CallsPage pattern
