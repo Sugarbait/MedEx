@@ -23,6 +23,7 @@ import { MFAProtectedRoute } from './components/auth/MFAProtectedRoute'
 import { AuditLogger } from './components/security/AuditLogger'
 import { useSessionTimeout } from './hooks/useSessionTimeout'
 import { SessionTimeoutWarning } from './components/common/SessionTimeoutWarning'
+import { ToastManager } from './components/common/ToastManager'
 
 // Pages
 import { DashboardPage } from './pages/DashboardPage'
@@ -227,6 +228,9 @@ const AppContent: React.FC<{
         onLogout={handleLogout}
         onDismiss={handleDismissWarning}
       />
+
+      {/* Toast Notifications */}
+      <ToastManager userId={user?.id} />
     </div>
   )
 }

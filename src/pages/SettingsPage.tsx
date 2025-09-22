@@ -31,6 +31,7 @@ import { avatarStorageService } from '@/services/avatarStorageService'
 import { SimpleUserManager } from '@/components/settings/SimpleUserManager'
 import { ThemeManager } from '@/utils/themeManager'
 import { SiteHelpChatbot } from '@/components/common/SiteHelpChatbot'
+import { toastNotificationService, ToastNotificationPreferences } from '@/services/toastNotificationService'
 
 interface User {
   id: string
@@ -81,12 +82,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   const [fullName, setFullName] = useState(user?.name || '')
   const [isEditingName, setIsEditingName] = useState(false)
   const [isSavingName, setIsSavingName] = useState(false)
+  const [toastPreferences, setToastPreferences] = useState<ToastNotificationPreferences>(
+    toastNotificationService.getPreferences()
+  )
 
   const tabs = [
     { id: 'profile', name: 'Profile', icon: UserIcon },
     { id: 'security', name: 'Security', icon: ShieldIcon },
     { id: 'api', name: 'API Configuration', icon: KeyIcon },
     { id: 'appearance', name: 'Appearance', icon: PaletteIcon },
+    { id: 'notifications', name: 'Notifications', icon: BellIcon },
     { id: 'audit', name: 'Audit Logs', icon: FileTextIcon },
     ...(user?.role === 'super_user' ? [{ id: 'users', name: 'User Management', icon: UserIcon }] : [])
   ]
@@ -766,6 +771,19 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
       [type]: enabled
     }
     await updateSettings({ notifications: updatedNotifications })
+  }
+
+  const handleToastPreferenceChange = async (key: keyof ToastNotificationPreferences, value: any) => {
+    const newPreferences = { ...toastPreferences, [key]: value }
+    setToastPreferences(newPreferences)
+    await toastNotificationService.updatePreferences(user.id, { [key]: value })
+  }
+
+  const handleDoNotDisturbChange = async (key: keyof ToastNotificationPreferences['doNotDisturb'], value: any) => {
+    const newDndSettings = { ...toastPreferences.doNotDisturb, [key]: value }
+    const newPreferences = { ...toastPreferences, doNotDisturb: newDndSettings }
+    setToastPreferences(newPreferences)
+    await toastNotificationService.updatePreferences(user.id, { doNotDisturb: newDndSettings })
   }
 
   // Helper function to test Supabase connectivity
@@ -1518,6 +1536,106 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                       userSettings?.notifications?.system ? 'translate-x-6' : 'translate-x-1'
                     }`} />
                   </button>
+                </div>
+
+                {/* Toast Notifications Section */}
+                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">Toast Notifications</h3>
+
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium text-gray-900 dark:text-gray-100">Real-time Toasts</h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                          Show popup notifications for new calls and SMS messages
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleToastPreferenceChange('enabled', !toastPreferences.enabled)}
+                        disabled={isLoading}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          toastPreferences.enabled ? 'bg-blue-500' : 'bg-gray-300'
+                        }`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          toastPreferences.enabled ? 'translate-x-6' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium text-gray-900 dark:text-gray-100">Sound Effects</h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                          Play gentle sound with toast notifications
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleToastPreferenceChange('soundEnabled', !toastPreferences.soundEnabled)}
+                        disabled={isLoading || !toastPreferences.enabled}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          toastPreferences.soundEnabled && toastPreferences.enabled ? 'bg-blue-500' : 'bg-gray-300'
+                        } ${!toastPreferences.enabled ? 'opacity-50' : ''}`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          toastPreferences.soundEnabled && toastPreferences.enabled ? 'translate-x-6' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </div>
+
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="font-medium text-gray-900 dark:text-gray-100">Do Not Disturb</h4>
+                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                          Silence notifications during specific hours
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => handleDoNotDisturbChange('enabled', !toastPreferences.doNotDisturb.enabled)}
+                        disabled={isLoading || !toastPreferences.enabled}
+                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                          toastPreferences.doNotDisturb.enabled && toastPreferences.enabled ? 'bg-blue-500' : 'bg-gray-300'
+                        } ${!toastPreferences.enabled ? 'opacity-50' : ''}`}
+                      >
+                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          toastPreferences.doNotDisturb.enabled && toastPreferences.enabled ? 'translate-x-6' : 'translate-x-1'
+                        }`} />
+                      </button>
+                    </div>
+
+                    {toastPreferences.doNotDisturb.enabled && toastPreferences.enabled && (
+                      <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 space-y-3">
+                        <h5 className="text-sm font-medium text-gray-900 dark:text-gray-100">Quiet Hours</h5>
+                        <div className="grid grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              Start Time
+                            </label>
+                            <input
+                              type="time"
+                              value={toastPreferences.doNotDisturb.startTime}
+                              onChange={(e) => handleDoNotDisturbChange('startTime', e.target.value)}
+                              className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
+                              End Time
+                            </label>
+                            <input
+                              type="time"
+                              value={toastPreferences.doNotDisturb.endTime}
+                              onChange={(e) => handleDoNotDisturbChange('endTime', e.target.value)}
+                              className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                            />
+                          </div>
+                        </div>
+                        <p className="text-xs text-gray-500 dark:text-gray-400">
+                          Notifications will be silenced between these hours (overnight periods supported)
+                        </p>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
