@@ -60,10 +60,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
   const [isExporting, setIsExporting] = useState(false)
 
   // SMS Segment caching state (exact copy from SMS page)
-  const [fullDataSegmentCache, setFullDataSegmentCache] = useState<Map<string, number>>(() => {
-    // Load cached data on initial mount
-    return loadSegmentCache()
-  })
+  const [fullDataSegmentCache, setFullDataSegmentCache] = useState<Map<string, number>>(new Map())
   const [segmentCache, setSegmentCache] = useState<Map<string, number>>(new Map())
   const [loadingFullChats, setLoadingFullChats] = useState<Set<string>>(new Set())
   const [segmentUpdateTrigger, setSegmentUpdateTrigger] = useState(0)
@@ -187,7 +184,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
 
   // Initialize cache loading state
   useEffect(() => {
-    console.log(`📁 Dashboard initialized with ${fullDataSegmentCache.size} cached segments from localStorage`)
+    const cachedSegments = loadSegmentCache()
+    setFullDataSegmentCache(cachedSegments)
+    console.log(`📁 Dashboard loaded ${cachedSegments.size} cached segments from localStorage`)
   }, [])
 
   // Save cache when it changes
