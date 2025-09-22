@@ -41,15 +41,25 @@ module.exports = async function (context, req) {
         // Get OpenAI API key from environment variables
         const openaiApiKey = process.env.OPENAI_API_KEY;
 
+        // Debug: Log available environment variables (without values for security)
+        context.log('Available environment variables:', Object.keys(process.env).filter(key => key.includes('OPENAI') || key.includes('API')));
+
         if (!openaiApiKey) {
             context.log.error('OPENAI_API_KEY environment variable not set');
+            context.log.error('Available env vars:', Object.keys(process.env));
             context.res.status = 500;
             context.res.body = {
                 error: 'Server configuration error. API key not available.',
-                success: false
+                success: false,
+                debug: {
+                    envVarsAvailable: Object.keys(process.env).length,
+                    relevantVars: Object.keys(process.env).filter(key => key.includes('OPENAI') || key.includes('API'))
+                }
             };
             return;
         }
+
+        context.log('OpenAI API key found, length:', openaiApiKey.length);
 
         // Validate request body
         if (!req.body) {
