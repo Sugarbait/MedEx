@@ -60,7 +60,7 @@ const getNavigationItems = (user: any) => {
       name: 'Dashboard',
       href: '/dashboard',
       icon: HomeIcon,
-      description: 'Overview and system status'
+      description: 'System overview'
     },
     // Protected pages - only show if user has MFA access
     ...(hasMFA ? [
