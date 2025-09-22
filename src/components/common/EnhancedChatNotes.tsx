@@ -13,7 +13,7 @@ import {
   ClockIcon,
   WifiOffIcon,
   CloudIcon,
-  SyncIcon,
+  RefreshCwIcon,
   AlertTriangleIcon
 } from 'lucide-react'
 import { useNotesWithOfflineSync } from '@/hooks/useNotesWithOfflineSync'
@@ -203,7 +203,7 @@ export const EnhancedChatNotes: React.FC<EnhancedChatNotesProps> = ({
 
             {isSyncing && (
               <div className="flex items-center gap-1 px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs">
-                <SyncIcon className="w-3 h-3 animate-spin" />
+                <RefreshCwIcon className="w-3 h-3 animate-spin" />
                 Syncing
               </div>
             )}
@@ -233,7 +233,7 @@ export const EnhancedChatNotes: React.FC<EnhancedChatNotesProps> = ({
               className="flex items-center gap-1 px-2 py-1 text-blue-600 bg-blue-50 rounded-lg hover:bg-blue-100 transition-colors text-sm"
               title="Force sync pending changes"
             >
-              <SyncIcon className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+              <RefreshCwIcon className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
               Sync
             </button>
           )}
