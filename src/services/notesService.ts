@@ -62,24 +62,34 @@ class NotesService {
     }
 
     try {
-      // Quick test with very short timeout
+      // Quick test with reasonable timeout for better user experience
       const testPromise = supabase.from('notes').select('id').limit(1).maybeSingle()
       const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error('Quick test timeout')), 1500)
+        setTimeout(() => reject(new Error('Quick test timeout')), 3000) // Increased from 1.5s to 3s
       )
 
       const { error } = await Promise.race([testPromise, timeoutPromise]) as any
 
-      if (error) {
+      if (error && !error.message.includes('timeout')) {
+        // Only mark as unavailable for actual database errors, not timeouts
         this.isSupabaseAvailable = false
         console.log('🔌 Supabase connection test failed, switching to localStorage mode')
+        return false
+      } else if (error && error.message.includes('timeout')) {
+        // For timeout errors, don't mark as unavailable but return false for this check
+        console.log('🔌 Supabase connection timeout (keeping connection available for retry)')
         return false
       }
 
       return true
     } catch (error) {
-      this.isSupabaseAvailable = false
-      console.log('🔌 Supabase connection failed, switching to localStorage mode')
+      // Only mark as unavailable for connection errors, not timeouts
+      if (error instanceof Error && !error.message.includes('timeout')) {
+        this.isSupabaseAvailable = false
+        console.log('🔌 Supabase connection failed, switching to localStorage mode')
+      } else {
+        console.log('🔌 Supabase connection timeout (keeping connection available for retry)')
+      }
       return false
     }
   }
@@ -199,9 +209,34 @@ class NotesService {
         metadata: data.metadata || {}
       }
 
-      // Fast path: Try Supabase directly without connection test
+      // Try direct Supabase save first, fall back to optimistic if it fails
       try {
-        console.log('✨ Fast path: Creating note with Supabase:', noteData)
+        console.log('✨ Direct path: Creating note with Supabase:', noteData)
+
+        // Try direct Supabase save with reasonable timeout
+        const supabasePromise = supabase
+          .from('notes')
+          .insert(noteData)
+          .select()
+          .single()
+
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Save timeout')), 8000)
+        )
+
+        const { data: supabaseNote, error } = await Promise.race([supabasePromise, timeoutPromise]) as any
+
+        if (!error && supabaseNote) {
+          console.log('Note created successfully in Supabase')
+          this.isSupabaseAvailable = true
+          return { success: true, note: supabaseNote }
+        }
+
+        // If Supabase fails, fall back to optimistic approach
+        console.log('Supabase save failed, using optimistic approach:', error)
+        throw new Error('Fallback to optimistic')
+      } catch (error) {
+        console.log('Using optimistic approach for note creation:', error instanceof Error ? error.message : 'Unknown error')
 
         // Optimistic UI approach: save to localStorage first, then sync to Supabase
         const localNote = await this.createNoteLocalStorage(data, userInfo)
@@ -216,14 +251,7 @@ class NotesService {
 
         console.log('Note created successfully with optimistic approach')
         return { success: true, note: localNote.note }
-      } catch (error) {
-        console.error('Supabase connection failed during note creation, falling back to localStorage:', error)
-        this.isSupabaseAvailable = false
       }
-
-      // Use localStorage fallback
-      console.log('Using localStorage for note creation')
-      return this.createNoteLocalStorage(data, userInfo)
 
     } catch (error) {
       console.error('Error creating note, falling back to localStorage:', error)
@@ -435,8 +463,36 @@ class NotesService {
 
       console.log('Updating note:', noteId, updateData)
 
-      // Try Supabase first with timeout
+      // Try direct Supabase update first, fall back to optimistic if it fails
       try {
+        console.log('✨ Direct path: Updating note with Supabase:', noteId, updateData)
+
+        // Try direct Supabase update with reasonable timeout
+        const supabasePromise = supabase
+          .from('notes')
+          .update(updateData)
+          .eq('id', noteId)
+          .select()
+          .single()
+
+        const timeoutPromise = new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Update timeout')), 8000)
+        )
+
+        const { data: supabaseNote, error } = await Promise.race([supabasePromise, timeoutPromise]) as any
+
+        if (!error && supabaseNote) {
+          console.log('Note updated successfully in Supabase')
+          this.isSupabaseAvailable = true
+          return { success: true, note: supabaseNote }
+        }
+
+        // If Supabase fails, fall back to optimistic approach
+        console.log('Supabase update failed, using optimistic approach:', error)
+        throw new Error('Fallback to optimistic')
+      } catch (error) {
+        console.log('Using optimistic approach for note update:', error instanceof Error ? error.message : 'Unknown error')
+
         // Optimistic UI approach: update localStorage first, then sync to Supabase
         const localNote = await this.updateNoteLocalStorage(noteId, data, userInfo)
         if (!localNote.success) {
@@ -450,14 +506,8 @@ class NotesService {
 
         console.log('Note updated successfully with optimistic approach')
         return { success: true, note: localNote.note }
-      } catch (error) {
-        console.error('Supabase connection failed during note update, falling back to localStorage:', error)
-        this.isSupabaseAvailable = false
       }
 
-      // Use localStorage fallback
-      console.log('Using localStorage for note update')
-      return this.updateNoteLocalStorage(noteId, data, userInfo)
     } catch (error) {
       console.error('Error updating note, falling back to localStorage:', error)
       const userInfo = await this.getCurrentUserInfo()
@@ -520,7 +570,7 @@ class NotesService {
           .order('created_at', { ascending: true })
 
         const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error('Internal timeout')), 10000)
+          setTimeout(() => reject(new Error('Internal timeout')), 15000) // Increased from 10s to 15s
         )
 
         const { data: notes, error } = await Promise.race([fetchPromise, timeoutPromise]) as any

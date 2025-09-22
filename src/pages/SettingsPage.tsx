@@ -99,6 +99,19 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
         // Initialize the robust settings service
         await RobustUserSettingsService.initialize()
 
+        // Force sync from Supabase to get latest cross-device settings
+        console.log('🔄 Force syncing settings from Supabase for cross-device access...')
+        try {
+          const syncResponse = await RobustUserSettingsService.forceSync(user.id)
+          if (syncResponse.status === 'success') {
+            console.log('✅ Settings force-synced from Supabase successfully')
+          } else {
+            console.warn('⚠️ Force sync failed, using cached data:', syncResponse.error)
+          }
+        } catch (syncError) {
+          console.warn('⚠️ Force sync failed, using cached data:', syncError)
+        }
+
         // Load user settings with automatic fallback
         console.log('Loading settings with robust service...')
         const response = await RobustUserSettingsService.getUserSettings(user.id)

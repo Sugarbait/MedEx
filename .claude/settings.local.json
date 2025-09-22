@@ -110,7 +110,21 @@
       "Bash(start http://localhost:3020)",
       "Bash(start http://localhost:3021)",
       "Bash(start http://localhost:3022)",
-      "WebFetch(domain:nexasync.ca)"
+      "WebFetch(domain:nexasync.ca)",
+      "Bash(start http://localhost:3002)",
+      "Bash(start \"I:\\Apps Back Up\\CareXPS CRM\\test-chatbot-functionality.html\")",
+      "Bash(del test-openai-api.js direct-chatbot-test.js test-chatbot-functionality.html)",
+      "Bash(start http://localhost:3004/debug-chatbot.html)",
+      "Bash(start http://localhost:3004)",
+      "Bash(del test-openai-api.js debug-chatbot.html)",
+      "Bash(start http://localhost:3005)",
+      "Bash(gh run list:*)",
+      "Bash(del \".env.production\")",
+      "Bash(npm:*)",
+      "Bash(start http://localhost:3006)",
+      "Bash(func --version)",
+      "Bash(start http://localhost:3007)",
+      "Bash(start http://localhost:3008)"
     ],
     "deny": [],
     "ask": []

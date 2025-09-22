@@ -71,7 +71,7 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
     }
   }
 
-  // Save new note with timeout
+  // Save new note with improved timeout handling
   const handleAddNote = async () => {
     if (!newNoteContent.trim()) {
       setError('Note content cannot be empty')
@@ -79,7 +79,6 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
     }
 
     let saveInProgress = false
-    let timeoutId: NodeJS.Timeout | null = null
 
     try {
       setIsSaving(true)
@@ -88,26 +87,13 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
 
       console.log('ChatNotes: Starting note save operation')
 
-      // Safety timeout to reset saving state after 10 seconds
-      timeoutId = setTimeout(() => {
-        console.warn('ChatNotes: Save operation timed out, resetting state')
-        setIsSaving(false)
-        setError('Save operation timed out. Please try again.')
-      }, 10000)
-
-      // Save note with optimistic approach
+      // Save note with optimistic approach - let the service handle timeouts
       const result = await notesService.createNote({
         reference_id: chatId,
         reference_type: 'sms',
         content: newNoteContent.trim(),
         content_type: 'plain'
       })
-
-      // Clear timeout since operation completed
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-        timeoutId = null
-      }
 
       console.log('ChatNotes: Note save result:', result)
 
@@ -130,9 +116,6 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
       console.error('Error saving note:', err)
       setError('Failed to save note')
     } finally {
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-      }
       if (saveInProgress) {
         console.log('ChatNotes: Resetting save state')
         setIsSaving(false)
@@ -140,7 +123,7 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
     }
   }
 
-  // Update existing note with timeout
+  // Update existing note with improved timeout handling
   const handleUpdateNote = async () => {
     if (!editingNoteId || !editingContent.trim()) {
       setError('Note content cannot be empty')
@@ -148,7 +131,6 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
     }
 
     let saveInProgress = false
-    let timeoutId: NodeJS.Timeout | null = null
 
     try {
       setIsSaving(true)
@@ -157,24 +139,11 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
 
       console.log('ChatNotes: Starting note update operation')
 
-      // Safety timeout to reset saving state after 10 seconds
-      timeoutId = setTimeout(() => {
-        console.warn('ChatNotes: Update operation timed out, resetting state')
-        setIsSaving(false)
-        setError('Update operation timed out. Please try again.')
-      }, 10000)
-
-      // Update note with optimistic approach
+      // Update note with optimistic approach - let the service handle timeouts
       const result = await notesService.updateNote(editingNoteId, {
         content: editingContent.trim(),
         content_type: 'plain'
       })
-
-      // Clear timeout since operation completed
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-        timeoutId = null
-      }
 
       console.log('ChatNotes: Note update result:', result)
 
@@ -200,9 +169,6 @@ export const ChatNotes: React.FC<ChatNotesProps> = ({ chatId, isReadonly = false
       console.error('Error updating note:', err)
       setError('Failed to update note')
     } finally {
-      if (timeoutId) {
-        clearTimeout(timeoutId)
-      }
       if (saveInProgress) {
         console.log('ChatNotes: Resetting update state')
         setIsSaving(false)

@@ -2,6 +2,8 @@ import React, { useState } from 'react'
 import { ShieldCheckIcon, EyeIcon, EyeOffIcon, AlertCircleIcon } from 'lucide-react'
 import { userManagementService } from '@/services/userManagementService'
 import { userProfileService } from '@/services/userProfileService'
+import { mfaService } from '@/services/mfaService'
+import { userSettingsService } from '@/services/userSettingsService'
 import { PasswordDebugger } from '@/utils/passwordDebug'
 import { createGuestUser } from '@/utils/createGuestUser'
 import { createPierreUser } from '@/utils/createPierreUser'
@@ -197,6 +199,30 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       if (isSystemUser) {
         // Try system account login first for system users
         if (await handleDemoAccountLogin(email, password)) {
+          // Force sync cross-device data for demo users too
+          const currentUser = localStorage.getItem('currentUser')
+          if (currentUser) {
+            try {
+              const user = JSON.parse(currentUser)
+              console.log('🔄 Syncing cross-device data for demo user from Supabase...')
+              await mfaService.forceCloudSync(user.id)
+              const settingsSynced = await userSettingsService.forceSyncFromSupabase(user.id)
+              console.log('✅ Cross-device sync completed for demo user')
+
+              // Reload Retell credentials for demo user
+              if (settingsSynced && settingsSynced.retell_config) {
+                const { retellService } = await import('@/services/retellService')
+                retellService.updateCredentials(
+                  settingsSynced.retell_config.api_key,
+                  settingsSynced.retell_config.call_agent_id,
+                  settingsSynced.retell_config.sms_agent_id
+                )
+                console.log('✅ Retell credentials updated for demo user')
+              }
+            } catch (syncError) {
+              console.warn('⚠️ Demo user cross-device sync failed:', syncError)
+            }
+          }
           onLogin()
           return
         }
@@ -237,12 +263,62 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           mfa_enabled: userData.mfa_enabled
         }))
 
+        // Force sync MFA and settings from Supabase for cross-device access
+        console.log('🔄 Syncing cross-device data from Supabase...')
+        try {
+          // Force sync MFA data from cloud
+          const mfaSynced = await mfaService.forceCloudSync(userData.id)
+          console.log(`✅ MFA data sync: ${mfaSynced ? 'successful' : 'no data found'}`)
+
+          // Force sync user settings from cloud
+          const settingsSynced = await userSettingsService.forceSyncFromSupabase(userData.id)
+          console.log(`✅ Settings sync: ${settingsSynced ? 'successful' : 'using defaults'}`)
+
+          // Reload Retell credentials after settings sync
+          if (settingsSynced && settingsSynced.retell_config) {
+            const { retellService } = await import('@/services/retellService')
+            retellService.updateCredentials(
+              settingsSynced.retell_config.api_key,
+              settingsSynced.retell_config.call_agent_id,
+              settingsSynced.retell_config.sms_agent_id
+            )
+            console.log('✅ Retell credentials updated from synced settings')
+          }
+        } catch (syncError) {
+          console.warn('⚠️ Cross-device sync failed, using local data:', syncError)
+          // Continue with login even if sync fails - will use local/default data
+        }
+
         // Clear failed attempts on successful login
         LoginAttemptTracker.clearFailedAttempts(email)
         onLogin()
       } else {
         // Check for system accounts as fallback (only if user not found in system and not already tried)
         if (!isSystemUser && await handleDemoAccountLogin(email, password)) {
+          // Force sync cross-device data for demo users
+          const currentUser = localStorage.getItem('currentUser')
+          if (currentUser) {
+            try {
+              const user = JSON.parse(currentUser)
+              console.log('🔄 Syncing cross-device data for fallback demo user from Supabase...')
+              await mfaService.forceCloudSync(user.id)
+              const settingsSynced = await userSettingsService.forceSyncFromSupabase(user.id)
+              console.log('✅ Cross-device sync completed for fallback demo user')
+
+              // Reload Retell credentials for fallback demo user
+              if (settingsSynced && settingsSynced.retell_config) {
+                const { retellService } = await import('@/services/retellService')
+                retellService.updateCredentials(
+                  settingsSynced.retell_config.api_key,
+                  settingsSynced.retell_config.call_agent_id,
+                  settingsSynced.retell_config.sms_agent_id
+                )
+                console.log('✅ Retell credentials updated for fallback demo user')
+              }
+            } catch (syncError) {
+              console.warn('⚠️ Fallback demo user cross-device sync failed:', syncError)
+            }
+          }
           // Clear failed attempts on successful login
           LoginAttemptTracker.clearFailedAttempts(email)
           onLogin()

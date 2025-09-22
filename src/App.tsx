@@ -3,7 +3,6 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavig
 import { supabase } from './config/supabase'
 import { auditLogger, AuditAction, ResourceType, AuditOutcome } from './services/auditLogger'
 import { userProfileService } from './services/userProfileService'
-import { mfaService } from './services/mfaService'
 import { retellService } from './services/retellService'
 import { AuthProvider } from './contexts/AuthContext'
 import { SupabaseProvider } from './contexts/SupabaseContext'
@@ -289,6 +288,36 @@ const App: React.FC = () => {
 
         if (storedUser) {
           const userData = storedUser
+
+          // Force sync MFA and settings from Supabase for cross-device access
+          console.log('🔄 Syncing cross-device data on app initialization...')
+          try {
+            // Import the services
+            const { mfaService } = await import('./services/mfaService')
+            const { userSettingsService } = await import('./services/userSettingsService')
+
+            // Force sync MFA data from cloud
+            const mfaSynced = await mfaService.forceCloudSync(userData.id)
+            console.log(`✅ MFA data sync on init: ${mfaSynced ? 'successful' : 'no data found'}`)
+
+            // Force sync user settings from cloud
+            const settingsSynced = await userSettingsService.forceSyncFromSupabase(userData.id)
+            console.log(`✅ Settings sync on init: ${settingsSynced ? 'successful' : 'using defaults'}`)
+
+            // Reload Retell credentials after settings sync
+            if (settingsSynced && settingsSynced.retell_config) {
+              const { retellService } = await import('./services/retellService')
+              retellService.updateCredentials(
+                settingsSynced.retell_config.api_key,
+                settingsSynced.retell_config.call_agent_id,
+                settingsSynced.retell_config.sms_agent_id
+              )
+              console.log('✅ Retell credentials updated from synced settings')
+            }
+          } catch (syncError) {
+            console.warn('⚠️ Cross-device sync on init failed, using local data:', syncError)
+            // Continue with initialization even if sync fails - will use local/default data
+          }
 
           // Try to load full profile from Supabase with timeout
           try {

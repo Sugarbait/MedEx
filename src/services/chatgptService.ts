@@ -26,19 +26,18 @@ class ChatGPTService {
   private readonly model = 'gpt-3.5-turbo' // Best suited for this application - fast and cost-effective
 
   constructor() {
-    // Use Azure Function API proxy instead of direct OpenAI API
-    // For local development, use Azure Functions runtime on port 7071
+    // Use local proxy server for development, Azure Function for production
     const isDevelopment = import.meta.env.DEV
     const baseUrl = isDevelopment
-      ? 'http://localhost:7071'  // Azure Functions runtime
+      ? 'http://localhost:3008'  // Local proxy server
       : import.meta.env.VITE_APP_URL || window.location.origin
 
     this.apiUrl = `${baseUrl}/api/chatgpt`
 
-    console.log('🔍 ChatGPT Service initialized with Azure Function proxy')
+    console.log('🤖 ChatGPT Service initialized')
     console.log('🔍 Development mode:', isDevelopment)
     console.log('🔍 API URL:', this.apiUrl)
-    console.log('✅ Using secure server-side API key management')
+    console.log('✅ Using secure proxy server for API key management')
   }
 
   /**
@@ -70,11 +69,12 @@ ANALYTICS CAPABILITIES:
 - All analytics data is anonymized and aggregated - NO individual records or patient information
 
 RESPONSE FORMATTING:
-- Use natural language and well-formatted responses
-- Structure information with headers, bullet points, and clear paragraphs
-- Use markdown formatting for better readability
-- Provide actionable insights and recommendations when possible
-- Keep responses professional, helpful, and easy to understand
+- Use natural language with elegant, well-structured sentences and paragraphs
+- Structure information with proper numbered lists (1., 2., 3.) and clear paragraph breaks
+- Do NOT use markdown formatting, headers, or bullet points
+- Write in a conversational, professional tone with proper punctuation
+- Provide actionable insights and recommendations in easy-to-read numbered format
+- Keep responses helpful, clear, and easy to understand
 
 When users ask about statistics, patterns, or historical data, provide comprehensive analysis using the available aggregated data while maintaining strict PHI protection.`
   }
@@ -127,18 +127,18 @@ When users ask about statistics, patterns, or historical data, provide comprehen
         }
       }
 
-      // First try Azure Function proxy
+      // First try the proxy server for real OpenAI responses
       try {
-        const azureFunctionResponse = await this.sendToAzureFunction(enhancedUserMessage, conversationHistory)
-        if (azureFunctionResponse.success) {
-          return azureFunctionResponse
+        const proxyResponse = await this.sendToProxyServer(enhancedUserMessage, conversationHistory)
+        if (proxyResponse.success) {
+          return proxyResponse
         }
-        console.log('Azure Function unavailable, using intelligent fallback response')
+        console.log('Proxy server unavailable, using intelligent fallback response')
       } catch (error) {
-        console.log('Azure Function error, using intelligent fallback response:', error)
+        console.log('Proxy server error, using intelligent fallback response:', error)
       }
 
-      // Intelligent fallback response for development
+      // Intelligent fallback response when proxy is unavailable
       return {
         success: true,
         message: this.getIntelligentFallbackResponse(userMessage)
@@ -151,6 +151,64 @@ When users ask about statistics, patterns, or historical data, provide comprehen
         error: 'Unable to connect to help service. Please try again later.'
       }
     }
+  }
+
+  /**
+   * Send message to local proxy server
+   */
+  private async sendToProxyServer(userMessage: string, conversationHistory: ChatGPTMessage[]): Promise<ChatGPTResponse> {
+    // Build the conversation with system prompt
+    const messages: ChatGPTMessage[] = [
+      { role: 'system', content: this.getSystemPrompt() },
+      ...conversationHistory.slice(-10), // Keep last 10 messages for context
+      { role: 'user', content: userMessage }
+    ]
+
+    const requestBody = {
+      model: this.model,
+      messages: messages,
+      max_tokens: 1000
+    }
+
+    console.log('Sending request to proxy server:', {
+      messageCount: messages.length,
+      apiUrl: this.apiUrl
+    })
+
+    const response = await fetch(this.apiUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(requestBody)
+    })
+
+    console.log('Proxy server API Response status:', response.status, response.statusText)
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}))
+      console.error('Proxy server API error:', response.status, errorData)
+
+      if (response.status === 401) {
+        throw new Error('Authentication failed')
+      } else if (response.status === 429) {
+        return { success: false, error: 'Rate limit exceeded. Please try again in a moment.' }
+      } else {
+        throw new Error('Service temporarily unavailable')
+      }
+    }
+
+    const data = await response.json()
+
+    if (data.success && data.message) {
+      console.log('ChatGPT response received successfully via proxy server')
+      return {
+        success: true,
+        message: data.message
+      }
+    }
+
+    throw new Error(data.error || 'No response generated')
   }
 
   /**
