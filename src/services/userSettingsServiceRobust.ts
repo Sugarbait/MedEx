@@ -488,6 +488,13 @@ export class RobustUserSettingsService {
   }
 
   /**
+   * Force sync settings across all devices (alias for forceSyncAcrossDevices)
+   */
+  static async forceSync(userId: string): Promise<ServiceResponse<UserSettings>> {
+    return this.forceSyncAcrossDevices(userId)
+  }
+
+  /**
    * Force sync settings across all devices
    */
   static async forceSyncAcrossDevices(userId: string): Promise<ServiceResponse<UserSettings>> {
