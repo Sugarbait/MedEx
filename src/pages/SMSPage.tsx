@@ -38,6 +38,12 @@ import {
   TrashIcon
 } from 'lucide-react'
 
+// CRITICAL FIX: Disable console logging in production to prevent infinite loops
+const isProduction = !import.meta.env.DEV
+const safeLog = isProduction ? () => {} : safeLog
+const safeWarn = isProduction ? () => {} : safeWarn
+const safeError = isProduction ? () => {} : safeError
+
 // ==================================================================================
 // 🔒 LOCKED CODE: SMS SEGMENT CACHE UTILITIES - PRODUCTION READY - NO MODIFICATIONS
 // ==================================================================================
@@ -74,7 +80,7 @@ const loadSegmentCache = (): Map<string, number> => {
 
     // Check if cache is expired
     if (now - cacheData.lastUpdated > expiryTime) {
-      console.log('📅 SMS segment cache expired, clearing old data')
+      safeLog('📅 SMS segment cache expired, clearing old data')
       localStorage.removeItem(SMS_SEGMENT_CACHE_KEY)
       return new Map()
     }
@@ -84,10 +90,10 @@ const loadSegmentCache = (): Map<string, number> => {
       return now - entry.timestamp < expiryTime
     })
 
-    console.log(`💾 Loaded ${validEntries.length} cached SMS segment calculations`)
+    safeLog(`💾 Loaded ${validEntries.length} cached SMS segment calculations`)
     return new Map(validEntries.map(entry => [entry.chatId, entry.segments]))
   } catch (error) {
-    console.error('Failed to load SMS segment cache:', error)
+    safeError('Failed to load SMS segment cache:', error)
     return new Map()
   }
 }
@@ -105,9 +111,9 @@ const saveSegmentCache = (cache: Map<string, number>) => {
     }
 
     localStorage.setItem(SMS_SEGMENT_CACHE_KEY, JSON.stringify(cacheData))
-    console.log(`💾 Saved ${cache.size} SMS segment calculations to cache`)
+    safeLog(`💾 Saved ${cache.size} SMS segment calculations to cache`)
   } catch (error) {
-    console.error('Failed to save SMS segment cache:', error)
+    safeError('Failed to save SMS segment cache:', error)
   }
 }
 
@@ -185,7 +191,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   // SMS cost management using cache service
   const smsCostManager = useSMSCostManager({
     onProgress: (loaded, total) => {
-      console.log(`SMS cost loading progress: ${loaded}/${total}`)
+      safeLog(`SMS cost loading progress: ${loaded}/${total}`)
     }
   })
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null)
@@ -241,7 +247,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       // Priority 1: Check full data cache first (populated by modal with accurate data)
       const fullDataCached = fullDataSegmentCache.get(chat.chat_id)
       if (fullDataCached !== undefined) {
-        console.log(`✅ Using accurate segment count from modal: ${fullDataCached} segments for chat ${chat.chat_id}`)
+        safeLog(`✅ Using accurate segment count from modal: ${fullDataCached} segments for chat ${chat.chat_id}`)
         return fullDataCached
       }
 
@@ -254,7 +260,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       let messages = []
       let segments = 1 // Default fallback
 
-      console.log(`🔍 CALCULATING SEGMENTS for chat ${chat.chat_id}:`, {
+      safeLog(`🔍 CALCULATING SEGMENTS for chat ${chat.chat_id}:`, {
         hasMessages: !!(chat.message_with_tool_calls?.length),
         messageCount: chat.message_with_tool_calls?.length || 0,
         hasTranscript: !!chat.transcript,
@@ -269,14 +275,14 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         const messagesWithContent = chat.message_with_tool_calls.filter(m => m.content && m.content.trim().length > 0)
         if (messagesWithContent.length > 0) {
           messages = messagesWithContent
-          console.log(`📝 Using ${messages.length} content messages from message_with_tool_calls`)
+          safeLog(`📝 Using ${messages.length} content messages from message_with_tool_calls`)
         }
       }
 
       // Priority 2: Use transcript as fallback if no proper messages found
       if (messages.length === 0 && chat.transcript && chat.transcript.trim().length > 0) {
         messages = [{ content: chat.transcript, role: 'user' }]
-        console.log(`📝 Using transcript (${chat.transcript.trim().length} chars) as single message`)
+        safeLog(`📝 Using transcript (${chat.transcript.trim().length} chars) as single message`)
       }
 
       // Calculate segments if we have content
@@ -286,13 +292,13 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
         // Enhanced debugging for segment calculation
         const totalChars = messages.reduce((acc, msg) => acc + (msg.content?.length || 0), 0)
-        console.log(`📊 ✅ Chat ${chat.chat_id}: ${segments} segments calculated from available data (${messages.length} messages, ${totalChars} total characters)`)
+        safeLog(`📊 ✅ Chat ${chat.chat_id}: ${segments} segments calculated from available data (${messages.length} messages, ${totalChars} total characters)`)
 
         // If segments seem unusually low for the content, investigate
         if (totalChars > 500 && segments < 3) {
-          console.warn(`🚨 SEGMENT CALCULATION WARNING: Chat ${chat.chat_id} has ${totalChars} characters but only ${segments} segments - investigating breakdown:`)
-          console.warn(`🚨 Breakdown:`, breakdown)
-          console.warn(`🚨 Messages:`, messages.map(m => ({ role: m.role, length: m.content?.length || 0, content: m.content?.substring(0, 100) + '...' })))
+          safeWarn(`🚨 SEGMENT CALCULATION WARNING: Chat ${chat.chat_id} has ${totalChars} characters but only ${segments} segments - investigating breakdown:`)
+          safeWarn(`🚨 Breakdown:`, breakdown)
+          safeWarn(`🚨 Messages:`, messages.map(m => ({ role: m.role, length: m.content?.length || 0, content: m.content?.substring(0, 100) + '...' })))
         }
       } else {
         // No content available - use a more accurate estimate based on chat data
@@ -311,11 +317,11 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
             segments = 1 // Short conversations
           }
 
-          console.log(`📊 Chat ${chat.chat_id}: Using duration-based fallback ${segments} segments (${durationMinutes.toFixed(1)} min duration)`)
+          safeLog(`📊 Chat ${chat.chat_id}: Using duration-based fallback ${segments} segments (${durationMinutes.toFixed(1)} min duration)`)
         } else {
           // If no duration data, use a slightly higher estimate for year view
           segments = selectedDateRange === 'year' ? 2 : 1
-          console.log(`📊 Chat ${chat.chat_id}: Using conservative fallback ${segments} segment (no duration data, range: ${selectedDateRange})`)
+          safeLog(`📊 Chat ${chat.chat_id}: Using conservative fallback ${segments} segment (no duration data, range: ${selectedDateRange})`)
         }
       }
 
@@ -329,7 +335,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       return segments
 
     } catch (error) {
-      console.error(`❌ Error calculating SMS segments for chat ${chat.chat_id}:`, error)
+      safeError(`❌ Error calculating SMS segments for chat ${chat.chat_id}:`, error)
 
       // Try to use transcript as last resort
       try {
@@ -346,7 +352,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
             fallbackSegments = Math.max(Math.ceil(transcriptLength / 160), 1)
           }
 
-          console.log(`🆘 Emergency fallback using transcript for ${chat.chat_id}: ${fallbackSegments} segments`)
+          safeLog(`🆘 Emergency fallback using transcript for ${chat.chat_id}: ${fallbackSegments} segments`)
 
           // Only cache this emergency fallback if explicitly requested
           if (shouldCache) {
@@ -359,7 +365,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           return fallbackSegments
         }
       } catch (fallbackError) {
-        console.error(`❌ Emergency fallback failed for ${chat.chat_id}:`, fallbackError)
+        safeError(`❌ Emergency fallback failed for ${chat.chat_id}:`, fallbackError)
       }
 
       // Final fallback - use 1 instead of 2 for more realistic base cost
@@ -375,7 +381,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   const updateFullDataSegmentCache = useCallback((chatId: string, fullChatData: any) => {
     try {
       if (!fullChatData?.message_with_tool_calls || !Array.isArray(fullChatData.message_with_tool_calls)) {
-        console.log(`⚠️ No full message data available for chat ${chatId}`)
+        safeLog(`⚠️ No full message data available for chat ${chatId}`)
         return
       }
 
@@ -385,7 +391,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         const breakdown = twilioCostService.getDetailedSMSBreakdown(messagesWithContent)
         const accurateSegments = Math.max(breakdown.segmentCount, 1)
 
-        console.log(`🎯 Modal calculated accurate segments for chat ${chatId}: ${accurateSegments} segments`)
+        safeLog(`🎯 Modal calculated accurate segments for chat ${chatId}: ${accurateSegments} segments`)
 
         // Update the full data cache and persist to localStorage
         setFullDataSegmentCache(prev => {
@@ -401,7 +407,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         return accurateSegments
       }
     } catch (error) {
-      console.error(`❌ Error calculating accurate segments for chat ${chatId}:`, error)
+      safeError(`❌ Error calculating accurate segments for chat ${chatId}:`, error)
     }
   }, [])
 
@@ -429,8 +435,8 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     // Only update tracking if date range actually changed
     // Note: We do NOT clear fullDataSegmentCache as it contains persistent data that should survive date range changes
     if (lastDateRange !== selectedDateRange) {
-      console.log(`📅 Date range changed from ${lastDateRange} to ${selectedDateRange}, keeping persistent segment cache`)
-      console.log(`💾 Persistent cache contains ${fullDataSegmentCache.size} entries that will be preserved`)
+      safeLog(`📅 Date range changed from ${lastDateRange} to ${selectedDateRange}, keeping persistent segment cache`)
+      safeLog(`💾 Persistent cache contains ${fullDataSegmentCache.size} entries that will be preserved`)
       setLastDateRange(selectedDateRange)
     }
   }, [selectedDateRange, hasInitiallyLoaded, lastDateRange])
@@ -440,9 +446,9 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     if (!allFilteredChats || allFilteredChats.length === 0) return
 
     // Add debugging to verify we're processing the correct chats for this date range
-    console.log(`🔍 loadAccurateSegmentsForAllChats called for ${selectedDateRange} with ${allFilteredChats.length} chats`)
-    console.log(`📊 Current date range: ${selectedDateRange}`)
-    console.log(`📅 Sample chat dates:`, allFilteredChats.slice(0, 3).map(chat => ({
+    safeLog(`🔍 loadAccurateSegmentsForAllChats called for ${selectedDateRange} with ${allFilteredChats.length} chats`)
+    safeLog(`📊 Current date range: ${selectedDateRange}`)
+    safeLog(`📅 Sample chat dates:`, allFilteredChats.slice(0, 3).map(chat => ({
       id: chat.chat_id,
       created: chat.created_at,
       date: new Date(chat.created_at).toLocaleDateString()
@@ -452,26 +458,26 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     const cachedCount = allFilteredChats.length - chatsToProcess.length
 
     if (chatsToProcess.length === 0) {
-      console.log(`💾 All ${allFilteredChats.length} chats already have cached segment data - no processing needed!`)
+      safeLog(`💾 All ${allFilteredChats.length} chats already have cached segment data - no processing needed!`)
       return
     }
 
-    console.log(`🚀 Loading accurate segment data for ${chatsToProcess.length} chats (${cachedCount} already cached)...`)
-    console.log(`📊 Processing ${chatsToProcess.length} chats for ${selectedDateRange} date range (Total: ${allFilteredChats.length} chats)`)
-    console.log(`📅 Date range: ${selectedDateRange} - Expected large batches for extended ranges like "year"`)
+    safeLog(`🚀 Loading accurate segment data for ${chatsToProcess.length} chats (${cachedCount} already cached)...`)
+    safeLog(`📊 Processing ${chatsToProcess.length} chats for ${selectedDateRange} date range (Total: ${allFilteredChats.length} chats)`)
+    safeLog(`📅 Date range: ${selectedDateRange} - Expected large batches for extended ranges like "year"`)
 
     // Safety check: If processing too many chats for "today", something is wrong
     // But allow larger ranges like "year" to process all chats
     if (selectedDateRange === 'today' && chatsToProcess.length > 50) {
-      console.error(`🚨 SAFETY ABORT: Attempting to process ${chatsToProcess.length} chats for "today" - this seems wrong! Aborting to prevent server overload.`)
-      console.error(`🚨 Expected ~10 chats for today, got ${allFilteredChats.length} total chats`)
-      console.error(`🚨 This suggests the allFilteredChats contains data from wrong date range`)
+      safeError(`🚨 SAFETY ABORT: Attempting to process ${chatsToProcess.length} chats for "today" - this seems wrong! Aborting to prevent server overload.`)
+      safeError(`🚨 Expected ~10 chats for today, got ${allFilteredChats.length} total chats`)
+      safeError(`🚨 This suggests the allFilteredChats contains data from wrong date range`)
       return
     }
 
     // For larger date ranges (year, etc.), allow processing but with warning
     if (chatsToProcess.length > 500) {
-      console.warn(`⚠️ Processing ${chatsToProcess.length} chats for ${selectedDateRange} - this is a large batch but expected for extended date ranges`)
+      safeWarn(`⚠️ Processing ${chatsToProcess.length} chats for ${selectedDateRange} - this is a large batch but expected for extended date ranges`)
     }
 
     // Start loading state
@@ -492,7 +498,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         // Small delay to prevent rate limiting
         await new Promise(resolve => setTimeout(resolve, 100))
       } catch (error) {
-        console.error(`Failed to load accurate segments for chat ${chat.chat_id}:`, error)
+        safeError(`Failed to load accurate segments for chat ${chat.chat_id}:`, error)
         completed++
         setSegmentLoadingProgress({ completed, total: chatsToProcess.length })
       }
@@ -501,7 +507,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     // Finish loading state
     setIsLoadingSegments(false)
     setSegmentLoadingComplete(true)
-    console.log(`✅ Finished loading accurate segment data`)
+    safeLog(`✅ Finished loading accurate segment data`)
 
     // Hide completion message after 3 seconds
     setTimeout(() => {
@@ -515,7 +521,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
     // Wait for cache to be properly initialized on mount
     if (!hasInitiallyLoaded) {
-      console.log(`⏳ Waiting for initial cache load to complete before processing ${allFilteredChats.length} chats`)
+      safeLog(`⏳ Waiting for initial cache load to complete before processing ${allFilteredChats.length} chats`)
       return
     }
 
@@ -523,26 +529,26 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     const chatsToProcess = allFilteredChats.filter(chat => !fullDataSegmentCache.has(chat.chat_id))
     const cachedCount = allFilteredChats.length - chatsToProcess.length
 
-    console.log(`📊 Chats loaded: ${allFilteredChats.length} total, ${cachedCount} already cached, ${chatsToProcess.length} need processing`)
+    safeLog(`📊 Chats loaded: ${allFilteredChats.length} total, ${cachedCount} already cached, ${chatsToProcess.length} need processing`)
 
     // Only trigger bulk loading if there are uncached chats AND it's worth processing
     if (chatsToProcess.length > 0) {
       const cacheHitRate = cachedCount / allFilteredChats.length
-      console.log(`💾 Cache hit rate: ${(cacheHitRate * 100).toFixed(1)}% (${cachedCount}/${allFilteredChats.length})`)
+      safeLog(`💾 Cache hit rate: ${(cacheHitRate * 100).toFixed(1)}% (${cachedCount}/${allFilteredChats.length})`)
 
       // For full date range coverage, always auto-load if there are uncached chats
       // Only skip if very few chats need processing to avoid unnecessary API calls
       if (chatsToProcess.length >= 2) {
-        console.log(`🚀 Auto-triggering bulk load for ${chatsToProcess.length} uncached chats (cache hit rate: ${(cacheHitRate * 100).toFixed(1)}%) - ensuring complete date range coverage`)
+        safeLog(`🚀 Auto-triggering bulk load for ${chatsToProcess.length} uncached chats (cache hit rate: ${(cacheHitRate * 100).toFixed(1)}%) - ensuring complete date range coverage`)
         const timer = setTimeout(() => {
           loadAccurateSegmentsForAllChats()
         }, 1000)
         return () => clearTimeout(timer)
       } else {
-        console.log(`✨ Only ${chatsToProcess.length} chat(s) need processing (cache hit rate: ${(cacheHitRate * 100).toFixed(1)}%), will load on demand.`)
+        safeLog(`✨ Only ${chatsToProcess.length} chat(s) need processing (cache hit rate: ${(cacheHitRate * 100).toFixed(1)}%), will load on demand.`)
       }
     } else {
-      console.log(`💾 All ${allFilteredChats.length} chats already cached - no bulk loading needed!`)
+      safeLog(`💾 All ${allFilteredChats.length} chats already cached - no bulk loading needed!`)
     }
   }, [allFilteredChats, fullDataSegmentCache, loadAccurateSegmentsForAllChats, hasInitiallyLoaded])
 
@@ -579,9 +585,9 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       setLoadingFullChats(new Set()) // Clear loading state for new date range
       setTotalSegments(0) // Reset segments count for new date range
       setSegmentUpdateTrigger(0) // Reset segment update trigger
-      console.log('📅 Date range changed, cleared non-persistent caches and reset state')
+      safeLog('📅 Date range changed, cleared non-persistent caches and reset state')
     } else {
-      console.log('📅 Initial mount, preserving cached segment data')
+      safeLog('📅 Initial mount, preserving cached segment data')
     }
 
     debouncedFetchChats.debouncedCallback(true)
@@ -626,7 +632,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     const timestamp = new Date().toLocaleString()
     const triggerType = isAutomatic ? '🕐 AUTOMATIC (4-hour timer)' : '🗑️ MANUAL (button click)'
 
-    console.log(`${triggerType} - Clearing all segment caches at ${timestamp}`)
+    safeLog(`${triggerType} - Clearing all segment caches at ${timestamp}`)
 
     // Clear in-memory caches
     setSegmentCache(new Map())
@@ -638,7 +644,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     // Reset segment update trigger to force recalculation
     setSegmentUpdateTrigger(prev => prev + 1)
 
-    console.log(`✅ All segment caches cleared successfully (${isAutomatic ? 'automatic' : 'manual'})`)
+    safeLog(`✅ All segment caches cleared successfully (${isAutomatic ? 'automatic' : 'manual'})`)
   }, [])
 
   // ==================================================================================
@@ -656,18 +662,18 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
   // Auto-clear cache every 4 hours
   useEffect(() => {
-    console.log('🕐 Setting up automatic cache clearing every 4 hours...')
+    safeLog('🕐 Setting up automatic cache clearing every 4 hours...')
 
     const FOUR_HOURS_MS = 4 * 60 * 60 * 1000 // 4 hours in milliseconds
 
     const interval = setInterval(() => {
-      console.log('🕐 4-hour timer triggered - automatically clearing SMS segment caches...')
+      safeLog('🕐 4-hour timer triggered - automatically clearing SMS segment caches...')
       clearAllSegmentCaches(true) // Pass true to indicate automatic clearing
     }, FOUR_HOURS_MS)
 
     // Cleanup interval on component unmount
     return () => {
-      console.log('🕐 Cleaning up automatic cache clearing timer')
+      safeLog('🕐 Cleaning up automatic cache clearing timer')
       clearInterval(interval)
     }
   }, [clearAllSegmentCaches])
@@ -706,27 +712,27 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       // Calculate SMS segments using accurate modal data when available
       let calculatedTotalSegments = 0
       let chatsWithAccurateData = 0
-      console.log(`📊 Calculating SMS segments for ${allFilteredChats.length} chats using fullDataSegmentCache priority`)
-      console.log(`📅 Date range: ${selectedDateRange} - Processing ${allFilteredChats.length} total chats for segment calculation`)
-      console.log(`🔍 DEBUG: Cache state - fullDataSegmentCache has ${fullDataSegmentCache.size} entries`)
+      safeLog(`📊 Calculating SMS segments for ${allFilteredChats.length} chats using fullDataSegmentCache priority`)
+      safeLog(`📅 Date range: ${selectedDateRange} - Processing ${allFilteredChats.length} total chats for segment calculation`)
+      safeLog(`🔍 DEBUG: Cache state - fullDataSegmentCache has ${fullDataSegmentCache.size} entries`)
 
       // YEAR VIEW DEBUGGING
       if (selectedDateRange === 'year') {
-        console.warn(`🎯 YEAR VIEW DEBUG: Processing ${allFilteredChats.length} chats for year view`)
-        console.warn(`🎯 YEAR VIEW DEBUG: Cache has ${fullDataSegmentCache.size} entries`)
-        console.warn(`🎯 YEAR VIEW DEBUG: Expected 1300+ segments, investigating calculation`)
+        safeWarn(`🎯 YEAR VIEW DEBUG: Processing ${allFilteredChats.length} chats for year view`)
+        safeWarn(`🎯 YEAR VIEW DEBUG: Cache has ${fullDataSegmentCache.size} entries`)
+        safeWarn(`🎯 YEAR VIEW DEBUG: Expected 1300+ segments, investigating calculation`)
 
         const chatsWithCache = allFilteredChats.filter(chat => fullDataSegmentCache.has(chat.chat_id))
         const chatsWithoutCache = allFilteredChats.filter(chat => !fullDataSegmentCache.has(chat.chat_id))
 
-        console.warn(`🎯 YEAR VIEW DEBUG: ${chatsWithCache.length} chats have cached data, ${chatsWithoutCache.length} need calculation`)
+        safeWarn(`🎯 YEAR VIEW DEBUG: ${chatsWithCache.length} chats have cached data, ${chatsWithoutCache.length} need calculation`)
       }
 
       // DEBUGGING: Check if the issue is with date filtering or segment calculation
       if (selectedDateRange === 'today' && allFilteredChats.length < 5) {
-        console.warn(`🚨 POTENTIAL ISSUE: Only ${allFilteredChats.length} chats for today - expected more for 16 segments`)
-        console.warn(`🚨 This suggests the date filtering might be too restrictive or no chats exist for today`)
-        console.warn(`🚨 Current date range filtering for 'today' may need investigation`)
+        safeWarn(`🚨 POTENTIAL ISSUE: Only ${allFilteredChats.length} chats for today - expected more for 16 segments`)
+        safeWarn(`🚨 This suggests the date filtering might be too restrictive or no chats exist for today`)
+        safeWarn(`🚨 Current date range filtering for 'today' may need investigation`)
       }
 
       allFilteredChats.forEach((chat, index) => {
@@ -737,7 +743,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           chatsWithAccurateData++
           // Always log for debugging when dealing with low chat counts (today issue)
           if (allFilteredChats.length <= 10 || index % 50 === 0 || index < 10 || index >= allFilteredChats.length - 5) {
-            console.log(`Chat ${index + 1} (${chat.chat_id}): ${accurateSegments} segments (ACCURATE from modal)`)
+            safeLog(`Chat ${index + 1} (${chat.chat_id}): ${accurateSegments} segments (ACCURATE from modal)`)
           }
         } else {
           // Fallback to basic calculation only when no accurate data available
@@ -746,20 +752,20 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           calculatedTotalSegments += fallbackSegments
           // Always log for debugging when dealing with low chat counts (today issue)
           if (allFilteredChats.length <= 10 || index % 50 === 0 || index < 10 || index >= allFilteredChats.length - 5) {
-            console.log(`Chat ${index + 1} (${chat.chat_id}): ${fallbackSegments} segments (fallback)`)
+            safeLog(`Chat ${index + 1} (${chat.chat_id}): ${fallbackSegments} segments (fallback)`)
           }
         }
       })
 
-      console.log(`📊 ✅ COMPLETE: Total SMS segments calculated: ${calculatedTotalSegments} (${chatsWithAccurateData}/${allFilteredChats.length} from accurate modal data)`)
-      console.log(`📈 Segment breakdown: ${chatsWithAccurateData} accurate + ${allFilteredChats.length - chatsWithAccurateData} fallback = ${calculatedTotalSegments} total segments`)
-      console.log(`🔍 DEBUG: Expected 16 segments but got ${calculatedTotalSegments} - investigating discrepancy`)
-      console.log(`🔍 DEBUG: Date range verification - Selected: ${selectedDateRange}, Chats processed: ${allFilteredChats.length}`)
+      safeLog(`📊 ✅ COMPLETE: Total SMS segments calculated: ${calculatedTotalSegments} (${chatsWithAccurateData}/${allFilteredChats.length} from accurate modal data)`)
+      safeLog(`📈 Segment breakdown: ${chatsWithAccurateData} accurate + ${allFilteredChats.length - chatsWithAccurateData} fallback = ${calculatedTotalSegments} total segments`)
+      safeLog(`🔍 DEBUG: Expected 16 segments but got ${calculatedTotalSegments} - investigating discrepancy`)
+      safeLog(`🔍 DEBUG: Date range verification - Selected: ${selectedDateRange}, Chats processed: ${allFilteredChats.length}`)
 
       // DEBUGGING FIX: If we're getting significantly fewer segments than expected for today, trigger accurate recalculation
       if (selectedDateRange === 'today' && calculatedTotalSegments < 10 && allFilteredChats.length > 0) {
-        console.warn(`🚨 APPLYING FIX: Only ${calculatedTotalSegments} segments for ${allFilteredChats.length} chats today - this seems low`)
-        console.warn(`🚨 Triggering accurate segment recalculation for all today's chats`)
+        safeWarn(`🚨 APPLYING FIX: Only ${calculatedTotalSegments} segments for ${allFilteredChats.length} chats today - this seems low`)
+        safeWarn(`🚨 Triggering accurate segment recalculation for all today's chats`)
 
         // Clear cache for today's chats and trigger fresh calculation
         allFilteredChats.forEach(chat => {
@@ -779,17 +785,17 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
       // YEAR VIEW FIX: If we're getting significantly fewer segments than expected for year view
       if (selectedDateRange === 'year' && calculatedTotalSegments < 1000 && allFilteredChats.length > 0) {
-        console.warn(`🎯 YEAR VIEW FIX: Only ${calculatedTotalSegments} segments for ${allFilteredChats.length} chats in year view - expected 1300+`)
-        console.warn(`🎯 YEAR VIEW FIX: Cache coverage: ${chatsWithAccurateData}/${allFilteredChats.length} = ${Math.round((chatsWithAccurateData / allFilteredChats.length) * 100)}%`)
+        safeWarn(`🎯 YEAR VIEW FIX: Only ${calculatedTotalSegments} segments for ${allFilteredChats.length} chats in year view - expected 1300+`)
+        safeWarn(`🎯 YEAR VIEW FIX: Cache coverage: ${chatsWithAccurateData}/${allFilteredChats.length} = ${Math.round((chatsWithAccurateData / allFilteredChats.length) * 100)}%`)
 
         // If less than 50% of chats have accurate cache data, trigger bulk recalculation
         const cacheCoverage = chatsWithAccurateData / allFilteredChats.length
         if (cacheCoverage < 0.5) {
-          console.warn(`🎯 YEAR VIEW FIX: Cache coverage too low (${Math.round(cacheCoverage * 100)}%), triggering bulk recalculation`)
+          safeWarn(`🎯 YEAR VIEW FIX: Cache coverage too low (${Math.round(cacheCoverage * 100)}%), triggering bulk recalculation`)
 
           // Don't clear cache, but trigger bulk loading for missing data
           setTimeout(() => {
-            console.warn(`🎯 YEAR VIEW FIX: Starting bulk segment loading for year view`)
+            safeWarn(`🎯 YEAR VIEW FIX: Starting bulk segment loading for year view`)
             loadSegmentDataForChats(allFilteredChats)
           }, 1000)
         }
@@ -800,7 +806,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       // Calculate total cost from calculated segments (more accurate than individual chat costs)
       const totalCostFromSegmentsUSD = calculatedTotalSegments * 0.0083 // USD per segment
       const totalCostFromSegments = currencyService.convertUSDToCAD(totalCostFromSegmentsUSD) // Convert to CAD
-      console.log(`💰 Total cost calculated from ${calculatedTotalSegments} segments: $${totalCostFromSegmentsUSD.toFixed(4)} USD → $${totalCostFromSegments.toFixed(4)} CAD`)
+      safeLog(`💰 Total cost calculated from ${calculatedTotalSegments} segments: $${totalCostFromSegmentsUSD.toFixed(4)} USD → $${totalCostFromSegments.toFixed(4)} CAD`)
 
       // Also calculate from individual chat costs for comparison/fallback
       let totalCostFromFilteredChats = 0
@@ -818,7 +824,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       const finalTotalCost = calculatedTotalSegments > 0 ? totalCostFromSegments : totalCostFromFilteredChats
       const avgCostPerChat = allFilteredChats.length > 0 ? finalTotalCost / allFilteredChats.length : 0
 
-      console.log(`💰 Cost comparison - Segments: $${totalCostFromSegments.toFixed(4)} CAD, Individual: $${totalCostFromFilteredChats.toFixed(4)}, Using: $${finalTotalCost.toFixed(4)} CAD`)
+      safeLog(`💰 Cost comparison - Segments: $${totalCostFromSegments.toFixed(4)} CAD, Individual: $${totalCostFromFilteredChats.toFixed(4)}, Using: $${finalTotalCost.toFixed(4)} CAD`)
 
       // Calculate positive sentiment count from filtered chats
       const positiveSentimentCount = allFilteredChats.filter(chat =>
@@ -850,7 +856,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       }
 
       // Update metrics with calculated SMS segments (prioritizing accurate modal data)
-      console.log(`💰 Updating metrics with totalSMSSegments: ${calculatedTotalSegments} (${chatsWithAccurateData}/${allFilteredChats.length} from accurate modal data)`)
+      safeLog(`💰 Updating metrics with totalSMSSegments: ${calculatedTotalSegments} (${chatsWithAccurateData}/${allFilteredChats.length} from accurate modal data)`)
 
       setMetrics(prevMetrics => {
         const updatedMetrics = {
@@ -862,7 +868,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           peakHour,
           peakHourCount
         }
-        console.log(`💰 Updated metrics: Total SMS Segments = ${updatedMetrics.totalSMSSegments}, Total Cost = $${updatedMetrics.totalCost.toFixed(4)} CAD`)
+        safeLog(`💰 Updated metrics: Total SMS Segments = ${updatedMetrics.totalSMSSegments}, Total Cost = $${updatedMetrics.totalCost.toFixed(4)} CAD`)
         return updatedMetrics
       })
     }
@@ -880,11 +886,11 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     const chatsNeedingData = chats.filter(chat => !fullDataSegmentCache.has(chat.chat_id))
 
     if (chatsNeedingData.length === 0) {
-      console.log('📊 All chats already have cached segment data')
+      safeLog('📊 All chats already have cached segment data')
       return
     }
 
-    console.log(`📊 Loading segment data for ${chatsNeedingData.length}/${chats.length} chats in background`)
+    safeLog(`📊 Loading segment data for ${chatsNeedingData.length}/${chats.length} chats in background`)
 
     // Process in batches to avoid overwhelming the API
     const batchSize = 10
@@ -913,25 +919,25 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
               return { chatId: chat.chat_id, segments }
             }
           } catch (error) {
-            console.warn(`Failed to load segment data for chat ${chat.chat_id}:`, error)
+            safeWarn(`Failed to load segment data for chat ${chat.chat_id}:`, error)
           }
           return null
         })
 
         const batchResults = await Promise.all(batchPromises)
         const successCount = batchResults.filter(r => r !== null).length
-        console.log(`📊 Batch ${batchIndex + 1}/${batches.length}: Loaded segment data for ${successCount}/${batch.length} chats`)
+        safeLog(`📊 Batch ${batchIndex + 1}/${batches.length}: Loaded segment data for ${successCount}/${batch.length} chats`)
 
         // Small delay between batches to avoid overwhelming the API
         if (batchIndex < batches.length - 1) {
           await new Promise(resolve => setTimeout(resolve, 100))
         }
       } catch (error) {
-        console.error(`Error processing batch ${batchIndex + 1}:`, error)
+        safeError(`Error processing batch ${batchIndex + 1}:`, error)
       }
     }
 
-    console.log(`📊 ✅ Finished loading segment data for ${chatsNeedingData.length} chats`)
+    safeLog(`📊 ✅ Finished loading segment data for ${chatsNeedingData.length} chats`)
   }, [fullDataSegmentCache, saveSegmentCache])
 
   // Simplified chat fetching following CallsPage pattern
@@ -944,7 +950,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     try {
       // Reload credentials (localStorage + Supabase sync) - same as Calls page
       chatService.reloadCredentials()
-      console.log('Reloaded chat credentials:', {
+      safeLog('Reloaded chat credentials:', {
         hasApiKey: !!chatService.isConfigured(),
         configured: chatService.isConfigured()
       })
@@ -957,9 +963,9 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
       // Get date range for filtering
       const { start, end } = getDateRangeFromSelection(selectedDateRange, customStartDate, customEndDate)
-      console.log(`🔍 fetchChatsOptimized: selectedDateRange = "${selectedDateRange}"`)
-      console.log(`📅 Date range for filtering: ${start.toLocaleString()} to ${end.toLocaleString()}`)
-      console.log(`⏰ Current time: ${new Date().toLocaleString()}`)
+      safeLog(`🔍 fetchChatsOptimized: selectedDateRange = "${selectedDateRange}"`)
+      safeLog(`📅 Date range for filtering: ${start.toLocaleString()} to ${end.toLocaleString()}`)
+      safeLog(`⏰ Current time: ${new Date().toLocaleString()}`)
 
       // Fetch with retry logic for rate limiting - same as Calls page
       let allChatsResponse
@@ -967,7 +973,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         // Add small delay to prevent rate limiting
         if (retryCount > 0) {
           const delay = Math.min(1000 * Math.pow(2, retryCount), 8000) // Exponential backoff, max 8 seconds
-          console.log(`Rate limited, retrying in ${delay}ms (attempt ${retryCount + 1})`)
+          safeLog(`Rate limited, retrying in ${delay}ms (attempt ${retryCount + 1})`)
           await new Promise(resolve => setTimeout(resolve, delay))
         }
 
@@ -980,7 +986,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         // Handle rate limiting specifically
         if (error.message?.includes('429') || error.status === 429) {
           if (retryCount < 3) {
-            console.log(`Rate limited (429), retrying... (attempt ${retryCount + 1}/3)`)
+            safeLog(`Rate limited (429), retrying... (attempt ${retryCount + 1}/3)`)
             return fetchChatsOptimized(retryCount + 1)
           } else {
             throw new Error('Rate limit exceeded. Please wait a moment and try again.')
@@ -995,13 +1001,13 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       const startMs = start.getTime()
       const endMs = end.getTime()
 
-      console.log(`🔍 Total chats received from API: ${allChatsResponse.chats.length} (requested up to 2000 chats)`)
-      console.log(`📅 Filtering range: ${startMs} to ${endMs}`)
+      safeLog(`🔍 Total chats received from API: ${allChatsResponse.chats.length} (requested up to 2000 chats)`)
+      safeLog(`📅 Filtering range: ${startMs} to ${endMs}`)
 
       // Warn if we hit the API limit - might need multiple requests for very large date ranges
       if (allChatsResponse.chats.length >= 2000) {
-        console.warn(`⚠️ WARNING: Received maximum API limit (2000 chats). Some chats from ${selectedDateRange} may be missing!`)
-        console.warn(`📋 Consider implementing pagination for date ranges with >2000 chats`)
+        safeWarn(`⚠️ WARNING: Received maximum API limit (2000 chats). Some chats from ${selectedDateRange} may be missing!`)
+        safeWarn(`📋 Consider implementing pagination for date ranges with >2000 chats`)
       }
 
       const finalFiltered = allChatsResponse.chats.filter(chat => {
@@ -1011,28 +1017,28 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
         // Debug first few chats
         if (allChatsResponse.chats.indexOf(chat) < 3) {
-          console.log(`Chat ${chat.chat_id}: timestamp=${timestamp}, chatTimeMs=${chatTimeMs}, date=${new Date(chatTimeMs).toLocaleString()}, inRange=${isInRange}`)
+          safeLog(`Chat ${chat.chat_id}: timestamp=${timestamp}, chatTimeMs=${chatTimeMs}, date=${new Date(chatTimeMs).toLocaleString()}, inRange=${isInRange}`)
         }
 
         return isInRange
       })
 
-      console.log(`📊 After filtering: ${finalFiltered.length} chats match "${selectedDateRange}" date range`)
-      console.log(`🔍 DEBUG: Date filtering results for ${selectedDateRange}:`)
-      console.log(`🔍 DEBUG: Expected many chats for today but got ${finalFiltered.length}`)
-      console.log(`🔍 DEBUG: Date range: ${start.toLocaleString()} to ${end.toLocaleString()}`)
+      safeLog(`📊 After filtering: ${finalFiltered.length} chats match "${selectedDateRange}" date range`)
+      safeLog(`🔍 DEBUG: Date filtering results for ${selectedDateRange}:`)
+      safeLog(`🔍 DEBUG: Expected many chats for today but got ${finalFiltered.length}`)
+      safeLog(`🔍 DEBUG: Date range: ${start.toLocaleString()} to ${end.toLocaleString()}`)
       if (finalFiltered.length < 10 && selectedDateRange === 'today') {
-        console.log(`🔍 DEBUG: Only ${finalFiltered.length} chats for today - this seems low, investigating first few chats:`)
+        safeLog(`🔍 DEBUG: Only ${finalFiltered.length} chats for today - this seems low, investigating first few chats:`)
         finalFiltered.slice(0, 5).forEach((chat, idx) => {
-          console.log(`🔍 Chat ${idx + 1}: ${chat.chat_id}, Date: ${new Date(chat.start_timestamp.toString().length <= 10 ? chat.start_timestamp * 1000 : chat.start_timestamp).toLocaleString()}`)
+          safeLog(`🔍 Chat ${idx + 1}: ${chat.chat_id}, Date: ${new Date(chat.start_timestamp.toString().length <= 10 ? chat.start_timestamp * 1000 : chat.start_timestamp).toLocaleString()}`)
         })
       }
 
       // If "today" has many chats, show warning
       if (selectedDateRange === 'today' && finalFiltered.length > 20) {
-        console.warn(`⚠️ WARNING: "today" date range contains ${finalFiltered.length} chats - this seems high!`)
-        console.warn(`📅 Today range: ${start.toLocaleString()} to ${end.toLocaleString()}`)
-        console.warn(`⏰ Current time: ${new Date().toLocaleString()}`)
+        safeWarn(`⚠️ WARNING: "today" date range contains ${finalFiltered.length} chats - this seems high!`)
+        safeWarn(`📅 Today range: ${start.toLocaleString()} to ${end.toLocaleString()}`)
+        safeWarn(`⏰ Current time: ${new Date().toLocaleString()}`)
       }
 
       setTotalChatsCount(finalFiltered.length)
@@ -1051,7 +1057,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
       // Calculate basic metrics using optimized service (exclude SMS segments, handled separately)
       const calculatedMetrics = chatService.getChatStats(finalFiltered)
-      console.log('📊 Chat metrics calculated:', calculatedMetrics)
+      safeLog('📊 Chat metrics calculated:', calculatedMetrics)
       setMetrics(prev => ({
         ...prev,
         ...calculatedMetrics,
@@ -1059,7 +1065,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         totalSMSSegments: prev.totalSMSSegments
       }))
 
-      console.log('Optimized SMS Chats fetched:', {
+      safeLog('Optimized SMS Chats fetched:', {
         agentFilter: smsAgentId || 'All agents',
         displayedChats: paginatedChats.length,
         totalFilteredChats: finalFiltered.length,
@@ -1069,7 +1075,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     } catch (error) {
       if (!mountedRef.current) return
 
-      console.error('Failed to fetch chats:', error)
+      safeError('Failed to fetch chats:', error)
       setError(error instanceof Error ? error.message : 'Failed to fetch chat data')
     } finally {
       if (mountedRef.current) {
@@ -1084,7 +1090,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     interval: 60000, // 1 minute
     onRefresh: useCallback(() => {
       fetchChatsOptimized()
-      console.log('SMS page refreshed at:', new Date().toLocaleTimeString())
+      safeLog('SMS page refreshed at:', new Date().toLocaleTimeString())
     }, [fetchChatsOptimized])
   })
 
@@ -1092,13 +1098,13 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     try {
       const result = await chatService.endChat(chatId)
       if (result.success) {
-        console.log('Chat ended successfully:', chatId)
+        safeLog('Chat ended successfully:', chatId)
         fetchChatsOptimized() // Refresh to show updated status
       } else {
         throw new Error(result.error || 'Failed to end chat')
       }
     } catch (error) {
-      console.error('Failed to end chat:', error)
+      safeError('Failed to end chat:', error)
       setError(error instanceof Error ? error.message : 'Failed to end chat')
     }
   }
@@ -1190,13 +1196,13 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           setSmsAgentId(agentId)
           setSmsAgentConfigured(!!agentId)
 
-          console.log('SMS Agent Configuration:', {
+          safeLog('SMS Agent Configuration:', {
             agentId,
             configured: !!agentId
           })
         }
       } catch (error) {
-        console.error('Error loading SMS agent configuration:', error)
+        safeError('Error loading SMS agent configuration:', error)
         setSmsAgentConfigured(false)
       }
     }
@@ -1267,13 +1273,13 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
             }
 
             const { start, end } = getDateRangeFromSelection(range, customStart, customEnd)
-            console.log('SMS date range changed:', { range, start, end, customStart, customEnd })
+            safeLog('SMS date range changed:', { range, start, end, customStart, customEnd })
           }}
         />
         <div className="flex items-center gap-3">
           <button
             onClick={() => {
-              console.log('SMS page manual refresh triggered at:', new Date().toLocaleTimeString())
+              safeLog('SMS page manual refresh triggered at:', new Date().toLocaleTimeString())
               // Clear caches and force a complete refresh
               smsCostManager.clearCosts()
               setSegmentCache(new Map()) // Clear segment cache on manual refresh
@@ -1282,7 +1288,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
               setError('')
               // Note: We preserve fullDataSegmentCache as it contains persistent data
               // It will be validated against new chat data automatically
-              console.log('🔄 Manual refresh: cleared temporary caches, preserving persistent segment cache')
+              safeLog('🔄 Manual refresh: cleared temporary caches, preserving persistent segment cache')
               fetchChatsOptimized()
             }}
             disabled={loading}

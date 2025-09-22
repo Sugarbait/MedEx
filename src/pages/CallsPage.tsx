@@ -34,6 +34,12 @@ import { supabase } from '@/config/supabase'
 import { PHIDataHandler, encryptionService } from '@/services/encryption'
 import { auditLogger, AuditAction, ResourceType, AuditOutcome } from '@/services/auditLogger'
 
+// CRITICAL FIX: Disable console logging in production to prevent infinite loops
+const isProduction = !import.meta.env.DEV
+const safeLog = isProduction ? () => {} : safeLog
+const safeWarn = isProduction ? () => {} : safeWarn
+const safeError = isProduction ? () => {} : safeError
+
 interface CallsPageProps {
   user: any
 }
@@ -127,21 +133,21 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
     interval: 60000, // 1 minute refresh interval
     onRefresh: () => {
       fetchCalls()
-      console.log('Calls page refreshed at:', new Date().toLocaleTimeString())
+      safeLog('Calls page refreshed at:', new Date().toLocaleTimeString())
     }
   })
 
   useEffect(() => {
     // Set up Retell client event listeners
     retellWebClient.on("call_started", () => {
-      console.log("Call started")
+      safeLog("Call started")
       setIsCallActive(true)
       setCallStatus('active')
       setCurrentTranscript('')
     })
 
     retellWebClient.on("call_ended", () => {
-      console.log("Call ended")
+      safeLog("Call ended")
       setIsCallActive(false)
       setCallStatus('completed')
       fetchCalls()
@@ -154,7 +160,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
     })
 
     retellWebClient.on("error", (error) => {
-      console.error("Call error:", error)
+      safeError("Call error:", error)
       setError(`Call error: ${error.message}`)
       setIsCallActive(false)
       setCallStatus('failed')
@@ -184,7 +190,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
     try {
       // Reload credentials (localStorage + Supabase sync)
       await retellService.loadCredentialsAsync()
-      console.log('Reloaded credentials with cross-device sync:', {
+      safeLog('Reloaded credentials with cross-device sync:', {
         hasApiKey: !!retellService.isConfigured(),
         configured: retellService.isConfigured()
       })
@@ -215,7 +221,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
         // Add small delay to prevent rate limiting
         if (retryCount > 0) {
           const delay = Math.min(1000 * Math.pow(2, retryCount), 8000) // Exponential backoff, max 8 seconds
-          console.log(`Rate limited, retrying in ${delay}ms (attempt ${retryCount + 1})`)
+          safeLog(`Rate limited, retrying in ${delay}ms (attempt ${retryCount + 1})`)
           await new Promise(resolve => setTimeout(resolve, delay))
         }
 
@@ -225,7 +231,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
         // Handle rate limiting specifically
         if (error.message?.includes('429') || error.status === 429) {
           if (retryCount < 3) {
-            console.log(`Rate limited (429), retrying... (attempt ${retryCount + 1}/3)`)
+            safeLog(`Rate limited (429), retrying... (attempt ${retryCount + 1}/3)`)
             return fetchCalls(retryCount + 1)
           } else {
             throw new Error('Rate limit exceeded. Please wait a moment and try again.')
@@ -250,7 +256,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
         if (retellCall.duration_ms !== undefined && retellCall.duration_ms !== null) {
           // Use API duration_ms if available (prioritize this field as per Retell AI docs)
           durationSeconds = retellCall.duration_ms / 1000
-          console.log(`Call ${retellCall.call_id}: Using API duration_ms = ${retellCall.duration_ms}ms = ${durationSeconds.toFixed(3)}s`)
+          safeLog(`Call ${retellCall.call_id}: Using API duration_ms = ${retellCall.duration_ms}ms = ${durationSeconds.toFixed(3)}s`)
         } else if (retellCall.start_timestamp && retellCall.end_timestamp) {
           // Calculate from timestamps with proper conversion
           let startMs = retellCall.start_timestamp
@@ -265,9 +271,9 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
           }
 
           durationSeconds = (endMs - startMs) / 1000
-          console.log(`Call ${retellCall.call_id}: Calculated from timestamps: start=${startMs}, end=${endMs}, duration=${durationSeconds.toFixed(3)}s`)
+          safeLog(`Call ${retellCall.call_id}: Calculated from timestamps: start=${startMs}, end=${endMs}, duration=${durationSeconds.toFixed(3)}s`)
         } else {
-          console.log(`Call ${retellCall.call_id}: No duration data available`)
+          safeLog(`Call ${retellCall.call_id}: No duration data available`)
         }
 
         return {
@@ -295,7 +301,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
         const notesCountData = await notesService.getNotesCount(callIds, 'call')
         setNotesCount(notesCountData)
       } catch (notesError) {
-        console.error('Error fetching notes count:', notesError)
+        safeError('Error fetching notes count:', notesError)
         // Don't fail the whole operation if notes fetch fails
       }
 
@@ -306,7 +312,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
       const metricsWithTwilio = addTwilioCostsToMetrics(baseMetrics, totalCalls)
 
       // Debug: Log the total cost to verify it's correct
-      console.log('📊 Enhanced Metrics (Retell + Twilio):', {
+      safeLog('📊 Enhanced Metrics (Retell + Twilio):', {
         totalCalls: metricsWithTwilio.totalCalls,
         totalCostCAD: metricsWithTwilio.totalCost,
         avgCostPerCallCAD: metricsWithTwilio.avgCostPerCall,
@@ -335,7 +341,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
       )
 
     } catch (error) {
-      console.error('Failed to fetch calls:', error)
+      safeError('Failed to fetch calls:', error)
       setError(error instanceof Error ? error.message : 'Failed to fetch call data')
     } finally {
       setLoading(false)
@@ -347,7 +353,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
     setError('')
 
     try {
-      console.log('Starting demo call...')
+      safeLog('Starting demo call...')
       setCallStatus('connecting')
 
       setTimeout(() => {
@@ -357,7 +363,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
       }, 2000)
 
     } catch (error) {
-      console.error('Failed to start call:', error)
+      safeError('Failed to start call:', error)
       setError('Failed to start call. Please try again.')
       setCallStatus('failed')
     } finally {
@@ -413,7 +419,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
 
     // Debug logging to understand why all calls show $0.69
     if (retellCostCAD + twilioCostCAD > 0.68 && retellCostCAD + twilioCostCAD < 0.70) {
-      console.log('Call Cost Debug - Potential $0.69 issue:', {
+      safeLog('Call Cost Debug - Potential $0.69 issue:', {
         callId: call.call_id,
         duration: call.call_length_seconds,
         retellCostCents,
@@ -516,7 +522,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
             }
 
             const { start, end } = getDateRangeFromSelection(range, customStart, customEnd)
-            console.log('Calls date range changed:', { range, start, end, customStart, customEnd })
+            safeLog('Calls date range changed:', { range, start, end, customStart, customEnd })
           }}
         />
         <div className="flex items-center gap-3">

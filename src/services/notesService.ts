@@ -9,6 +9,12 @@ import { supabase } from '@/config/supabase'
 import { RealtimeChannel } from '@supabase/supabase-js'
 import { userIdTranslationService } from './userIdTranslationService'
 
+// CRITICAL FIX: Disable console logging in production to prevent infinite loops
+const isProduction = !import.meta.env.DEV
+const safeLog = isProduction ? () => {} : safeLog
+const safeWarn = isProduction ? () => {} : safeWarn
+const safeError = isProduction ? () => {} : safeError
+
 export interface Note {
   id: string
   reference_id: string // call_id or chat_id from Retell AI
@@ -80,14 +86,14 @@ class NotesService {
       // Quick test to ensure Supabase is available for cross-device sync
       const { error } = await supabase.from('notes').select('id').limit(1).maybeSingle()
       if (error) {
-        console.log('⚠️ Cross-device sync limited: Supabase connection issue')
+        safeLog('⚠️ Cross-device sync limited: Supabase connection issue')
         this.isSupabaseAvailable = false
       } else {
-        console.log('✅ Cross-device sync ready: Supabase connected')
+        safeLog('✅ Cross-device sync ready: Supabase connected')
         this.isSupabaseAvailable = true
       }
     } catch (error) {
-      console.log('⚠️ Cross-device sync limited: Connection error')
+      safeLog('⚠️ Cross-device sync limited: Connection error')
       this.isSupabaseAvailable = false
     }
   }
@@ -112,11 +118,11 @@ class NotesService {
       if (error && !error.message.includes('timeout')) {
         // Only mark as unavailable for actual database errors, not timeouts
         this.isSupabaseAvailable = false
-        console.log('🔌 Supabase connection test failed, switching to localStorage mode')
+        safeLog('🔌 Supabase connection test failed, switching to localStorage mode')
         return false
       } else if (error && error.message.includes('timeout')) {
         // For timeout errors, don't mark as unavailable but return false for this check
-        console.log('🔌 Supabase connection timeout (keeping connection available for retry)')
+        safeLog('🔌 Supabase connection timeout (keeping connection available for retry)')
         return false
       }
 
@@ -125,9 +131,9 @@ class NotesService {
       // Only mark as unavailable for connection errors, not timeouts
       if (error instanceof Error && !error.message.includes('timeout')) {
         this.isSupabaseAvailable = false
-        console.log('🔌 Supabase connection failed, switching to localStorage mode')
+        safeLog('🔌 Supabase connection failed, switching to localStorage mode')
       } else {
-        console.log('🔌 Supabase connection timeout (keeping connection available for retry)')
+        safeLog('🔌 Supabase connection timeout (keeping connection available for retry)')
       }
       return false
     }
@@ -157,8 +163,8 @@ class NotesService {
       }
       localStorage.setItem(`${key}_cache_info`, JSON.stringify(cacheInfo))
 
-      console.log(`💾 Saved ${sortedNotes.length} notes to localStorage for ${referenceType}:${referenceId}`)
-      console.log(`💾 Notes saved:`, sortedNotes.map(n => ({
+      safeLog(`💾 Saved ${sortedNotes.length} notes to localStorage for ${referenceType}:${referenceId}`)
+      safeLog(`💾 Notes saved:`, sortedNotes.map(n => ({
         id: n.id,
         created_by: n.created_by,
         content: n.content.substring(0, 30) + '...'
@@ -169,31 +175,31 @@ class NotesService {
         const verification = localStorage.getItem(key)
         if (verification) {
           const parsed = JSON.parse(verification)
-          console.log(`✅ Verification: ${parsed.length} notes confirmed in localStorage`)
+          safeLog(`✅ Verification: ${parsed.length} notes confirmed in localStorage`)
         }
       } catch (verifyError) {
-        console.error('❌ Verification failed:', verifyError)
+        safeError('❌ Verification failed:', verifyError)
       }
     } catch (error) {
-      console.error('❌ Failed to save notes to localStorage:', error)
+      safeError('❌ Failed to save notes to localStorage:', error)
       // Try to save individually to identify problematic note
       try {
-        console.log('🔍 Attempting individual note saves...')
+        safeLog('🔍 Attempting individual note saves...')
         const validNotes = []
         for (const note of notes) {
           try {
             JSON.stringify(note)
             validNotes.push(note)
           } catch (noteError) {
-            console.error('❌ Problematic note found:', note.id, noteError)
+            safeError('❌ Problematic note found:', note.id, noteError)
           }
         }
         if (validNotes.length > 0) {
           localStorage.setItem(key, JSON.stringify(validNotes))
-          console.log(`🛠️ Saved ${validNotes.length}/${notes.length} valid notes`)
+          safeLog(`🛠️ Saved ${validNotes.length}/${notes.length} valid notes`)
         }
       } catch (fallbackError) {
-        console.error('❌ Emergency save also failed:', fallbackError)
+        safeError('❌ Emergency save also failed:', fallbackError)
       }
     }
   }
@@ -204,25 +210,25 @@ class NotesService {
       const stored = localStorage.getItem(key)
 
       if (!stored) {
-        console.log(`💾 No localStorage data found for ${referenceType}:${referenceId}`)
+        safeLog(`💾 No localStorage data found for ${referenceType}:${referenceId}`)
         return []
       }
 
       const notes = JSON.parse(stored)
-      console.log(`💾 Loaded ${notes.length} notes from localStorage for ${referenceType}:${referenceId}`)
-      console.log(`💾 Notes loaded:`, notes.map((n: Note) => ({ id: n.id, content: n.content.substring(0, 30) + '...' })))
+      safeLog(`💾 Loaded ${notes.length} notes from localStorage for ${referenceType}:${referenceId}`)
+      safeLog(`💾 Notes loaded:`, notes.map((n: Note) => ({ id: n.id, content: n.content.substring(0, 30) + '...' })))
 
       // Validate note structure
       const validNotes = notes.filter((note: any) => {
         if (!note.id || !note.content || !note.reference_id) {
-          console.warn('⚠️ Invalid note structure found:', note)
+          safeWarn('⚠️ Invalid note structure found:', note)
           return false
         }
         return true
       })
 
       if (validNotes.length !== notes.length) {
-        console.warn(`⚠️ Filtered out ${notes.length - validNotes.length} invalid notes`)
+        safeWarn(`⚠️ Filtered out ${notes.length - validNotes.length} invalid notes`)
         // Re-save the cleaned data
         this.saveNotesToLocalStorage(referenceId, referenceType, validNotes)
       }
@@ -232,15 +238,15 @@ class NotesService {
         new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
       )
     } catch (error) {
-      console.error('❌ Failed to load notes from localStorage:', error)
+      safeError('❌ Failed to load notes from localStorage:', error)
       // Try to recover by clearing corrupted data
       try {
         const key = this.getLocalStorageKey(referenceId, referenceType)
         localStorage.removeItem(key)
         localStorage.removeItem(`${key}_cache_info`)
-        console.log('🧨 Cleared corrupted localStorage data')
+        safeLog('🧨 Cleared corrupted localStorage data')
       } catch (clearError) {
-        console.error('❌ Failed to clear corrupted data:', clearError)
+        safeError('❌ Failed to clear corrupted data:', clearError)
       }
       return []
     }
@@ -296,13 +302,13 @@ class NotesService {
         localStorage.setItem(userIdCacheKey, consistentUserId)
         localStorage.setItem('notes_primary_id', primaryId)
 
-        console.log('🔑 Created new consistent user ID:', {
+        safeLog('🔑 Created new consistent user ID:', {
           primaryId,
           consistentUserId,
           source: 'new'
         })
       } else {
-        console.log('🔑 Using cached consistent user ID:', {
+        safeLog('🔑 Using cached consistent user ID:', {
           primaryId,
           consistentUserId,
           source: 'cached'
@@ -319,13 +325,13 @@ class NotesService {
       }
 
     } catch (error) {
-      console.error('Error getting current user info:', error)
+      safeError('Error getting current user info:', error)
 
       // Emergency fallback - use a consistent anonymous ID (not time-based)
       const emergencyId = 'emergency-user-fallback'
       const emergencyUserId = this.createDeterministicUuid(emergencyId)
 
-      console.warn('🆘 Using emergency user ID:', emergencyUserId)
+      safeWarn('🆘 Using emergency user ID:', emergencyUserId)
 
       return {
         id: emergencyUserId,
@@ -391,7 +397,7 @@ class NotesService {
         metadata: data.metadata || {}
       }
 
-      console.log('🚀 Creating note with robust persistence strategy:', {
+      safeLog('🚀 Creating note with robust persistence strategy:', {
         reference_id: noteData.reference_id,
         reference_type: noteData.reference_type,
         created_by: noteData.created_by,
@@ -401,12 +407,12 @@ class NotesService {
       })
 
       // DEBUGGING: Log the complete note data being created
-      console.log('📝 Complete note data:', noteData)
+      safeLog('📝 Complete note data:', noteData)
 
       // STRATEGY 1: Try Supabase first for immediate cloud persistence
       if (this.isSupabaseAvailable) {
         try {
-          console.log('💾 Attempting direct Supabase save...')
+          safeLog('💾 Attempting direct Supabase save...')
           const { data: supabaseNote, error } = await supabase
             .from('notes')
             .insert(noteData)
@@ -414,7 +420,7 @@ class NotesService {
             .single()
 
           if (!error && supabaseNote) {
-            console.log('✅ Note saved directly to Supabase:', supabaseNote.id)
+            safeLog('✅ Note saved directly to Supabase:', supabaseNote.id)
 
             // Also save to localStorage for offline access
             const notes = this.getNotesFromLocalStorage(data.reference_id, data.reference_type)
@@ -429,17 +435,17 @@ class NotesService {
             this.isSupabaseAvailable = true
             return { success: true, note: supabaseNote }
           } else {
-            console.warn('Supabase save failed, falling back to localStorage:', error?.message)
+            safeWarn('Supabase save failed, falling back to localStorage:', error?.message)
             this.isSupabaseAvailable = false
           }
         } catch (supabaseError) {
-          console.warn('Supabase connection failed, falling back to localStorage:', supabaseError)
+          safeWarn('Supabase connection failed, falling back to localStorage:', supabaseError)
           this.isSupabaseAvailable = false
         }
       }
 
       // STRATEGY 2: Fallback to localStorage with background sync
-      console.log('💾 Using localStorage fallback with background sync...')
+      safeLog('💾 Using localStorage fallback with background sync...')
       const localNote = await this.createNoteLocalStorage(data, userInfo)
       if (!localNote.success) {
         throw new Error(localNote.error || 'Failed to create local note')
@@ -453,7 +459,7 @@ class NotesService {
         this.backgroundCreateNoteInSupabase(localNote.note!, noteData)
           .then(syncedNote => {
             if (syncedNote) {
-              console.log('🔄 Background sync successful: Note synced to cloud')
+              safeLog('🔄 Background sync successful: Note synced to cloud')
               // Replace local note with synced note
               const notes = this.getNotesFromLocalStorage(data.reference_id, data.reference_type)
               const updatedNotes = notes.map(n => n.id === localNote.note!.id ? syncedNote : n)
@@ -468,26 +474,26 @@ class NotesService {
             }
           })
           .catch(error => {
-            console.log('🔄 Background sync failed (note remains in localStorage):', error.message)
+            safeLog('🔄 Background sync failed (note remains in localStorage):', error.message)
           })
       }
 
-      console.log('✅ Note created in localStorage with background sync queued')
+      safeLog('✅ Note created in localStorage with background sync queued')
       return { success: true, note: localNote.note }
 
     } catch (error) {
-      console.error('❌ Critical error creating note:', error)
+      safeError('❌ Critical error creating note:', error)
 
       // Last resort: try localStorage only
       try {
         const userInfo = await this.getCurrentUserInfo()
         const localNote = await this.createNoteLocalStorage(data, userInfo)
         if (localNote.success) {
-          console.log('🆘 Emergency save to localStorage successful')
+          safeLog('🆘 Emergency save to localStorage successful')
           return localNote
         }
       } catch (emergencyError) {
-        console.error('🆘 Emergency save failed:', emergencyError)
+        safeError('🆘 Emergency save failed:', emergencyError)
       }
 
       return { success: false, error: 'Failed to save note: ' + (error instanceof Error ? error.message : 'Unknown error') }
@@ -509,12 +515,12 @@ class NotesService {
         this.isSupabaseAvailable = true
         return supabaseNote
       } else {
-        console.log('Background sync to Supabase failed:', error)
+        safeLog('Background sync to Supabase failed:', error)
         this.isSupabaseAvailable = false
         return null
       }
     } catch (error) {
-      console.log('Background Supabase creation failed:', error)
+      safeLog('Background Supabase creation failed:', error)
       this.isSupabaseAvailable = false
       return null
     }
@@ -548,7 +554,7 @@ class NotesService {
             const localNotes = this.getNotesFromLocalStorage(note.reference_id, note.reference_type)
             const updatedNotes = localNotes.map(n => n.id === note.id ? supabaseNote : n)
             this.saveNotesToLocalStorage(note.reference_id, note.reference_type, updatedNotes)
-            console.log('Background sync successful: local note synced to Supabase')
+            safeLog('Background sync successful: local note synced to Supabase')
           }
         }
       } else if (operation === 'update') {
@@ -566,11 +572,11 @@ class NotesService {
             })
             .eq('id', note.id)
 
-          console.log('Background sync successful: note updated in Supabase')
+          safeLog('Background sync successful: note updated in Supabase')
         }
       }
     } catch (error) {
-      console.log('Background sync failed (note remains local):', error)
+      safeLog('Background sync failed (note remains local):', error)
     }
   }
 
@@ -617,10 +623,10 @@ class NotesService {
       const updatedNotes = [...existingNotes, note]
       this.saveNotesToLocalStorage(data.reference_id, data.reference_type, updatedNotes)
 
-      console.log('Note created successfully in localStorage:', note)
+      safeLog('Note created successfully in localStorage:', note)
       return { success: true, note }
     } catch (error) {
-      console.error('Error creating note in localStorage:', error)
+      safeError('Error creating note in localStorage:', error)
       return { success: false, error: 'Failed to save note locally' }
     }
   }
@@ -656,17 +662,17 @@ class NotesService {
             notes[noteIndex] = updatedNote
             localStorage.setItem(key, JSON.stringify(notes))
 
-            console.log('Note updated successfully in localStorage:', updatedNote)
+            safeLog('Note updated successfully in localStorage:', updatedNote)
             return { success: true, note: updatedNote }
           }
         } catch (parseError) {
-          console.error('Error parsing localStorage notes for key:', key, parseError)
+          safeError('Error parsing localStorage notes for key:', key, parseError)
         }
       }
 
       return { success: false, error: 'Note not found in localStorage' }
     } catch (error) {
-      console.error('Error updating note in localStorage:', error)
+      safeError('Error updating note in localStorage:', error)
       return { success: false, error: 'Failed to update note locally' }
     }
   }
@@ -690,17 +696,17 @@ class NotesService {
             notes.splice(noteIndex, 1)
             localStorage.setItem(key, JSON.stringify(notes))
 
-            console.log('Note deleted successfully from localStorage:', noteId)
+            safeLog('Note deleted successfully from localStorage:', noteId)
             return { success: true }
           }
         } catch (parseError) {
-          console.error('Error parsing localStorage notes for key:', key, parseError)
+          safeError('Error parsing localStorage notes for key:', key, parseError)
         }
       }
 
       return { success: false, error: 'Note not found in localStorage' }
     } catch (error) {
-      console.error('Error deleting note from localStorage:', error)
+      safeError('Error deleting note from localStorage:', error)
       return { success: false, error: 'Failed to delete note locally' }
     }
   }
@@ -721,11 +727,11 @@ class NotesService {
         metadata: data.metadata
       }
 
-      console.log('Updating note:', noteId, updateData)
+      safeLog('Updating note:', noteId, updateData)
 
       // Try direct Supabase update first, fall back to optimistic if it fails
       try {
-        console.log('✨ Direct path: Updating note with Supabase:', noteId, updateData)
+        safeLog('✨ Direct path: Updating note with Supabase:', noteId, updateData)
 
         // Try direct Supabase update with reasonable timeout
         const supabasePromise = supabase
@@ -742,16 +748,16 @@ class NotesService {
         const { data: supabaseNote, error } = await Promise.race([supabasePromise, timeoutPromise]) as any
 
         if (!error && supabaseNote) {
-          console.log('Note updated successfully in Supabase')
+          safeLog('Note updated successfully in Supabase')
           this.isSupabaseAvailable = true
           return { success: true, note: supabaseNote }
         }
 
         // If Supabase fails, fall back to optimistic approach
-        console.log('Supabase update failed, using optimistic approach:', error)
+        safeLog('Supabase update failed, using optimistic approach:', error)
         throw new Error('Fallback to optimistic')
       } catch (error) {
-        console.log('Using optimistic approach for note update:', error instanceof Error ? error.message : 'Unknown error')
+        safeLog('Using optimistic approach for note update:', error instanceof Error ? error.message : 'Unknown error')
 
         // Optimistic UI approach: update localStorage first, then sync to Supabase
         const localNote = await this.updateNoteLocalStorage(noteId, data, userInfo)
@@ -761,15 +767,15 @@ class NotesService {
 
         // Background sync to Supabase (no timeout, no blocking)
         this.backgroundSyncNote(localNote.note!, 'update').catch(error => {
-          console.log('Background sync failed, note remains in localStorage:', error)
+          safeLog('Background sync failed, note remains in localStorage:', error)
         })
 
-        console.log('Note updated successfully with optimistic approach')
+        safeLog('Note updated successfully with optimistic approach')
         return { success: true, note: localNote.note }
       }
 
     } catch (error) {
-      console.error('Error updating note, falling back to localStorage:', error)
+      safeError('Error updating note, falling back to localStorage:', error)
       const userInfo = await this.getCurrentUserInfo()
       return this.updateNoteLocalStorage(noteId, data, userInfo)
     }
@@ -780,7 +786,7 @@ class NotesService {
    */
   async deleteNote(noteId: string): Promise<{ success: boolean; error?: string }> {
     try {
-      console.log('Deleting note:', noteId)
+      safeLog('Deleting note:', noteId)
 
       // Try Supabase first (fast path - no connection test)
       try {
@@ -790,24 +796,24 @@ class NotesService {
           .eq('id', noteId)
 
         if (!error) {
-          console.log('Note deleted successfully from Supabase')
+          safeLog('Note deleted successfully from Supabase')
           this.isSupabaseAvailable = true
           return { success: true }
         }
 
         // If Supabase fails, fall back to localStorage
-        console.error('Supabase error deleting note, falling back to localStorage:', error)
+        safeError('Supabase error deleting note, falling back to localStorage:', error)
         this.isSupabaseAvailable = false
       } catch (error) {
-        console.error('Supabase connection failed, falling back to localStorage:', error)
+        safeError('Supabase connection failed, falling back to localStorage:', error)
         this.isSupabaseAvailable = false
       }
 
       // Use localStorage fallback
-      console.log('Using localStorage for note deletion')
+      safeLog('Using localStorage for note deletion')
       return this.deleteNoteLocalStorage(noteId)
     } catch (error) {
-      console.error('Error deleting note, falling back to localStorage:', error)
+      safeError('Error deleting note, falling back to localStorage:', error)
       return this.deleteNoteLocalStorage(noteId)
     }
   }
@@ -819,16 +825,16 @@ class NotesService {
   async getNotes(referenceId: string, referenceType: 'call' | 'sms'): Promise<{ success: boolean; notes?: Note[]; error?: string }> {
     try {
       const cacheKey = `${referenceType}_${referenceId}`
-      console.log('🚀 Fetching notes with consistent user context for:', referenceType, referenceId)
+      safeLog('🚀 Fetching notes with consistent user context for:', referenceType, referenceId)
 
       // Ensure user context is established for consistent filtering
       const userInfo = await this.getCurrentUserInfo()
-      console.log('🔑 User context for notes retrieval:', { userId: userInfo.id, userName: userInfo.name })
+      safeLog('🔑 User context for notes retrieval:', { userId: userInfo.id, userName: userInfo.name })
 
       // STEP 1: Check in-memory cache first for immediate response
       const cached = this.notesCache.get(cacheKey)
       if (cached && (Date.now() - cached.timestamp) < this.CACHE_DURATION) {
-        console.log('⚡ Immediate cache hit for notes:', cached.notes.length)
+        safeLog('⚡ Immediate cache hit for notes:', cached.notes.length)
         // Still do background refresh for cross-device updates
         this.backgroundRefreshNotes(referenceId, referenceType)
         return { success: true, notes: cached.notes }
@@ -838,7 +844,7 @@ class NotesService {
       let supabaseNotes: Note[] = []
       if (this.isSupabaseAvailable) {
         try {
-          console.log('💾 Fetching from Supabase...')
+          safeLog('💾 Fetching from Supabase...')
           const { data, error } = await supabase
             .from('notes')
             .select('*')
@@ -848,7 +854,7 @@ class NotesService {
 
           if (!error && data) {
             supabaseNotes = data
-            console.log('✅ Supabase fetch successful:', supabaseNotes.length, 'notes')
+            safeLog('✅ Supabase fetch successful:', supabaseNotes.length, 'notes')
             this.isSupabaseAvailable = true
 
             // Update localStorage with authoritative data
@@ -859,18 +865,18 @@ class NotesService {
 
             return { success: true, notes: supabaseNotes }
           } else {
-            console.warn('Supabase fetch failed, using localStorage:', error?.message)
+            safeWarn('Supabase fetch failed, using localStorage:', error?.message)
             this.isSupabaseAvailable = false
           }
         } catch (supabaseError) {
-          console.warn('Supabase connection failed, using localStorage:', supabaseError)
+          safeWarn('Supabase connection failed, using localStorage:', supabaseError)
           this.isSupabaseAvailable = false
         }
       }
 
       // STEP 3: Fallback to localStorage
       const localNotes = this.getNotesFromLocalStorage(referenceId, referenceType)
-      console.log('💾 localStorage fallback response:', localNotes.length, 'notes')
+      safeLog('💾 localStorage fallback response:', localNotes.length, 'notes')
 
       // Cache the local notes
       if (localNotes.length > 0) {
@@ -883,18 +889,18 @@ class NotesService {
         setTimeout(() => {
           this.quickConnectionCheck().then(isAvailable => {
             if (isAvailable) {
-              console.log('🔄 Connection restored, attempting background sync...')
+              safeLog('🔄 Connection restored, attempting background sync...')
               this.backgroundRefreshNotes(referenceId, referenceType)
             }
           })
         }, 5000)
       }
 
-      console.log('✅ Notes loaded:', localNotes.length, 'notes')
+      safeLog('✅ Notes loaded:', localNotes.length, 'notes')
       return { success: true, notes: localNotes }
 
     } catch (error) {
-      console.error('❌ Error in getNotes, using localStorage emergency fallback:', error)
+      safeError('❌ Error in getNotes, using localStorage emergency fallback:', error)
       // Always return something to keep UI working
       const localNotes = this.getNotesFromLocalStorage(referenceId, referenceType)
       return { success: true, notes: localNotes }
@@ -921,7 +927,7 @@ class NotesService {
         }
       }
     } catch (error) {
-      console.log('Background refresh failed:', error)
+      safeLog('Background refresh failed:', error)
     }
   }
 
@@ -930,7 +936,7 @@ class NotesService {
    */
   private async backgroundSyncWithSupabase(referenceId: string, referenceType: 'call' | 'sms', localNotes: Note[]): Promise<Note[] | null> {
     try {
-      console.log('🔄 Background cross-device sync for:', referenceType, referenceId)
+      safeLog('🔄 Background cross-device sync for:', referenceType, referenceId)
 
       const fetchPromise = supabase
         .from('notes')
@@ -946,7 +952,7 @@ class NotesService {
       const { data: supabaseNotes, error } = await Promise.race([fetchPromise, timeoutPromise]) as any
 
       if (!error && supabaseNotes) {
-        console.log('📱 Cross-device sync successful:', supabaseNotes.length, 'notes from cloud')
+        safeLog('📱 Cross-device sync successful:', supabaseNotes.length, 'notes from cloud')
         this.isSupabaseAvailable = true
 
         // Merge with local notes (prioritizing Supabase for cross-device consistency)
@@ -957,12 +963,12 @@ class NotesService {
 
         return mergedNotes
       } else {
-        console.log('📱 Cross-device sync failed, using local notes:', error?.message || 'unknown error')
+        safeLog('📱 Cross-device sync failed, using local notes:', error?.message || 'unknown error')
         this.isSupabaseAvailable = false
         return null
       }
     } catch (error) {
-      console.log('📱 Cross-device sync error:', error instanceof Error ? error.message : 'unknown')
+      safeLog('📱 Cross-device sync error:', error instanceof Error ? error.message : 'unknown')
       this.isSupabaseAvailable = false
       return null
     }
@@ -978,7 +984,7 @@ class NotesService {
   ): Promise<{ success: boolean; error?: string }> {
     try {
       const subscriptionKey = `${referenceType}_${referenceId}`
-      console.log('🔄 Setting up cross-device real-time sync for:', subscriptionKey)
+      safeLog('🔄 Setting up cross-device real-time sync for:', subscriptionKey)
 
       // Clean up existing subscription if any
       await this.unsubscribeFromNotes(referenceId, referenceType)
@@ -994,7 +1000,7 @@ class NotesService {
 
       // Set up cross-device real-time subscription if Supabase is available
       if (this.isSupabaseAvailable) {
-        console.log('📱 Enabling cross-device real-time updates for:', subscriptionKey)
+        safeLog('📱 Enabling cross-device real-time updates for:', subscriptionKey)
 
         const channel = supabase
           .channel(`notes_crossdevice_${subscriptionKey}`)
@@ -1007,7 +1013,7 @@ class NotesService {
               filter: `reference_id=eq.${referenceId},reference_type=eq.${referenceType}`
             },
             async (payload) => {
-              console.log('📱 Cross-device update received:', payload.eventType, payload.new || payload.old)
+              safeLog('📱 Cross-device update received:', payload.eventType, payload.new || payload.old)
 
               // Clear cache to force fresh data
               this.notesCache.delete(subscriptionKey)
@@ -1015,29 +1021,29 @@ class NotesService {
               // Fetch latest notes for cross-device consistency
               const latestResult = await this.getNotes(referenceId, referenceType)
               if (latestResult.success && latestResult.notes) {
-                console.log('📱 Cross-device sync: Broadcasting updated notes to UI')
+                safeLog('📱 Cross-device sync: Broadcasting updated notes to UI')
                 callback(latestResult.notes)
               }
             }
           )
           .subscribe((status) => {
-            console.log('📱 Cross-device subscription status:', status)
+            safeLog('📱 Cross-device subscription status:', status)
             if (status === 'SUBSCRIBED') {
-              console.log('✅ Cross-device real-time sync active')
+              safeLog('✅ Cross-device real-time sync active')
             } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
-              console.log('⚠️ Cross-device sync limited - using local mode')
+              safeLog('⚠️ Cross-device sync limited - using local mode')
               this.isSupabaseAvailable = false
             }
           })
 
         this.subscriptions.set(subscriptionKey, channel)
       } else {
-        console.log('⚠️ Cross-device sync unavailable - using local storage only')
+        safeLog('⚠️ Cross-device sync unavailable - using local storage only')
       }
 
       return { success: true }
     } catch (error) {
-      console.error('Error setting up cross-device subscription:', error)
+      safeError('Error setting up cross-device subscription:', error)
       // Always try to provide initial data even if real-time fails
       const result = await this.getNotes(referenceId, referenceType)
       if (result.success && result.notes) {
@@ -1055,7 +1061,7 @@ class NotesService {
 
     const channel = this.subscriptions.get(subscriptionKey)
     if (channel) {
-      console.log('Unsubscribing from notes:', subscriptionKey)
+      safeLog('Unsubscribing from notes:', subscriptionKey)
       await supabase.removeChannel(channel)
       this.subscriptions.delete(subscriptionKey)
       this.callbacks.delete(subscriptionKey)
@@ -1066,7 +1072,7 @@ class NotesService {
    * Clean up all subscriptions (call on component unmount)
    */
   async cleanupAllSubscriptions(): Promise<void> {
-    console.log('Cleaning up all notes subscriptions')
+    safeLog('Cleaning up all notes subscriptions')
 
     for (const [key, channel] of this.subscriptions) {
       await supabase.removeChannel(channel)
@@ -1142,13 +1148,13 @@ class NotesService {
         .eq('reference_type', referenceType)
 
       if (error) {
-        console.error('Error checking for notes:', error)
+        safeError('Error checking for notes:', error)
         return false
       }
 
       return (count || 0) > 0
     } catch (error) {
-      console.error('Error checking for notes:', error)
+      safeError('Error checking for notes:', error)
       return false
     }
   }
@@ -1193,18 +1199,18 @@ class NotesService {
               const updatedNotes = notes.filter(n => n.id !== note.id).concat([createdNote])
               this.saveNotesToLocalStorage(note.reference_id, note.reference_type, updatedNotes)
               syncedCount++
-              console.log('Synced local note to Supabase:', note.id, '->', createdNote.id)
+              safeLog('Synced local note to Supabase:', note.id, '->', createdNote.id)
             }
           }
         } catch (error) {
-          console.error('Error syncing notes for key:', key, error)
+          safeError('Error syncing notes for key:', key, error)
         }
       }
 
-      console.log(`Successfully synced ${syncedCount} local notes to Supabase`)
+      safeLog(`Successfully synced ${syncedCount} local notes to Supabase`)
       return { success: true, syncedCount }
     } catch (error) {
-      console.error('Error syncing local notes to Supabase:', error)
+      safeError('Error syncing local notes to Supabase:', error)
       return { success: false, syncedCount: 0, error: error instanceof Error ? error.message : 'Unknown error' }
     }
   }
@@ -1218,7 +1224,7 @@ class NotesService {
         return {}
       }
 
-      console.log('Fetching notes count for:', referenceType, referenceIds.length, 'records')
+      safeLog('Fetching notes count for:', referenceType, referenceIds.length, 'records')
 
       // Try Supabase first if available
       if (this.isSupabaseAvailable) {
@@ -1236,20 +1242,20 @@ class NotesService {
               counts[note.reference_id] = (counts[note.reference_id] || 0) + 1
             })
 
-            console.log('Notes count fetched from Supabase:', Object.keys(counts).length, 'records with notes')
+            safeLog('Notes count fetched from Supabase:', Object.keys(counts).length, 'records with notes')
             return counts
           } else {
-            console.warn('Supabase notes count failed, falling back to localStorage:', error?.message)
+            safeWarn('Supabase notes count failed, falling back to localStorage:', error?.message)
             this.isSupabaseAvailable = false
           }
         } catch (supabaseError) {
-          console.warn('Supabase connection failed for notes count, using localStorage:', supabaseError)
+          safeWarn('Supabase connection failed for notes count, using localStorage:', supabaseError)
           this.isSupabaseAvailable = false
         }
       }
 
       // Fallback to localStorage count
-      console.log('Using localStorage fallback for notes count')
+      safeLog('Using localStorage fallback for notes count')
       const counts: Record<string, number> = {}
 
       for (const referenceId of referenceIds) {
@@ -1259,10 +1265,10 @@ class NotesService {
         }
       }
 
-      console.log('Notes count fetched from localStorage:', Object.keys(counts).length, 'records with notes')
+      safeLog('Notes count fetched from localStorage:', Object.keys(counts).length, 'records with notes')
       return counts
     } catch (error) {
-      console.error('Error fetching notes count:', error)
+      safeError('Error fetching notes count:', error)
       return {}
     }
   }
@@ -1278,7 +1284,7 @@ class NotesService {
     userInfo: any
     summary: string
   }> {
-    console.log('🔍 DEBUG: Starting comprehensive notes analysis for', referenceType, referenceId)
+    safeLog('🔍 DEBUG: Starting comprehensive notes analysis for', referenceType, referenceId)
 
     const result = {
       localStorage: [] as Note[],
@@ -1291,11 +1297,11 @@ class NotesService {
     try {
       // 1. Get user info
       result.userInfo = await this.getCurrentUserInfo()
-      console.log('🔑 User context:', result.userInfo)
+      safeLog('🔑 User context:', result.userInfo)
 
       // 2. Check localStorage
       result.localStorage = this.getNotesFromLocalStorage(referenceId, referenceType)
-      console.log('💾 localStorage notes:', result.localStorage.length)
+      safeLog('💾 localStorage notes:', result.localStorage.length)
 
       // 3. Check Supabase
       try {
@@ -1308,12 +1314,12 @@ class NotesService {
 
         if (!error && data) {
           result.supabase = data
-          console.log('💾 Supabase notes:', result.supabase.length)
+          safeLog('💾 Supabase notes:', result.supabase.length)
         } else {
-          console.error('❌ Supabase query failed:', error)
+          safeError('❌ Supabase query failed:', error)
         }
       } catch (supabaseError) {
-        console.error('❌ Supabase connection failed:', supabaseError)
+        safeError('❌ Supabase connection failed:', supabaseError)
       }
 
       // 4. Check cache
@@ -1321,9 +1327,9 @@ class NotesService {
       const cached = this.notesCache.get(cacheKey)
       if (cached) {
         result.cache = cached.notes
-        console.log('⚡ Cache notes:', result.cache.length, '(age:', Date.now() - cached.timestamp, 'ms)')
+        safeLog('⚡ Cache notes:', result.cache.length, '(age:', Date.now() - cached.timestamp, 'ms)')
       } else {
-        console.log('⚡ No cache data')
+        safeLog('⚡ No cache data')
       }
 
       // 5. Analysis
@@ -1343,19 +1349,19 @@ class NotesService {
         result.summary = 'Notes synchronized correctly'
       }
 
-      console.log('📊 ANALYSIS:', result.summary)
+      safeLog('📊 ANALYSIS:', result.summary)
 
       // 6. Check for user ID consistency
       const allNotes = [...result.localStorage, ...result.supabase]
       const uniqueUserIds = [...new Set(allNotes.map(n => n.created_by))]
       if (uniqueUserIds.length > 1) {
-        console.warn('⚠️ Multiple user IDs found in notes:', uniqueUserIds)
-        console.warn('⚠️ Current user ID:', result.userInfo.id)
+        safeWarn('⚠️ Multiple user IDs found in notes:', uniqueUserIds)
+        safeWarn('⚠️ Current user ID:', result.userInfo.id)
       }
 
       return result
     } catch (error) {
-      console.error('❌ Debug analysis failed:', error)
+      safeError('❌ Debug analysis failed:', error)
       result.summary = 'Debug failed: ' + (error instanceof Error ? error.message : 'Unknown error')
       return result
     }
@@ -1366,7 +1372,7 @@ class NotesService {
    * RECOVERY TOOL: Call this if notes are missing
    */
   async emergencyRecovery(referenceId: string, referenceType: 'call' | 'sms'): Promise<{ success: boolean; recovered: number; error?: string }> {
-    console.log('🆘 EMERGENCY RECOVERY: Attempting to recover notes for', referenceType, referenceId)
+    safeLog('🆘 EMERGENCY RECOVERY: Attempting to recover notes for', referenceType, referenceId)
 
     try {
       // 1. Get all possible sources
@@ -1414,7 +1420,7 @@ class NotesService {
               syncedCount++
             }
           } catch (syncError) {
-            console.warn('⚠️ Failed to sync note:', note.id, syncError)
+            safeWarn('⚠️ Failed to sync note:', note.id, syncError)
           }
         }
       }
@@ -1423,14 +1429,14 @@ class NotesService {
       const cacheKey = `${referenceType}_${referenceId}`
       this.notesCache.set(cacheKey, { notes: recoveredNotes, timestamp: Date.now() })
 
-      console.log(`✅ Recovery complete: ${recoveredNotes.length} notes recovered, ${syncedCount} synced to cloud`)
+      safeLog(`✅ Recovery complete: ${recoveredNotes.length} notes recovered, ${syncedCount} synced to cloud`)
 
       return {
         success: true,
         recovered: recoveredNotes.length
       }
     } catch (error) {
-      console.error('❌ Emergency recovery failed:', error)
+      safeError('❌ Emergency recovery failed:', error)
       return {
         success: false,
         recovered: 0,
@@ -1487,7 +1493,7 @@ if (typeof window !== 'undefined') {
     },
 
     help: () => {
-      console.log(`
+      safeLog(`
 🔧 CareXPS Notes Debug Tools
 ==============================
 
@@ -1502,7 +1508,7 @@ Usage in browser console:
 
 Example:
   const result = await notesDebug.debug('your-call-id')
-  console.log(result.summary)
+  safeLog(result.summary)
 `)
     }
   }
