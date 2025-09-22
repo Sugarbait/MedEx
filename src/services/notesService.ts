@@ -158,7 +158,22 @@ class NotesService {
       localStorage.setItem(`${key}_cache_info`, JSON.stringify(cacheInfo))
 
       console.log(`💾 Saved ${sortedNotes.length} notes to localStorage for ${referenceType}:${referenceId}`)
-      console.log(`💾 Notes saved:`, sortedNotes.map(n => ({ id: n.id, content: n.content.substring(0, 30) + '...' })))
+      console.log(`💾 Notes saved:`, sortedNotes.map(n => ({
+        id: n.id,
+        created_by: n.created_by,
+        content: n.content.substring(0, 30) + '...'
+      })))
+
+      // DEBUGGING: Verify the save was successful
+      try {
+        const verification = localStorage.getItem(key)
+        if (verification) {
+          const parsed = JSON.parse(verification)
+          console.log(`✅ Verification: ${parsed.length} notes confirmed in localStorage`)
+        }
+      } catch (verifyError) {
+        console.error('❌ Verification failed:', verifyError)
+      }
     } catch (error) {
       console.error('❌ Failed to save notes to localStorage:', error)
       // Try to save individually to identify problematic note
@@ -237,67 +252,83 @@ class NotesService {
 
   /**
    * Get current user information for note attribution
-   * Fixed to ensure consistent user ID handling and prevent note disappearance
+   * SIMPLIFIED: More reliable user ID handling to prevent note disappearance
    */
   private async getCurrentUserInfo() {
     try {
+      // Step 1: Try to get from localStorage first (most reliable)
       const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
 
-      let user = null
+      // Step 2: Try Supabase auth (if available)
+      let supabaseUser = null
       try {
-        // Try to get user from Supabase auth, but don't fail if it's not available
         const { data } = await supabase.auth.getUser()
-        user = data?.user
+        supabaseUser = data?.user
       } catch (authError) {
-        console.log('Supabase auth not available, using localStorage user info')
-        // Gracefully continue with just localStorage info
+        // Supabase auth not available - continue with localStorage only
       }
 
-      // CRITICAL FIX: Use a consistent user identification strategy
-      // Priority: Azure AD ID > localStorage ID > Supabase ID > fallback
-      let primaryId = currentUser.id || user?.id || 'anonymous-user'
+      // Step 3: Determine primary user ID (simplified priority)
+      let primaryId = currentUser.id || supabaseUser?.id || 'anonymous-user'
 
-      // IMPORTANT: Store the original ID for consistency tracking
-      const userIdKey = `notes_user_id_${primaryId}`
-      let consistentUuid = localStorage.getItem(userIdKey)
+      // Step 4: Create or retrieve consistent UUID (SIMPLIFIED)
+      const userIdCacheKey = 'notes_consistent_user_id'
+      let consistentUserId = localStorage.getItem(userIdCacheKey)
 
-      if (!consistentUuid) {
-        // First time - create and store a consistent UUID for this user
-        try {
-          consistentUuid = await userIdTranslationService.stringToUuid(primaryId)
-          if (consistentUuid) {
-            localStorage.setItem(userIdKey, consistentUuid)
-            console.log('🔑 Created consistent UUID mapping:', { primaryId, consistentUuid })
+      if (!consistentUserId) {
+        // First time - create a simple, consistent ID
+        if (primaryId && primaryId !== 'anonymous-user') {
+          // Use the userIdTranslationService for known users
+          try {
+            consistentUserId = await userIdTranslationService.stringToUuid(primaryId)
+          } catch (error) {
+            // Fallback to deterministic UUID
+            consistentUserId = this.createDeterministicUuid(primaryId)
           }
-        } catch (translationError) {
-          console.log('User ID translation failed, using deterministic fallback')
-          // Create a deterministic UUID that will always be the same for this user
-          consistentUuid = this.createDeterministicUuid(primaryId)
-          localStorage.setItem(userIdKey, consistentUuid)
+        } else {
+          // Anonymous user - create a PERSISTENT anonymous ID (not time-based)
+          // Use a fixed string so the same anonymous session always gets the same ID
+          const anonymousKey = 'anonymous-session-persistent'
+          consistentUserId = this.createDeterministicUuid(anonymousKey)
         }
+
+        // Store it for consistency
+        localStorage.setItem(userIdCacheKey, consistentUserId)
+        localStorage.setItem('notes_primary_id', primaryId)
+
+        console.log('🔑 Created new consistent user ID:', {
+          primaryId,
+          consistentUserId,
+          source: 'new'
+        })
       } else {
-        console.log('🔑 Using existing consistent UUID:', { primaryId, consistentUuid })
+        console.log('🔑 Using cached consistent user ID:', {
+          primaryId,
+          consistentUserId,
+          source: 'cached'
+        })
       }
 
-      const finalUserId = consistentUuid || 'anonymous-user'
-
-      console.log('User ID resolution:', {
-        primaryId,
-        finalUserId,
-        source: currentUser.id ? 'localStorage' : (user?.id ? 'supabase' : 'fallback')
-      })
+      // Step 5: Return user info with guaranteed valid ID
+      const finalUserId = consistentUserId || this.createDeterministicUuid('fallback-user')
 
       return {
         id: finalUserId,
-        name: currentUser.full_name || currentUser.name || user?.user_metadata?.full_name || 'Anonymous User',
-        email: user?.email || currentUser.email
+        name: currentUser.full_name || currentUser.name || supabaseUser?.user_metadata?.full_name || 'Anonymous User',
+        email: supabaseUser?.email || currentUser.email || undefined
       }
+
     } catch (error) {
       console.error('Error getting current user info:', error)
-      // Return a more robust fallback with consistent ID
-      const fallbackId = 'anonymous-user'
+
+      // Emergency fallback - use a consistent anonymous ID (not time-based)
+      const emergencyId = 'emergency-user-fallback'
+      const emergencyUserId = this.createDeterministicUuid(emergencyId)
+
+      console.warn('🆘 Using emergency user ID:', emergencyUserId)
+
       return {
-        id: this.createDeterministicUuid(fallbackId),
+        id: emergencyUserId,
         name: 'Anonymous User',
         email: undefined
       }
@@ -317,10 +348,26 @@ class NotesService {
       hash = hash & hash // Convert to 32-bit integer
     }
 
-    // Convert hash to a UUID-like format (v4 compatible)
+    // Convert hash to a proper UUID format (v4 compatible)
     const hashStr = Math.abs(hash).toString(16).padStart(8, '0')
-    const uuid = `${hashStr.slice(0, 8)}-${hashStr.slice(0, 4)}-4${hashStr.slice(1, 4)}-a${hashStr.slice(1, 4)}-${hashStr.slice(0, 12).padEnd(12, '0')}`
 
+    // Create additional hash segments for a proper 32-character UUID
+    let hash2 = 0
+    for (let i = 0; i < input.length; i++) {
+      const char = input.charCodeAt(i)
+      hash2 = ((hash2 << 3) - hash2) + char
+      hash2 = hash2 & hash2
+    }
+    const hashStr2 = Math.abs(hash2).toString(16).padStart(8, '0')
+
+    // Combine to create a valid UUID format
+    const part1 = hashStr.slice(0, 8)
+    const part2 = hashStr.slice(0, 4)
+    const part3 = '4' + hashStr.slice(1, 4) // Version 4 UUID
+    const part4 = 'a' + hashStr2.slice(1, 4) // Variant bits
+    const part5 = (hashStr + hashStr2).slice(0, 12)
+
+    const uuid = `${part1}-${part2}-${part3}-${part4}-${part5}`
     return uuid
   }
 
@@ -348,8 +395,13 @@ class NotesService {
         reference_id: noteData.reference_id,
         reference_type: noteData.reference_type,
         created_by: noteData.created_by,
-        content_length: noteData.content.length
+        created_by_name: noteData.created_by_name,
+        content_length: noteData.content.length,
+        supabaseAvailable: this.isSupabaseAvailable
       })
+
+      // DEBUGGING: Log the complete note data being created
+      console.log('📝 Complete note data:', noteData)
 
       // STRATEGY 1: Try Supabase first for immediate cloud persistence
       if (this.isSupabaseAvailable) {
