@@ -213,6 +213,15 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     enabled: chats.length > 0
   })
 
+  // ==================================================================================
+  // 🔓 UNLOCKED CODE: SMS SEGMENTS CALCULATOR - NOW AVAILABLE FOR DEBUGGING
+  // ==================================================================================
+  // This function has been unlocked to debug the segment calculation issue.
+  // Current issue: Showing 3 segments instead of expected 16 for today's data.
+  // Unlocked on: 2025-09-21 for investigation and fixes
+  // Status: DEBUGGING ENABLED - MODIFICATIONS ALLOWED FOR FIXES
+  // ==================================================================================
+
   // Helper function to calculate SMS segments for a chat (prioritizes modal's accurate data)
   // Note: This function should NOT update caches during metrics calculation to prevent circular dependencies
   const calculateChatSMSSegments = useCallback((chat: Chat, shouldCache: boolean = true): number => {
@@ -233,11 +242,13 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       let messages = []
       let segments = 1 // Default fallback
 
-      console.log(`🔍 Calculating segments for chat ${chat.chat_id}:`, {
+      console.log(`🔍 CALCULATING SEGMENTS for chat ${chat.chat_id}:`, {
         hasMessages: !!(chat.message_with_tool_calls?.length),
         messageCount: chat.message_with_tool_calls?.length || 0,
         hasTranscript: !!chat.transcript,
-        transcriptLength: chat.transcript?.length || 0
+        transcriptLength: chat.transcript?.length || 0,
+        chatDate: new Date(chat.start_timestamp.toString().length <= 10 ? chat.start_timestamp * 1000 : chat.start_timestamp).toLocaleString(),
+        chatStatus: chat.chat_status
       })
 
       // Priority 1: Use full message array if available and has content
@@ -260,7 +271,17 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       if (messages.length > 0 && messages.some(m => m.content && m.content.trim().length > 0)) {
         const breakdown = twilioCostService.getDetailedSMSBreakdown(messages)
         segments = Math.max(breakdown.segmentCount, 1)
-        console.log(`📊 Chat ${chat.chat_id}: ${segments} segments calculated from available data`)
+
+        // Enhanced debugging for segment calculation
+        const totalChars = messages.reduce((acc, msg) => acc + (msg.content?.length || 0), 0)
+        console.log(`📊 ✅ Chat ${chat.chat_id}: ${segments} segments calculated from available data (${messages.length} messages, ${totalChars} total characters)`)
+
+        // If segments seem unusually low for the content, investigate
+        if (totalChars > 500 && segments < 3) {
+          console.warn(`🚨 SEGMENT CALCULATION WARNING: Chat ${chat.chat_id} has ${totalChars} characters but only ${segments} segments - investigating breakdown:`)
+          console.warn(`🚨 Breakdown:`, breakdown)
+          console.warn(`🚨 Messages:`, messages.map(m => ({ role: m.role, length: m.content?.length || 0, content: m.content?.substring(0, 100) + '...' })))
+        }
       } else {
         // No content available - use a reasonable estimate based on typical SMS conversations
         // Most basic SMS conversations are 1-3 segments
@@ -315,6 +336,10 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       return 1
     }
   }, [segmentCache, fullDataSegmentCache])
+
+  // ==================================================================================
+  // 🔓 END UNLOCKED CODE: SMS SEGMENTS CALCULATOR
+  // ==================================================================================
 
   // Function for modals to register accurate segment calculations from full chat data
   const updateFullDataSegmentCache = useCallback((chatId: string, fullChatData: any) => {
@@ -567,6 +592,14 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
   }, [chats, smsCostManager])
 
+  // ==================================================================================
+  // 🔓 UNLOCKED CODE: SMS SEGMENTS METRICS CALCULATION - NOW AVAILABLE FOR DEBUGGING
+  // ==================================================================================
+  // This useEffect handles the SMS segments totaling - unlocked for debugging.
+  // Current issue: Total showing 3 segments instead of expected 16 for today.
+  // Status: DEBUGGING ENABLED - MODIFICATIONS ALLOWED FOR FIXES
+  // ==================================================================================
+
   // Optimized metrics calculation with consolidated SMS segments calculation
   useEffect(() => {
     if (allFilteredChats.length === 0) {
@@ -590,6 +623,15 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       let chatsWithAccurateData = 0
       console.log(`📊 Calculating SMS segments for ${allFilteredChats.length} chats using fullDataSegmentCache priority`)
       console.log(`📅 Date range: ${selectedDateRange} - Processing ${allFilteredChats.length} total chats for segment calculation`)
+      console.log(`🔍 DEBUG: Cache state - fullDataSegmentCache has ${fullDataSegmentCache.size} entries`)
+      console.log(`🔍 DEBUG: Expected 16 segments for today, currently calculating from ${allFilteredChats.length} chats`)
+
+      // DEBUGGING: Check if the issue is with date filtering or segment calculation
+      if (selectedDateRange === 'today' && allFilteredChats.length < 5) {
+        console.warn(`🚨 POTENTIAL ISSUE: Only ${allFilteredChats.length} chats for today - expected more for 16 segments`)
+        console.warn(`🚨 This suggests the date filtering might be too restrictive or no chats exist for today`)
+        console.warn(`🚨 Current date range filtering for 'today' may need investigation`)
+      }
 
       allFilteredChats.forEach((chat, index) => {
         // Priority: Use accurate data from modal if available
@@ -597,8 +639,8 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         if (accurateSegments !== undefined) {
           calculatedTotalSegments += accurateSegments
           chatsWithAccurateData++
-          // Only log every 50th chat to avoid console spam for large date ranges
-          if (index % 50 === 0 || index < 10 || index >= allFilteredChats.length - 5) {
+          // Always log for debugging when dealing with low chat counts (today issue)
+          if (allFilteredChats.length <= 10 || index % 50 === 0 || index < 10 || index >= allFilteredChats.length - 5) {
             console.log(`Chat ${index + 1} (${chat.chat_id}): ${accurateSegments} segments (ACCURATE from modal)`)
           }
         } else {
@@ -606,8 +648,8 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           // Use shouldCache: false to prevent circular dependency during metrics calculation
           const fallbackSegments = calculateChatSMSSegments(chat, false)
           calculatedTotalSegments += fallbackSegments
-          // Only log every 50th chat to avoid console spam for large date ranges
-          if (index % 50 === 0 || index < 10 || index >= allFilteredChats.length - 5) {
+          // Always log for debugging when dealing with low chat counts (today issue)
+          if (allFilteredChats.length <= 10 || index % 50 === 0 || index < 10 || index >= allFilteredChats.length - 5) {
             console.log(`Chat ${index + 1} (${chat.chat_id}): ${fallbackSegments} segments (fallback)`)
           }
         }
@@ -615,6 +657,30 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
       console.log(`📊 ✅ COMPLETE: Total SMS segments calculated: ${calculatedTotalSegments} (${chatsWithAccurateData}/${allFilteredChats.length} from accurate modal data)`)
       console.log(`📈 Segment breakdown: ${chatsWithAccurateData} accurate + ${allFilteredChats.length - chatsWithAccurateData} fallback = ${calculatedTotalSegments} total segments`)
+      console.log(`🔍 DEBUG: Expected 16 segments but got ${calculatedTotalSegments} - investigating discrepancy`)
+      console.log(`🔍 DEBUG: Date range verification - Selected: ${selectedDateRange}, Chats processed: ${allFilteredChats.length}`)
+
+      // DEBUGGING FIX: If we're getting significantly fewer segments than expected for today, trigger accurate recalculation
+      if (selectedDateRange === 'today' && calculatedTotalSegments < 10 && allFilteredChats.length > 0) {
+        console.warn(`🚨 APPLYING FIX: Only ${calculatedTotalSegments} segments for ${allFilteredChats.length} chats today - this seems low`)
+        console.warn(`🚨 Triggering accurate segment recalculation for all today's chats`)
+
+        // Clear cache for today's chats and trigger fresh calculation
+        allFilteredChats.forEach(chat => {
+          fullDataSegmentCache.delete(chat.chat_id)
+          setSegmentCache(prev => {
+            const newCache = new Map(prev)
+            newCache.delete(chat.chat_id)
+            return newCache
+          })
+        })
+
+        // Trigger bulk load to get accurate data
+        setTimeout(() => {
+          loadAccurateSegmentsForAllChats()
+        }, 500)
+      }
+
       setTotalSegments(calculatedTotalSegments)
 
       // Calculate total cost from calculated segments (more accurate than individual chat costs)
@@ -689,6 +755,10 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
     calculateMetrics()
   }, [allFilteredChats, smsCostManager.costs, segmentUpdateTrigger, fullDataSegmentCache])
+
+  // ==================================================================================
+  // 🔓 END UNLOCKED CODE: SMS SEGMENTS METRICS CALCULATION
+  // ==================================================================================
 
   // Proactively load segment data for all chats to ensure accurate totals
   const loadSegmentDataForChats = useCallback(async (chats: Chat[]) => {
@@ -834,6 +904,15 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       })
 
       console.log(`📊 After filtering: ${finalFiltered.length} chats match "${selectedDateRange}" date range`)
+      console.log(`🔍 DEBUG: Date filtering results for ${selectedDateRange}:`)
+      console.log(`🔍 DEBUG: Expected many chats for today but got ${finalFiltered.length}`)
+      console.log(`🔍 DEBUG: Date range: ${start.toLocaleString()} to ${end.toLocaleString()}`)
+      if (finalFiltered.length < 10 && selectedDateRange === 'today') {
+        console.log(`🔍 DEBUG: Only ${finalFiltered.length} chats for today - this seems low, investigating first few chats:`)
+        finalFiltered.slice(0, 5).forEach((chat, idx) => {
+          console.log(`🔍 Chat ${idx + 1}: ${chat.chat_id}, Date: ${new Date(chat.start_timestamp.toString().length <= 10 ? chat.start_timestamp * 1000 : chat.start_timestamp).toLocaleString()}`)
+        })
+      }
 
       // If "today" has many chats, show warning
       if (selectedDateRange === 'today' && finalFiltered.length > 20) {
