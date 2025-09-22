@@ -153,7 +153,7 @@ export const MFAGate: React.FC<MFAGateProps> = ({ onSuccess, user }) => {
                   This additional authentication step is required to protect patient health information (PHI)
                   in accordance with HIPAA security regulations.
                 </p>
-                <p className="mt-2 text-xs">
+                <p className="mt-2 text-[10px]">
                   Use your authenticator app or backup codes to generate the verification code.
                 </p>
               </div>

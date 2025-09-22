@@ -1,0 +1,15 @@
+{
+  "name": "carexps-api",
+  "version": "1.0.0",
+  "description": "Azure Functions for CareXPS Healthcare CRM",
+  "main": "index.js",
+  "scripts": {
+    "start": "func start",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {},
+  "devDependencies": {},
+  "engines": {
+    "node": "18"
+  }
+}
