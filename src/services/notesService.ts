@@ -1220,24 +1220,46 @@ class NotesService {
 
       console.log('Fetching notes count for:', referenceType, referenceIds.length, 'records')
 
-      const { data, error } = await supabase
-        .from('notes')
-        .select('reference_id, id')
-        .eq('reference_type', referenceType)
-        .in('reference_id', referenceIds)
+      // Try Supabase first if available
+      if (this.isSupabaseAvailable) {
+        try {
+          const { data, error } = await supabase
+            .from('notes')
+            .select('reference_id, id')
+            .eq('reference_type', referenceType)
+            .in('reference_id', referenceIds)
 
-      if (error) {
-        console.error('Error fetching notes count:', error)
-        return {}
+          if (!error && data) {
+            // Count notes per reference_id
+            const counts: Record<string, number> = {}
+            data.forEach(note => {
+              counts[note.reference_id] = (counts[note.reference_id] || 0) + 1
+            })
+
+            console.log('Notes count fetched from Supabase:', Object.keys(counts).length, 'records with notes')
+            return counts
+          } else {
+            console.warn('Supabase notes count failed, falling back to localStorage:', error?.message)
+            this.isSupabaseAvailable = false
+          }
+        } catch (supabaseError) {
+          console.warn('Supabase connection failed for notes count, using localStorage:', supabaseError)
+          this.isSupabaseAvailable = false
+        }
       }
 
-      // Count notes per reference_id
+      // Fallback to localStorage count
+      console.log('Using localStorage fallback for notes count')
       const counts: Record<string, number> = {}
-      data?.forEach(note => {
-        counts[note.reference_id] = (counts[note.reference_id] || 0) + 1
-      })
 
-      console.log('Notes count fetched:', Object.keys(counts).length, 'records with notes')
+      for (const referenceId of referenceIds) {
+        const localNotes = this.getNotesFromLocalStorage(referenceId, referenceType)
+        if (localNotes.length > 0) {
+          counts[referenceId] = localNotes.length
+        }
+      }
+
+      console.log('Notes count fetched from localStorage:', Object.keys(counts).length, 'records with notes')
       return counts
     } catch (error) {
       console.error('Error fetching notes count:', error)
