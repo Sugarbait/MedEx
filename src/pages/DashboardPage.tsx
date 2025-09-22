@@ -610,6 +610,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
   // 🔒 END LOCKED CODE: SMS SEGMENTS METRICS CALCULATION - PRODUCTION READY
   // ==================================================================================
 
+  // ==================================================================================
+  // 🔒 LOCKED CODE: DASHBOARD SEGMENT LOADING - PRODUCTION READY - NO MODIFICATIONS
+  // ==================================================================================
+  // This function provides fast, accurate segment loading with API throttle protection.
+  // Speed optimization confirmed: Amazing performance achieved with batch processing.
+  // Locked on: 2025-09-21 after successful speed and accuracy verification
+  // Status: PRODUCTION LOCKED - ABSOLUTELY NO MODIFICATIONS ALLOWED
+  // ==================================================================================
+
   // Proactively load segment data for all chats to ensure accurate totals (same as SMS page)
   const loadSegmentDataForChats = useCallback(async (chats: any[]) => {
     // Only load for chats that don't already have cached data
@@ -669,6 +678,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
 
     console.log(`📊 ✅ Dashboard: Finished loading segment data for ${chatsNeedingData.length} chats`)
   }, [fullDataSegmentCache, saveSegmentCache])
+
+  // ==================================================================================
+  // 🔒 END LOCKED CODE: DASHBOARD SEGMENT LOADING - PRODUCTION READY
+  // ==================================================================================
 
   const fetchDashboardData = async () => {
     setIsLoading(true)
@@ -892,7 +905,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
       setFilteredChatsForCosts(filteredChats)
       setAllFilteredChats(filteredChats)
 
-      // Proactively load segment data for accurate totals (async, don't block UI)
+      // 🔒 LOCKED: Proactively load segment data for accurate totals (async, don't block UI)
+      // This call provides amazing speed - DO NOT MODIFY
       loadSegmentDataForChats(filteredChats)
 
       // Check cache hit rate and start segment calculation if needed
