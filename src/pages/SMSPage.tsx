@@ -625,6 +625,39 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   }, [chats, smsCostManager])
 
   // ==================================================================================
+  // 🔒 LOCKED CODE: CLEAR CACHE FUNCTION - PRODUCTION READY - NO MODIFICATIONS
+  // ==================================================================================
+  // CRITICAL WARNING - PRODUCTION READY CODE
+  // ABSOLUTELY NO MODIFICATIONS ALLOWED
+  // Manual and automatic cache clearing functionality
+  // Status: PRODUCTION READY ✅
+  // ==================================================================================
+
+  // Clear all segment caches function
+  const clearAllSegmentCaches = useCallback((isAutomatic = false) => {
+    const timestamp = new Date().toLocaleString()
+    const triggerType = isAutomatic ? '🕐 AUTOMATIC (4-hour timer)' : '🗑️ MANUAL (button click)'
+
+    console.log(`${triggerType} - Clearing all segment caches at ${timestamp}`)
+
+    // Clear in-memory caches
+    setSegmentCache(new Map())
+    setFullDataSegmentCache(new Map())
+
+    // Clear localStorage cache
+    localStorage.removeItem(SMS_SEGMENT_CACHE_KEY)
+
+    // Reset segment update trigger to force recalculation
+    setSegmentUpdateTrigger(prev => prev + 1)
+
+    console.log(`✅ All segment caches cleared successfully (${isAutomatic ? 'automatic' : 'manual'})`)
+  }, [])
+
+  // ==================================================================================
+  // 🔒 END LOCKED CODE: CLEAR CACHE FUNCTION - PRODUCTION READY
+  // ==================================================================================
+
+  // ==================================================================================
   // 🔒 LOCKED CODE: AUTOMATIC CACHE CLEARING - PRODUCTION READY - NO MODIFICATIONS
   // ==================================================================================
   // CRITICAL WARNING - PRODUCTION READY CODE
@@ -912,39 +945,6 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
     console.log(`📊 ✅ Finished loading segment data for ${chatsNeedingData.length} chats`)
   }, [fullDataSegmentCache, saveSegmentCache])
-
-  // ==================================================================================
-  // 🔒 LOCKED CODE: CLEAR CACHE FUNCTION - PRODUCTION READY - NO MODIFICATIONS
-  // ==================================================================================
-  // CRITICAL WARNING - PRODUCTION READY CODE
-  // ABSOLUTELY NO MODIFICATIONS ALLOWED
-  // Manual and automatic cache clearing functionality
-  // Status: PRODUCTION READY ✅
-  // ==================================================================================
-
-  // Clear all segment caches function
-  const clearAllSegmentCaches = useCallback((isAutomatic = false) => {
-    const timestamp = new Date().toLocaleString()
-    const triggerType = isAutomatic ? '🕐 AUTOMATIC (4-hour timer)' : '🗑️ MANUAL (button click)'
-
-    console.log(`${triggerType} - Clearing all segment caches at ${timestamp}`)
-
-    // Clear in-memory caches
-    setSegmentCache(new Map())
-    setFullDataSegmentCache(new Map())
-
-    // Clear localStorage cache
-    localStorage.removeItem(SMS_SEGMENT_CACHE_KEY)
-
-    // Reset segment update trigger to force recalculation
-    setSegmentUpdateTrigger(prev => prev + 1)
-
-    console.log(`✅ All segment caches cleared successfully (${isAutomatic ? 'automatic' : 'manual'})`)
-  }, [])
-
-  // ==================================================================================
-  // 🔒 END LOCKED CODE: CLEAR CACHE FUNCTION - PRODUCTION READY
-  // ==================================================================================
 
   // Simplified chat fetching following CallsPage pattern
   const fetchChatsOptimized = useCallback(async (retryCount = 0) => {
