@@ -610,6 +610,66 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
   // 🔒 END LOCKED CODE: SMS SEGMENTS METRICS CALCULATION - PRODUCTION READY
   // ==================================================================================
 
+  // Proactively load segment data for all chats to ensure accurate totals (same as SMS page)
+  const loadSegmentDataForChats = useCallback(async (chats: any[]) => {
+    // Only load for chats that don't already have cached data
+    const chatsNeedingData = chats.filter(chat => !fullDataSegmentCache.has(chat.chat_id))
+
+    if (chatsNeedingData.length === 0) {
+      console.log('📊 Dashboard: All chats already have cached segment data')
+      return
+    }
+
+    console.log(`📊 Dashboard: Loading segment data for ${chatsNeedingData.length}/${chats.length} chats in background`)
+
+    // Process in batches to avoid overwhelming the API
+    const batchSize = 10
+    const batches = []
+    for (let i = 0; i < chatsNeedingData.length; i += batchSize) {
+      batches.push(chatsNeedingData.slice(i, i + batchSize))
+    }
+
+    // Process batches with delay between them
+    for (const [batchIndex, batch] of batches.entries()) {
+      try {
+        // Process batch in parallel
+        const batchPromises = batch.map(async (chat) => {
+          try {
+            const fullChatData = await chatService.getChat(chat.chat_id)
+            if (fullChatData?.message_with_tool_calls) {
+              const segments = twilioCostService.calculateSMSSegments(fullChatData.message_with_tool_calls)
+
+              // Update the cache
+              setFullDataSegmentCache(prev => {
+                const newCache = new Map(prev.set(chat.chat_id, segments))
+                saveSegmentCache(newCache)
+                return newCache
+              })
+
+              return { chatId: chat.chat_id, segments }
+            }
+          } catch (error) {
+            console.warn(`Dashboard: Failed to load segment data for chat ${chat.chat_id}:`, error)
+          }
+          return null
+        })
+
+        const batchResults = await Promise.all(batchPromises)
+        const successCount = batchResults.filter(r => r !== null).length
+        console.log(`📊 Dashboard Batch ${batchIndex + 1}/${batches.length}: Loaded segment data for ${successCount}/${batch.length} chats`)
+
+        // Small delay between batches to avoid overwhelming the API
+        if (batchIndex < batches.length - 1) {
+          await new Promise(resolve => setTimeout(resolve, 100))
+        }
+      } catch (error) {
+        console.error(`Dashboard: Error processing batch ${batchIndex + 1}:`, error)
+      }
+    }
+
+    console.log(`📊 ✅ Dashboard: Finished loading segment data for ${chatsNeedingData.length} chats`)
+  }, [fullDataSegmentCache, saveSegmentCache])
+
   const fetchDashboardData = async () => {
     setIsLoading(true)
     setError('')
@@ -831,6 +891,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
       // Store filtered chats for cost recalculation and metrics
       setFilteredChatsForCosts(filteredChats)
       setAllFilteredChats(filteredChats)
+
+      // Proactively load segment data for accurate totals (async, don't block UI)
+      loadSegmentDataForChats(filteredChats)
 
       // Check cache hit rate and start segment calculation if needed
       const cacheHits = filteredChats.filter(chat => fullDataSegmentCache.has(chat.chat_id)).length
