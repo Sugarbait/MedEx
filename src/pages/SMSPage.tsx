@@ -8,7 +8,6 @@ import { DateRangePicker, DateRange, getDateRangeFromSelection } from '@/compone
 import { ChatDetailModal } from '@/components/common/ChatDetailModal'
 import { SiteHelpChatbot } from '@/components/common/SiteHelpChatbot'
 import { chatService, type Chat, type ChatListOptions } from '@/services/chatService'
-import { optimizedChatService } from '@/services/optimizedChatService'
 import { retellService } from '@/services'
 import { twilioCostService } from '@/services/twilioCostService'
 import { currencyService } from '@/services/currencyService'
@@ -164,7 +163,6 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
   // Optimization state
   const [lastDataFetch, setLastDataFetch] = useState<number>(0)
-  const [isSmartRefreshing, setIsSmartRefreshing] = useState(false)
   const [showHelpChatbot, setShowHelpChatbot] = useState(false)
   const mountedRef = useRef(true)
   const [metrics, setMetrics] = useState<ChatMetrics>({
@@ -558,13 +556,14 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   const { debouncedValue: debouncedStatusFilter } = useDebounce(statusFilter, 300)
   const { debouncedValue: debouncedSentimentFilter } = useDebounce(sentimentFilter, 300)
 
-  // Optimized auto-refresh with smart change detection
+  // Auto-refresh functionality like other pages
   const { formatLastRefreshTime } = useAutoRefresh({
     enabled: true,
-    interval: 60000, // 1 minute (reduced frequency)
+    interval: 60000, // 1 minute
     onRefresh: useCallback(() => {
-      performSmartRefresh()
-    }, [])
+      fetchChatsOptimized()
+      console.log('SMS page refreshed at:', new Date().toLocaleTimeString())
+    }, [fetchChatsOptimized])
   })
 
   // Optimized data fetching
@@ -1181,64 +1180,6 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
   }
 
-  // Smart refresh that only updates when needed
-  const performSmartRefresh = useCallback(async () => {
-    if (!mountedRef.current || loading || isSmartRefreshing) {
-      console.log('Skipping smart refresh - component unmounted, loading, or already refreshing')
-      return
-    }
-
-    console.log('🔄 Starting smart refresh...')
-    setIsSmartRefreshing(true)
-
-    try {
-      const result = await optimizedChatService.smartRefresh(chats, {
-        limit: recordsPerPage * 2,
-        filter_criteria: smsAgentConfigured && smsAgentId ? { agent_id: smsAgentId } : undefined
-      })
-
-      if (result.hasChanges && mountedRef.current) {
-        console.log('✅ Smart refresh detected changes, updating data')
-        // Use the fresh data from smart refresh if available
-        if (result.chats) {
-          setChats(result.chats)
-          setLastDataFetch(Date.now())
-        } else {
-          // If no fresh data, do a full fetch
-          await fetchChatsOptimized()
-        }
-      } else {
-        console.log('✅ Smart refresh: no changes detected')
-
-        // For auto-refresh, if no changes are detected, that's fine
-        // But for manual refresh, we should still update the last refresh time
-        // so the user knows the refresh actually happened
-        if (mountedRef.current) {
-          setLastDataFetch(Date.now())
-        }
-      }
-    } catch (error) {
-      console.warn('❌ Smart refresh failed:', error)
-
-      // If smart refresh fails completely, fall back to a simple data fetch
-      // but only for auto-refresh scenarios to avoid infinite loops
-      if (mountedRef.current) {
-        console.log('🔄 Smart refresh failed, attempting fallback refresh...')
-        try {
-          await fetchChatsOptimized()
-          console.log('✅ Fallback refresh completed successfully')
-        } catch (fallbackError) {
-          console.error('❌ Fallback refresh also failed:', fallbackError)
-        }
-      }
-    } finally {
-      // Always ensure we reset the smart refreshing state
-      if (mountedRef.current) {
-        console.log('🔄 Smart refresh finished, resetting state')
-        setIsSmartRefreshing(false)
-      }
-    }
-  }, [chats, loading, isSmartRefreshing, smsAgentConfigured, smsAgentId, recordsPerPage, fetchChatsOptimized])
 
   // Load SMS agent configuration on mount
   useEffect(() => {
@@ -1338,7 +1279,6 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
             onClick={() => {
               console.log('SMS page manual refresh triggered at:', new Date().toLocaleTimeString())
               // Clear caches and force a complete refresh
-              optimizedChatService.clearAllCaches()
               smsCostManager.clearCosts()
               setSegmentCache(new Map()) // Clear segment cache on manual refresh
               setLoadingFullChats(new Set()) // Clear loading state
@@ -1349,11 +1289,11 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
               console.log('🔄 Manual refresh: cleared temporary caches, preserving persistent segment cache')
               fetchChatsOptimized()
             }}
-            disabled={loading || isSmartRefreshing}
+            disabled={loading}
             className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 transition-colors disabled:opacity-50"
           >
-            <RefreshCwIcon className={`w-4 h-4 ${loading || isSmartRefreshing ? 'animate-spin' : ''}`} />
-            {isSmartRefreshing ? 'Smart Refresh...' : 'Refresh'}
+            <RefreshCwIcon className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            Refresh
           </button>
           <button
             onClick={clearAllSegmentCaches}
@@ -1371,7 +1311,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       </div>
       <div className="text-xs text-gray-500 mb-6 flex items-center justify-between">
         <div>
-          Last refreshed: {formatLastRefreshTime()} (Auto-refresh every 1 minute) | {totalChatsCount} total chats
+          Last refreshed: {formatLastRefreshTime()} (Auto-refresh every minute) | {totalChatsCount} total chats
         </div>
         {smsCostManager.progress && (
           <div className="flex items-center gap-2">
