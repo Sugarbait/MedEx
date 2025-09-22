@@ -124,7 +124,8 @@
       "Bash(start http://localhost:3006)",
       "Bash(func --version)",
       "Bash(start http://localhost:3007)",
-      "Bash(start http://localhost:3008)"
+      "Bash(start http://localhost:3008)",
+      "Bash(del:*)"
     ],
     "deny": [],
     "ask": []
