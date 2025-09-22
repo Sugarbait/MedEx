@@ -204,15 +204,51 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
   // Calculate chat SMS segments (exact same logic as SMS page)
   const calculateChatSMSSegments = useCallback((chat: any, shouldCache: boolean = true): number => {
     try {
-      let messages = []
-      if (chat.message_with_tool_calls && Array.isArray(chat.message_with_tool_calls)) {
-        messages = chat.message_with_tool_calls
-      } else if (chat.transcript) {
-        messages = [{ content: chat.transcript, role: 'user' }]
+      // Priority 1: Check full data cache first (populated by modal with accurate data)
+      const fullDataCached = fullDataSegmentCache.get(chat.chat_id)
+      if (fullDataCached !== undefined) {
+        console.log(`✅ Using accurate segment count from cache: ${fullDataCached} segments for chat ${chat.chat_id}`)
+        return fullDataCached
       }
 
-      const segments = twilioCostService.calculateSMSSegments(messages)
+      let messages = []
+      let segments = 1 // Default fallback
 
+      console.log(`🔍 Calculating segments for chat ${chat.chat_id}:`, {
+        hasMessages: !!(chat.message_with_tool_calls?.length),
+        messageCount: chat.message_with_tool_calls?.length || 0,
+        hasTranscript: !!chat.transcript,
+        transcriptLength: chat.transcript?.length || 0
+      })
+
+      // Priority 1: Use full message array if available and has content
+      if (chat.message_with_tool_calls && Array.isArray(chat.message_with_tool_calls) && chat.message_with_tool_calls.length > 0) {
+        // Check if messages actually have content
+        const messagesWithContent = chat.message_with_tool_calls.filter(m => m.content && m.content.trim().length > 0)
+        if (messagesWithContent.length > 0) {
+          messages = messagesWithContent
+          console.log(`📝 Using ${messages.length} content messages from message_with_tool_calls`)
+        }
+      }
+
+      // Priority 2: Use transcript as fallback if no proper messages found
+      if (messages.length === 0 && chat.transcript && chat.transcript.trim().length > 0) {
+        messages = [{ content: chat.transcript, role: 'user' }]
+        console.log(`📝 Using transcript (${chat.transcript.trim().length} chars) as single message`)
+      }
+
+      // Calculate segments if we have content
+      if (messages.length > 0 && messages.some(m => m.content && m.content.trim().length > 0)) {
+        const breakdown = twilioCostService.getDetailedSMSBreakdown(messages)
+        segments = Math.max(breakdown.segmentCount, 1)
+        console.log(`📊 Chat ${chat.chat_id}: ${segments} segments calculated from available data`)
+      } else {
+        // No content available - use a reasonable estimate
+        segments = 1
+        console.log(`📊 Chat ${chat.chat_id}: Using fallback ${segments} segment (no content available)`)
+      }
+
+      // Only cache the result if explicitly requested (prevents circular dependencies)
       if (shouldCache) {
         setFullDataSegmentCache(prev => {
           const newCache = new Map(prev.set(chat.chat_id, segments))
@@ -224,10 +260,44 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
 
       return segments
     } catch (error) {
-      console.error('Error calculating segments for chat:', chat.chat_id, error)
-      return 2
+      console.error(`❌ Error calculating SMS segments for chat ${chat.chat_id}:`, error)
+
+      // Try to use transcript as last resort
+      try {
+        if (chat.transcript && chat.transcript.trim().length > 0) {
+          const transcriptLength = chat.transcript.trim().length
+          let fallbackSegments
+
+          try {
+            // Try using Twilio service for accurate calculation
+            fallbackSegments = twilioCostService.getDetailedSMSBreakdown([{ content: chat.transcript, role: 'user' }]).segmentCount
+            fallbackSegments = Math.max(fallbackSegments, 1)
+          } catch (twilioError) {
+            // Fallback to rough estimation
+            fallbackSegments = Math.max(Math.ceil(transcriptLength / 160), 1)
+          }
+
+          console.log(`🆘 Emergency fallback using transcript for ${chat.chat_id}: ${fallbackSegments} segments`)
+
+          // Only cache this emergency fallback if explicitly requested
+          if (shouldCache) {
+            setFullDataSegmentCache(prev => {
+              const newCache = new Map(prev.set(chat.chat_id, fallbackSegments))
+              saveSegmentCache(newCache)
+              return newCache
+            })
+          }
+
+          return fallbackSegments
+        }
+      } catch (fallbackError) {
+        console.error(`❌ Emergency fallback failed for ${chat.chat_id}:`, fallbackError)
+      }
+
+      // Final fallback - use 1 instead of 2 for more realistic base
+      return 1
     }
-  }, [fullDataSegmentCache])
+  }, [fullDataSegmentCache, saveSegmentCache])
 
   // Fetch full chat details and calculate SMS cost with caching
   const fetchChatCost = async (chatId: string): Promise<number> => {
@@ -681,15 +751,32 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
         return sum + calculateChatSMSCost(chat)
       }, 0)
 
-      // Calculate total segments for display
-      const totalSegments = filteredChats.reduce((sum, chat) => {
+      // Calculate total segments for display (same logic as SMS page)
+      console.log(`📊 Dashboard: Calculating SMS segments for ${filteredChats.length} chats`)
+      let calculatedTotalSegments = 0
+      let chatsWithAccurateData = 0
+
+      filteredChats.forEach((chat, index) => {
         const cachedSegments = fullDataSegmentCache.get(chat.chat_id)
         if (cachedSegments !== undefined) {
-          return sum + cachedSegments
+          calculatedTotalSegments += cachedSegments
+          chatsWithAccurateData++
+          // Only log first few to avoid spam
+          if (index < 5) {
+            console.log(`Dashboard Chat ${index + 1}: ${cachedSegments} segments (from cache)`)
+          }
+        } else {
+          // Fallback to calculated segments (don't cache during metrics calculation)
+          const fallbackSegments = calculateChatSMSSegments(chat, false)
+          calculatedTotalSegments += fallbackSegments
+          if (index < 5) {
+            console.log(`Dashboard Chat ${index + 1}: ${fallbackSegments} segments (calculated)`)
+          }
         }
-        // Fallback to calculated segments
-        return sum + calculateChatSMSSegments(chat)
-      }, 0)
+      })
+
+      console.log(`📊 Dashboard Total Segments: ${calculatedTotalSegments} (${chatsWithAccurateData}/${filteredChats.length} from cache)`)
+      const totalSegments = calculatedTotalSegments
 
       // Calculate chat metrics using exact same logic as SMS page
       const baseChatMetrics = chatService.getChatStats(filteredChats)
