@@ -38,6 +38,10 @@ const createSupabaseClient = () => {
           autoRefreshToken: false,
           storageKey: 'carexps-auth-fallback'
         },
+        realtime: {
+          // Disable realtime connections for fallback client
+          disabled: true
+        },
         global: {
           fetch: () => Promise.reject(new Error('Supabase not configured - using localStorage mode'))
         }
@@ -93,6 +97,10 @@ const createSupabaseClient = () => {
         persistSession: false,
         autoRefreshToken: false,
         storageKey: 'carexps-auth-fallback'
+      },
+      realtime: {
+        // Disable realtime connections for fallback client
+        disabled: true
       },
       global: {
         fetch: () => Promise.reject(new Error('Supabase not configured - using localStorage mode'))

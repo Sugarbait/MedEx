@@ -556,16 +556,6 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   const { debouncedValue: debouncedStatusFilter } = useDebounce(statusFilter, 300)
   const { debouncedValue: debouncedSentimentFilter } = useDebounce(sentimentFilter, 300)
 
-  // Auto-refresh functionality like other pages
-  const { formatLastRefreshTime } = useAutoRefresh({
-    enabled: true,
-    interval: 60000, // 1 minute
-    onRefresh: useCallback(() => {
-      fetchChatsOptimized()
-      console.log('SMS page refreshed at:', new Date().toLocaleTimeString())
-    }, [fetchChatsOptimized])
-  })
-
   // Optimized data fetching
   const debouncedFetchChats = useDebouncedCallback(
     async (resetPage: boolean = false) => {
@@ -594,7 +584,6 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       console.log('📅 Initial mount, preserving cached segment data')
     }
 
-    setIsSmartRefreshing(false) // Reset smart refresh state to prevent infinite spinning
     debouncedFetchChats.debouncedCallback(true)
   }, [selectedDateRange, customStartDate, customEndDate, hasInitiallyLoaded])
 
@@ -1089,7 +1078,15 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
   }, [selectedDateRange, customStartDate, customEndDate, currentPage, lastDataFetch])
 
-
+  // Auto-refresh functionality like other pages - defined after fetchChatsOptimized
+  const { formatLastRefreshTime } = useAutoRefresh({
+    enabled: true,
+    interval: 60000, // 1 minute
+    onRefresh: useCallback(() => {
+      fetchChatsOptimized()
+      console.log('SMS page refreshed at:', new Date().toLocaleTimeString())
+    }, [fetchChatsOptimized])
+  })
 
   const endChat = async (chatId: string) => {
     try {
@@ -1211,7 +1208,6 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   useEffect(() => {
     return () => {
       mountedRef.current = false
-      optimizedChatService.cancelAllOperations()
       debouncedFetchChats.cancel()
     }
   }, [])
