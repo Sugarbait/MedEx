@@ -214,11 +214,12 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   })
 
   // ==================================================================================
-  // 🔓 TEMPORARILY UNLOCKED: SMS SEGMENTS CALCULATOR - FIXING YEAR VIEW CALCULATION
+  // 🔒 LOCKED CODE: SMS SEGMENTS CALCULATOR - PRODUCTION READY - NO MODIFICATIONS
   // ==================================================================================
-  // Critical Issue: Year view shows 703 segments instead of expected 1300+
-  // Permission granted to fix segment calculation for large date ranges
-  // Status: TEMPORARILY UNLOCKED FOR CRITICAL YEAR VIEW BUG FIX
+  // CRITICAL WARNING - PRODUCTION READY CODE
+  // ABSOLUTELY NO MODIFICATIONS ALLOWED
+  // Year view calculation fix verified and locked
+  // Status: PRODUCTION READY WITH YEAR VIEW IMPROVEMENTS ✅
   // ==================================================================================
 
   // Helper function to calculate SMS segments for a chat (prioritizes modal's accurate data)
