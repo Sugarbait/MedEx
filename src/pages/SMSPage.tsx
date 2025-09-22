@@ -35,7 +35,8 @@ import {
   PlayCircleIcon,
   StopCircleIcon,
   EyeIcon,
-  StickyNoteIcon
+  StickyNoteIcon,
+  TrashIcon
 } from 'lucide-react'
 
 // Persistent cache utilities for SMS segments
@@ -867,6 +868,23 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     console.log(`📊 ✅ Finished loading segment data for ${chatsNeedingData.length} chats`)
   }, [fullDataSegmentCache, saveSegmentCache])
 
+  // Clear all segment caches function
+  const clearAllSegmentCaches = useCallback(() => {
+    console.log('🗑️ Clearing all segment caches...')
+
+    // Clear in-memory caches
+    setSegmentCache(new Map())
+    setFullDataSegmentCache(new Map())
+
+    // Clear localStorage cache
+    localStorage.removeItem(SMS_SEGMENT_CACHE_KEY)
+
+    // Reset segment update trigger to force recalculation
+    setSegmentUpdateTrigger(prev => prev + 1)
+
+    console.log('✅ All segment caches cleared successfully')
+  }, [])
+
   // Simplified chat fetching following CallsPage pattern
   const fetchChatsOptimized = useCallback(async (retryCount = 0) => {
     if (!mountedRef.current) return
@@ -1254,6 +1272,14 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           >
             <RefreshCwIcon className={`w-4 h-4 ${loading || isSmartRefreshing ? 'animate-spin' : ''}`} />
             {isSmartRefreshing ? 'Smart Refresh...' : 'Refresh'}
+          </button>
+          <button
+            onClick={clearAllSegmentCaches}
+            className="flex items-center gap-2 px-3 py-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
+            title="Clear all SMS segment calculation caches"
+          >
+            <TrashIcon className="w-4 h-4" />
+            Clear Cache
           </button>
           <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
             <DownloadIcon className="w-4 h-4" />
