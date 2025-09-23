@@ -616,7 +616,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     if (chats.length > 0) {
       smsCostManager.loadCostsForChats(chats)
     }
-  }, [chats, smsCostManager])
+  }, [chats, smsCostManager.loadCostsForChats])
 
   // ==================================================================================
   // 🔒 LOCKED CODE: CLEAR CACHE FUNCTION - PRODUCTION READY - NO MODIFICATIONS
