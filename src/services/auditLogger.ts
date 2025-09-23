@@ -384,7 +384,12 @@ class HIPAAAuditLogger {
     } catch (error) {
       console.error('Primary audit storage failed, using backup:', error)
       // Backup: Store locally only if server fails
-      this.storeAuditEntryLocally(encryptedEntry)
+      try {
+        this.storeAuditEntryLocally(encryptedEntry)
+      } catch (backupError) {
+        console.error('Backup audit storage also failed:', backupError)
+        // Continue execution - don't let audit failures break core functionality
+      }
     }
 
   }
@@ -394,6 +399,11 @@ class HIPAAAuditLogger {
    */
   private async storeAuditEntrySupabase(encryptedEntry: any): Promise<void> {
     try {
+      // Check if Supabase is properly configured
+      if (!supabase || typeof supabase.from !== 'function') {
+        throw new Error('Supabase not properly configured - using localStorage fallback')
+      }
+
       const { error } = await supabase
         .from('audit_logs')
         .insert([{

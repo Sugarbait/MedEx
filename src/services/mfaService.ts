@@ -226,17 +226,21 @@ class TOTPMFAService {
       // Check for rate limiting
       const rateLimitResult = this.checkRateLimit(userId)
       if (!rateLimitResult.allowed) {
-        await auditLogger.logPHIAccess(
-          AuditAction.LOGIN_FAILURE,
-          ResourceType.SYSTEM,
-          `mfa-verification-${userId}`,
-          AuditOutcome.FAILURE,
-          {
-            operation: 'mfa_rate_limited',
-            remainingAttempts: rateLimitResult.remainingAttempts,
-            phiAccess: isPhiAccess
-          }
-        )
+        try {
+          await auditLogger.logPHIAccess(
+            AuditAction.LOGIN_FAILURE,
+            ResourceType.SYSTEM,
+            `mfa-verification-${userId}`,
+            AuditOutcome.FAILURE,
+            {
+              operation: 'mfa_rate_limited',
+              remainingAttempts: rateLimitResult.remainingAttempts,
+              phiAccess: isPhiAccess
+            }
+          )
+        } catch (auditError) {
+          console.warn('Audit logging failed during rate limit check:', auditError)
+        }
 
         return {
           success: false,
@@ -249,13 +253,17 @@ class TOTPMFAService {
       const mfaData = await this.getMFAData(userId)
 
       if (!mfaData) {
-        await auditLogger.logPHIAccess(
-          AuditAction.LOGIN_FAILURE,
-          ResourceType.SYSTEM,
-          `mfa-verification-${userId}`,
-          AuditOutcome.FAILURE,
-          { operation: 'mfa_not_setup', phiAccess: isPhiAccess }
-        )
+        try {
+          await auditLogger.logPHIAccess(
+            AuditAction.LOGIN_FAILURE,
+            ResourceType.SYSTEM,
+            `mfa-verification-${userId}`,
+            AuditOutcome.FAILURE,
+            { operation: 'mfa_not_setup', phiAccess: isPhiAccess }
+          )
+        } catch (auditError) {
+          console.warn('Audit logging failed during MFA data check:', auditError)
+        }
 
         return {
           success: false,
