@@ -84,8 +84,13 @@ function loadEnvironmentVariables(): EnvironmentConfig {
   // Method 4: Runtime configuration API (for Azure Static Web Apps)
   // This would be loaded asynchronously, but we'll handle that separately
 
-  // Method 5: Fallback to development defaults for localhost
-  if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+  // Method 5: Fallback to environment-specific defaults
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  const isAzureProduction = window.location.hostname.includes('azurestaticapps.net') ||
+                           window.location.hostname.includes('nexasync.ca')
+
+  if (isLocalhost || isAzureProduction) {
+    // Provide actual credentials for both development and Azure production
     config.supabaseUrl = config.supabaseUrl || 'https://cpkslvmydfdevdftieck.supabase.co'
     config.supabaseAnonKey = config.supabaseAnonKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwa3Nsdm15ZGZkZXZkZnRpZWNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY5MDAyOTUsImV4cCI6MjA2MjQ3NjI5NX0.IfkIVsp3AtLOyXDW9hq9bEvnozd9IaaUay244iDhWGE'
     config.supabaseServiceRoleKey = config.supabaseServiceRoleKey || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwa3Nsdm15ZGZkZXZkZnRpZWNrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjkwMDI5NSwiZXhwIjoyMDYyNDc2Mjk1fQ.5Nwr-DrgL63DwPMH2egxgdjoHGhAxCvIrz2SMTMKqD0'
@@ -102,14 +107,18 @@ export const environmentConfig = loadEnvironmentVariables()
 
 // Debug logging for troubleshooting
 const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
-if (isDev || !sessionStorage.getItem('env-config-logged')) {
+const isAzureProduction = window.location.hostname.includes('azurestaticapps.net') ||
+                         window.location.hostname.includes('nexasync.ca')
+
+if (isDev || isAzureProduction || !sessionStorage.getItem('env-config-logged')) {
   console.log('🔧 Environment Configuration Loaded:', {
     supabaseUrl: environmentConfig.supabaseUrl ? '✅ configured' : '❌ missing',
     supabaseAnonKey: environmentConfig.supabaseAnonKey ? '✅ configured' : '❌ missing',
     azureClientId: environmentConfig.azureClientId ? '✅ configured' : '❌ missing',
     azureTenantId: environmentConfig.azureTenantId ? '✅ configured' : '❌ missing',
     hostname: window.location.hostname,
-    method: 'environmentLoader'
+    method: 'environmentLoader',
+    usingFallback: (isDev || isAzureProduction) ? 'yes - hardcoded credentials' : 'no'
   })
   if (!isDev) {
     sessionStorage.setItem('env-config-logged', 'true')
