@@ -42,9 +42,9 @@ import {
 
 // CRITICAL FIX: Disable console logging in production to prevent infinite loops
 const isProduction = !import.meta.env.DEV
-const safeLog = isProduction ? () => {} : safeLog
-const safeWarn = isProduction ? () => {} : safeWarn
-const safeError = isProduction ? () => {} : safeError
+const safeLog = isProduction ? () => {} : console.log
+const safeWarn = isProduction ? () => {} : console.warn
+const safeError = isProduction ? () => {} : console.error
 
 // ==================================================================================
 // 🔒 LOCKED CODE: SMS SEGMENT CACHE UTILITIES - PRODUCTION READY - NO MODIFICATIONS
@@ -1440,17 +1440,15 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
             </div>
           )}
 
-          {/* Completion Message */}
-          {segmentLoadingComplete && !isLoadingSegments && (
-            <div className="mt-2 mb-1">
+          {/* Completion Message - Only show once after actual loading */}
+          {segmentLoadingComplete && !isLoadingSegments && fullDataSegmentCache.size > 0 && (
+            <div className="mt-2 mb-1 transition-opacity duration-500">
               <div className="flex items-center gap-2 text-xs text-green-600">
-                <div className="w-3 h-3 bg-green-600 rounded-full flex items-center justify-center">
-                  <span className="text-white text-[8px] font-bold">✓</span>
-                </div>
-                <span>✅ Calculation complete!</span>
+                <CheckCircleIcon className="w-3 h-3" />
+                <span>Calculation complete</span>
               </div>
               <div className="text-[10px] text-gray-500 mt-1">
-                💾 {fullDataSegmentCache.size} chats now cached • Future loads will be faster
+                {fullDataSegmentCache.size} chats cached
               </div>
             </div>
           )}
