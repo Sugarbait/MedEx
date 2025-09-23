@@ -1159,27 +1159,18 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
 
       {/* SMS Metrics Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total SMS Segments */}
+        {/* Total Chats */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600 dark:text-gray-400">Total SMS Segments</span>
+            <span className="text-sm text-gray-600 dark:text-gray-400">Total Chats</span>
             <MessageSquareIcon className="w-4 h-4 text-gray-400" />
           </div>
           <div className="text-3xl font-black text-blue-600 mb-1 numeric-data">
-            {smsCostManager.progress ? (
-              <div className="flex items-center gap-2">
-                <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                <span>{metrics.totalSegments || '...'}</span>
-              </div>
-            ) : (
-              metrics.totalSegments || 0
-            )}
+            {isLoading ? '...' : metrics.totalMessages}
           </div>
           <div className="text-xs text-gray-500">
-            {smsCostManager.progress ? (
-              `Loading costs... (${smsCostManager.progress.loaded}/${smsCostManager.progress.total})`
-            ) : (
-              `${metrics.totalMessages} conversations`
+            {metrics.totalMessages === 0 ? 'No conversations yet' : (
+              <><span className="numeric-data">{metrics.totalMessages}</span> conversations</>
             )}
           </div>
         </div>
@@ -1214,17 +1205,28 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
           </div>
         </div>
 
-        {/* Message Delivery Rate */}
+        {/* Total SMS Segments */}
         <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm text-gray-600 dark:text-gray-400">Message Delivery Rate</span>
-            <TrendingUpIcon className="w-4 h-4 text-gray-400" />
+            <span className="text-sm text-gray-600 dark:text-gray-400">Total SMS Segments</span>
+            <BarChart3Icon className="w-4 h-4 text-gray-400" />
           </div>
           <div className="text-3xl font-black text-blue-600 mb-1 numeric-data">
-            {isLoading ? '...' : `${metrics.messageDeliveryRate.toFixed(1)}%`}
+            {smsCostManager.progress ? (
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
+                <span>{metrics.totalSegments || '...'}</span>
+              </div>
+            ) : (
+              metrics.totalSegments || 0
+            )}
           </div>
           <div className="text-xs text-gray-500">
-            0 delivered
+            {smsCostManager.progress ? (
+              `Loading costs... (${smsCostManager.progress.loaded}/${smsCostManager.progress.total})`
+            ) : (
+              `Total segments for date range`
+            )}
           </div>
         </div>
       </div>
