@@ -42,10 +42,19 @@ class LogoService {
   }
 
   /**
-   * Upload a logo file to Supabase storage
+   * Upload a logo file to Supabase storage (Super Users Only)
    */
   async uploadLogo(file: File, type: 'header' | 'footer-light' | 'footer-dark' | 'favicon'): Promise<string | null> {
     try {
+      // Security check: Verify user is a super user (this should be enforced on the backend as well)
+      const currentUser = localStorage.getItem('currentUser')
+      if (currentUser) {
+        const user = JSON.parse(currentUser)
+        if (user.role !== 'super_user') {
+          console.error('Unauthorized: Only super users can upload company logos')
+          throw new Error('Unauthorized: Only super users can upload company logos')
+        }
+      }
       // Validate file
       if (!file.type.startsWith('image/')) {
         throw new Error('File must be an image')
@@ -116,10 +125,19 @@ class LogoService {
   }
 
   /**
-   * Save company logos configuration
+   * Save company logos configuration (Super Users Only)
    */
   async saveLogos(logos: CompanyLogos): Promise<boolean> {
     try {
+      // Security check: Verify user is a super user
+      const currentUser = localStorage.getItem('currentUser')
+      if (currentUser) {
+        const user = JSON.parse(currentUser)
+        if (user.role !== 'super_user') {
+          console.error('Unauthorized: Only super users can modify company logos')
+          return false
+        }
+      }
       // Add timestamp
       logos.lastUpdated = new Date().toISOString()
 
@@ -209,10 +227,19 @@ class LogoService {
   }
 
   /**
-   * Delete a logo
+   * Delete a logo (Super Users Only)
    */
   async deleteLogo(type: 'header' | 'footer-light' | 'footer-dark' | 'favicon'): Promise<boolean> {
     try {
+      // Security check: Verify user is a super user
+      const currentUser = localStorage.getItem('currentUser')
+      if (currentUser) {
+        const user = JSON.parse(currentUser)
+        if (user.role !== 'super_user') {
+          console.error('Unauthorized: Only super users can delete company logos')
+          return false
+        }
+      }
       const logos = await this.getLogos()
 
       switch (type) {

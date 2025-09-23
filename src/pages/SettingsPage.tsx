@@ -93,10 +93,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
     { id: 'security', name: 'Security', icon: ShieldIcon },
     { id: 'api', name: 'API Configuration', icon: KeyIcon },
     { id: 'appearance', name: 'Appearance', icon: PaletteIcon },
-    { id: 'branding', name: 'Company Branding', icon: PaletteIcon },
     { id: 'notifications', name: 'Notifications', icon: BellIcon },
     { id: 'audit', name: 'Audit Logs', icon: FileTextIcon },
-    ...(user?.role === 'super_user' ? [{ id: 'users', name: 'User Management', icon: UserIcon }] : [])
+    ...(user?.role === 'super_user' ? [
+      { id: 'branding', name: 'Company Branding', icon: PaletteIcon },
+      { id: 'users', name: 'User Management', icon: UserIcon }
+    ] : [])
   ]
 
   // Load settings using robust service on component mount
@@ -1776,12 +1778,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
             </div>
           )}
 
-          {/* Company Branding */}
-          {activeTab === 'branding' && (
+          {/* Company Branding - Super Users Only */}
+          {activeTab === 'branding' && user?.role === 'super_user' && (
             <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 Company Branding
               </h2>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                As a super user, you can customize the company logos. Changes will be visible to all users across all profiles.
+              </p>
 
               <div className="space-y-6">
                 {/* Header Logo */}
@@ -1952,13 +1957,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                 {/* Info */}
                 <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
                   <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">
-                    About Company Branding
+                    About Company Branding (Super User Only)
                   </h4>
                   <div className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
-                    <p>• Logos are synchronized across all devices and users</p>
-                    <p>• Changes take effect immediately after page reload</p>
-                    <p>• Supported formats: PNG, JPG, SVG</p>
-                    <p>• Maximum file size: 5MB</p>
+                    <p>• Only super users can upload or modify company logos</p>
+                    <p>• Logos are visible to ALL users across ALL profiles</p>
+                    <p>• Changes are synchronized across all devices instantly</p>
+                    <p>• Page reload required to see updated logos</p>
+                    <p>• Supported formats: PNG, JPG, SVG (Max: 5MB)</p>
                   </div>
                 </div>
               </div>

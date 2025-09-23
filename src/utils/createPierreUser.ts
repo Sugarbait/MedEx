@@ -12,7 +12,7 @@ export async function createPierreUser() {
     const userData: Omit<UserProfileData, 'id'> = {
       name: 'Pierre PhaetonAI',
       email: 'pierre@phaetonai.com',
-      role: 'admin',  // Set as admin role (mapped from super_user)
+      role: 'super_user',  // Set as super_user role for full access
       mfa_enabled: false,
       settings: {
         theme: 'light',
@@ -33,10 +33,10 @@ export async function createPierreUser() {
     const response = await userManagementService.createSystemUser(userData, credentials)
 
     if (response.status === 'success') {
-      console.log('Admin super user created successfully!')
+      console.log('Super user created successfully!')
       console.log('User credentials configured')
       console.log('Password: configured successfully')
-      console.log('Role: admin')
+      console.log('Role: super_user')
       return response.data
     } else {
       console.error('Failed to create admin user:', response.error)
