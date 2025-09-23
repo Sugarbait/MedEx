@@ -391,6 +391,95 @@ class UserSettingsServiceClass {
 
 
   /**
+   * Force immediate sync from cloud, bypassing cache (for cross-device login)
+   */
+  async forceSyncFromCloud(userId: string): Promise<UserSettingsData | null> {
+    try {
+      console.log(`🔄 FORCE SYNC: Starting for user ${userId}`)
+      console.log(`📋 FORCE SYNC: Cache state before clear:`, this.cache.has(userId) ? 'EXISTS' : 'EMPTY')
+
+      // Clear cache first to ensure fresh data
+      this.cache.delete(userId)
+      console.log(`🗑️ FORCE SYNC: Cache cleared for user ${userId}`)
+
+      // Check Supabase configuration
+      const isConfigured = supabaseConfig.isConfigured()
+      console.log(`🔧 FORCE SYNC: Supabase configured:`, isConfigured)
+
+      if (!isConfigured) {
+        console.log('⚠️ FORCE SYNC: Supabase not configured, force sync skipped')
+        console.log('🔍 FORCE SYNC: This is likely why cross-device sync is not working!')
+        return null
+      }
+
+      // Attempt to fetch from Supabase
+      console.log(`🌐 FORCE SYNC: Querying Supabase for user_settings where user_id = ${userId}`)
+      const queryStart = Date.now()
+
+      const { data: settings, error } = await supabase
+        .from('user_settings')
+        .select('*')
+        .eq('user_id', userId)
+        .single()
+
+      const queryDuration = Date.now() - queryStart
+      console.log(`⏱️ FORCE SYNC: Supabase query completed in ${queryDuration}ms`)
+
+      if (error) {
+        console.log(`❌ FORCE SYNC: Supabase error:`, error)
+        console.log(`🔍 FORCE SYNC: Error code:`, error.code)
+        console.log(`🔍 FORCE SYNC: Error details:`, error.details)
+        console.log(`🔍 FORCE SYNC: Error hint:`, error.hint)
+        return null
+      }
+
+      if (!settings) {
+        console.log('📭 FORCE SYNC: Query succeeded but no settings data returned')
+        console.log('ℹ️ FORCE SYNC: No cloud settings found for user, will use defaults')
+        return null
+      }
+
+      console.log(`📄 FORCE SYNC: Raw settings data received:`)
+      console.log(`   - user_id:`, settings.user_id)
+      console.log(`   - theme:`, settings.theme)
+      console.log(`   - retell_config:`, settings.retell_config ? 'EXISTS' : 'NULL')
+      console.log(`   - updated_at:`, settings.updated_at)
+      console.log(`   - last_synced:`, settings.last_synced)
+
+      // Transform the data
+      console.log(`🔄 FORCE SYNC: Transforming Supabase data to local format...`)
+      const transformStart = Date.now()
+      const localSettings = await this.transformSupabaseToLocal(settings)
+      const transformDuration = Date.now() - transformStart
+      console.log(`✅ FORCE SYNC: Transform completed in ${transformDuration}ms`)
+
+      // Log what we got after transformation
+      console.log(`📊 FORCE SYNC: Transformed settings keys:`, Object.keys(localSettings))
+      if (localSettings.retell_config) {
+        console.log(`🔑 FORCE SYNC: API credentials after decryption:`)
+        console.log(`   - API Key:`, localSettings.retell_config.api_key ? `${localSettings.retell_config.api_key.substring(0, 10)}...` : 'MISSING')
+        console.log(`   - Call Agent ID:`, localSettings.retell_config.call_agent_id || 'MISSING')
+        console.log(`   - SMS Agent ID:`, localSettings.retell_config.sms_agent_id || 'MISSING')
+      } else {
+        console.log(`❌ FORCE SYNC: No retell_config in transformed data`)
+      }
+
+      // Update cache and localStorage immediately
+      this.cache.set(userId, { data: localSettings, timestamp: Date.now() })
+      this.storeLocalSettings(userId, localSettings)
+
+      console.log(`✅ FORCE SYNC: Successfully cached and stored locally`)
+      console.log(`✅ FORCE SYNC: Complete - loaded ${Object.keys(localSettings).length} settings keys`)
+      return localSettings
+
+    } catch (error) {
+      console.error('❌ FORCE SYNC: Failed with exception:', error)
+      console.error('❌ FORCE SYNC: Error stack:', error instanceof Error ? error.stack : 'No stack trace')
+      return null
+    }
+  }
+
+  /**
    * Clear cache (useful for logout)
    */
   clearCache(userId?: string): void {

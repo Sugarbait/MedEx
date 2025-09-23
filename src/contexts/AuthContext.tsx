@@ -61,11 +61,40 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
           const userProfile = await authService.getUserProfile(account.homeAccountId)
 
-          if (userProfile.mfaEnabled && !userProfile.mfaVerified) {
+          // Force sync MFA data from cloud for cross-device support
+          console.log('🔐 CROSS-DEVICE MFA SYNC: Starting MFA sync for user:', userProfile.id)
+          try {
+            const mfaSyncStart = Date.now()
+            const mfaSyncSuccess = await mfaService.forceSyncFromCloud(userProfile.id)
+            const mfaSyncDuration = Date.now() - mfaSyncStart
+
+            if (mfaSyncSuccess) {
+              console.log(`✅ MFA force sync SUCCESS in ${mfaSyncDuration}ms`)
+              console.log('🔐 MFA data available on this device after sync')
+            } else {
+              console.log(`⚠️ MFA force sync found no cloud data in ${mfaSyncDuration}ms`)
+            }
+          } catch (error) {
+            console.warn('⚠️ MFA force sync failed:', error)
+          }
+
+          // Check if MFA is required after sync
+          const hasMFASetup = await mfaService.hasMFASetup(userProfile.id)
+          const mfaEnabled = hasMFASetup && userProfile.mfaEnabled
+
+          console.log('🔐 MFA Status Check:', {
+            hasMFASetup,
+            userProfileMfaEnabled: userProfile.mfaEnabled,
+            userProfileMfaVerified: userProfile.mfaVerified,
+            finalMfaEnabled: mfaEnabled
+          })
+
+          if (mfaEnabled && !userProfile.mfaVerified) {
             logger.info('MFA required for user', userProfile.id)
             setMfaRequired(true)
             const challenge = await authService.initiateMFA(userProfile.id)
             setMfaChallenge(challenge)
+            console.log('🔐 MFA challenge initiated for cross-device login')
           } else {
             setUser(userProfile)
 
@@ -82,10 +111,42 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             // Store user data securely
             await secureStorage.setSessionData('current_user', userProfile)
 
-            // Load user settings from cloud
+            // Load user settings from cloud with force sync for cross-device support
             if (userProfile.id) {
               try {
-                const settings = await userSettingsService.getUserSettings(userProfile.id)
+                // Enhanced logging for cross-device sync debugging
+                console.log('🔄 CROSS-DEVICE SYNC: Starting settings load for user:', userProfile.id)
+                console.log('📱 Device check: Cache state before force sync')
+
+                // First, try force sync from cloud to ensure fresh data on new device
+                console.log('🔄 Attempting force sync for cross-device login...')
+                const startTime = Date.now()
+                let settings = await userSettingsService.forceSyncFromCloud(userProfile.id)
+                const syncDuration = Date.now() - startTime
+
+                if (settings) {
+                  console.log(`✅ Force sync SUCCESS in ${syncDuration}ms`)
+                  console.log('📊 Force sync retrieved settings with keys:', Object.keys(settings))
+                  if (settings.retell_config) {
+                    console.log('🔑 API credentials found in force sync:')
+                    console.log('   - API Key:', settings.retell_config.api_key ? '✅ Present' : '❌ Missing')
+                    console.log('   - Call Agent ID:', settings.retell_config.call_agent_id ? '✅ Present' : '❌ Missing')
+                    console.log('   - SMS Agent ID:', settings.retell_config.sms_agent_id ? '✅ Present' : '❌ Missing')
+                  } else {
+                    console.log('⚠️ No retell_config found in force sync result')
+                  }
+                } else {
+                  console.log('❌ Force sync returned null - no cloud data found')
+                  console.log('🔄 Force sync found no data, falling back to regular settings load...')
+                  settings = await userSettingsService.getUserSettings(userProfile.id)
+
+                  if (settings?.retell_config) {
+                    console.log('🔍 Fallback found retell_config - this suggests cloud sync issue')
+                  } else {
+                    console.log('🆕 No settings found anywhere - new user or cloud not configured')
+                  }
+                }
+
                 setUserSettings(settings)
 
                 // Store settings securely
@@ -102,8 +163,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                   }))
                 })
 
+                console.log('✅ Cross-device settings sync completed successfully')
+
               } catch (error) {
                 console.warn('Failed to load settings:', error)
+                // Fall back to regular settings load as safety net
+                try {
+                  const fallbackSettings = await userSettingsService.getUserSettings(userProfile.id)
+                  setUserSettings(fallbackSettings)
+                } catch (fallbackError) {
+                  console.error('Settings fallback also failed:', fallbackError)
+                }
               }
             }
 
@@ -176,12 +246,23 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         await authService.invalidateSession(sessionInfo.sessionId)
       }
 
-      // Clean up settings subscriptions
-      userSettingsService.unsubscribeFromSettings()
-      userSettingsService.clearCache()
+      // Clean up settings subscriptions for current user
+      if (user?.id) {
+        userSettingsService.unsubscribeFromSettings(user.id)
+        userSettingsService.clearCache(user.id)
+      } else {
+        // Fallback: clean up all subscriptions and cache
+        userSettingsService.unsubscribeFromSettings()
+        userSettingsService.clearCache()
+      }
 
       // Clear all secure storage
       secureStorage.clear()
+
+      // Clear any localStorage items related to user settings
+      if (user?.id) {
+        localStorage.removeItem(`user_settings_${user.id}`)
+      }
 
       await instance.logoutPopup({
         postLogoutRedirectUri: window.location.origin,
