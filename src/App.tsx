@@ -135,8 +135,9 @@ const AppContent: React.FC<{
     }
 
     // Listen for custom events from SettingsPage
-    const handleCustomSettingsUpdate = () => {
-      setTimeout(handleSettingsUpdate, 100) // Small delay to ensure localStorage is updated
+    const handleCustomSettingsUpdate = (event: any) => {
+      console.log('🔄 App.tsx: Received userSettingsUpdated event:', event.detail)
+      setTimeout(handleSettingsUpdate, 150) // Small delay to ensure localStorage is updated
     }
 
     window.addEventListener('storage', handleStorageChange)

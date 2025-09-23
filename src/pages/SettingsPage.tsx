@@ -713,12 +713,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   }
 
   const handleSessionTimeoutChange = async (timeout: number) => {
+    console.log('🔄 SettingsPage: Updating session timeout to:', timeout, 'minutes')
+
     await updateSettings({ sessionTimeout: timeout })
 
-    // Dispatch custom event to notify App.tsx of session timeout change
-    window.dispatchEvent(new CustomEvent('userSettingsUpdated', {
-      detail: { sessionTimeout: timeout }
-    }))
+    // Add a small delay to ensure localStorage is updated
+    setTimeout(() => {
+      console.log('🔄 SettingsPage: Dispatching userSettingsUpdated event')
+      // Dispatch custom event to notify App.tsx of session timeout change
+      window.dispatchEvent(new CustomEvent('userSettingsUpdated', {
+        detail: { sessionTimeout: timeout }
+      }))
+    }, 50)
   }
 
 
