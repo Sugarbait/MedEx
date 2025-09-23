@@ -555,7 +555,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     } else {
       safeLog(`💾 All ${allFilteredChats.length} chats already cached - no bulk loading needed!`)
     }
-  }, [allFilteredChats, fullDataSegmentCache, loadAccurateSegmentsForAllChats, hasInitiallyLoaded])
+  }, [allFilteredChats, fullDataSegmentCache, hasInitiallyLoaded])
 
   // Debounced search and filters
   const { debouncedValue: debouncedSearchTerm } = useDebounce(searchTerm, 500, {
@@ -789,10 +789,12 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           })
         })
 
-        // Trigger bulk load to get accurate data
-        setTimeout(() => {
-          loadAccurateSegmentsForAllChats()
-        }, 500)
+        // Trigger bulk load to get accurate data - but only if not already loading
+        if (!isLoadingSegments) {
+          setTimeout(() => {
+            loadAccurateSegmentsForAllChats()
+          }, 500)
+        }
       }
 
       // YEAR VIEW FIX: If we're getting significantly fewer segments than expected for year view
@@ -805,11 +807,13 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         if (cacheCoverage < 0.5) {
           safeWarn(`🎯 YEAR VIEW FIX: Cache coverage too low (${Math.round(cacheCoverage * 100)}%), triggering bulk recalculation`)
 
-          // Don't clear cache, but trigger bulk loading for missing data
-          setTimeout(() => {
-            safeWarn(`🎯 YEAR VIEW FIX: Starting bulk segment loading for year view`)
-            loadSegmentDataForChats(allFilteredChats)
-          }, 1000)
+          // Don't clear cache, but trigger bulk loading for missing data - but only if not already loading
+          if (!isLoadingSegments) {
+            setTimeout(() => {
+              safeWarn(`🎯 YEAR VIEW FIX: Starting bulk segment loading for year view`)
+              loadSegmentDataForChats(allFilteredChats)
+            }, 1000)
+          }
         }
       }
 
