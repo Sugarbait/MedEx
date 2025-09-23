@@ -786,6 +786,29 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
     await toastNotificationService.updatePreferences(user.id, { doNotDisturb: newDndSettings })
   }
 
+  // Test function to trigger demo toast notifications
+  const handleTestToastNotification = (type: 'call' | 'sms') => {
+    const testNotification = {
+      id: `test_${type}_${Date.now()}`,
+      type,
+      title: type === 'call' ? 'Test Call Notification' : 'Test SMS Notification',
+      timestamp: new Date(),
+      recordId: `test_${type}_${Math.random().toString(36).substr(2, 9)}`
+    }
+
+    console.log('🧪 Triggering test toast notification:', testNotification)
+
+    // Directly call the toast service's private showNotification method via callback
+    const unsubscribe = toastNotificationService.subscribe((notification) => {
+      // This will be called immediately for our test
+      unsubscribe() // Clean up the subscription
+    })
+
+    // Manually trigger the notification by calling the service's callback
+    // This bypasses the real-time monitoring and directly shows the toast
+    ;(toastNotificationService as any).showNotification(testNotification)
+  }
+
   // Helper function to test Supabase connectivity
   const testSupabaseConnection = async () => {
     try {
@@ -1632,6 +1655,41 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                         </p>
                       </div>
                     )}
+
+                    {/* Test Buttons Section */}
+                    <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
+                      <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-3">Test Toast Notifications</h4>
+                      <p className="text-sm text-blue-700 dark:text-blue-300 mb-4">
+                        Click the buttons below to see what the toast notifications look like
+                      </p>
+                      <div className="flex gap-3">
+                        <button
+                          onClick={() => handleTestToastNotification('call')}
+                          disabled={!toastPreferences.enabled}
+                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                        >
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
+                          </svg>
+                          Test Call Toast
+                        </button>
+                        <button
+                          onClick={() => handleTestToastNotification('sms')}
+                          disabled={!toastPreferences.enabled}
+                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                        >
+                          <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd" />
+                          </svg>
+                          Test SMS Toast
+                        </button>
+                      </div>
+                      {!toastPreferences.enabled && (
+                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                          Enable "Real-time Toasts" above to test notifications
+                        </p>
+                      )}
+                    </div>
                   </div>
                 </div>
               </div>
