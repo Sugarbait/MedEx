@@ -1196,13 +1196,21 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     try {
       safeLog('🔄 Starting PDF export for all chats in date range:', selectedDateRange)
 
+      // Show loading state
+      const originalButtonText = 'Export Chat Report'
+      const button = document.querySelector('[title*="Export all SMS chats"]') as HTMLButtonElement
+      if (button) {
+        button.disabled = true
+        button.innerHTML = '<svg class="animate-spin w-4 h-4 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Generating PDF...'
+      }
+
       // Get the filtered chats for the current date range (including custom dates)
       const { start, end } = getDateRangeFromSelection(selectedDateRange, customStartDate, customEndDate)
       safeLog(`📅 Export date range: ${start.toLocaleString()} to ${end.toLocaleString()}`)
 
       // Use the already filtered chats from the page state to ensure consistency
       // allFilteredChats already contains the correctly filtered chats for the current date range
-      const chatsToExport = allFilteredChats.filter(chat => {
+      let chatsToExport = allFilteredChats.filter(chat => {
         const chatDate = new Date(chat.start_timestamp || chat.created_at || 0)
         // Double-check the date filtering to ensure accuracy
         return chatDate >= start && chatDate <= end
@@ -1213,9 +1221,24 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         return
       }
 
+      // Limit export to prevent performance issues
+      const MAX_CHATS = 50
+      if (chatsToExport.length > MAX_CHATS) {
+        const confirmLarge = confirm(`You are about to export ${chatsToExport.length} chats. This may take a while and create a large PDF. Would you like to limit to the most recent ${MAX_CHATS} chats instead?`)
+        if (confirmLarge) {
+          chatsToExport = chatsToExport.slice(0, MAX_CHATS)
+        }
+      }
+
       safeLog(`📊 Exporting ${chatsToExport.length} chats for ${selectedDateRange}`)
 
-      const doc = new jsPDF()
+      // Create PDF document with error handling
+      let doc: jsPDF
+      try {
+        doc = new jsPDF()
+      } catch (pdfError) {
+        throw new Error(`Failed to create PDF document: ${pdfError instanceof Error ? pdfError.message : 'Unknown PDF error'}`)
+      }
       let yPosition = 20
       const pageWidth = doc.internal.pageSize.width
       const pageHeight = doc.internal.pageSize.height
@@ -1251,9 +1274,18 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth / 2, yPosition, { align: 'center' })
       yPosition += 20
 
-      // Process each chat
+      // Process each chat with async yields to prevent blocking
       for (let i = 0; i < chatsToExport.length; i++) {
         const chat = chatsToExport[i]
+
+        // Yield control every 10 chats to prevent blocking and update progress
+        if (i > 0 && i % 10 === 0) {
+          if (button) {
+            const progress = Math.round((i / chatsToExport.length) * 100)
+            button.innerHTML = `<svg class="animate-spin w-4 h-4 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Processing ${progress}%...`
+          }
+          await new Promise(resolve => setTimeout(resolve, 10)) // 10ms yield
+        }
 
         checkNewPage(60) // Ensure enough space for chat header
 
@@ -1285,7 +1317,14 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                            chat.phone_number ||
                            'Unknown'
 
-        const patientId = phoneNumber !== 'Unknown' ? patientIdService.getPatientId(phoneNumber) : 'PT00000000'
+        // Get patient ID safely to avoid audit logging issues
+        let patientId = 'PT00000000'
+        try {
+          patientId = phoneNumber !== 'Unknown' ? patientIdService.getPatientId(phoneNumber) : 'PT00000000'
+        } catch (patientError) {
+          safeWarn('Patient ID generation error (using fallback):', patientError)
+          patientId = 'PT00000000'
+        }
         doc.text(`Patient ID: ${patientId}`, margin, yPosition)
         yPosition += 6
 
@@ -1345,8 +1384,8 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           doc.setFontSize(9)
           doc.setFont('helvetica', 'normal')
 
-          // Limit to first 10 messages to keep PDF reasonable
-          const messagesToShow = chat.transcript.slice(0, 10)
+          // Limit to first 5 messages to improve performance and keep PDF reasonable
+          const messagesToShow = chat.transcript.slice(0, 5)
           messagesToShow.forEach((message, idx) => {
             checkNewPage(15)
 
@@ -1367,10 +1406,10 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
             yPosition += 3
           })
 
-          if (chat.transcript.length > 10) {
+          if (chat.transcript.length > 5) {
             doc.setFontSize(9)
             doc.setFont('helvetica', 'italic')
-            doc.text(`... and ${chat.transcript.length - 10} more messages`, margin, yPosition)
+            doc.text(`... and ${chat.transcript.length - 5} more messages`, margin, yPosition)
             yPosition += 8
           }
         }
@@ -1398,7 +1437,20 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
     } catch (error) {
       safeError('❌ PDF export failed:', error)
-      alert('Failed to export PDF. Please try again.')
+
+      // Show detailed error information
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+      const detailedError = `PDF Export Failed:\n\nError: ${errorMessage}\n\nThis might be due to:\n• Too many chats selected (try a smaller date range)\n• Network connectivity issues\n• Browser memory limitations\n\nPlease try:\n1. Select a smaller date range\n2. Refresh the page and try again\n3. Check your internet connection`
+
+      alert(detailedError)
+      safeError('PDF export error details:', { error, selectedDateRange, chatCount: allFilteredChats.length })
+    } finally {
+      // Reset button state
+      const button = document.querySelector('[title*="Export all SMS chats"]') as HTMLButtonElement
+      if (button) {
+        button.disabled = false
+        button.innerHTML = '<svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>Export Chat Report'
+      }
     }
   }
 
