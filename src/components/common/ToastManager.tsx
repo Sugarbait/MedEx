@@ -10,6 +10,8 @@ export const ToastManager: React.FC<ToastManagerProps> = ({ userId }) => {
   const [toasts, setToasts] = useState<ToastNotificationData[]>([])
   const [preferences] = useState(toastNotificationService.getPreferences())
 
+  console.log('🔔 ToastManager render - userId:', userId, 'toasts count:', toasts.length)
+
   useEffect(() => {
     if (!userId) return
 
@@ -18,9 +20,11 @@ export const ToastManager: React.FC<ToastManagerProps> = ({ userId }) => {
 
     // Subscribe to new notifications
     const unsubscribe = toastNotificationService.subscribe((notification) => {
+      console.log('🔔 ToastManager received notification:', notification)
       setToasts(current => {
         // Limit to maximum 3 toasts to prevent screen overflow
         const newToasts = [notification, ...current.slice(0, 2)]
+        console.log('🔔 ToastManager updated toasts count:', newToasts.length)
         return newToasts
       })
     })
@@ -46,14 +50,11 @@ export const ToastManager: React.FC<ToastManagerProps> = ({ userId }) => {
   }
 
   return (
-    <div className="fixed z-50 pointer-events-none">
-      {toasts.map((toast, index) => (
+    <div className="fixed bottom-36 right-5 z-50 pointer-events-none space-y-3">
+      {toasts.map((toast) => (
         <div
           key={toast.id}
           className="pointer-events-auto"
-          style={{
-            transform: `translateY(-${index * 85}px)` // Stack toasts vertically
-          }}
         >
           <ToastNotification
             notification={toast}

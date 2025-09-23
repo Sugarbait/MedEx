@@ -99,14 +99,12 @@ export const ToastNotification: React.FC<ToastNotificationProps> = ({
   return (
     <div
       className={`
-        fixed z-50 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700
+        relative bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700
         rounded-lg shadow-lg p-3 cursor-pointer transition-all duration-200
         hover:shadow-xl hover:scale-105
         ${isAnimating ? 'opacity-0 transform translate-x-full' : 'opacity-100 transform translate-x-0'}
       `}
       style={{
-        bottom: '140px', // Position above chat button
-        right: '20px',
         minWidth: '280px',
         maxWidth: '320px'
       }}
