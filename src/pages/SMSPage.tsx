@@ -41,6 +41,8 @@ import {
   TrashIcon,
   ZapIcon
 } from 'lucide-react'
+import jsPDF from 'jspdf'
+import { patientIdService } from '@/services/patientIdService'
 
 // CRITICAL FIX: Disable console logging in production to prevent infinite loops
 const isProduction = !import.meta.env.DEV
@@ -1189,6 +1191,217 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
   }
 
+  // Export all chats in selected date range to PDF
+  const exportAllChatsToPDF = async () => {
+    try {
+      safeLog('🔄 Starting PDF export for all chats in date range:', selectedDateRange)
+
+      // Get the filtered chats for the current date range (including custom dates)
+      const { start, end } = getDateRangeFromSelection(selectedDateRange, customStartDate, customEndDate)
+      safeLog(`📅 Export date range: ${start.toLocaleString()} to ${end.toLocaleString()}`)
+
+      // Use the already filtered chats from the page state to ensure consistency
+      // allFilteredChats already contains the correctly filtered chats for the current date range
+      const chatsToExport = allFilteredChats.filter(chat => {
+        const chatDate = new Date(chat.start_timestamp || chat.created_at || 0)
+        // Double-check the date filtering to ensure accuracy
+        return chatDate >= start && chatDate <= end
+      })
+
+      if (chatsToExport.length === 0) {
+        alert(`No SMS chats found for ${selectedDateRange}. Please select a different date range.`)
+        return
+      }
+
+      safeLog(`📊 Exporting ${chatsToExport.length} chats for ${selectedDateRange}`)
+
+      const doc = new jsPDF()
+      let yPosition = 20
+      const pageWidth = doc.internal.pageSize.width
+      const pageHeight = doc.internal.pageSize.height
+      const margin = 20
+
+      // Helper function to add new page if needed
+      const checkNewPage = (requiredSpace = 20) => {
+        if (yPosition + requiredSpace > pageHeight - 30) {
+          doc.addPage()
+          yPosition = 20
+        }
+      }
+
+      // Title page
+      doc.setFontSize(20)
+      doc.setFont('helvetica', 'bold')
+      doc.text('SMS Chat Export Report', pageWidth / 2, yPosition, { align: 'center' })
+      yPosition += 15
+
+      doc.setFontSize(14)
+      doc.setFont('helvetica', 'normal')
+      const displayRange = selectedDateRange === 'custom' ? 'CUSTOM RANGE' : selectedDateRange.toUpperCase()
+      doc.text(`Date Range: ${displayRange}`, pageWidth / 2, yPosition, { align: 'center' })
+      yPosition += 10
+
+      doc.setFontSize(12)
+      doc.text(`From: ${start.toLocaleDateString()} To: ${end.toLocaleDateString()}`, pageWidth / 2, yPosition, { align: 'center' })
+      yPosition += 10
+
+      doc.text(`Total Chats: ${chatsToExport.length}`, pageWidth / 2, yPosition, { align: 'center' })
+      yPosition += 10
+
+      doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth / 2, yPosition, { align: 'center' })
+      yPosition += 20
+
+      // Process each chat
+      for (let i = 0; i < chatsToExport.length; i++) {
+        const chat = chatsToExport[i]
+
+        checkNewPage(60) // Ensure enough space for chat header
+
+        // Chat separator
+        if (i > 0) {
+          doc.setDrawColor(200, 200, 200)
+          doc.line(margin, yPosition, pageWidth - margin, yPosition)
+          yPosition += 10
+        }
+
+        // Chat header
+        doc.setFontSize(14)
+        doc.setFont('helvetica', 'bold')
+        doc.text(`Chat ${i + 1}: ${chat.chat_id}`, margin, yPosition)
+        yPosition += 8
+
+        // Basic chat info
+        doc.setFontSize(10)
+        doc.setFont('helvetica', 'normal')
+
+        const chatDateTime = formatDateTime(chat.start_timestamp || chat.created_at || 0)
+        doc.text(`Date: ${chatDateTime.date} ${chatDateTime.time}`, margin, yPosition)
+        yPosition += 6
+
+        // Patient info
+        const phoneNumber = chat.chat_analysis?.custom_analysis_data?.phone_number ||
+                           chat.chat_analysis?.custom_analysis_data?.customer_phone_number ||
+                           chat.metadata?.phone_number ||
+                           chat.phone_number ||
+                           'Unknown'
+
+        const patientId = phoneNumber !== 'Unknown' ? patientIdService.getPatientId(phoneNumber) : 'PT00000000'
+        doc.text(`Patient ID: ${patientId}`, margin, yPosition)
+        yPosition += 6
+
+        doc.text(`Status: ${chat.status || 'Unknown'}`, margin, yPosition)
+        yPosition += 6
+
+        // Cost info
+        const segments = getSegmentCount(chat)
+        const costPerSegment = smsCostPerSegment
+        const totalCost = segments * costPerSegment
+        doc.text(`SMS Segments: ${segments} | Cost: $${totalCost.toFixed(4)} CAD`, margin, yPosition)
+        yPosition += 10
+
+        // Detailed Analysis Section
+        if (chat.chat_analysis?.custom_analysis_data && Object.keys(chat.chat_analysis.custom_analysis_data).length > 0) {
+          checkNewPage(40)
+
+          doc.setFontSize(12)
+          doc.setFont('helvetica', 'bold')
+          doc.text('Detailed Analysis:', margin, yPosition)
+          yPosition += 8
+
+          doc.setFontSize(10)
+          doc.setFont('helvetica', 'normal')
+
+          Object.entries(chat.chat_analysis.custom_analysis_data).forEach(([key, value]) => {
+            checkNewPage(12)
+
+            const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+            const displayValue = String(value || 'N/A')
+
+            // Handle long values by wrapping text
+            const maxWidth = pageWidth - 2 * margin
+            if (displayValue.length > 60) {
+              const lines = doc.splitTextToSize(`${displayKey}: ${displayValue}`, maxWidth)
+              lines.forEach((line: string) => {
+                checkNewPage(6)
+                doc.text(line, margin, yPosition)
+                yPosition += 6
+              })
+            } else {
+              doc.text(`${displayKey}: ${displayValue}`, margin, yPosition)
+              yPosition += 6
+            }
+          })
+        }
+
+        // Message Thread (if available and not too long)
+        if (chat.transcript && chat.transcript.length > 0) {
+          checkNewPage(30)
+
+          doc.setFontSize(12)
+          doc.setFont('helvetica', 'bold')
+          doc.text('Message Thread:', margin, yPosition)
+          yPosition += 8
+
+          doc.setFontSize(9)
+          doc.setFont('helvetica', 'normal')
+
+          // Limit to first 10 messages to keep PDF reasonable
+          const messagesToShow = chat.transcript.slice(0, 10)
+          messagesToShow.forEach((message, idx) => {
+            checkNewPage(15)
+
+            const role = message.role === 'user' ? 'Patient' : 'Assistant'
+            const content = message.content || message.message || 'No content'
+
+            doc.setFont('helvetica', 'bold')
+            doc.text(`${role}:`, margin, yPosition)
+            yPosition += 5
+
+            doc.setFont('helvetica', 'normal')
+            const messageLines = doc.splitTextToSize(content, pageWidth - 2 * margin - 10)
+            messageLines.forEach((line: string) => {
+              checkNewPage(5)
+              doc.text(line, margin + 10, yPosition)
+              yPosition += 5
+            })
+            yPosition += 3
+          })
+
+          if (chat.transcript.length > 10) {
+            doc.setFontSize(9)
+            doc.setFont('helvetica', 'italic')
+            doc.text(`... and ${chat.transcript.length - 10} more messages`, margin, yPosition)
+            yPosition += 8
+          }
+        }
+
+        yPosition += 15 // Space between chats
+      }
+
+      // Footer on last page
+      doc.setFontSize(8)
+      doc.setFont('helvetica', 'italic')
+      doc.text('🤖 Generated with CareXPS Healthcare CRM', margin, pageHeight - 20)
+      doc.text(`Exported by: ${currentUser?.email || 'System'}`, margin, pageHeight - 12)
+      doc.text(`Total Pages: ${doc.getNumberOfPages()}`, pageWidth - margin - 40, pageHeight - 12)
+
+      // Save the PDF
+      const dateStr = new Date().toISOString().split('T')[0]
+      const rangeStr = selectedDateRange === 'custom' ?
+        `${start.toISOString().split('T')[0]}_to_${end.toISOString().split('T')[0]}` :
+        selectedDateRange
+      const filename = `SMS-Export-${rangeStr}-${dateStr}.pdf`
+      doc.save(filename)
+
+      safeLog(`✅ PDF export completed: ${filename}`)
+      alert(`Successfully exported ${chatsToExport.length} SMS chats to ${filename}`)
+
+    } catch (error) {
+      safeError('❌ PDF export failed:', error)
+      alert('Failed to export PDF. Please try again.')
+    }
+  }
+
   const getSentimentColor = (sentiment?: string) => {
     switch (sentiment) {
       case 'positive': return 'text-green-600 bg-green-50 border-green-200'
@@ -1348,7 +1561,11 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
             <TrashIcon className="w-4 h-4" />
             Clear Cache
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+          <button
+            onClick={exportAllChatsToPDF}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            title={`Export all SMS chats for ${selectedDateRange} to PDF`}
+          >
             <DownloadIcon className="w-4 h-4" />
             Export Chat Report
           </button>
