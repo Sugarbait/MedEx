@@ -50,7 +50,7 @@ export const ToastManager: React.FC<ToastManagerProps> = ({ userId }) => {
   }
 
   return (
-    <div className="fixed bottom-36 right-5 z-50 pointer-events-none space-y-3">
+    <div className="fixed bottom-4 right-4 z-50 pointer-events-none space-y-3">
       {toasts.map((toast) => (
         <div
           key={toast.id}
