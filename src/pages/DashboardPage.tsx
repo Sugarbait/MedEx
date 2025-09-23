@@ -6,6 +6,7 @@ import { retellService, currencyService, twilioCostService, chatService } from '
 import { pdfExportService } from '@/services/pdfExportService'
 import { userSettingsService } from '@/services'
 import { SiteHelpChatbot } from '@/components/common/SiteHelpChatbot'
+import { DashboardCharts } from '@/components/dashboard/DashboardCharts'
 import {
   PhoneIcon,
   MessageSquareIcon,
@@ -1289,6 +1290,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
           </div>
         </div>
       </div>
+
+      {/* Dashboard Charts - Beautiful animated charts with no PHI */}
+      <DashboardCharts
+        metrics={metrics}
+        dateRange={selectedDateRange}
+      />
 
       {/* Site Help Chatbot */}
       <SiteHelpChatbot
