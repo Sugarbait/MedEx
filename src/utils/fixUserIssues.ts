@@ -294,7 +294,7 @@ export class UserIssuesFixer {
         try {
           await avatarStorageService.syncAvatarAcrossDevices(user.id)
         } catch (error) {
-          console.warn(`Failed to sync avatar for ${user.name}:`, error)
+          console.warn(`Failed to sync avatar for user [REDACTED]:`, error)
         }
       }
 

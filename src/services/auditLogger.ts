@@ -328,8 +328,8 @@ class HIPAAAuditLogger {
       // Store in Supabase with retry logic
       await this.storeAuditEntry(encryptedEntry)
 
-      // Log to console for immediate debugging (remove in production)
-      console.log(`[AUDIT] ${params.action} on ${params.resourceType}:${params.resourceId} by ${auditEntry.user_name} - ${params.outcome}`)
+      // Log to console without PHI/PII data for debugging
+      console.log(`[AUDIT] ${params.action} on ${params.resourceType}:[REDACTED] by [REDACTED] - ${params.outcome}`)
 
     } catch (error) {
       // Critical: Audit logging failures must be handled

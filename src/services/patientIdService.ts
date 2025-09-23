@@ -104,7 +104,7 @@ class PatientIdService {
     this.patientMap.set(normalized, record)
     this.saveToStorage()
 
-    console.log(`Generated new Patient ID: ${patientId} for phone: ${phoneNumber} (normalized: ${normalized})`)
+    console.log(`Generated new Patient ID: ${patientId} for phone: [REDACTED] (normalized: [REDACTED])`)
 
     return patientId
   }

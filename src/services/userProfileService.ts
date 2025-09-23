@@ -456,7 +456,7 @@ export class UserProfileService {
 
         // Check for email duplicates (different ID, same email)
         if (existingIndexByEmail >= 0 && existingIndexById !== existingIndexByEmail) {
-          console.warn(`Demo user ${demoUser.name} has email conflict with existing user. Skipping to prevent duplicate.`)
+          console.warn(`Demo user [REDACTED] has email conflict with existing user. Skipping to prevent duplicate.`)
           return
         }
 

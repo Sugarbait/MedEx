@@ -83,7 +83,7 @@ export const ChatDetailModal: React.FC<ChatDetailModalProps> = ({ chat, isOpen, 
       if (phoneNumber && phoneNumber !== 'Unknown Number') {
         const patientId = patientIdService.getPatientId(phoneNumber)
         const record = patientIdService.getPatientRecord(phoneNumber)
-        console.log('ChatDetailModal: Generated Patient ID:', patientId, 'for phone:', phoneNumber)
+        console.log('ChatDetailModal: Generated Patient ID:', patientId, 'for phone: [REDACTED]')
         setGeneratedPatientId(patientId)
         setPatientRecord(record)
       } else {
