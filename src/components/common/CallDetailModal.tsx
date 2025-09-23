@@ -230,153 +230,207 @@ export const CallDetailModal: React.FC<CallDetailModalProps> = ({ call, isOpen, 
             {call.transcript && (
               <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Full Transcript</h3>
-                <div className="bg-white dark:bg-gray-800 rounded border p-4 max-h-64 overflow-y-auto">
+                <div className="bg-white dark:bg-gray-800 rounded border p-4 max-h-96 overflow-y-auto">
                   {(() => {
-                    // Enhanced transcript parsing to capture both sides of conversation
+                    // Enhanced transcript parsing for timestamped conversations with tool calls
                     const transcript = call.transcript.trim()
+
                     // Check if transcript is truncated and handle accordingly
                     if (transcript.includes('…')) {
                       console.log('⚠️ Transcript appears truncated, displaying available content')
                     }
+
+                    // Check for different transcript formats
+                    const hasTimestamps = /\d+:\d+\s*$/m.test(transcript)
+                    const hasKeypadInputs = /User pressed keypad/i.test(transcript)
+                    const hasVoiceConversation = /Agent:.*\n\n\d+:\d+\n\nUser:/i.test(transcript) ||
+                                               /Agent:.*\n\d+:\d+\n\nAgent:/i.test(transcript)
 
                     // Check for multiple types of speaker patterns that Retell AI might use
                     const hasStructuredFormat = /\b(AI|Agent|Assistant|Patient|User|Human|Caller|Customer|Client|Bot|System):\s/i.test(transcript) ||
                                               /^(AI|Agent|Assistant|Patient|User|Human|Caller|Customer|Client|Bot|System)\s*:/im.test(transcript) ||
                                               /\[(AI|Agent|Assistant|Patient|User|Human|Caller|Customer|Client|Bot|System)\]/i.test(transcript)
 
-                    if (hasStructuredFormat) {
-                      // Split by lines and process each line
-                      const lines = transcript.split('\n').filter(line => line.trim())
+                    if (hasTimestamps || hasStructuredFormat) {
+                      // Parse different transcript formats
+                      const parseTranscript = (text: string) => {
+                        const entries = []
+
+                        if (hasVoiceConversation && !hasKeypadInputs) {
+                          // Voice conversation format: "Agent: content\n\n0:00\n\nUser: content"
+                          return parseVoiceTranscript(text)
+                        } else if (hasKeypadInputs) {
+                          // Keypad/dial tone format
+                          return parseKeypadTranscript(text)
+                        } else {
+                          // Generic structured format
+                          return parseGenericTranscript(text)
+                        }
+                      }
+
+                      const parseVoiceTranscript = (text: string) => {
+                        const entries = []
+                        // Split by double newlines to get message blocks
+                        const blocks = text.split(/\n\n+/).filter(block => block.trim())
+                        let currentTimestamp = ''
+
+                        for (let i = 0; i < blocks.length; i++) {
+                          const block = blocks[i].trim()
+
+                          // Check if this is a standalone timestamp
+                          const timestampMatch = block.match(/^(\d+:\d+)$/)
+                          if (timestampMatch) {
+                            currentTimestamp = timestampMatch[1]
+                            continue
+                          }
+
+                          // Check for Tool Invocation/Result
+                          if (block.match(/^Tool (Invocation|Result)/)) {
+                            const type = block.includes('Invocation') ? 'tool_call' : 'tool_result'
+                            const content = block.replace(/^Tool (Invocation|Result):\s*/, '')
+                            entries.push({
+                              speaker: block.match(/^Tool (Invocation|Result)/)?.[0] || block,
+                              content: content,
+                              timestamp: currentTimestamp,
+                              type: type
+                            })
+                            continue
+                          }
+
+                          // Check for speaker patterns (Agent: or User:)
+                          const speakerMatch = block.match(/^(Agent|User):\s*(.*)/s)
+                          if (speakerMatch) {
+                            const [, speaker, content] = speakerMatch
+                            entries.push({
+                              speaker: speaker,
+                              content: content.trim(),
+                              timestamp: currentTimestamp,
+                              type: 'message'
+                            })
+                            continue
+                          }
+
+                          // If no speaker pattern, might be continuation of previous message
+                          if (entries.length > 0 && !block.match(/^\d+:\d+$/)) {
+                            const lastEntry = entries[entries.length - 1]
+                            if (lastEntry.type === 'message') {
+                              lastEntry.content += (lastEntry.content ? ' ' : '') + block
+                            }
+                          }
+                        }
+
+                        return entries
+                      }
+
+                      const parseKeypadTranscript = (text: string) => {
+                        const entries = []
+                        let currentEntry = { speaker: '', content: '', timestamp: '', type: 'message' }
+                        const lines = text.split('\n')
+
+                        for (let i = 0; i < lines.length; i++) {
+                          const line = lines[i].trim()
+
+                          // Check for timestamp (e.g., "0:00", "0:28", etc.)
+                          const timestampMatch = line.match(/^(\d+:\d+)$/)
+                          if (timestampMatch) {
+                            // If we have a current entry, save it
+                            if (currentEntry.content || currentEntry.speaker) {
+                              entries.push({...currentEntry})
+                            }
+                            currentEntry = { speaker: '', content: '', timestamp: timestampMatch[1], type: 'message' }
+                            continue
+                          }
+
+                          // Check for Tool Invocation/Result
+                          if (line.match(/^Tool (Invocation|Result)/)) {
+                            if (currentEntry.content || currentEntry.speaker) {
+                              entries.push({...currentEntry})
+                            }
+                            currentEntry = {
+                              speaker: line,
+                              content: '',
+                              timestamp: currentEntry.timestamp,
+                              type: line.includes('Invocation') ? 'tool_call' : 'tool_result'
+                            }
+                            continue
+                          }
+
+                          // Check for speaker patterns
+                          const speakerMatch = line.match(/^(Agent|User pressed keypad|Tool Invocation|Tool Result):\s*(.*)$/i)
+                          if (speakerMatch) {
+                            if (currentEntry.content || currentEntry.speaker) {
+                              entries.push({...currentEntry})
+                            }
+
+                            const speaker = speakerMatch[1]
+                            const content = speakerMatch[2]
+
+                            currentEntry = {
+                              speaker,
+                              content,
+                              timestamp: currentEntry.timestamp,
+                              type: speaker.includes('keypad') ? 'keypad' :
+                                   speaker.includes('Tool') ? 'tool_call' : 'message'
+                            }
+                            continue
+                          }
+
+                          // Continuation of current content
+                          if (line && currentEntry.speaker) {
+                            currentEntry.content += (currentEntry.content ? ' ' : '') + line
+                          } else if (line && !currentEntry.speaker) {
+                            // Line without clear speaker, probably continuation
+                            currentEntry.content += (currentEntry.content ? ' ' : '') + line
+                            currentEntry.speaker = currentEntry.speaker || 'Agent'
+                          }
+                        }
+
+                        // Add final entry
+                        if (currentEntry.content || currentEntry.speaker) {
+                          entries.push(currentEntry)
+                        }
+
+                        return entries
+                      }
+
+                      const parseGenericTranscript = (text: string) => {
+                        // Fallback to basic parsing
+                        const lines = text.split('\n').filter(line => line.trim())
+                        const entries = []
+
+                        for (const line of lines) {
+                          const speakerMatch = line.match(/^(Agent|User|AI|Assistant):\s*(.*)/i)
+                          if (speakerMatch) {
+                            entries.push({
+                              speaker: speakerMatch[1],
+                              content: speakerMatch[2],
+                              timestamp: '',
+                              type: 'message'
+                            })
+                          }
+                        }
+
+                        return entries
+                      }
+
+                      const parsedEntries = parseTranscript(transcript)
 
                       return (
-                        <div className="space-y-3">
-                          {lines.map((line, index) => {
-                            const trimmedLine = line.trim()
+                        <div className="space-y-4">
+                          {parsedEntries.map((entry, index) => {
+                            const { speaker, content, timestamp, type } = entry
 
-                            // Enhanced speaker pattern matching - check for AI/Assistant/Bot patterns
-                            const aiMatch = trimmedLine.match(/^(\[?)?(AI|Agent|Assistant|Bot|System)(\]?)?:?\s*(.*)/i) ||
-                                           trimmedLine.match(/^\[(AI|Agent|Assistant|Bot|System)\]\s*(.*)/i)
-
-                            // Enhanced pattern matching for caller/patient/human patterns
-                            const callerMatch = trimmedLine.match(/^(\[?)?(Patient|User|Human|Caller|Customer|Client)(\]?)?:?\s*(.*)/i) ||
-                                               trimmedLine.match(/^\[(Patient|User|Human|Caller|Customer|Client)\]\s*(.*)/i)
-
-                            // Check for keypad input patterns and instructions
-                            const keypadMatch = trimmedLine.match(/User pressed keypad:\s*([0-9#*]+)\s*digit:\s*([0-9#*]+)/i) ||
-                                              trimmedLine.match(/^(User pressed keypad|digit):\s*(.*)/i) ||
-                                              trimmedLine.match(/keypad:\s*([0-9#*]+)/i) ||
-                                              trimmedLine.match(/pressed\s+([0-9#*]+)/i) ||
-                                              trimmedLine.match(/press\s+([0-9#*]+)/i) ||
-                                              trimmedLine.match(/pound\s+sign/i)
-
-                            if (aiMatch) {
-                              const content = aiMatch[4] || aiMatch[2] || trimmedLine.replace(/^.*?:\s*/, '')
+                            // Handle different types of entries
+                            if (type === 'keypad') {
+                              const keypadInput = content.match(/([0-9#*]+)/)?.[1] || content
                               return (
-                                <div key={index} className="flex items-start gap-3">
-                                  <div className="flex-shrink-0 w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-                                    <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
-                                  </div>
-                                  <div className="flex-1">
-                                    <div className="text-xs font-medium text-blue-700 mb-1">AI Assistant</div>
-                                    <p className="text-gray-800 dark:text-gray-200 leading-relaxed">{content.trim()}</p>
-                                  </div>
-                                </div>
-                              )
-                            } else if (keypadMatch) {
-                              // Extract the keypad input - handle Retell AI specific format
-                              let keypadInput = 'unknown input'
-                              if (keypadMatch[1] && keypadMatch[2]) {
-                                // "User pressed keypad: 1# digit: 1#" format
-                                keypadInput = keypadMatch[1]
-                              } else if (keypadMatch[2]) {
-                                // Other formats with captured groups
-                                keypadInput = keypadMatch[2]
-                              } else if (keypadMatch[1]) {
-                                keypadInput = keypadMatch[1]
-                              } else {
-                                // Fallback to extract any digits/symbols
-                                const fallback = trimmedLine.match(/([0-9#*]+)/)?.[1]
-                                if (fallback) keypadInput = fallback
-                              }
-                              return (
-                                <div key={index} className="flex items-start gap-3">
-                                  <div className="flex-shrink-0 w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
-                                    <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                                  </div>
-                                  <div className="flex-1">
-                                    <div className="text-xs font-medium text-orange-700 mb-1">📞 Keypad Input</div>
-                                    <div className="bg-orange-50 border border-orange-200 rounded px-3 py-1 inline-block">
-                                      <span className="text-orange-800 font-mono text-sm font-bold">{keypadInput.trim()}</span>
+                                <div key={index} className="space-y-2">
+                                  {timestamp && (
+                                    <div className="text-xs text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded inline-block">
+                                      {timestamp}
                                     </div>
-                                  </div>
-                                </div>
-                              )
-                            } else if (callerMatch) {
-                              const content = callerMatch[4] || callerMatch[2] || trimmedLine.replace(/^.*?:\s*/, '')
-                              return (
-                                <div key={index} className="flex items-start gap-3">
-                                  <div className="flex-shrink-0 w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
-                                    <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                                  </div>
-                                  <div className="flex-1">
-                                    <div className="text-xs font-medium text-green-700 mb-1">Caller</div>
-                                    <p className="text-gray-800 dark:text-gray-200 leading-relaxed">{content.trim()}</p>
-                                  </div>
-                                </div>
-                              )
-                            } else if (trimmedLine.includes(':') && trimmedLine.length > 5) {
-                              // Generic speaker pattern - split on first colon
-                              const colonIndex = trimmedLine.indexOf(':')
-                              const speaker = trimmedLine.substring(0, colonIndex).trim()
-                              const content = trimmedLine.substring(colonIndex + 1).trim()
-
-                              // Check if this is a keypad input in generic format
-                              const isKeypad = /keypad|digit|pressed/i.test(speaker) || /^[0-9#*]+$/.test(content.trim()) ||
-                                             /User pressed keypad/i.test(trimmedLine)
-
-                              // Determine display based on content type
-                              let bgColor, dotColor, textColor, label
-                              if (isKeypad) {
-                                bgColor = 'bg-orange-100'
-                                dotColor = 'bg-orange-500'
-                                textColor = 'text-orange-700'
-                                label = '📞 Keypad Input'
-                              } else {
-                                const isAI = /^(ai|agent|assistant|bot|system)/i.test(speaker)
-                                bgColor = isAI ? 'bg-blue-100' : 'bg-green-100'
-                                dotColor = isAI ? 'bg-blue-500' : 'bg-green-500'
-                                textColor = isAI ? 'text-blue-700' : 'text-green-700'
-                                label = isAI ? 'AI Assistant' : 'Caller'
-                              }
-
-                              return (
-                                <div key={index} className="flex items-start gap-3">
-                                  <div className={`flex-shrink-0 w-8 h-8 ${bgColor} rounded-full flex items-center justify-center`}>
-                                    <div className={`w-3 h-3 ${dotColor} rounded-full`}></div>
-                                  </div>
-                                  <div className="flex-1">
-                                    <div className={`text-xs font-medium ${textColor} mb-1`}>{label}</div>
-                                    {isKeypad ? (
-                                      <div className="bg-orange-50 border border-orange-200 rounded px-3 py-1 inline-block">
-                                        <span className="text-orange-800 font-mono text-sm font-bold">{content}</span>
-                                      </div>
-                                    ) : (
-                                      <p className="text-gray-800 dark:text-gray-200 leading-relaxed">{content}</p>
-                                    )}
-                                  </div>
-                                </div>
-                              )
-                            } else {
-                              // Check if this is a keypad input without speaker label
-                              const standaloneKeypad = trimmedLine.match(/^([0-9#*]+)$/) ||
-                                                      trimmedLine.match(/keypad.*?([0-9#*]+)/i) ||
-                                                      trimmedLine.match(/pressed.*?([0-9#*]+)/i) ||
-                                                      trimmedLine.match(/User pressed keypad:\s*([0-9#*]+)/i)
-
-                              if (standaloneKeypad) {
-                                const keypadInput = standaloneKeypad[1] || trimmedLine.trim()
-                                return (
-                                  <div key={index} className="flex items-start gap-3">
+                                  )}
+                                  <div className="flex items-start gap-3">
                                     <div className="flex-shrink-0 w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center">
                                       <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
                                     </div>
@@ -387,16 +441,71 @@ export const CallDetailModal: React.FC<CallDetailModalProps> = ({ call, isOpen, 
                                       </div>
                                     </div>
                                   </div>
-                                )
-                              }
-
-                              // Line without clear speaker - display as narrative
-                              return (
-                                <div key={index} className="pl-11">
-                                  <p className="text-gray-700 dark:text-gray-300 leading-relaxed">{trimmedLine}</p>
                                 </div>
                               )
                             }
+
+                            if (type === 'tool_call') {
+                              return (
+                                <div key={index} className="space-y-2">
+                                  {timestamp && (
+                                    <div className="text-xs text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded inline-block">
+                                      {timestamp}
+                                    </div>
+                                  )}
+                                  <div className="flex items-start gap-3">
+                                    <div className="flex-shrink-0 w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                                      <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                                    </div>
+                                    <div className="flex-1">
+                                      <div className="text-xs font-medium text-purple-700 mb-1">🔧 {speaker}</div>
+                                      <div className="bg-purple-50 border border-purple-200 rounded px-3 py-2">
+                                        <span className="text-purple-800 text-sm">{content}</span>
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            }
+
+                            if (type === 'tool_result') {
+                              return (
+                                <div key={index} className="flex items-start gap-3 ml-11">
+                                  <div className="flex-1">
+                                    <div className="text-xs font-medium text-purple-600 mb-1">📋 Tool Result</div>
+                                    <div className="bg-purple-25 border border-purple-100 rounded px-3 py-2">
+                                      <span className="text-purple-700 text-sm">{content || 'Tool executed successfully'}</span>
+                                    </div>
+                                  </div>
+                                </div>
+                              )
+                            }
+
+                            // Regular message
+                            const isAgent = speaker.toLowerCase().includes('agent') || !speaker.toLowerCase().includes('user')
+                            const bgColor = isAgent ? 'bg-blue-100' : 'bg-green-100'
+                            const dotColor = isAgent ? 'bg-blue-500' : 'bg-green-500'
+                            const textColor = isAgent ? 'text-blue-700' : 'text-green-700'
+                            const label = isAgent ? 'Agent' : 'Caller'
+
+                            return (
+                              <div key={index} className="space-y-2">
+                                {timestamp && (
+                                  <div className="text-xs text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded inline-block">
+                                    {timestamp}
+                                  </div>
+                                )}
+                                <div className="flex items-start gap-3">
+                                  <div className={`flex-shrink-0 w-8 h-8 ${bgColor} rounded-full flex items-center justify-center`}>
+                                    <div className={`w-3 h-3 ${dotColor} rounded-full`}></div>
+                                  </div>
+                                  <div className="flex-1">
+                                    <div className={`text-xs font-medium ${textColor} mb-1`}>{label}</div>
+                                    <p className="text-gray-800 dark:text-gray-200 leading-relaxed">{content}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            )
                           })}
                         </div>
                       )

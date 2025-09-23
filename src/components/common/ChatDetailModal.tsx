@@ -710,39 +710,156 @@ export const ChatDetailModal: React.FC<ChatDetailModalProps> = ({ chat, isOpen, 
             {displayChat.message_with_tool_calls && displayChat.message_with_tool_calls.length > 0 && (
               <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
                 <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Message Thread</h3>
-                <div className="bg-white dark:bg-gray-800 rounded border p-4 max-h-64 overflow-y-auto">
-                  <div className="space-y-3">
-                    {displayChat.message_with_tool_calls.map((message, index) => (
-                      <div key={message.message_id || index} className="flex items-start gap-3">
-                        <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
-                          message.role === 'agent' ? 'bg-blue-100' : 'bg-green-100'
-                        }`}>
-                          {message.role === 'agent' ?
-                            <BotIcon className="w-4 h-4 text-blue-600" /> :
-                            <UserIcon className="w-4 h-4 text-green-600" />
-                          }
-                        </div>
-                        <div className="flex-1">
-                          <div className={`text-xs font-medium mb-1 ${
-                            message.role === 'agent' ? 'text-blue-700' : 'text-green-700'
-                          }`}>
-                            {message.role === 'agent' ? 'AI Assistant' : 'Patient'}
-                          </div>
-                          <p className="text-gray-800 dark:text-gray-200 leading-relaxed">{message.content}</p>
-                          {message.tool_calls && message.tool_calls.length > 0 && (
-                            <div className="mt-2 p-2 bg-gray-100 dark:bg-gray-700 rounded text-xs">
-                              <span className="font-medium">Tool calls:</span>
-                              {message.tool_calls.map((tool, toolIndex) => (
-                                <div key={toolIndex} className="ml-2">
-                                  {tool.function?.name || tool.type}
+                <div className="bg-white dark:bg-gray-800 rounded border p-4 max-h-96 overflow-y-auto">
+                  {(() => {
+                    // Enhanced SMS message parsing for timestamped format
+                    const parseSMSMessages = (messages: any[]) => {
+                      const parsedMessages = []
+
+                      for (const message of messages) {
+                        let content = message.content || ''
+
+                        // Check if content has timestamp format like "11:26:13, 09/23"
+                        const timestampMatch = content.match(/^(.+?)\s+(\d{1,2}:\d{2}:\d{2},\s*\d{1,2}\/\d{1,2})[\s\n]+(.*)/s)
+
+                        if (timestampMatch) {
+                          // Content with embedded timestamp and details
+                          const [, userDetails, timestamp, actualContent] = timestampMatch
+
+                          // Check if this is user details (like "User: Melissa Ann Muir...")
+                          const userDetailsMatch = userDetails.match(/^User:\s*(.+)/)
+
+                          parsedMessages.push({
+                            ...message,
+                            originalContent: content,
+                            userDetails: userDetailsMatch ? userDetailsMatch[1] : null,
+                            timestamp: timestamp,
+                            content: actualContent.trim(),
+                            hasTimestamp: true
+                          })
+                        } else {
+                          // Regular content format
+                          parsedMessages.push({
+                            ...message,
+                            originalContent: content,
+                            userDetails: null,
+                            timestamp: null,
+                            hasTimestamp: false
+                          })
+                        }
+                      }
+
+                      return parsedMessages
+                    }
+
+                    const parsedMessages = parseSMSMessages(displayChat.message_with_tool_calls)
+
+                    return (
+                      <div className="space-y-4">
+                        {parsedMessages.map((message, index) => {
+                          // Handle Tool Invocation messages
+                          if (message.content && (message.content.includes('Tool Invocation:') || message.tool_calls?.length > 0)) {
+                            return (
+                              <div key={message.message_id || index} className="space-y-2">
+                                {message.timestamp && (
+                                  <div className="text-xs text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded inline-block">
+                                    {message.timestamp}
+                                  </div>
+                                )}
+                                <div className="flex items-start gap-3">
+                                  <div className="flex-shrink-0 w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center">
+                                    <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+                                  </div>
+                                  <div className="flex-1">
+                                    <div className="text-xs font-medium text-purple-700 mb-1">🔧 Tool Invocation</div>
+                                    <div className="bg-purple-50 border border-purple-200 rounded px-3 py-2">
+                                      <span className="text-purple-800 text-sm">
+                                        {message.tool_calls?.map(tool => tool.function?.name || tool.type).join(', ') ||
+                                         message.content.replace(/Tool Invocation:\s*/, '')}
+                                      </span>
+                                    </div>
+                                  </div>
                                 </div>
-                              ))}
+                              </div>
+                            )
+                          }
+
+                          // Handle User details message (first message with user info)
+                          if (message.userDetails) {
+                            return (
+                              <div key={message.message_id || index} className="space-y-2">
+                                {message.timestamp && (
+                                  <div className="text-xs text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded inline-block">
+                                    {message.timestamp}
+                                  </div>
+                                )}
+                                <div className="flex items-start gap-3">
+                                  <div className="flex-shrink-0 w-8 h-8 bg-green-100 rounded-full flex items-center justify-center">
+                                    <UserIcon className="w-4 h-4 text-green-600" />
+                                  </div>
+                                  <div className="flex-1">
+                                    <div className="text-xs font-medium text-green-700 mb-1">Patient Details</div>
+                                    <div className="bg-green-50 border border-green-200 rounded px-3 py-2 mb-2">
+                                      <div className="text-green-800 text-sm font-mono whitespace-pre-line">
+                                        {message.userDetails}
+                                      </div>
+                                    </div>
+                                    {message.content && (
+                                      <div>
+                                        <div className="text-xs font-medium text-blue-700 mb-1">Agent Response</div>
+                                        <p className="text-gray-800 dark:text-gray-200 leading-relaxed">{message.content}</p>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            )
+                          }
+
+                          // Regular message with or without timestamp
+                          const isAgent = message.role === 'agent'
+                          const bgColor = isAgent ? 'bg-blue-100' : 'bg-green-100'
+                          const iconColor = isAgent ? 'text-blue-600' : 'text-green-600'
+                          const textColor = isAgent ? 'text-blue-700' : 'text-green-700'
+                          const label = isAgent ? 'Agent' : 'User'
+
+                          return (
+                            <div key={message.message_id || index} className="space-y-2">
+                              {message.timestamp && (
+                                <div className="text-xs text-gray-500 dark:text-gray-400 font-mono bg-gray-100 dark:bg-gray-700 px-2 py-1 rounded inline-block">
+                                  {message.timestamp}
+                                </div>
+                              )}
+                              <div className="flex items-start gap-3">
+                                <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${bgColor}`}>
+                                  {isAgent ?
+                                    <BotIcon className={`w-4 h-4 ${iconColor}`} /> :
+                                    <UserIcon className={`w-4 h-4 ${iconColor}`} />
+                                  }
+                                </div>
+                                <div className="flex-1">
+                                  <div className={`text-xs font-medium mb-1 ${textColor}`}>
+                                    {label}
+                                  </div>
+                                  <p className="text-gray-800 dark:text-gray-200 leading-relaxed">{message.content}</p>
+                                  {message.tool_calls && message.tool_calls.length > 0 && (
+                                    <div className="mt-2 p-2 bg-purple-50 border border-purple-200 rounded text-xs">
+                                      <span className="font-medium text-purple-700">Tool calls:</span>
+                                      {message.tool_calls.map((tool, toolIndex) => (
+                                        <div key={toolIndex} className="ml-2 text-purple-800">
+                                          🔧 {tool.function?.name || tool.type}
+                                        </div>
+                                      ))}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
                             </div>
-                          )}
-                        </div>
+                          )
+                        })}
                       </div>
-                    ))}
-                  </div>
+                    )
+                  })()}
                 </div>
               </div>
             )}

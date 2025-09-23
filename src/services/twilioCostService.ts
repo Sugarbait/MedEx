@@ -141,8 +141,8 @@ class TwilioCostService {
   }
 
   /**
-   * Parse chat content to exclude role/title indicators
-   * Removes "Patient", "AI Assistant" and similar role indicators
+   * Parse chat content to exclude role/title indicators, tool invocations, and timestamps
+   * Removes "Patient", "AI Assistant", tool calls, timestamps from SMS segment calculations
    * Fixed: Added case-insensitive matching and improved pattern handling
    */
   private parseMessageContent(content: string): string {
@@ -160,12 +160,39 @@ class TwilioCostService {
       /^Bot(?:\s*\n?)/gmi           // Case-insensitive
     ]
 
+    // Remove tool invocations and tool results (don't count in SMS segments)
+    const toolPatterns = [
+      /Tool Invocation:.*?(?=\n|$)/gmi,  // Tool Invocation lines
+      /Tool Result.*?(?=\n|$)/gmi,       // Tool Result lines
+      /🔧.*?(?=\n|$)/gmi,                // Tool emojis with content
+      /📋.*?(?=\n|$)/gmi                 // Tool result emojis with content
+    ]
+
+    // Remove timestamps (don't count in SMS segments)
+    const timestampPatterns = [
+      /\d{1,2}:\d{2}:\d{2},\s*\d{1,2}\/\d{1,2}/g,  // SMS format: 11:26:13, 09/23
+      /^\d{1,2}:\d{2}$/gm,                          // Call format: 0:00, 0:28
+      /\b\d{1,2}:\d{2}\b/g                          // Any MM:SS or HH:MM format
+    ]
+
     let cleanContent = content
+
+    // Remove role indicators
     rolePatterns.forEach(pattern => {
       cleanContent = cleanContent.replace(pattern, '')
     })
 
-    // Remove empty lines that might be left after role removal
+    // Remove tool invocations and results
+    toolPatterns.forEach(pattern => {
+      cleanContent = cleanContent.replace(pattern, '')
+    })
+
+    // Remove timestamps
+    timestampPatterns.forEach(pattern => {
+      cleanContent = cleanContent.replace(pattern, '')
+    })
+
+    // Remove empty lines that might be left after removal
     cleanContent = cleanContent.replace(/^\s*$/gm, '').trim()
 
     return cleanContent
