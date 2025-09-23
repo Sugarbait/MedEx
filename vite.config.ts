@@ -2,7 +2,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
-import { copyFileSync } from 'fs'
+import { copyFileSync, mkdirSync } from 'fs'
 
 export default defineConfig({
   // Define environment variables for Azure Static Web Apps
@@ -35,6 +35,18 @@ export default defineConfig({
           console.log('✅ Copied 404.html to dist/')
         } catch (error) {
           console.warn('⚠️ Failed to copy 404.html:', error)
+        }
+
+        // Copy Azure environment injection script
+        try {
+          // Ensure the directory exists
+          const targetDir = path.dirname('dist/src/config/azure-env-inject.js')
+          mkdirSync(targetDir, { recursive: true })
+
+          copyFileSync('src/config/azure-env-inject.js', 'dist/src/config/azure-env-inject.js')
+          console.log('✅ Copied azure-env-inject.js to dist/')
+        } catch (error) {
+          console.warn('⚠️ Failed to copy azure-env-inject.js:', error)
         }
       }
     },

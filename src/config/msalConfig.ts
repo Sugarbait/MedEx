@@ -1,10 +1,9 @@
 import { Configuration, PublicClientApplication } from '@azure/msal-browser'
+import { environmentConfig } from './environmentLoader'
 
-// Get environment variables from Vite define or fallback to import.meta.env
-const azureClientId = (typeof __VITE_AZURE_CLIENT_ID__ !== 'undefined' ? __VITE_AZURE_CLIENT_ID__ : null)
-  || import.meta.env.VITE_AZURE_CLIENT_ID || '12345678-1234-1234-1234-123456789012'
-const azureTenantId = (typeof __VITE_AZURE_TENANT_ID__ !== 'undefined' ? __VITE_AZURE_TENANT_ID__ : null)
-  || import.meta.env.VITE_AZURE_TENANT_ID || '87654321-4321-4321-4321-210987654321'
+// Use the robust environment loader for Azure credentials
+const azureClientId = environmentConfig.azureClientId || '12345678-1234-1234-1234-123456789012'
+const azureTenantId = environmentConfig.azureTenantId || '87654321-4321-4321-4321-210987654321'
 
 // MSAL configuration
 const msalConfig: Configuration = {

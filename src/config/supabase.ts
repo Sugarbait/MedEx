@@ -1,13 +1,11 @@
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '@/types/supabase'
+import { environmentConfig } from './environmentLoader'
 
-// Use properly injected environment variables from Vite define
-const supabaseUrl = (typeof __VITE_SUPABASE_URL__ !== 'undefined' ? __VITE_SUPABASE_URL__ : null)
-  || (import.meta as any).env?.VITE_SUPABASE_URL
-const supabaseAnonKey = (typeof __VITE_SUPABASE_ANON_KEY__ !== 'undefined' ? __VITE_SUPABASE_ANON_KEY__ : null)
-  || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY
-const supabaseServiceRoleKey = (typeof __VITE_SUPABASE_SERVICE_ROLE_KEY__ !== 'undefined' ? __VITE_SUPABASE_SERVICE_ROLE_KEY__ : null)
-  || (import.meta as any).env?.VITE_SUPABASE_SERVICE_ROLE_KEY
+// Use the robust environment loader instead of direct env access
+const supabaseUrl = environmentConfig.supabaseUrl
+const supabaseAnonKey = environmentConfig.supabaseAnonKey
+const supabaseServiceRoleKey = environmentConfig.supabaseServiceRoleKey
 
 // Only log detailed environment check in development mode or when explicitly debugging
 if (import.meta.env?.DEV && !sessionStorage.getItem('supabase-config-logged')) {
