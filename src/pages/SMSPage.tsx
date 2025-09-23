@@ -1332,10 +1332,11 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         yPosition += 6
 
         // Cost info
-        const segments = getSegmentCount(chat)
-        const costPerSegment = smsCostPerSegment
-        const totalCost = segments * costPerSegment
-        doc.text(`SMS Segments: ${segments} | Cost: $${totalCost.toFixed(4)} CAD`, margin, yPosition)
+        const segments = calculateChatSMSSegments(chat, false) // Don't cache during PDF export
+        const { cost: totalCost, loading: costLoading } = smsCostManager.getChatCost(chat.chat_id)
+        const costPerSegment = segments > 0 ? (totalCost / segments) : 0
+        const costDisplay = costLoading ? 'Loading...' : `$${totalCost.toFixed(4)} CAD`
+        doc.text(`SMS Segments: ${segments} | Cost: ${costDisplay}`, margin, yPosition)
         yPosition += 10
 
         // Detailed Analysis Section
