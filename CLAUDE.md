@@ -85,7 +85,7 @@ npm run update:deps     # Update dependencies
 ### **External Integrations**
 - **Voice AI**: Retell AI for conversational AI calls
 - **SMS**: Twilio for SMS messaging with cost tracking
-- **PDF Generation**: jsPDF for report exports
+- **PDF Generation**: jsPDF for report exports with comprehensive chat analysis
 - **Currency**: Exchange rate APIs for cost calculations
 - **Help Chat**: OpenAI GPT for in-app assistance
 - **QR Codes**: QRCode generation for MFA setup
@@ -113,6 +113,7 @@ The codebase features an extensive service layer with 40+ specialized services o
 - **chatService / optimizedChatService / simpleChatService**: Chat management variants
 - **retellSMSService**: SMS integration with Retell AI
 - **notesService**: Cross-device synchronized notes
+- **toastNotificationService**: Real-time toast notifications for new records
 
 ### **Cost & Analytics Services**
 - **twilioCostService**: SMS cost tracking and optimization
@@ -177,9 +178,9 @@ src/
 │   ├── useNotesCount.ts     # Notes management
 │   └── useOptimizedSMSCosts.ts # Cost optimization
 ├── pages/               # Route components
-│   ├── DashboardPage.tsx    # Analytics dashboard
-│   ├── CallsPage.tsx        # Voice call management
-│   ├── SMSPage.tsx          # SMS conversations
+│   ├── DashboardPage.tsx    # Analytics dashboard with animated charts
+│   ├── CallsPage.tsx        # Voice call management with toast notifications
+│   ├── SMSPage.tsx          # SMS conversations with PDF export functionality
 │   ├── SettingsPage.tsx     # User settings
 │   ├── UserManagementPage.tsx # Admin user management
 │   ├── AuditDashboard.tsx   # HIPAA audit viewing
@@ -468,6 +469,124 @@ The application includes comprehensive demo mode functionality that activates wh
 
 ---
 
+## **Advanced Features & Recent Additions**
+
+### **SMS Management & Analytics**
+The SMS page includes sophisticated segment calculation and cost management:
+
+```typescript
+// Core function for SMS segment calculation
+calculateChatSMSSegments(chat: Chat, shouldCache: boolean = true): number
+
+// Use this function for PDF exports and cost calculations
+const segments = calculateChatSMSSegments(chat, false) // Don't cache during export
+const { cost, loading } = smsCostManager.getChatCost(chat.chat_id)
+```
+
+**Key SMS Features:**
+- **Persistent Segment Cache**: SMS segments cached in localStorage with 12-hour expiry
+- **Cost Optimization**: Real-time cost tracking with Canadian currency conversion
+- **Bulk Processing**: Async segment loading with progress tracking for large datasets
+- **PDF Export**: Comprehensive chat export with detailed analysis and message threads
+- **Smart Filtering**: Excludes tools, timestamps, and titles from segment calculations
+
+### **Dashboard Analytics**
+Interactive chart system using Recharts with PHI-free data visualization:
+
+```typescript
+// DashboardCharts component in src/components/dashboard/
+- Bar Charts: Call & SMS volume comparison with business hour weighting
+- Pie Charts: Cost distribution between calls and SMS
+- Line Charts: Performance trends with smooth animations
+- Radial Charts: Success rates with proper orientation
+- Area Charts: Cumulative activity overview
+```
+
+**Chart Features:**
+- **Auto-refresh**: Charts update when date range changes
+- **Responsive Design**: Adapts to different screen sizes
+- **Performance Optimized**: Efficient data processing for large datasets
+- **Accessibility**: Proper ARIA labels and keyboard navigation
+
+### **Toast Notification System**
+Real-time notifications for new records with cross-device support:
+
+```typescript
+// Service: toastNotificationService
+- Real-time monitoring via Supabase subscriptions
+- Cross-device synchronization
+- Do Not Disturb mode with configurable hours
+- Deduplication to prevent spam
+- Graceful fallback when offline
+```
+
+**Notification Features:**
+- **Smart Detection**: Monitors calls and SMS tables for new records
+- **User Preferences**: Configurable sound and timing settings
+- **Tab Visibility**: Queues notifications when tab is not visible
+- **Rate Limiting**: Prevents notification flooding
+
+### **PDF Export System**
+Comprehensive PDF generation for SMS chats with detailed analysis:
+
+```typescript
+// SMSPage.tsx - exportAllChatsToPDF function
+- Exports all chats in selected date range
+- Includes detailed analysis from custom_analysis_data
+- Shows message threads with Patient/Assistant labels
+- Performance optimized with async processing
+- User-friendly progress indicators
+```
+
+**Export Features:**
+- **Smart Limits**: 50-chat limit with user confirmation for larger exports
+- **Progress Feedback**: Real-time progress updates with spinning indicators
+- **Error Handling**: Detailed error messages with troubleshooting steps
+- **Cost Analysis**: Includes segment counts and cost breakdowns
+- **HIPAA Compliant**: Safe patient ID generation with audit logging
+
+---
+
+## **Critical Development Patterns**
+
+### **SMS Segment Calculation**
+Always use the `calculateChatSMSSegments()` function instead of direct calculations:
+
+```typescript
+// ✅ CORRECT: Use the centralized function
+const segments = calculateChatSMSSegments(chat, false)
+
+// ❌ INCORRECT: Direct calculation or undefined functions
+const segments = getSegmentCount(chat) // This function doesn't exist
+const segments = chat.segments // Direct property access
+```
+
+### **Cost Management**
+Use `smsCostManager` for all cost-related operations:
+
+```typescript
+// ✅ CORRECT: Use the cost manager
+const { cost, loading } = smsCostManager.getChatCost(chat.chat_id)
+
+// ❌ INCORRECT: Direct cost calculation
+const cost = segments * costPerSegment // May use undefined variables
+```
+
+### **Performance Optimization for Large Exports**
+When processing large datasets, implement async yields:
+
+```typescript
+// ✅ CORRECT: Yield control during long operations
+for (let i = 0; i < largeArray.length; i++) {
+  if (i % 10 === 0) {
+    await new Promise(resolve => setTimeout(resolve, 10))
+  }
+  // Process item
+}
+```
+
+---
+
 ## **Important Notes for Claude**
 
 1. **Never Bypass Security**: Always maintain encryption and audit logging
@@ -480,4 +599,4 @@ The application includes comprehensive demo mode functionality that activates wh
 
 ---
 
-*Last Updated: Generated by Claude Code*
+*Last Updated: Enhanced with Advanced Features - Generated by Claude Code*
