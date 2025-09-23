@@ -1,13 +1,15 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { useNotesCount } from '@/hooks/useNotesCount'
 import { DateRangePicker, DateRange, getDateRangeFromSelection } from '@/components/common/DateRangePicker'
 import { CallDetailModal } from '@/components/common/CallDetailModal'
 import { SiteHelpChatbot } from '@/components/common/SiteHelpChatbot'
+import { ToastManager } from '@/components/common/ToastManager'
 import { RetellWebClient } from 'retell-client-js-sdk'
 import { retellService, type RetellCall, currencyService, twilioCostService } from '@/services'
 import { notesService } from '@/services/notesService'
 import { fuzzySearchService } from '@/services/fuzzySearchService'
+import { toastNotificationService } from '@/services/toastNotificationService'
 import {
   PhoneIcon,
   PlayIcon,
@@ -81,6 +83,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
   const [isCallActive, setIsCallActive] = useState(false)
   const [isMuted, setIsMuted] = useState(false)
   const [calls, setCalls] = useState<Call[]>([])
+  const previousCallsRef = useRef<Call[]>([])
   const [currentTranscript, setCurrentTranscript] = useState('')
   const [callStatus, setCallStatus] = useState<string>('idle')
   const [loading, setLoading] = useState(false)
@@ -304,6 +307,20 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
       })
 
       setCalls(transformedCalls)
+
+      // Check for new calls and show toast notifications
+      if (previousCallsRef.current.length > 0) {
+        const previousCallIds = new Set(previousCallsRef.current.map(call => call.call_id))
+        const newCalls = transformedCalls.filter(call => !previousCallIds.has(call.call_id))
+
+        newCalls.forEach(newCall => {
+          toastNotificationService.triggerTestNotification('call')
+          safeLog('🔔 New call detected:', newCall.call_id)
+        })
+      }
+
+      // Update previous calls reference
+      previousCallsRef.current = [...transformedCalls]
 
       // Fetch notes count for all calls
       try {
@@ -558,6 +575,13 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
           >
             <RefreshCwIcon className="w-4 h-4" />
             Refresh
+          </button>
+          <button
+            onClick={() => toastNotificationService.triggerTestNotification('call')}
+            className="flex items-center gap-2 px-3 py-2 text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 transition-colors"
+          >
+            <ZapIcon className="w-4 h-4" />
+            Test Toast
           </button>
           <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
             <DownloadIcon className="w-4 h-4" />
@@ -1082,6 +1106,9 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
           isVisible={showHelpChatbot}
           onToggle={() => setShowHelpChatbot(!showHelpChatbot)}
         />
+
+        {/* Toast Notifications for new records */}
+        <ToastManager userId={user?.id} />
 
     </div>
   )

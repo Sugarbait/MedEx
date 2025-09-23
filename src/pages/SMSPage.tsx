@@ -7,12 +7,14 @@ import { useNotesCount } from '@/hooks/useNotesCount'
 import { DateRangePicker, DateRange, getDateRangeFromSelection } from '@/components/common/DateRangePicker'
 import { ChatDetailModal } from '@/components/common/ChatDetailModal'
 import { SiteHelpChatbot } from '@/components/common/SiteHelpChatbot'
+import { ToastManager } from '@/components/common/ToastManager'
 import { chatService, type Chat, type ChatListOptions } from '@/services/chatService'
 import { retellService } from '@/services'
 import { twilioCostService } from '@/services/twilioCostService'
 import { currencyService } from '@/services/currencyService'
 import { userSettingsService } from '@/services'
 import { fuzzySearchService } from '@/services/fuzzySearchService'
+import { toastNotificationService } from '@/services/toastNotificationService'
 import {
   MessageSquareIcon,
   SendIcon,
@@ -148,6 +150,7 @@ interface ChatMetrics {
 export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   const { user: currentUser } = useAuth()
   const [chats, setChats] = useState<Chat[]>([])
+  const previousChatsRef = useRef<Chat[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
@@ -1067,6 +1070,20 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
       setChats(paginatedChats)
 
+      // Check for new chats and show toast notifications
+      if (previousChatsRef.current.length > 0) {
+        const previousChatIds = new Set(previousChatsRef.current.map(chat => chat.chat_id))
+        const newChats = paginatedChats.filter(chat => !previousChatIds.has(chat.chat_id))
+
+        newChats.forEach(newChat => {
+          toastNotificationService.triggerTestNotification('sms')
+          safeLog('🔔 New SMS detected:', newChat.chat_id)
+        })
+      }
+
+      // Update previous chats reference
+      previousChatsRef.current = [...paginatedChats]
+
       // Proactively load segment data for accurate totals (async, don't block UI)
       loadSegmentDataForChats(finalFiltered)
       setLastDataFetch(Date.now())
@@ -1314,6 +1331,14 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           >
             <RefreshCwIcon className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             Refresh
+          </button>
+          <button
+            onClick={() => toastNotificationService.triggerTestNotification('sms')}
+            className="flex items-center gap-2 px-3 py-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors"
+            title="Test SMS toast notification"
+          >
+            <MessageCircleIcon className="w-4 h-4" />
+            Test Toast
           </button>
           <button
             onClick={clearAllSegmentCaches}
@@ -1988,6 +2013,9 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           isVisible={showHelpChatbot}
           onToggle={() => setShowHelpChatbot(!showHelpChatbot)}
         />
+
+        {/* Toast Notifications for new records */}
+        <ToastManager userId={user?.id} />
 
     </div>
   )
