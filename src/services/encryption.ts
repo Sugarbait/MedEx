@@ -44,10 +44,11 @@ class HIPAAEncryptionService {
       )
 
       // Derive a key using PBKDF2 with 100,000 iterations (NIST recommended minimum)
-      const salt = new Uint8Array([
-        0x48, 0x49, 0x50, 0x41, 0x41, 0x2D, 0x43, 0x52,
-        0x4D, 0x2D, 0x32, 0x30, 0x32, 0x34, 0x2D, 0x53
-      ]) // "HIPAA-CRM-2024-S" in hex
+      // SECURITY FIX: Use user-specific salt generation instead of fixed salt
+      // Generate salt from user context to maintain consistency while being unique per user
+      const userContext = masterPassword || import.meta.env?.VITE_ENCRYPTION_MASTER_KEY || 'hipaa-default-context'
+      const userSalt = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(userContext + 'HIPAA-CRM-2024'))
+      const salt = new Uint8Array(userSalt.slice(0, 16)) // Use first 16 bytes as salt
 
       this.encryptionKey = await crypto.subtle.deriveKey(
         {

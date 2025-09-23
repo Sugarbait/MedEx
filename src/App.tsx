@@ -535,8 +535,8 @@ const App: React.FC = () => {
               }
             } catch (error) {
               console.error('Error checking MFA requirement:', error)
-              // Fallback to simple check if service fails
-              if (userData.mfa_enabled && !localStorage.getItem('mfa_verified')) {
+              // SECURITY FIX: Force MFA if user has it enabled and service fails
+              if (userData.mfa_enabled) {
                 setMfaRequired(true)
               }
             }

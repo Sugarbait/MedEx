@@ -128,10 +128,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                   console.log(`✅ Force sync SUCCESS in ${syncDuration}ms`)
                   console.log('📊 Force sync retrieved settings with keys:', Object.keys(settings))
                   if (settings.retell_config) {
-                    console.log('🔑 API credentials found in force sync:')
-                    console.log('   - API Key:', settings.retell_config.api_key ? '✅ Present' : '❌ Missing')
-                    console.log('   - Call Agent ID:', settings.retell_config.call_agent_id ? '✅ Present' : '❌ Missing')
-                    console.log('   - SMS Agent ID:', settings.retell_config.sms_agent_id ? '✅ Present' : '❌ Missing')
+                    console.log('🔑 API credentials found in force sync: [REDACTED - HIPAA PROTECTED]')
+                    console.log('   - API Key: [REDACTED]')
+                    console.log('   - Call Agent ID: [REDACTED]')
+                    console.log('   - SMS Agent ID: [REDACTED]')
                   } else {
                     console.log('⚠️ No retell_config found in force sync result')
                   }

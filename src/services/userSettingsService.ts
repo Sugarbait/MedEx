@@ -456,10 +456,10 @@ class UserSettingsServiceClass {
       // Log what we got after transformation
       console.log(`📊 FORCE SYNC: Transformed settings keys:`, Object.keys(localSettings))
       if (localSettings.retell_config) {
-        console.log(`🔑 FORCE SYNC: API credentials after decryption:`)
-        console.log(`   - API Key:`, localSettings.retell_config.api_key ? `${localSettings.retell_config.api_key.substring(0, 10)}...` : 'MISSING')
-        console.log(`   - Call Agent ID:`, localSettings.retell_config.call_agent_id || 'MISSING')
-        console.log(`   - SMS Agent ID:`, localSettings.retell_config.sms_agent_id || 'MISSING')
+        console.log(`🔑 FORCE SYNC: API credentials after decryption: [REDACTED - HIPAA PROTECTED]`)
+        console.log(`   - API Key: [REDACTED]`)
+        console.log(`   - Call Agent ID: [REDACTED]`)
+        console.log(`   - SMS Agent ID: [REDACTED]`)
       } else {
         console.log(`❌ FORCE SYNC: No retell_config in transformed data`)
       }
