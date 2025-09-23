@@ -980,7 +980,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   }
 
   // Logo upload handlers
-  const handleLogoUpload = async (file: File, type: 'header' | 'footer-light' | 'footer-dark' | 'favicon') => {
+  const handleLogoUpload = async (file: File, type: 'header' | 'favicon') => {
     if (!file) return
 
     setLogoUploadStatus('uploading')
@@ -999,12 +999,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
       switch (type) {
         case 'header':
           updatedLogos.headerLogo = url
-          break
-        case 'footer-light':
-          updatedLogos.footerLogoLight = url
-          break
-        case 'footer-dark':
-          updatedLogos.footerLogoDark = url
           break
         case 'favicon':
           updatedLogos.favicon = url
@@ -1034,7 +1028,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
     }
   }
 
-  const handleLogoDelete = async (type: 'header' | 'footer-light' | 'footer-dark' | 'favicon') => {
+  const handleLogoDelete = async (type: 'header' | 'favicon') => {
     try {
       const deleted = await logoService.deleteLogo(type)
 
@@ -1825,82 +1819,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                   </div>
                 </div>
 
-                {/* Footer Logos */}
-                <div className="border-b border-gray-200 dark:border-gray-700 pb-6">
-                  <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-4">Footer Logos</h3>
-
-                  {/* Light Mode Footer Logo */}
-                  <div className="mb-4">
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Light Mode Logo</p>
-                    <div className="flex items-center gap-4">
-                      {companyLogos.footerLogoLight && (
-                        <img
-                          src={companyLogos.footerLogoLight}
-                          alt="Footer Light Logo"
-                          className="h-8 w-auto object-contain border border-gray-300 dark:border-gray-600 rounded p-2 bg-white"
-                        />
-                      )}
-                      <div className="flex gap-2">
-                        <label className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 cursor-pointer">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0]
-                              if (file) handleLogoUpload(file, 'footer-light')
-                            }}
-                            className="hidden"
-                          />
-                          Upload
-                        </label>
-                        {companyLogos.footerLogoLight && (
-                          <button
-                            onClick={() => handleLogoDelete('footer-light')}
-                            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Dark Mode Footer Logo */}
-                  <div>
-                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Dark Mode Logo</p>
-                    <div className="flex items-center gap-4">
-                      {companyLogos.footerLogoDark && (
-                        <img
-                          src={companyLogos.footerLogoDark}
-                          alt="Footer Dark Logo"
-                          className="h-8 w-auto object-contain border border-gray-300 dark:border-gray-600 rounded p-2 bg-gray-800"
-                        />
-                      )}
-                      <div className="flex gap-2">
-                        <label className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 cursor-pointer">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0]
-                              if (file) handleLogoUpload(file, 'footer-dark')
-                            }}
-                            className="hidden"
-                          />
-                          Upload
-                        </label>
-                        {companyLogos.footerLogoDark && (
-                          <button
-                            onClick={() => handleLogoDelete('footer-dark')}
-                            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
-                          >
-                            Remove
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </div>
 
                 {/* Favicon */}
                 <div className="pb-6">
@@ -1964,6 +1882,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                     <p>• Logos are visible to ALL users across ALL profiles</p>
                     <p>• Changes are synchronized across all devices instantly</p>
                     <p>• Page reload required to see updated logos</p>
+                    <p>• Footer logos are permanent and cannot be changed</p>
                     <p>• Supported formats: PNG, JPG, SVG (Max: 5MB)</p>
                   </div>
                 </div>

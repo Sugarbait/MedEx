@@ -10,6 +10,8 @@ import { SupabaseProvider } from './contexts/SupabaseContext'
 // Import SMS cost test for validation
 import './test/smsCostCalculationTest'
 import { ThemeManager } from './utils/themeManager'
+// Import utility to make Pierre super user (available in console)
+import './utils/makePierreSuperUser'
 import { initializeSecureStorage } from './services/storageSecurityMigration'
 import { secureUserDataService } from './services/secureUserDataService'
 import { authService } from './services/authService'

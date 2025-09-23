@@ -142,3 +142,6 @@ export async function makePierreSuperUser() {
 if (typeof window !== 'undefined') {
   (window as any).makePierreSuperUser = makePierreSuperUser
 }
+
+// Also export as default for module imports
+export default makePierreSuperUser
