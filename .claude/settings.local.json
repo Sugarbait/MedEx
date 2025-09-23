@@ -127,7 +127,8 @@
       "Bash(start http://localhost:3008)",
       "Bash(del:*)",
       "Bash(npx playwright install:*)",
-      "Bash(grep:*)"
+      "Bash(grep:*)",
+      "Bash(start \"I:\\Apps Back Up\\CareXPS CRM\\test-simple-sync.html\")"
     ],
     "deny": [],
     "ask": []
