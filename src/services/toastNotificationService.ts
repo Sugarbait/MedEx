@@ -254,7 +254,7 @@ class ToastNotificationService {
     const notification: ToastNotificationData = {
       id: notificationId,
       type: 'call',
-      title: 'New Call',
+      title: 'New Call Record Received',
       timestamp: new Date(callRecord.start_timestamp || callRecord.created_at || Date.now()),
       recordId: callRecord.call_id
     }
@@ -276,7 +276,7 @@ class ToastNotificationService {
     const notification: ToastNotificationData = {
       id: notificationId,
       type: 'sms',
-      title: 'New SMS',
+      title: 'New SMS Record Received',
       timestamp: new Date(smsRecord.created_at || Date.now()),
       recordId: smsRecord.chat_id
     }
@@ -351,7 +351,7 @@ class ToastNotificationService {
     const testNotification: ToastNotificationData = {
       id: `test_${type}_${Date.now()}`,
       type,
-      title: type === 'call' ? 'Test Call Notification' : 'Test SMS Notification',
+      title: type === 'call' ? 'New Call Record Received' : 'New SMS Record Received',
       timestamp: new Date(),
       recordId: `test_${type}_${Math.random().toString(36).substr(2, 9)}`
     }

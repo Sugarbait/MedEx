@@ -85,39 +85,59 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({
   // Prepare data for volume comparison bar chart (NO PHI - only counts)
   const volumeData = useMemo(() => {
     const data = []
-    // Use actual metrics to create proportional data
-    const avgCallsPerPeriod = Math.max(1, Math.floor(metrics.totalCalls / 10))
-    const avgSMSPerPeriod = Math.max(1, Math.floor(metrics.totalMessages / 10))
 
     if (dateRange === 'today') {
-      // Hourly data for today
+      // For today, distribute actual totals across 24 hours with business hour weighting
+      const businessHourMultiplier = 0.8 // 80% of activity during business hours
+      const businessHours = 9 // 9 hours from 9 AM to 5 PM
+      const offHours = 15 // Remaining hours
+
+      const businessHourCalls = Math.floor(metrics.totalCalls * businessHourMultiplier / businessHours)
+      const offHourCalls = Math.floor(metrics.totalCalls * (1 - businessHourMultiplier) / offHours)
+      const businessHourSMS = Math.floor(metrics.totalMessages * businessHourMultiplier / businessHours)
+      const offHourSMS = Math.floor(metrics.totalMessages * (1 - businessHourMultiplier) / offHours)
+
       for (let hour = 0; hour < 24; hour++) {
         const isBusinessHours = hour >= 9 && hour <= 17
         data.push({
           name: `${hour}:00`,
-          Calls: Math.floor(Math.random() * avgCallsPerPeriod) + (isBusinessHours ? avgCallsPerPeriod : 0),
-          SMS: Math.floor(Math.random() * avgSMSPerPeriod) + (isBusinessHours ? avgSMSPerPeriod : 0),
+          Calls: isBusinessHours ? businessHourCalls : offHourCalls,
+          SMS: isBusinessHours ? businessHourSMS : offHourSMS,
         })
       }
     } else if (dateRange === 'week') {
-      // Daily data for week
+      // For week, distribute across 7 days with weekday weighting
+      const weekdayMultiplier = 0.85 // 85% of activity on weekdays
+      const weekdays = 5
+      const weekends = 2
+
+      const weekdayCalls = Math.floor(metrics.totalCalls * weekdayMultiplier / weekdays)
+      const weekendCalls = Math.floor(metrics.totalCalls * (1 - weekdayMultiplier) / weekends)
+      const weekdaySMS = Math.floor(metrics.totalMessages * weekdayMultiplier / weekdays)
+      const weekendSMS = Math.floor(metrics.totalMessages * (1 - weekdayMultiplier) / weekends)
+
       const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
       days.forEach((day, index) => {
         const isWeekend = index >= 5
         data.push({
           name: day,
-          Calls: Math.floor(Math.random() * avgCallsPerPeriod * 2) + (isWeekend ? 0 : avgCallsPerPeriod),
-          SMS: Math.floor(Math.random() * avgSMSPerPeriod * 2) + (isWeekend ? 0 : avgSMSPerPeriod),
+          Calls: isWeekend ? weekendCalls : weekdayCalls,
+          SMS: isWeekend ? weekendSMS : weekdaySMS,
         })
       })
     } else {
-      // Monthly data - show actual totals
-      data.push(
-        { name: 'Week 1', Calls: Math.floor(metrics.totalCalls * 0.25), SMS: Math.floor(metrics.totalMessages * 0.25) },
-        { name: 'Week 2', Calls: Math.floor(metrics.totalCalls * 0.25), SMS: Math.floor(metrics.totalMessages * 0.25) },
-        { name: 'Week 3', Calls: Math.floor(metrics.totalCalls * 0.25), SMS: Math.floor(metrics.totalMessages * 0.25) },
-        { name: 'Week 4', Calls: Math.floor(metrics.totalCalls * 0.25), SMS: Math.floor(metrics.totalMessages * 0.25) },
-      )
+      // For month/longer periods, show weekly distribution
+      const weeksInPeriod = 4
+      const callsPerWeek = Math.floor(metrics.totalCalls / weeksInPeriod)
+      const smsPerWeek = Math.floor(metrics.totalMessages / weeksInPeriod)
+
+      for (let week = 1; week <= weeksInPeriod; week++) {
+        data.push({
+          name: `Week ${week}`,
+          Calls: callsPerWeek,
+          SMS: smsPerWeek,
+        })
+      }
     }
     return data
   }, [dateRange, metrics.totalCalls, metrics.totalMessages])
@@ -175,6 +195,75 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({
     }
     return data
   }, [dateRange, metrics.avgCostPerCall, metrics.avgCostPerMessage, metrics.callSuccessRate])
+
+  // Prepare activity overview data - cumulative activity for the selected date range
+  const activityOverviewData = useMemo(() => {
+    const data = []
+
+    if (dateRange === 'today') {
+      // For today, show cumulative activity building throughout the day
+      let cumulativeCalls = 0
+      let cumulativeSMS = 0
+      const totalCallsToday = metrics.totalCalls
+      const totalSMSToday = metrics.totalMessages
+
+      for (let hour = 0; hour < 24; hour++) {
+        // Add more activity during business hours
+        const isBusinessHours = hour >= 9 && hour <= 17
+        const callsThisHour = isBusinessHours ? Math.floor(totalCallsToday * 0.06) : Math.floor(totalCallsToday * 0.02)
+        const smsThisHour = isBusinessHours ? Math.floor(totalSMSToday * 0.06) : Math.floor(totalSMSToday * 0.02)
+
+        cumulativeCalls += callsThisHour
+        cumulativeSMS += smsThisHour
+
+        data.push({
+          name: `${hour}:00`,
+          Calls: Math.min(cumulativeCalls, totalCallsToday),
+          SMS: Math.min(cumulativeSMS, totalSMSToday),
+        })
+      }
+    } else if (dateRange === 'week') {
+      // For week, show daily cumulative activity
+      let cumulativeCalls = 0
+      let cumulativeSMS = 0
+      const callsPerDay = Math.floor(metrics.totalCalls / 7)
+      const smsPerDay = Math.floor(metrics.totalMessages / 7)
+
+      const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
+      days.forEach((day, index) => {
+        const isWeekend = index >= 5
+        const todaysCalls = isWeekend ? Math.floor(callsPerDay * 0.3) : callsPerDay
+        const todaysSMS = isWeekend ? Math.floor(smsPerDay * 0.3) : smsPerDay
+
+        cumulativeCalls += todaysCalls
+        cumulativeSMS += todaysSMS
+
+        data.push({
+          name: day,
+          Calls: cumulativeCalls,
+          SMS: cumulativeSMS,
+        })
+      })
+    } else {
+      // For month/longer periods, show weekly cumulative
+      let cumulativeCalls = 0
+      let cumulativeSMS = 0
+      const callsPerWeek = Math.floor(metrics.totalCalls / 4)
+      const smsPerWeek = Math.floor(metrics.totalMessages / 4)
+
+      for (let week = 1; week <= 4; week++) {
+        cumulativeCalls += callsPerWeek
+        cumulativeSMS += smsPerWeek
+
+        data.push({
+          name: `Week ${week}`,
+          Calls: cumulativeCalls,
+          SMS: cumulativeSMS,
+        })
+      }
+    }
+    return data
+  }, [dateRange, metrics.totalCalls, metrics.totalMessages])
 
   return (
     <div className="mt-8 space-y-6">
@@ -290,15 +379,16 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({
             🎯 Success Rates
           </h3>
           <ResponsiveContainer width="100%" height={300}>
-            <RadialBarChart cx="50%" cy="50%" innerRadius="10%" outerRadius="90%" data={successData}>
+            <RadialBarChart cx="50%" cy="50%" innerRadius="20%" outerRadius="80%" data={successData} startAngle={90} endAngle={-270}>
               <RadialBar
                 minAngle={15}
-                label={{ position: 'insideStart', fill: '#fff' }}
+                label={{ position: 'outside', fill: '#374151', fontSize: 14 }}
                 background
-                clockWise
+                clockWise={false}
                 dataKey="value"
                 animationBegin={0}
                 animationDuration={1500}
+                cornerRadius={4}
               />
               <Legend
                 iconSize={10}
@@ -318,7 +408,7 @@ export const DashboardCharts: React.FC<DashboardChartsProps> = ({
           📉 Activity Overview
         </h3>
         <ResponsiveContainer width="100%" height={300}>
-          <AreaChart data={volumeData}>
+          <AreaChart data={activityOverviewData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
             <XAxis dataKey="name" stroke="#6b7280" fontSize={12} />
             <YAxis stroke="#6b7280" fontSize={12} />
