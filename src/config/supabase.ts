@@ -1,10 +1,13 @@
 import { createClient } from '@supabase/supabase-js'
 import { Database } from '@/types/supabase'
 
-// Force use of direct environment variables - BYPASS VALIDATOR COMPLETELY
-const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL
-const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY
-const supabaseServiceRoleKey = (import.meta as any).env?.VITE_SUPABASE_SERVICE_ROLE_KEY
+// Use properly injected environment variables from Vite define
+const supabaseUrl = (typeof __VITE_SUPABASE_URL__ !== 'undefined' ? __VITE_SUPABASE_URL__ : null)
+  || (import.meta as any).env?.VITE_SUPABASE_URL
+const supabaseAnonKey = (typeof __VITE_SUPABASE_ANON_KEY__ !== 'undefined' ? __VITE_SUPABASE_ANON_KEY__ : null)
+  || (import.meta as any).env?.VITE_SUPABASE_ANON_KEY
+const supabaseServiceRoleKey = (typeof __VITE_SUPABASE_SERVICE_ROLE_KEY__ !== 'undefined' ? __VITE_SUPABASE_SERVICE_ROLE_KEY__ : null)
+  || (import.meta as any).env?.VITE_SUPABASE_SERVICE_ROLE_KEY
 
 // Only log detailed environment check in development mode or when explicitly debugging
 if (import.meta.env?.DEV && !sessionStorage.getItem('supabase-config-logged')) {
@@ -169,7 +172,8 @@ export const supabaseAdmin = supabaseServiceRoleKey && supabaseUrl
 
 // HIPAA Compliance Configuration
 export const hipaaConfig = {
-  encryptionEnabled: (import.meta as any).env?.VITE_HIPAA_MODE === 'true',
+  encryptionEnabled: ((typeof __VITE_HIPAA_MODE__ !== 'undefined' ? __VITE_HIPAA_MODE__ : null)
+    || (import.meta as any).env?.VITE_HIPAA_MODE) === 'true',
   auditLoggingEnabled: true,
   dataRetentionDays: 2555, // 7 years for HIPAA compliance
   sessionTimeoutMinutes: 15,

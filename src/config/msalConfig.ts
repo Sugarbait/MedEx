@@ -1,10 +1,16 @@
 import { Configuration, PublicClientApplication } from '@azure/msal-browser'
 
+// Get environment variables from Vite define or fallback to import.meta.env
+const azureClientId = (typeof __VITE_AZURE_CLIENT_ID__ !== 'undefined' ? __VITE_AZURE_CLIENT_ID__ : null)
+  || import.meta.env.VITE_AZURE_CLIENT_ID || '12345678-1234-1234-1234-123456789012'
+const azureTenantId = (typeof __VITE_AZURE_TENANT_ID__ !== 'undefined' ? __VITE_AZURE_TENANT_ID__ : null)
+  || import.meta.env.VITE_AZURE_TENANT_ID || '87654321-4321-4321-4321-210987654321'
+
 // MSAL configuration
 const msalConfig: Configuration = {
   auth: {
-    clientId: import.meta.env.VITE_AZURE_CLIENT_ID || '12345678-1234-1234-1234-123456789012',
-    authority: `https://login.microsoftonline.com/${import.meta.env.VITE_AZURE_TENANT_ID || '87654321-4321-4321-4321-210987654321'}`,
+    clientId: azureClientId,
+    authority: `https://login.microsoftonline.com/${azureTenantId}`,
     redirectUri: window.location.origin,
     postLogoutRedirectUri: window.location.origin,
     navigateToLoginRequestUrl: true

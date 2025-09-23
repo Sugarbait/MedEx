@@ -5,6 +5,16 @@ import path from 'path'
 import { copyFileSync } from 'fs'
 
 export default defineConfig({
+  // Define environment variables for Azure Static Web Apps
+  define: {
+    // Ensure environment variables are properly injected during build
+    __VITE_SUPABASE_URL__: JSON.stringify(process.env.VITE_SUPABASE_URL),
+    __VITE_SUPABASE_ANON_KEY__: JSON.stringify(process.env.VITE_SUPABASE_ANON_KEY),
+    __VITE_SUPABASE_SERVICE_ROLE_KEY__: JSON.stringify(process.env.VITE_SUPABASE_SERVICE_ROLE_KEY),
+    __VITE_AZURE_CLIENT_ID__: JSON.stringify(process.env.VITE_AZURE_CLIENT_ID),
+    __VITE_AZURE_TENANT_ID__: JSON.stringify(process.env.VITE_AZURE_TENANT_ID),
+    __VITE_HIPAA_MODE__: JSON.stringify(process.env.VITE_HIPAA_MODE)
+  },
   plugins: [
     react(),
     // Plugin to copy Azure Static Web Apps files
