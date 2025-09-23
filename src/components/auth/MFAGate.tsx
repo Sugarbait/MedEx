@@ -19,7 +19,7 @@ export const MFAGate: React.FC<MFAGateProps> = ({ onSuccess, user }) => {
     setError('')
 
     try {
-      console.log('🔐 Attempting MFA verification for user:', user.email)
+      console.log('🔐 Attempting MFA verification for user:', '[EMAIL-REDACTED - HIPAA PROTECTED]')
 
       // Use the MFA service to verify the code
       const verificationResult = await mfaService.verifyTOTP(user.id, mfaCode, false)

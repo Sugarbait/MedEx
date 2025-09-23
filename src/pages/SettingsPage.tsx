@@ -358,7 +358,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
             setShowMFASetup(true)
             return
           }
-          console.log('MFA re-enabled for user:', user.id)
+          console.log('MFA re-enabled for user:', '[USER-ID-REDACTED - HIPAA PROTECTED]')
         } else if (!hasSetup) {
           // No MFA setup exists - show setup dialog
           setShowMFASetup(true)
@@ -369,7 +369,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
         if (hasEnabled) {
           // Temporarily disable MFA (preserve setup)
           await mfaService.disableMFA(user.id)
-          console.log('MFA temporarily disabled for user:', user.id)
+          console.log('MFA temporarily disabled for user:', '[USER-ID-REDACTED - HIPAA PROTECTED]')
         }
       }
     } catch (error) {

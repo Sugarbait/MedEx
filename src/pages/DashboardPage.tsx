@@ -251,7 +251,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
       // Priority 2: Use transcript as fallback if no proper messages found
       if (messages.length === 0 && chat.transcript && chat.transcript.trim().length > 0) {
         messages = [{ content: chat.transcript, role: 'user' }]
-        console.log(`📝 Using transcript (${chat.transcript.trim().length} chars) as single message`)
+        console.log(`📝 Using transcript ([TRANSCRIPT-REDACTED - HIPAA PROTECTED]) as single message`)
       }
 
       // Calculate segments if we have content
@@ -305,7 +305,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
             fallbackSegments = Math.max(Math.ceil(transcriptLength / 160), 1)
           }
 
-          console.log(`🆘 Emergency fallback using transcript for ${chat.chat_id}: ${fallbackSegments} segments`)
+          console.log(`🆘 Emergency fallback using transcript for ${chat.chat_id}: [TRANSCRIPT-REDACTED - HIPAA PROTECTED] - ${fallbackSegments} segments`)
 
           // Only cache this emergency fallback if explicitly requested
           if (shouldCache) {

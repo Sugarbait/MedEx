@@ -10,7 +10,7 @@ export const ToastManager: React.FC<ToastManagerProps> = ({ userId }) => {
   const [toasts, setToasts] = useState<ToastNotificationData[]>([])
   const [preferences] = useState(toastNotificationService.getPreferences())
 
-  console.log('🔔 ToastManager render - userId:', userId, 'toasts count:', toasts.length)
+  console.log('🔔 ToastManager render - userId: [USER-ID-REDACTED - HIPAA PROTECTED], toasts count:', toasts.length)
 
   useEffect(() => {
     if (!userId) return

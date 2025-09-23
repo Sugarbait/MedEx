@@ -223,11 +223,9 @@ Use the comprehensive fix instead.`
         { email: 'elmfarrell@yahoo.com', password: this.generateSecurePassword() }
       ]
 
-      // Log secure passwords for first-time setup (remove in production)
-      console.log('🔐 SECURITY: Demo account passwords generated (change on first login):')
-      demoUserEmails.forEach(user => {
-        console.log(`📧 ${user.email}: ${user.password}`)
-      })
+      // SECURITY: Demo account setup completed (credentials redacted for HIPAA compliance)
+      console.log('🔐 SECURITY: Demo account setup completed - [CREDENTIALS-REDACTED - HIPAA PROTECTED]')
+      console.log(`📊 Generated ${demoUserEmails.length} demo accounts with secure credentials`)
 
       const demoUsers = []
       for (const userConfig of demoUserEmails) {

@@ -122,7 +122,7 @@ class TOTPMFAService {
    */
   async generateSecret(userId: string, userEmail: string): Promise<MFASecret> {
     try {
-      console.log('Starting MFA secret generation for user:', userId)
+      console.log('Starting MFA secret generation for user:', '[USER-ID-REDACTED - HIPAA PROTECTED]')
 
       // Log MFA setup initiation
       try {

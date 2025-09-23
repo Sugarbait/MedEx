@@ -64,19 +64,19 @@ export const ChatDetailModal: React.FC<ChatDetailModalProps> = ({ chat, isOpen, 
 
       console.log('ChatDetailModal: Phone number detection:', {
         chat_id: chat.chat_id,
-        phoneNumber,
+        phoneNumber: '[PHONE-REDACTED - HIPAA PROTECTED]',
         sources: {
-          analysis_phone: chat.chat_analysis?.custom_analysis_data?.phone_number,
-          analysis_customer: chat.chat_analysis?.custom_analysis_data?.customer_phone_number,
-          analysis_phone_short: chat.chat_analysis?.custom_analysis_data?.phone,
-          analysis_contact: chat.chat_analysis?.custom_analysis_data?.contact_number,
-          metadata_phone: chat.metadata?.phone_number,
-          metadata_customer: chat.metadata?.customer_phone_number,
-          metadata_from: chat.metadata?.from_phone_number,
-          metadata_to: chat.metadata?.to_phone_number,
-          dynamic_phone: chat.collected_dynamic_variables?.phone_number,
-          dynamic_customer: chat.collected_dynamic_variables?.customer_phone_number,
-          direct: chat.phone_number
+          analysis_phone: '[REDACTED]',
+          analysis_customer: '[REDACTED]',
+          analysis_phone_short: '[REDACTED]',
+          analysis_contact: '[REDACTED]',
+          metadata_phone: '[REDACTED]',
+          metadata_customer: '[REDACTED]',
+          metadata_from: '[REDACTED]',
+          metadata_to: '[REDACTED]',
+          dynamic_phone: '[REDACTED]',
+          dynamic_customer: '[REDACTED]',
+          direct: '[REDACTED]'
         }
       })
 
