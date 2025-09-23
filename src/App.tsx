@@ -9,6 +9,8 @@ import { SupabaseProvider } from './contexts/SupabaseContext'
 
 // Import SMS cost test for validation
 import './test/smsCostCalculationTest'
+// Import MFA cross-device security test
+import './test/mfaCrossDeviceTest'
 import { ThemeManager } from './utils/themeManager'
 // Import utility to make Pierre super user (available in console)
 import './utils/makePierreSuperUser'
@@ -342,6 +344,9 @@ const App: React.FC = () => {
             const { mfaService } = await import('./services/mfaService')
             const { userSettingsService } = await import('./services/userSettingsService')
 
+            // Initialize MFA service for this user (loads cloud sessions)
+            await mfaService.initializeForUser(userData.id)
+
             // Force sync MFA data from cloud
             const mfaSynced = await mfaService.forceCloudSync(userData.id)
             console.log(`✅ MFA data sync on init: ${mfaSynced ? 'successful' : 'no data found'}`)
@@ -363,6 +368,13 @@ const App: React.FC = () => {
           } catch (syncError) {
             console.warn('⚠️ Cross-device sync on init failed, using local data:', syncError)
             // Continue with initialization even if sync fails - will use local/default data
+            // Still try to initialize MFA service without cloud sync
+            try {
+              const { mfaService } = await import('./services/mfaService')
+              await mfaService.initializeForUser(userData.id)
+            } catch (mfaInitError) {
+              console.warn('MFA service initialization also failed:', mfaInitError)
+            }
           }
 
           // Try to load full profile from Supabase with timeout
@@ -506,45 +518,78 @@ const App: React.FC = () => {
             retellService.loadCredentials()
           }
 
-          // Check if MFA is required - use fast synchronous checks for performance
-          const checkMFARequirement = () => {
+          // Check if MFA is required - Enhanced cross-device verification
+          const checkMFARequirement = async () => {
             try {
-              // Use fast synchronous methods to avoid slow async database calls during auth
-              const hasMFAEnabled = mfaService.hasMFAEnabledSync(userData.id)
+              console.log('🔐 Starting comprehensive MFA requirement check for cross-device scenario')
+
+              // Step 1: Check if user has MFA enabled (both sync and async for accuracy)
+              const hasMFAEnabledSync = mfaService.hasMFAEnabledSync(userData.id)
+              const hasMFASetupSync = mfaService.hasMFASetupSync(userData.id)
+
+              // Step 2: Verify with async methods for cross-device accuracy
+              let hasMFAEnabledAsync = false
+              let hasMFASetupAsync = false
+              try {
+                hasMFAEnabledAsync = await mfaService.hasMFAEnabled(userData.id)
+                hasMFASetupAsync = await mfaService.hasMFASetup(userData.id)
+              } catch (asyncError) {
+                console.warn('Async MFA check failed, using sync fallback:', asyncError)
+              }
+
+              // Use the most permissive result for MFA setup/enabled status
+              const mfaEnabled = hasMFAEnabledSync || hasMFAEnabledAsync || userData.mfaEnabled
+              const mfaSetup = hasMFASetupSync || hasMFASetupAsync
+
+              // Step 3: Check for valid MFA session
               const currentSession = mfaService.getCurrentSessionSync(userData.id)
+              const hasValidSession = currentSession && currentSession.verified &&
+                                    new Date() <= currentSession.expiresAt
 
-              console.log('MFA Check: Fast status evaluated', { hasMFAEnabled, hasSession: !!currentSession })
+              console.log('MFA Requirement Analysis:', {
+                userId: userData.id,
+                userDataMfaEnabled: userData.mfaEnabled,
+                hasMFAEnabledSync,
+                hasMFAEnabledAsync,
+                hasMFASetupSync,
+                hasMFASetupAsync,
+                finalMfaEnabled: mfaEnabled,
+                finalMfaSetup: mfaSetup,
+                hasValidSession,
+                sessionExpiry: currentSession?.expiresAt,
+                isNewDevice: mfaEnabled && !hasValidSession
+              })
 
+              // Step 4: Determine if MFA is required
               // MFA is required if:
-              // 1. User has MFA enabled AND
-              // 2. No valid current session exists
-              if (hasMFAEnabled && !currentSession) {
-                console.log('🔒 MFA verification required')
+              // 1. User has MFA enabled or setup AND
+              // 2. No valid current session exists (covers new device scenario)
+              if ((mfaEnabled || mfaSetup) && !hasValidSession) {
+                console.log('🔒 MFA verification required (new device or expired session)')
                 setMfaRequired(true)
-              } else if (hasMFAEnabled && currentSession) {
-                console.log('✅ Valid MFA session found')
+              } else if ((mfaEnabled || mfaSetup) && hasValidSession) {
+                console.log('✅ Valid MFA session found - user authenticated')
                 setMfaRequired(false)
+                // Update userData to reflect MFA verification status
+                userData.mfaVerified = true
               } else {
                 console.log('ℹ️ MFA not enabled for current user')
                 setMfaRequired(false)
               }
 
-              // Background sync to ensure cache is up to date (non-blocking)
-              if (hasMFAEnabled) {
-                mfaService.hasMFAEnabled(userData.id).catch(error => {
-                  console.warn('Background MFA sync failed:', error)
-                })
-              }
             } catch (error) {
               console.error('Error checking MFA requirement:', error)
-              // Fallback to simple check if service fails
-              if (userData.mfa_enabled && !localStorage.getItem('mfa_verified')) {
+              // SECURITY: On error, be conservative and require MFA if user has it enabled
+              if (userData.mfaEnabled) {
+                console.log('🔒 Error during MFA check - requiring MFA for security')
                 setMfaRequired(true)
+              } else {
+                setMfaRequired(false)
               }
             }
           }
 
-          checkMFARequirement()
+          await checkMFARequirement()
 
           // Log authentication event for HIPAA audit
           try {

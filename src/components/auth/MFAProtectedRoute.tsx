@@ -13,31 +13,51 @@ const hasMFAAccess = (user: any): boolean => {
   if (!user?.id) return false
 
   try {
-    // Check if user has valid MFA session using MFA service
-    const currentSession = mfaService.getCurrentSession(user.id)
+    // First check if user has MFA enabled - if not, allow access
+    const hasMFASetup = mfaService.hasMFASetupSync(user.id)
+    const hasMFAEnabled = mfaService.hasMFAEnabledSync(user.id)
 
-    console.log('MFAProtectedRoute Access Check:', {
+    console.log('MFAProtectedRoute - MFA Status Check:', {
       userId: user.id,
       userEmail: user.email,
-      hasValidSession: !!currentSession,
-      sessionExpiry: currentSession?.expiresAt,
-      mfaVerifiedFallback: localStorage.getItem('mfa_verified') === 'true'
+      hasMFASetup,
+      hasMFAEnabled,
+      userMfaEnabled: user.mfaEnabled
     })
 
-    // Return true if valid session exists OR fallback verification is true
-    const hasAccess = !!currentSession || localStorage.getItem('mfa_verified') === 'true'
+    // If user doesn't have MFA enabled, allow access
+    if (!hasMFAEnabled && !user.mfaEnabled) {
+      console.log('✅ User has MFA disabled - allowing access')
+      return true
+    }
+
+    // If user has MFA enabled, check for valid session
+    const currentSession = mfaService.getCurrentSessionSync(user.id)
+
+    console.log('MFAProtectedRoute - Session Check:', {
+      hasValidSession: !!currentSession,
+      sessionExpiry: currentSession?.expiresAt,
+      sessionVerified: currentSession?.verified,
+      sessionPHIAccess: currentSession?.phiAccessEnabled
+    })
+
+    // CRITICAL: Only allow access if there's a valid, verified MFA session
+    // Remove the insecure localStorage fallback
+    const hasAccess = !!currentSession && currentSession.verified
 
     if (hasAccess) {
-      console.log('✅ User has MFA access - allowing protected route access')
+      console.log('✅ User has valid MFA session - allowing protected route access')
     } else {
-      console.log('🔒 User lacks MFA access - blocking protected route access')
+      console.log('🔒 User lacks valid MFA session - blocking protected route access')
+      console.log('🔒 MFA verification required for cross-device access')
     }
 
     return hasAccess
   } catch (error) {
     console.error('Error checking MFA access for protected route:', error)
-    // Fallback to localStorage check
-    return localStorage.getItem('mfa_verified') === 'true'
+    // SECURITY: In case of error, deny access (fail-safe)
+    console.log('🔒 MFA access check failed - denying access for security')
+    return false
   }
 }
 

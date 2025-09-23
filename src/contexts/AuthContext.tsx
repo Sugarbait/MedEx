@@ -78,24 +78,41 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             console.warn('⚠️ MFA force sync failed:', error)
           }
 
-          // Check if MFA is required after sync
+          // Check if MFA is required after sync - Enhanced cross-device check
           const hasMFASetup = await mfaService.hasMFASetup(userProfile.id)
           const mfaEnabled = hasMFASetup && userProfile.mfaEnabled
 
-          console.log('🔐 MFA Status Check:', {
+          // CRITICAL: Check for existing valid MFA session for cross-device scenarios
+          const existingMFASession = mfaService.getCurrentSessionSync(userProfile.id)
+          const hasValidMFASession = existingMFASession && existingMFASession.verified &&
+                                    new Date() <= existingMFASession.expiresAt
+
+          console.log('🔐 MFA Status Check (Enhanced):', {
             hasMFASetup,
             userProfileMfaEnabled: userProfile.mfaEnabled,
             userProfileMfaVerified: userProfile.mfaVerified,
-            finalMfaEnabled: mfaEnabled
+            finalMfaEnabled: mfaEnabled,
+            hasValidMFASession,
+            sessionExpiry: existingMFASession?.expiresAt,
+            isNewDevice: !hasValidMFASession
           })
 
-          if (mfaEnabled && !userProfile.mfaVerified) {
+          // MFA is required if:
+          // 1. User has MFA enabled AND
+          // 2. No valid MFA session exists (covers new device scenario)
+          if (mfaEnabled && !hasValidMFASession) {
             logger.info('MFA required for user', userProfile.id)
             setMfaRequired(true)
             const challenge = await authService.initiateMFA(userProfile.id)
             setMfaChallenge(challenge)
             console.log('🔐 MFA challenge initiated for cross-device login')
           } else {
+            // User either doesn't have MFA enabled OR has a valid session
+            if (mfaEnabled && hasValidMFASession) {
+              console.log('✅ Valid MFA session found - user authenticated')
+              // Update userProfile.mfaVerified to reflect current session status
+              userProfile.mfaVerified = true
+            }
             setUser(userProfile)
 
             // Create or retrieve secure session
@@ -143,7 +160,54 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                   if (settings?.retell_config) {
                     console.log('🔍 Fallback found retell_config - this suggests cloud sync issue')
                   } else {
-                    console.log('🆕 No settings found anywhere - new user or cloud not configured')
+                    console.log('🆕 No settings found anywhere - trying enhanced cross-device recovery...')
+
+                    // Enhanced cross-device recovery: Try to find data from other storage locations
+                    try {
+                      // Check for data in userProfileService which might have API keys
+                      const { userProfileService } = await import('@/services/userProfileService')
+                      const profileResponse = await userProfileService.loadUserProfile(userProfile.id)
+
+                      if (profileResponse.status === 'success' && profileResponse.data?.settings) {
+                        console.log('🔧 RECOVERY: Found API keys in user profile service')
+                        const profileSettings = profileResponse.data.settings
+
+                        // Create settings object with recovered API keys
+                        const recoveredSettings = {
+                          ...settings,
+                          retell_config: {
+                            api_key: profileSettings.retellApiKey,
+                            call_agent_id: profileSettings.callAgentId,
+                            sms_agent_id: profileSettings.smsAgentId
+                          }
+                        }
+
+                        // Update settings with recovered API keys
+                        if (profileSettings.retellApiKey || profileSettings.callAgentId) {
+                          settings = recoveredSettings
+                          console.log('✅ RECOVERY: API keys recovered from profile service')
+
+                          // Try to save the recovered settings for future use
+                          try {
+                            await userSettingsService.updateUserSettings(userProfile.id, recoveredSettings)
+                            console.log('✅ RECOVERY: Saved recovered settings for future cross-device access')
+                          } catch (saveError) {
+                            console.warn('⚠️ RECOVERY: Could not save recovered settings:', saveError)
+                          }
+                        }
+                      }
+
+                      // Also check secure storage for any cached settings
+                      const cachedSettings = await secureStorage.getUserPreference('user_settings', null)
+                      if (cachedSettings?.retell_config && !settings?.retell_config) {
+                        console.log('🔧 RECOVERY: Found API keys in secure storage cache')
+                        settings = { ...settings, ...cachedSettings }
+                        console.log('✅ RECOVERY: API keys recovered from secure storage')
+                      }
+
+                    } catch (recoveryError) {
+                      console.warn('⚠️ RECOVERY: Enhanced recovery failed:', recoveryError)
+                    }
                   }
                 }
 
@@ -296,6 +360,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (isValid) {
         const account = accounts[0]
         const userProfile = await authService.getUserProfile(account.homeAccountId)
+
+        // CRITICAL: Mark user as MFA verified for cross-device consistency
+        userProfile.mfaVerified = true
         setUser(userProfile)
 
         const session = await authService.getSessionInfo()
@@ -304,6 +371,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setMfaRequired(false)
         setMfaChallenge(null)
 
+        // Update user profile storage with verified status
+        await secureStorage.setSessionData('current_user', userProfile)
+
+        console.log('✅ MFA completed successfully - user now has verified access')
         return true
       }
 

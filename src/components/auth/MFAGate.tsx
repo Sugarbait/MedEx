@@ -19,25 +19,46 @@ export const MFAGate: React.FC<MFAGateProps> = ({ onSuccess, user }) => {
     setError('')
 
     try {
-      console.log('🔐 Attempting MFA verification for user:', '[EMAIL-REDACTED - HIPAA PROTECTED]')
+      console.log('🔐 Attempting MFA verification for cross-device access:', '[EMAIL-REDACTED - HIPAA PROTECTED]')
+      console.log('📱 Cross-device scenario: Verifying user identity on new device')
 
-      // Use the MFA service to verify the code
-      const verificationResult = await mfaService.verifyTOTP(user.id, mfaCode, false)
+      // Use the MFA service to verify the code with PHI access
+      const verificationResult = await mfaService.verifyTOTP(user.id, mfaCode, true)
 
-      console.log('MFA verification result:', verificationResult)
+      console.log('Cross-device MFA verification result:', {
+        success: verificationResult.success,
+        hasSession: !!verificationResult.session,
+        sessionExpiry: verificationResult.session?.expiresAt,
+        phiAccess: verificationResult.session?.phiAccessEnabled
+      })
 
-      if (verificationResult.success) {
-        console.log('✅ MFA verification successful')
-        onSuccess()
-        return
+      if (verificationResult.success && verificationResult.session) {
+        console.log('✅ Cross-device MFA verification successful')
+        console.log('🔐 MFA session created for new device access')
+
+        // Ensure the session is properly stored and available
+        const sessionToken = verificationResult.session.sessionToken
+        const sessionCheck = mfaService.getMFASession(sessionToken)
+
+        if (sessionCheck) {
+          console.log('✅ MFA session verified and accessible')
+          // Store for backward compatibility
+          localStorage.setItem('mfa_verified', 'true')
+          onSuccess()
+          return
+        } else {
+          console.error('❌ MFA session creation failed')
+          setError('Session creation failed. Please try again.')
+          return
+        }
       } else {
-        console.log('❌ MFA verification failed:', verificationResult.message)
+        console.log('❌ Cross-device MFA verification failed:', verificationResult.message)
         setError(verificationResult.message || 'Invalid MFA code. Please try again.')
         return
       }
 
     } catch (error) {
-      console.error('❌ MFA verification error:', error)
+      console.error('❌ Cross-device MFA verification error:', error)
       setError('MFA verification failed. Please try again.')
     } finally {
       setIsVerifying(false)

@@ -407,8 +407,54 @@ class UserSettingsServiceClass {
       console.log(`🔧 FORCE SYNC: Supabase configured:`, isConfigured)
 
       if (!isConfigured) {
-        console.log('⚠️ FORCE SYNC: Supabase not configured, force sync skipped')
-        console.log('🔍 FORCE SYNC: This is likely why cross-device sync is not working!')
+        console.log('⚠️ FORCE SYNC: Supabase not configured, attempting alternative sync methods...')
+
+        // Try alternative data sources when Supabase is not configured
+        try {
+          console.log('🔧 ALTERNATIVE SYNC: Checking userProfileService for API keys...')
+          const { userProfileService } = await import('./userProfileService')
+          const profileResponse = await userProfileService.loadUserProfile(userId)
+
+          if (profileResponse.status === 'success' && profileResponse.data?.settings) {
+            const profileSettings = profileResponse.data.settings
+
+            if (profileSettings.retellApiKey || profileSettings.callAgentId) {
+              console.log('✅ ALTERNATIVE SYNC: Found API keys in profile service')
+
+              // Create settings with API keys from profile service
+              const alternativeSettings: UserSettingsData = {
+                ...this.getDefaultSettings(),
+                retell_config: {
+                  api_key: profileSettings.retellApiKey,
+                  call_agent_id: profileSettings.callAgentId,
+                  sms_agent_id: profileSettings.smsAgentId
+                }
+              }
+
+              // Cache the alternative settings
+              this.updateLocalCache(userId, alternativeSettings)
+              console.log('✅ ALTERNATIVE SYNC: API keys recovered and cached')
+              return alternativeSettings
+            }
+          }
+
+          // Also try other robust settings service if available
+          console.log('🔧 ALTERNATIVE SYNC: Checking RobustUserSettingsService...')
+          const { RobustUserSettingsService } = await import('./userSettingsServiceRobust')
+          const robustResponse = await RobustUserSettingsService.getUserSettings(userId)
+
+          if (robustResponse.status === 'success' && robustResponse.data?.retell_config) {
+            console.log('✅ ALTERNATIVE SYNC: Found settings in RobustUserSettingsService')
+            const transformedSettings = this.transformRobustToLocal(robustResponse.data)
+            this.updateLocalCache(userId, transformedSettings)
+            return transformedSettings
+          }
+
+        } catch (alternativeError) {
+          console.warn('⚠️ ALTERNATIVE SYNC: Alternative methods failed:', alternativeError)
+        }
+
+        console.log('🔍 FORCE SYNC: No alternative data sources found - this is likely why cross-device sync is not working!')
         return null
       }
 
@@ -477,6 +523,56 @@ class UserSettingsServiceClass {
       console.error('❌ FORCE SYNC: Error stack:', error instanceof Error ? error.stack : 'No stack trace')
       return null
     }
+  }
+
+  /**
+   * Transform robust settings format to local format
+   */
+  private transformRobustToLocal(robustSettings: any): UserSettingsData {
+    return {
+      theme: robustSettings.theme || 'light',
+      notifications: robustSettings.notifications || {
+        email: true,
+        sms: true,
+        push: true,
+        in_app: true,
+        call_alerts: true,
+        sms_alerts: true,
+        security_alerts: true
+      },
+      security_preferences: robustSettings.security_preferences || {
+        session_timeout: 15,
+        require_mfa: true,
+        password_expiry_reminder: true,
+        login_notifications: true
+      },
+      dashboard_layout: robustSettings.dashboard_layout || { widgets: [] },
+      communication_preferences: robustSettings.communication_preferences || {
+        default_method: 'phone',
+        auto_reply_enabled: false,
+        business_hours: {
+          enabled: false,
+          start: '09:00',
+          end: '17:00',
+          timezone: Intl.DateTimeFormat().resolvedOptions().timeZone
+        }
+      },
+      accessibility_settings: robustSettings.accessibility_settings || {
+        high_contrast: false,
+        large_text: false,
+        screen_reader: false,
+        keyboard_navigation: false
+      },
+      retell_config: robustSettings.retell_config
+    }
+  }
+
+  /**
+   * Update local cache with settings
+   */
+  private updateLocalCache(userId: string, settings: UserSettingsData): void {
+    this.cache.set(userId, { data: settings, timestamp: Date.now() })
+    this.storeLocalSettings(userId, settings)
   }
 
   /**

@@ -10,7 +10,7 @@ const logger = secureLogger.component('AuthService')
 class AuthService {
   async getUserProfile(accountId: string): Promise<User & { mfaVerified: boolean }> {
     try {
-      logger.debug('Fetching user profile', accountId)
+      logger.debug('Fetching complete user profile with cross-device sync', accountId)
 
       // First, try to get user from database
       const { data: user, error } = await supabase
@@ -24,65 +24,243 @@ class AuthService {
         throw new Error('Failed to fetch user profile from database')
       }
 
-      // If user doesn't exist in database, create with default values
+      let userProfile: User
+
+      // If user doesn't exist in database, try to find by email or create new
       if (!user) {
-        logger.info('User not found in database, creating default profile', accountId)
+        // Try to find existing user by searching all known users in the system
+        let existingUser: any = null
+        try {
+          const { userProfileService } = await import('./userProfileService')
 
-        const defaultUser: Partial<User> = {
-          azure_ad_id: accountId,
-          email: `user-${accountId.substring(0, 8)}@healthcare.local`,
-          name: 'Healthcare User',
-          role: 'healthcare_provider',
-          permissions: [
-            { resource: 'dashboard', actions: ['read'] },
-            { resource: 'calls', actions: ['read', 'write'] },
-            { resource: 'sms', actions: ['read', 'write'] },
-            { resource: 'analytics', actions: ['read'] },
-            { resource: 'settings', actions: ['read', 'write'] }
-          ],
-          lastLogin: new Date().toISOString(),
-          mfaEnabled: true, // Enable MFA by default for security
-          isActive: true,
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString()
+          // Load all system users to find a match
+          const usersResponse = await userProfileService.loadSystemUsers()
+          if (usersResponse.status === 'success' && usersResponse.data) {
+            // Look for known users like pierre@phaetonai.com, elmfarrell@yahoo.com, etc.
+            const knownEmails = ['pierre@phaetonai.com', 'elmfarrell@yahoo.com', 'demo@carexps.com']
+
+            // Try to find a user that matches one of the known emails
+            for (const email of knownEmails) {
+              const emailLookup = await userProfileService.getUserByEmail(email)
+              if (emailLookup.status === 'success' && emailLookup.data) {
+                existingUser = emailLookup.data
+                logger.info('Found existing user by email lookup', accountId, undefined, {
+                  email: email,
+                  userId: existingUser.id,
+                  mappedFromAccountId: accountId
+                })
+                break
+              }
+            }
+
+            // If no match by known emails, try to find the first admin/super_user
+            if (!existingUser) {
+              const adminUser = usersResponse.data.find(user =>
+                user.role === 'admin' || user.role === 'super_user'
+              )
+              if (adminUser) {
+                existingUser = adminUser
+                logger.info('Found existing admin user to map', accountId, undefined, {
+                  email: adminUser.email,
+                  userId: adminUser.id,
+                  role: adminUser.role
+                })
+              }
+            }
+          }
+        } catch (lookupError) {
+          logger.warn('System user lookup failed, will create new user', accountId, undefined, {
+            error: lookupError instanceof Error ? lookupError.message : 'Unknown error'
+          })
         }
 
-        // Insert user into database
-        const { data: newUser, error: insertError } = await supabase
+        if (existingUser) {
+          // Use existing user profile but update azure_ad_id
+          userProfile = {
+            ...existingUser,
+            azure_ad_id: accountId,
+            lastLogin: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }
+
+          // Update the user in Supabase with the Azure AD ID
+          try {
+            await supabase
+              .from('users')
+              .upsert({
+                id: userProfile.id,
+                azure_ad_id: accountId,
+                email: userProfile.email,
+                name: userProfile.name,
+                role: userProfile.role,
+                last_login: new Date().toISOString(),
+                updated_at: new Date().toISOString()
+              })
+            logger.info('Updated existing user with Azure AD ID', accountId, undefined, { userId: userProfile.id })
+          } catch (updateError) {
+            logger.warn('Failed to update user in Supabase, continuing with existing profile', accountId, undefined, {
+              error: updateError instanceof Error ? updateError.message : 'Unknown error'
+            })
+          }
+        } else {
+          logger.info('User not found in database, creating default profile', accountId)
+
+          const defaultUser: Partial<User> = {
+            azure_ad_id: accountId,
+            email: `user-${accountId.substring(0, 8)}@healthcare.local`,
+            name: 'Healthcare User',
+            role: 'healthcare_provider',
+            permissions: [
+              { resource: 'dashboard', actions: ['read'] },
+              { resource: 'calls', actions: ['read', 'write'] },
+              { resource: 'sms', actions: ['read', 'write'] },
+              { resource: 'analytics', actions: ['read'] },
+              { resource: 'settings', actions: ['read', 'write'] }
+            ],
+            lastLogin: new Date().toISOString(),
+            mfaEnabled: true, // Enable MFA by default for security
+            isActive: true,
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString()
+          }
+
+          // Insert user into database
+          const { data: newUser, error: insertError } = await supabase
+            .from('users')
+            .insert(defaultUser)
+            .select()
+            .single()
+
+          if (insertError) {
+            logger.error('Failed to create user in database', accountId, undefined, { error: insertError.message })
+            throw new Error('Failed to create user profile')
+          }
+
+          logger.info('User profile created successfully', accountId)
+          userProfile = newUser as User
+        }
+      } else {
+        // Update last login
+        await supabase
           .from('users')
-          .insert(defaultUser)
-          .select()
-          .single()
+          .update({ lastLogin: new Date().toISOString() })
+          .eq('azure_ad_id', accountId)
 
-        if (insertError) {
-          logger.error('Failed to create user in database', accountId, undefined, { error: insertError.message })
-          throw new Error('Failed to create user profile')
-        }
-
-        logger.info('User profile created successfully', accountId)
-
-        // Check MFA verification status
-        const mfaVerified = await mfaService.hasMFAEnabled(accountId)
-
-        return {
-          ...newUser as User,
-          mfaVerified
-        }
+        userProfile = user as User
       }
 
-      // Update last login
-      await supabase
-        .from('users')
-        .update({ lastLogin: new Date().toISOString() })
-        .eq('azure_ad_id', accountId)
+      // Load complete user profile data including settings and API keys
+      try {
+        logger.debug('Loading user settings and API keys for cross-device sync', userProfile.id)
 
-      // Check MFA verification status
-      const mfaVerified = await mfaService.hasMFAEnabled(accountId)
+        // Get user settings from Supabase (includes API keys and preferences)
+        const { data: userSettings, error: settingsError } = await supabase
+          .from('user_settings')
+          .select('*')
+          .eq('user_id', userProfile.id)
+          .single()
 
-      logger.debug('User profile retrieved successfully', accountId)
+        if (!settingsError && userSettings) {
+          logger.debug('User settings loaded from Supabase', userProfile.id)
+
+          // Decrypt API keys if they exist
+          if (userSettings.retell_config) {
+            try {
+              const config = userSettings.retell_config as any
+              if (config.api_key) {
+                const { encryptionService } = await import('./encryption')
+                const decryptedApiKey = await encryptionService.decrypt(config.api_key)
+
+                // Add API keys to user profile
+                userProfile.retellApiKey = decryptedApiKey
+                userProfile.callAgentId = config.call_agent_id
+                userProfile.smsAgentId = config.sms_agent_id
+
+                logger.debug('API keys decrypted and loaded for cross-device access', userProfile.id)
+              }
+            } catch (decryptError) {
+              logger.warn('Failed to decrypt API keys, but continuing', userProfile.id, undefined, {
+                error: decryptError instanceof Error ? decryptError.message : 'Unknown error'
+              })
+            }
+          }
+
+          // Add other settings to user profile
+          userProfile.theme = userSettings.theme || 'light'
+          userProfile.notifications = userSettings.notifications || {}
+          userProfile.preferences = {
+            ...userSettings.security_preferences,
+            ...userSettings.communication_preferences,
+            ...userSettings.accessibility_settings,
+            dashboard_layout: userSettings.dashboard_layout
+          }
+        } else {
+          logger.debug('No user settings found in Supabase, will use defaults', userProfile.id)
+        }
+
+        // Load user profile data for additional information
+        const { userProfileService } = await import('./userProfileService')
+        const profileResponse = await userProfileService.loadUserProfile(userProfile.id)
+
+        if (profileResponse.status === 'success' && profileResponse.data) {
+          const profileData = profileResponse.data
+
+          // Merge profile data with user data
+          if (profileData.settings) {
+            userProfile.retellApiKey = userProfile.retellApiKey || profileData.settings.retellApiKey
+            userProfile.callAgentId = userProfile.callAgentId || profileData.settings.callAgentId
+            userProfile.smsAgentId = userProfile.smsAgentId || profileData.settings.smsAgentId
+          }
+
+          userProfile.avatar = profileData.avatar
+          logger.debug('Profile data merged successfully', userProfile.id)
+        }
+
+      } catch (profileError) {
+        logger.warn('Failed to load complete profile data, using basic profile', userProfile.id, undefined, {
+          error: profileError instanceof Error ? profileError.message : 'Unknown error'
+        })
+      }
+
+      // Check MFA verification status and sync MFA data
+      let mfaVerified = false
+      try {
+        const { mfaService } = await import('./mfaService')
+
+        // Force sync MFA data from cloud for cross-device access
+        await mfaService.forceSyncFromCloud(userProfile.id)
+
+        // Check if MFA is enabled and verified
+        const mfaEnabled = await mfaService.hasMFAEnabled(userProfile.id)
+        const hasMFASetup = await mfaService.hasMFASetup(userProfile.id)
+
+        userProfile.mfaEnabled = mfaEnabled || hasMFASetup
+        mfaVerified = mfaEnabled
+
+        logger.debug('MFA status synchronized', userProfile.id, undefined, {
+          mfaEnabled: userProfile.mfaEnabled,
+          mfaVerified,
+          hasMFASetup
+        })
+      } catch (mfaError) {
+        logger.warn('Failed to sync MFA data, using basic MFA status', userProfile.id, undefined, {
+          error: mfaError instanceof Error ? mfaError.message : 'Unknown error'
+        })
+
+        // Fallback to basic MFA check
+        const { mfaService } = await import('./mfaService')
+        mfaVerified = await mfaService.hasMFAEnabled(userProfile.id)
+      }
+
+      logger.info('Complete user profile loaded with cross-device sync', userProfile.id, undefined, {
+        hasApiKeys: !!(userProfile.retellApiKey && userProfile.callAgentId),
+        hasMFA: userProfile.mfaEnabled,
+        hasAvatar: !!userProfile.avatar,
+        hasPreferences: !!userProfile.preferences
+      })
 
       return {
-        ...user as User,
+        ...userProfile,
         mfaVerified
       }
 

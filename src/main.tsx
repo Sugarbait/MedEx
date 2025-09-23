@@ -54,6 +54,13 @@ import './index.css'
 //   import('./test/notesUuidFixTest')
 // }
 
+// Import cross-device sync diagnostic utility
+if (import.meta.env.DEV) {
+  import('./utils/crossDeviceSyncDiagnostic').catch(() => {
+    console.log('Cross-device sync diagnostic not available')
+  })
+}
+
 // Register service worker via virtual module
 if ('serviceWorker' in navigator) {
   import('virtual:pwa-register').then(({ registerSW }) => {

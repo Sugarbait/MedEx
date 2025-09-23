@@ -64,6 +64,20 @@ class TOTPMFAService {
   }
 
   /**
+   * Initialize MFA service for a specific user (loads cloud sessions)
+   */
+  async initializeForUser(userId: string): Promise<void> {
+    try {
+      console.log(`🔄 Initializing MFA service for user: ${userId}`)
+      await this.loadMFASessionsFromCloud(userId)
+      console.log(`✅ MFA service initialized for cross-device access`)
+    } catch (error) {
+      console.warn('Failed to initialize MFA service for user:', error)
+      // Continue with local sessions only
+    }
+  }
+
+  /**
    * Save sessions to localStorage
    */
   private saveSessionsToStorage(): void {
@@ -311,6 +325,15 @@ class TOTPMFAService {
         mfaData.verifiedAt = new Date().toISOString()
         mfaData.lastUsedAt = new Date().toISOString()
         await this.storeMFAData(userId, mfaData)
+
+        // CRITICAL: Store session in cloud for cross-device access
+        try {
+          await this.storeMFASessionInCloud(session)
+          console.log('✅ MFA session stored in cloud for cross-device access')
+        } catch (cloudError) {
+          console.warn('⚠️ Failed to store MFA session in cloud:', cloudError)
+          // Continue - session is still valid locally
+        }
 
         console.log('✅ MFA verified and synced across devices for user:', userId)
 
@@ -1381,6 +1404,80 @@ class TOTPMFAService {
         console.error('Failed to sync MFA data from cloud:', error)
       }
       return null
+    }
+  }
+
+  /**
+   * Store MFA session in cloud for cross-device access
+   */
+  private async storeMFASessionInCloud(session: MFASession): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('mfa_sessions')
+        .upsert({
+          session_token: session.sessionToken,
+          user_id: session.userId,
+          verified: session.verified,
+          verified_at: session.verifiedAt.toISOString(),
+          expires_at: session.expiresAt.toISOString(),
+          phi_access_enabled: session.phiAccessEnabled,
+          device_fingerprint: this.generateUserAgentFingerprint(),
+          created_at: new Date().toISOString(),
+          valid: true
+        }, {
+          onConflict: 'session_token'
+        })
+
+      if (error) {
+        throw error
+      }
+    } catch (error) {
+      console.error('Failed to store MFA session in cloud:', error)
+      throw error
+    }
+  }
+
+  /**
+   * Load MFA sessions from cloud for cross-device access
+   */
+  private async loadMFASessionsFromCloud(userId: string): Promise<void> {
+    try {
+      const { data: sessions, error } = await supabase
+        .from('mfa_sessions')
+        .select('*')
+        .eq('user_id', userId)
+        .eq('valid', true)
+        .gt('expires_at', new Date().toISOString())
+
+      if (error) {
+        throw error
+      }
+
+      if (sessions && sessions.length > 0) {
+        console.log(`🔄 Loading ${sessions.length} valid MFA sessions from cloud`)
+
+        for (const sessionData of sessions) {
+          const session: MFASession = {
+            sessionToken: sessionData.session_token,
+            userId: sessionData.user_id,
+            verified: sessionData.verified,
+            verifiedAt: new Date(sessionData.verified_at),
+            expiresAt: new Date(sessionData.expires_at),
+            phiAccessEnabled: sessionData.phi_access_enabled
+          }
+
+          // Only restore if not expired
+          if (session.expiresAt > new Date()) {
+            this.activeSessions.set(session.sessionToken, session)
+          }
+        }
+
+        this.saveSessionsToStorage()
+        console.log(`✅ Restored ${sessions.length} valid MFA sessions from cloud`)
+      }
+    } catch (error) {
+      console.warn('Failed to load MFA sessions from cloud:', error)
+      // Continue with local sessions only
     }
   }
 
