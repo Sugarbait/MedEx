@@ -1,5 +1,6 @@
 import React from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
+import { useCompanyLogos } from '@/hooks/useCompanyLogos'
 import {
   HomeIcon,
   PhoneIcon,
@@ -97,6 +98,7 @@ const getNavigationItems = (user: any) => {
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, user }) => {
   const location = useLocation()
+  const { logos } = useCompanyLogos()
 
   return (
     <>
@@ -119,15 +121,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, user }) => {
           <div className="flex items-center gap-3">
             <NavLink to="/dashboard" className="hover:opacity-80 transition-opacity">
               <img
-                src="https://nexasync.ca/images/Logo.png"
+                src={logos.headerLogo || "https://nexasync.ca/images/Logo.png"}
                 alt="CareXPS Logo"
                 className="h-8 sm:h-10 w-auto object-contain cursor-pointer"
-                onError={(e) => {
-                  // Silently handle image loading errors to reduce console noise
-                  const img = e.target as HTMLImageElement
-                  img.style.display = 'none'
-                }}
-                crossOrigin="anonymous"
+                referrerPolicy="no-referrer"
               />
             </NavLink>
           </div>

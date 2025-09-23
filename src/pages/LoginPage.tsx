@@ -3,6 +3,7 @@ import { ShieldCheckIcon, EyeIcon, EyeOffIcon, AlertCircleIcon } from 'lucide-re
 import { userManagementService } from '@/services/userManagementService'
 import { userProfileService } from '@/services/userProfileService'
 import { mfaService } from '@/services/mfaService'
+import { useCompanyLogos } from '@/hooks/useCompanyLogos'
 import { userSettingsService } from '@/services/userSettingsService'
 import { PasswordDebugger } from '@/utils/passwordDebug'
 import { createGuestUser } from '@/utils/createGuestUser'
@@ -21,6 +22,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [showPassword, setShowPassword] = useState(false)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState('')
+  const { logos } = useCompanyLogos()
   const [warning, setWarning] = useState('')
 
   // Emergency admin unlock function (press Ctrl+Shift+U on login page)
@@ -575,14 +577,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
         <div className="text-center mb-8">
           <img
-            src="https://nexasync.ca/images/Logo.png"
+            src={logos.headerLogo || "https://nexasync.ca/images/Logo.png"}
             alt="CareXPS Logo"
             className="max-h-20 w-auto mx-auto mb-4 object-contain"
-            onError={(e) => {
-              const img = e.target as HTMLImageElement
-              img.style.display = 'none'
-            }}
-            crossOrigin="anonymous"
+            referrerPolicy="no-referrer"
           />
           <p className="text-gray-600 text-sm">Healthcare CRM</p>
           <p className="text-gray-500 text-xs">Secure HIPAA-Compliant Platform</p>
@@ -666,14 +664,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
         <div className="text-center mt-6">
           <img
-            src="https://nexasync.ca/images/NexaSync-logo.png"
+            src={logos.footerLogoLight || "https://nexasync.ca/images/NexaSync-logo.png"}
             alt="NexaSync Logo"
             className="h-6 w-auto mx-auto mb-2 opacity-70"
-            onError={(e) => {
-              const img = e.target as HTMLImageElement
-              img.style.display = 'none'
-            }}
-            crossOrigin="anonymous"
+            referrerPolicy="no-referrer"
           />
           <div className="text-xs text-gray-500">
             © 2025 NexaSync. All rights reserved.

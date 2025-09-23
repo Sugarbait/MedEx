@@ -32,6 +32,7 @@ import { SimpleUserManager } from '@/components/settings/SimpleUserManager'
 import { ThemeManager } from '@/utils/themeManager'
 import { SiteHelpChatbot } from '@/components/common/SiteHelpChatbot'
 import { toastNotificationService, ToastNotificationPreferences } from '@/services/toastNotificationService'
+import { logoService, CompanyLogos } from '@/services/logoService'
 
 interface User {
   id: string
@@ -83,6 +84,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   const [toastPreferences, setToastPreferences] = useState<ToastNotificationPreferences>(
     toastNotificationService.getPreferences()
   )
+  const [companyLogos, setCompanyLogos] = useState<CompanyLogos>({})
+  const [logoUploadStatus, setLogoUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle')
 
 
   const tabs = [
@@ -90,6 +93,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
     { id: 'security', name: 'Security', icon: ShieldIcon },
     { id: 'api', name: 'API Configuration', icon: KeyIcon },
     { id: 'appearance', name: 'Appearance', icon: PaletteIcon },
+    { id: 'branding', name: 'Company Branding', icon: PaletteIcon },
     { id: 'notifications', name: 'Notifications', icon: BellIcon },
     { id: 'audit', name: 'Audit Logs', icon: FileTextIcon },
     ...(user?.role === 'super_user' ? [{ id: 'users', name: 'User Management', icon: UserIcon }] : [])
@@ -140,6 +144,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
           setUserSettings(loadedSettings)
           // setSyncStatus('loaded')
 
+          // Also save to localStorage for immediate access
+          localStorage.setItem(`settings_${user.id}`, JSON.stringify(loadedSettings))
+
           // Update retell service with loaded credentials
           if (loadedSettings.retellApiKey || loadedSettings.callAgentId || loadedSettings.smsAgentId) {
             console.log('Initializing retell service with saved credentials')
@@ -156,7 +163,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
           setErrorMessage(`Failed to load settings: ${response.error}`)
 
           // Set default settings on error
-          setUserSettings({
+          const defaultSettings = {
             theme: 'light',
             mfaEnabled: user?.mfa_enabled || false,
             refreshInterval: 30000,
@@ -166,14 +173,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
               sms: true,
               system: true
             }
-          })
+          }
+          setUserSettings(defaultSettings)
+          // Save default settings to localStorage
+          localStorage.setItem(`settings_${user.id}`, JSON.stringify(defaultSettings))
         }
       } catch (error) {
         console.error('Failed to load settings:', error)
         setErrorMessage(`Failed to load settings: ${error instanceof Error ? error.message : 'Unknown error'}`)
 
         // Set default settings on error
-        setUserSettings({
+        const errorDefaultSettings = {
           theme: 'light',
           mfaEnabled: user?.mfa_enabled || false,
           refreshInterval: 30000,
@@ -183,13 +193,23 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
             sms: true,
             system: true
           }
-        })
+        }
+        setUserSettings(errorDefaultSettings)
+        // Save default settings to localStorage
+        localStorage.setItem(`settings_${user.id}`, JSON.stringify(errorDefaultSettings))
       } finally {
         setIsLoading(false)
       }
     }
 
     loadSettings()
+
+    // Load company logos
+    logoService.getLogos().then(logos => {
+      setCompanyLogos(logos)
+    }).catch(error => {
+      console.error('Failed to load company logos:', error)
+    })
 
     // Subscribe to settings changes for this user with robust service
     const unsubscribe = RobustUserSettingsService.subscribeToUserSettings(user.id, (updatedSettings) => {
@@ -304,6 +324,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
         console.log('✅ Settings updated successfully')
         setSaveStatus('saved')
         // setSyncStatus('loaded')
+
+        // Save to localStorage for immediate access
+        localStorage.setItem(`settings_${user.id}`, JSON.stringify(updatedSettings))
+        console.log('💾 Session timeout saved to localStorage:', updatedSettings.sessionTimeout, 'minutes')
+
         setTimeout(() => setSaveStatus('idle'), 2000)
 
         // Update retell service if API settings changed
@@ -950,6 +975,80 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   const cancelEditName = () => {
     setFullName(user?.name || '')
     setIsEditingName(false)
+  }
+
+  // Logo upload handlers
+  const handleLogoUpload = async (file: File, type: 'header' | 'footer-light' | 'footer-dark' | 'favicon') => {
+    if (!file) return
+
+    setLogoUploadStatus('uploading')
+
+    try {
+      // Upload the logo
+      const url = await logoService.uploadLogoWithFallback(file, type)
+
+      if (!url) {
+        throw new Error('Failed to upload logo')
+      }
+
+      // Update logos configuration
+      const updatedLogos = { ...companyLogos }
+
+      switch (type) {
+        case 'header':
+          updatedLogos.headerLogo = url
+          break
+        case 'footer-light':
+          updatedLogos.footerLogoLight = url
+          break
+        case 'footer-dark':
+          updatedLogos.footerLogoDark = url
+          break
+        case 'favicon':
+          updatedLogos.favicon = url
+          break
+      }
+
+      // Save to service
+      const saved = await logoService.saveLogos(updatedLogos)
+
+      if (saved) {
+        setCompanyLogos(updatedLogos)
+        setLogoUploadStatus('success')
+
+        // Trigger a page reload to update all logo references
+        setTimeout(() => {
+          window.location.reload()
+        }, 1000)
+      } else {
+        throw new Error('Failed to save logo configuration')
+      }
+    } catch (error) {
+      console.error('Logo upload failed:', error)
+      setLogoUploadStatus('error')
+      alert(`Failed to upload logo: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    } finally {
+      setTimeout(() => setLogoUploadStatus('idle'), 3000)
+    }
+  }
+
+  const handleLogoDelete = async (type: 'header' | 'footer-light' | 'footer-dark' | 'favicon') => {
+    try {
+      const deleted = await logoService.deleteLogo(type)
+
+      if (deleted) {
+        const updatedLogos = await logoService.getLogos()
+        setCompanyLogos(updatedLogos)
+
+        // Trigger a page reload to update all logo references
+        setTimeout(() => {
+          window.location.reload()
+        }, 1000)
+      }
+    } catch (error) {
+      console.error('Failed to delete logo:', error)
+      alert('Failed to delete logo')
+    }
   }
 
   return (
@@ -1673,6 +1772,195 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                   </div>
                 </div>
 
+              </div>
+            </div>
+          )}
+
+          {/* Company Branding */}
+          {activeTab === 'branding' && (
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+                Company Branding
+              </h2>
+
+              <div className="space-y-6">
+                {/* Header Logo */}
+                <div className="border-b border-gray-200 dark:border-gray-700 pb-6">
+                  <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-4">Header Logo</h3>
+                  <div className="flex items-center gap-4">
+                    {companyLogos.headerLogo && (
+                      <img
+                        src={companyLogos.headerLogo}
+                        alt="Header Logo"
+                        className="h-12 w-auto object-contain border border-gray-300 dark:border-gray-600 rounded p-2"
+                      />
+                    )}
+                    <div className="flex gap-2">
+                      <label className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 cursor-pointer">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file) handleLogoUpload(file, 'header')
+                          }}
+                          className="hidden"
+                        />
+                        Upload Logo
+                      </label>
+                      {companyLogos.headerLogo && (
+                        <button
+                          onClick={() => handleLogoDelete('header')}
+                          className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Footer Logos */}
+                <div className="border-b border-gray-200 dark:border-gray-700 pb-6">
+                  <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-4">Footer Logos</h3>
+
+                  {/* Light Mode Footer Logo */}
+                  <div className="mb-4">
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Light Mode Logo</p>
+                    <div className="flex items-center gap-4">
+                      {companyLogos.footerLogoLight && (
+                        <img
+                          src={companyLogos.footerLogoLight}
+                          alt="Footer Light Logo"
+                          className="h-8 w-auto object-contain border border-gray-300 dark:border-gray-600 rounded p-2 bg-white"
+                        />
+                      )}
+                      <div className="flex gap-2">
+                        <label className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 cursor-pointer">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              if (file) handleLogoUpload(file, 'footer-light')
+                            }}
+                            className="hidden"
+                          />
+                          Upload
+                        </label>
+                        {companyLogos.footerLogoLight && (
+                          <button
+                            onClick={() => handleLogoDelete('footer-light')}
+                            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Dark Mode Footer Logo */}
+                  <div>
+                    <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">Dark Mode Logo</p>
+                    <div className="flex items-center gap-4">
+                      {companyLogos.footerLogoDark && (
+                        <img
+                          src={companyLogos.footerLogoDark}
+                          alt="Footer Dark Logo"
+                          className="h-8 w-auto object-contain border border-gray-300 dark:border-gray-600 rounded p-2 bg-gray-800"
+                        />
+                      )}
+                      <div className="flex gap-2">
+                        <label className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 cursor-pointer">
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0]
+                              if (file) handleLogoUpload(file, 'footer-dark')
+                            }}
+                            className="hidden"
+                          />
+                          Upload
+                        </label>
+                        {companyLogos.footerLogoDark && (
+                          <button
+                            onClick={() => handleLogoDelete('footer-dark')}
+                            className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                          >
+                            Remove
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Favicon */}
+                <div className="pb-6">
+                  <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-4">Favicon</h3>
+                  <div className="flex items-center gap-4">
+                    {companyLogos.favicon && (
+                      <img
+                        src={companyLogos.favicon}
+                        alt="Favicon"
+                        className="h-8 w-8 object-contain border border-gray-300 dark:border-gray-600 rounded p-1"
+                      />
+                    )}
+                    <div className="flex gap-2">
+                      <label className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 cursor-pointer">
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={(e) => {
+                            const file = e.target.files?.[0]
+                            if (file) handleLogoUpload(file, 'favicon')
+                          }}
+                          className="hidden"
+                        />
+                        Upload Favicon
+                      </label>
+                      {companyLogos.favicon && (
+                        <button
+                          onClick={() => handleLogoDelete('favicon')}
+                          className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                        >
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                    Recommended size: 32x32 or 64x64 pixels
+                  </p>
+                </div>
+
+                {/* Upload Status */}
+                {logoUploadStatus !== 'idle' && (
+                  <div className={`p-3 rounded-lg ${
+                    logoUploadStatus === 'uploading' ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' :
+                    logoUploadStatus === 'success' ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400' :
+                    'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'
+                  }`}>
+                    {logoUploadStatus === 'uploading' && 'Uploading logo...'}
+                    {logoUploadStatus === 'success' && 'Logo uploaded successfully! Page will reload shortly.'}
+                    {logoUploadStatus === 'error' && 'Failed to upload logo. Please try again.'}
+                  </div>
+                )}
+
+                {/* Info */}
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                  <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">
+                    About Company Branding
+                  </h4>
+                  <div className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
+                    <p>• Logos are synchronized across all devices and users</p>
+                    <p>• Changes take effect immediately after page reload</p>
+                    <p>• Supported formats: PNG, JPG, SVG</p>
+                    <p>• Maximum file size: 5MB</p>
+                  </div>
+                </div>
               </div>
             </div>
           )}

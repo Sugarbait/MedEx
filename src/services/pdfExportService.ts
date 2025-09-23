@@ -539,12 +539,15 @@ class PDFExportService {
 
   private async addLogoToPDF(centerX: number, y: number): Promise<void> {
     try {
-      // Load the logo from the URL with CORS handling
-      const logoUrl = 'https://nexasync.ca/images/Logo.png'
-      const response = await fetch(logoUrl, {
-        mode: 'cors',
-        cache: 'force-cache'
-      })
+      // Try to load the logo - first try local copy, then fallback to external URL
+      let logoUrl = '/images/Logo.png'
+      let response = await fetch(logoUrl).catch(() => null)
+
+      if (!response || !response.ok) {
+        // Try external URL as fallback
+        logoUrl = 'https://nexasync.ca/images/Logo.png'
+        response = await fetch(logoUrl).catch(() => null)
+      }
 
       if (!response.ok) {
         // Silently skip logo if unavailable to reduce console noise
