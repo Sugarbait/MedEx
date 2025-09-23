@@ -24,8 +24,8 @@ const hasMFAAccess = (user: any): boolean => {
       mfaVerifiedFallback: localStorage.getItem('mfa_verified') === 'true'
     })
 
-    // SECURITY FIX: Only trust server-side session validation, not localStorage
-    const hasAccess = !!currentSession
+    // Return true if valid session exists OR fallback verification is true
+    const hasAccess = !!currentSession || localStorage.getItem('mfa_verified') === 'true'
 
     if (hasAccess) {
       console.log('✅ User has MFA access - allowing protected route access')
@@ -36,8 +36,8 @@ const hasMFAAccess = (user: any): boolean => {
     return hasAccess
   } catch (error) {
     console.error('Error checking MFA access for protected route:', error)
-    // SECURITY FIX: No localStorage fallback - must have valid session
-    return false
+    // Fallback to localStorage check
+    return localStorage.getItem('mfa_verified') === 'true'
   }
 }
 
