@@ -29,10 +29,10 @@ export interface FuzzySearchConfig {
 
 // Default search configurations for different content types
 const SMS_SEARCH_CONFIG: FuzzySearchConfig = {
-  threshold: 0.6, // More lenient for better fuzzy matching (0.6 is more lenient than 0.4)
+  threshold: 0.3, // Stricter threshold - lower means more exact matching required
   includeScore: true,
   includeMatches: true,
-  minMatchCharLength: 1, // Allow single character matches
+  minMatchCharLength: 3, // Require at least 3 character matches to avoid false positives
   ignoreLocation: true,
   keys: [
     'metadata.phone_number',
@@ -50,10 +50,10 @@ const SMS_SEARCH_CONFIG: FuzzySearchConfig = {
 }
 
 const CALLS_SEARCH_CONFIG: FuzzySearchConfig = {
-  threshold: 0.6, // More lenient for better fuzzy matching (0.6 is more lenient than 0.4)
+  threshold: 0.3, // Stricter threshold - lower means more exact matching required
   includeScore: true,
   includeMatches: true,
-  minMatchCharLength: 1, // Allow single character matches
+  minMatchCharLength: 3, // Require at least 3 character matches to avoid false positives
   ignoreLocation: true,
   keys: [
     'patient_id',
