@@ -322,6 +322,42 @@ All tables have RLS policies ensuring users can only access their own data or da
 - **Caching**: Leverage React Query for API data caching
 - **Bundle Optimization**: Keep chunks under 2MB warning limit
 
+### **React Hooks Stability Patterns**
+**Critical for preventing infinite loops and excessive re-renders:**
+
+```typescript
+// ✅ CORRECT: Stable callback with useCallback and empty deps
+const onProgress = useCallback((loaded: number, total: number) => {
+  safeLog(`Progress: ${loaded}/${total}`)
+}, []) // Empty dependency array for logging callbacks
+
+// ✅ CORRECT: Ref-based callback management for unstable props
+const callbackRef = useRef(options.onCallback)
+useEffect(() => {
+  callbackRef.current = options.onCallback
+}, [options.onCallback])
+
+const stableWrapper = useCallback((data) => {
+  callbackRef.current?.(data)
+}, []) // Stable wrapper with empty deps
+
+// ❌ INCORRECT: Recreating callback on every render
+const manager = useService({
+  onProgress: (loaded, total) => log(`${loaded}/${total}`) // New function each render
+})
+
+// ❌ INCORRECT: Object in dependency array without memoization
+useEffect(() => {
+  loadData()
+}, [chats, manager]) // manager is recreated each render
+```
+
+**Key principles:**
+- Always use `useCallback` with empty `[]` deps for logging/progress callbacks
+- Use refs to store unstable callbacks, access via stable wrapper
+- Memoize objects passed to custom hooks with `useMemo`
+- Prefer stable function references in dependency arrays
+
 ---
 
 ## **Troubleshooting Common Issues**
@@ -349,6 +385,25 @@ All tables have RLS policies ensuring users can only access their own data or da
 - Check real-time subscription status
 - Force refresh user data
 - Check cross-device sync implementation
+
+### **Supabase WebSocket Connection Errors**
+**Console warnings about failed WebSocket connections are expected during development:**
+- Error: `WebSocket connection to 'wss://...supabase.co/realtime/v1/websocket?apikey=dummy-key...' failed`
+- Warning: `Real-time sync error, falling back to localStorage`
+
+**This is normal behavior when:**
+- Using development environment with placeholder/dummy API keys
+- Supabase service is temporarily unavailable
+- Network connectivity issues
+
+**The app gracefully handles this by:**
+- Automatically falling back to localStorage-only mode
+- Maintaining full functionality without real-time sync
+- Retrying connections when service becomes available
+
+**To reduce console noise in development:**
+- Set proper Supabase environment variables in `.env.local`
+- Use actual Supabase project credentials (not dummy keys)
 
 ---
 

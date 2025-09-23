@@ -40,7 +40,10 @@ const createSupabaseClient = () => {
         },
         realtime: {
           // Disable realtime connections for fallback client
-          disabled: true
+          disabled: true,
+          // Suppress console errors from WebSocket connection attempts
+          logger: () => {}, // Silent logger to prevent console spam
+          maxReconnectAttempts: 0 // Don't attempt reconnections
         },
         global: {
           fetch: () => Promise.reject(new Error('Supabase not configured - using localStorage mode'))
@@ -100,7 +103,10 @@ const createSupabaseClient = () => {
       },
       realtime: {
         // Disable realtime connections for fallback client
-        disabled: true
+        disabled: true,
+        // Suppress console errors from WebSocket connection attempts
+        logger: () => {}, // Silent logger to prevent console spam
+        maxReconnectAttempts: 0 // Don't attempt reconnections
       },
       global: {
         fetch: () => Promise.reject(new Error('Supabase not configured - using localStorage mode'))
