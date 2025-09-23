@@ -6,7 +6,6 @@ import { userProfileService } from './services/userProfileService'
 import { retellService } from './services/retellService'
 import { AuthProvider } from './contexts/AuthContext'
 import { SupabaseProvider } from './contexts/SupabaseContext'
-import { CrossDeviceProvider } from './contexts/CrossDeviceContext'
 
 // Import SMS cost test for validation
 import './test/smsCostCalculationTest'
@@ -345,9 +344,9 @@ const App: React.FC = () => {
             const mfaSynced = await mfaService.forceCloudSync(userData.id)
             console.log(`✅ MFA data sync on init: ${mfaSynced ? 'successful' : 'no data found'}`)
 
-            // Force sync user settings from cloud
-            const settingsSynced = await userSettingsService.forceSyncFromSupabase(userData.id)
-            console.log(`✅ Settings sync on init: ${settingsSynced ? 'successful' : 'using defaults'}`)
+            // Load user settings from cloud
+            const settingsSynced = await userSettingsService.getUserSettings(userData.id)
+            console.log(`✅ Settings loaded on init: ${settingsSynced ? 'successful' : 'using defaults'}`)
 
             // Reload Retell credentials after settings sync
             if (settingsSynced && settingsSynced.retell_config) {
@@ -799,21 +798,19 @@ const App: React.FC = () => {
   return (
     <SupabaseProvider>
       <AuthProvider>
-        <CrossDeviceProvider>
-          <Router>
-            <SPARedirectHandler />
-            <AppContent
-              user={user}
-              mfaRequired={mfaRequired}
-              setMfaRequired={setMfaRequired}
-              sidebarOpen={sidebarOpen}
-              setSidebarOpen={setSidebarOpen}
-              hipaaMode={hipaaMode}
-              handleMFASuccess={handleMFASuccess}
-              handleLogout={handleLogout}
-            />
-          </Router>
-        </CrossDeviceProvider>
+        <Router>
+          <SPARedirectHandler />
+          <AppContent
+            user={user}
+            mfaRequired={mfaRequired}
+            setMfaRequired={setMfaRequired}
+            sidebarOpen={sidebarOpen}
+            setSidebarOpen={setSidebarOpen}
+            hipaaMode={hipaaMode}
+            handleMFASuccess={handleMFASuccess}
+            handleLogout={handleLogout}
+          />
+        </Router>
       </AuthProvider>
     </SupabaseProvider>
   )

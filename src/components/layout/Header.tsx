@@ -1,7 +1,6 @@
 import React from 'react'
 import { MenuIcon, UserIcon, LogOutIcon } from 'lucide-react'
 import { SessionTimer } from '../common/SessionTimer'
-import { DeviceStatusIndicator } from '../crossDevice/DeviceStatusIndicator'
 
 interface HeaderProps {
   user: any
@@ -50,13 +49,6 @@ export const Header: React.FC<HeaderProps> = ({ user, onMenuToggle, sidebarOpen,
         )}
 
         <div className="flex items-center gap-2 sm:gap-4">
-          {/* Device Status Indicator */}
-          <DeviceStatusIndicator
-            size="sm"
-            showLabel={false}
-            className="hidden sm:flex"
-          />
-
           {/* Session Timer */}
           {getTimeRemaining && onExtendSession && (
             <SessionTimer

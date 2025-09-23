@@ -12,14 +12,7 @@ import { pdfExportService } from './pdfExportService'
 import { patientIdService } from './patientIdService'
 import { fuzzySearchService } from './fuzzySearchService'
 
-// Import cross-device services
-import { deviceFingerprintService } from './deviceFingerprintService'
-import { crossDeviceSessionService } from './crossDeviceSessionService'
-import { realTimeSyncService } from './realTimeSyncService'
-import { conflictResolutionService } from './conflictResolutionService'
-import { crossDeviceDataService } from './crossDeviceDataService'
-
-// Export cross-device sync services
+// Export service instances
 export const userSettingsService = userSettingsServiceInstance
 export const mfaService = mfaServiceInstance
 
@@ -36,13 +29,7 @@ export {
   twilioCostService,
   pdfExportService,
   patientIdService,
-  fuzzySearchService,
-  // Cross-device services
-  deviceFingerprintService,
-  crossDeviceSessionService,
-  realTimeSyncService,
-  conflictResolutionService,
-  crossDeviceDataService
+  fuzzySearchService
 }
 
 // Export classes and types for direct usage
@@ -52,10 +39,3 @@ export * from './mfaService'
 export * from './supabaseService'
 export * from './retellService'
 export * from './chatService'
-
-// Export cross-device service types and interfaces
-export * from './deviceFingerprintService'
-export * from './crossDeviceSessionService'
-export * from './realTimeSyncService'
-export * from './conflictResolutionService'
-export * from './crossDeviceDataService'

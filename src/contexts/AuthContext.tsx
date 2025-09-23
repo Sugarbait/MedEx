@@ -82,25 +82,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             // Store user data securely
             await secureStorage.setSessionData('current_user', userProfile)
 
-            // Load user settings from Supabase (cross-device sync)
+            // Load user settings from cloud
             if (userProfile.id) {
               try {
-                console.log('🔄 Loading user settings and MFA state for cross-device sync...')
-
-                // Force sync settings from Supabase on login
-                const settings = await userSettingsService.forceSyncFromSupabase(userProfile.id) ||
-                                await userSettingsService.getUserSettings(userProfile.id)
+                const settings = await userSettingsService.getUserSettings(userProfile.id)
                 setUserSettings(settings)
-
-                // Force sync MFA data from Supabase on login
-                await mfaService.forceCloudSync(userProfile.id)
 
                 // Store settings securely
                 await secureStorage.setUserPreference('user_settings', settings, false)
 
-                // Subscribe to real-time settings changes for cross-device sync
+                // Subscribe to real-time settings changes
                 userSettingsService.subscribeToSettings(userProfile.id, async (newSettings) => {
-                  console.log('📱 Real-time settings update received from another device')
                   setUserSettings(newSettings)
                   await secureStorage.setUserPreference('user_settings', newSettings, false)
 
@@ -110,13 +102,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                   }))
                 })
 
-                console.log('✅ Cross-device sync setup completed')
-              } catch (syncError) {
-                console.warn('⚠️ Cross-device sync setup failed, using local fallback:', syncError)
-
-                // Fallback to local-only mode
-                const fallbackSettings = await userSettingsService.getUserSettings(userProfile.id)
-                setUserSettings(fallbackSettings)
+              } catch (error) {
+                console.warn('Failed to load settings:', error)
               }
             }
 
@@ -189,7 +176,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         await authService.invalidateSession(sessionInfo.sessionId)
       }
 
-      // Clean up cross-device subscriptions
+      // Clean up settings subscriptions
       userSettingsService.unsubscribeFromSettings()
       userSettingsService.clearCache()
 

@@ -1,69 +1,22 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { UserSettings, ServiceResponse } from '@/types/supabase'
-import { UserSettingsService } from '@/services/userSettingsService'
+import { useState, useEffect, useCallback } from 'react'
+import { userSettingsService, UserSettingsData } from '@/services/userSettingsService'
 
 interface UseUserSettingsReturn {
-  settings: UserSettings | null
+  settings: UserSettingsData | null
   loading: boolean
   error: string | null
-  isOnline: boolean
-  syncStatus: {
-    lastSynced: string | null
-    needsSync: boolean
-    hasPendingChanges: boolean
-    deviceCount?: number
-  } | null
-
-  // Actions
-  updateSettings: (updates: Partial<UserSettings>, optimistic?: boolean) => Promise<ServiceResponse<UserSettings>>
-  forceSync: () => Promise<ServiceResponse<UserSettings>>
-  refreshSyncStatus: () => Promise<void>
-  exportSettings: () => Promise<ServiceResponse<any>>
-  importSettings: (settingsData: Partial<UserSettings>, overwrite?: boolean) => Promise<ServiceResponse<UserSettings>>
+  updateSettings: (updates: Partial<UserSettingsData>) => Promise<void>
 }
 
 /**
- * Enhanced hook for user settings with cross-device synchronization
+ * Simple hook for user settings with invisible cloud sync
  */
 export function useUserSettings(userId?: string): UseUserSettingsReturn {
-  const [settings, setSettings] = useState<UserSettings | null>(null)
+  const [settings, setSettings] = useState<UserSettingsData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [isOnline, setIsOnline] = useState(navigator.onLine)
-  const [syncStatus, setSyncStatus] = useState<{
-    lastSynced: string | null
-    needsSync: boolean
-    hasPendingChanges: boolean
-    deviceCount?: number
-  } | null>(null)
 
-  const unsubscribeRef = useRef<(() => void) | null>(null)
-  const syncIntervalRef = useRef<NodeJS.Timeout | null>(null)
-
-  // Monitor online/offline status
-  useEffect(() => {
-    const handleOnline = () => setIsOnline(true)
-    const handleOffline = () => setIsOnline(false)
-
-    window.addEventListener('online', handleOnline)
-    window.addEventListener('offline', handleOffline)
-
-    return () => {
-      window.removeEventListener('online', handleOnline)
-      window.removeEventListener('offline', handleOffline)
-    }
-  }, [])
-
-  // Initialize settings service
-  useEffect(() => {
-    UserSettingsService.initializeSync()
-
-    return () => {
-      UserSettingsService.cleanupSync()
-    }
-  }, [])
-
-  // Load initial settings and set up subscription
+  // Load settings on mount and when userId changes
   useEffect(() => {
     if (!userId) {
       setLoading(false)
@@ -77,18 +30,15 @@ export function useUserSettings(userId?: string): UseUserSettingsReturn {
         setLoading(true)
         setError(null)
 
-        const response = await UserSettingsService.getUserSettings(userId)
+        const settingsData = await userSettingsService.getUserSettings(userId)
 
-        if (!mounted) return
-
-        if (response.status === 'success') {
-          setSettings(response.data)
-        } else {
-          setError(response.error || 'Failed to load settings')
+        if (mounted) {
+          setSettings(settingsData)
         }
       } catch (err) {
-        if (!mounted) return
-        setError(err instanceof Error ? err.message : 'Unknown error')
+        if (mounted) {
+          setError(err instanceof Error ? err.message : 'Failed to load settings')
+        }
       } finally {
         if (mounted) {
           setLoading(false)
@@ -96,230 +46,66 @@ export function useUserSettings(userId?: string): UseUserSettingsReturn {
       }
     }
 
-    const setupSubscription = () => {
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current()
+    // Set up real-time subscription
+    userSettingsService.subscribeToSettings(userId, (updatedSettings) => {
+      if (mounted) {
+        setSettings(updatedSettings)
       }
-
-      unsubscribeRef.current = UserSettingsService.subscribeToUserSettings(
-        userId,
-        (updatedSettings) => {
-          if (mounted) {
-            setSettings(updatedSettings)
-            console.log('Settings updated via real-time sync')
-          }
-        }
-      )
-    }
+    })
 
     loadSettings()
-    setupSubscription()
 
     return () => {
       mounted = false
-      if (unsubscribeRef.current) {
-        unsubscribeRef.current()
-        unsubscribeRef.current = null
-      }
+      userSettingsService.unsubscribeFromSettings(userId)
     }
   }, [userId])
-
-  // Refresh sync status periodically
-  const refreshSyncStatus = useCallback(async () => {
-    if (!userId) return
-
-    try {
-      const response = await UserSettingsService.getSyncStatus(userId)
-      if (response.status === 'success') {
-        setSyncStatus(response.data)
-      }
-    } catch (err) {
-      console.warn('Failed to refresh sync status:', err)
-    }
-  }, [userId])
-
-  // Set up periodic sync status refresh
-  useEffect(() => {
-    if (!userId) return
-
-    // Initial sync status check
-    refreshSyncStatus()
-
-    // Refresh sync status every 30 seconds
-    syncIntervalRef.current = setInterval(refreshSyncStatus, 30000)
-
-    return () => {
-      if (syncIntervalRef.current) {
-        clearInterval(syncIntervalRef.current)
-        syncIntervalRef.current = null
-      }
-    }
-  }, [userId, refreshSyncStatus])
 
   // Update settings function
-  const updateSettings = useCallback(async (
-    updates: Partial<UserSettings>,
-    optimistic: boolean = true
-  ): Promise<ServiceResponse<UserSettings>> => {
-    if (!userId) {
-      return { status: 'error', error: 'No user ID provided' }
-    }
+  const updateSettings = useCallback(async (updates: Partial<UserSettingsData>) => {
+    if (!userId) return
 
     try {
       setError(null)
-
-      const response = await UserSettingsService.updateUserSettingsSync(
-        userId,
-        updates,
-        optimistic
-      )
-
-      if (response.status === 'success' && response.data) {
-        setSettings(response.data)
-
-        // Refresh sync status after update
-        setTimeout(refreshSyncStatus, 1000)
-      } else {
-        setError(response.error || 'Failed to update settings')
-      }
-
-      return response
+      const newSettings = await userSettingsService.updateUserSettings(userId, updates)
+      setSettings(newSettings)
     } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-      setError(errorMessage)
-      return { status: 'error', error: errorMessage }
-    }
-  }, [userId, refreshSyncStatus])
-
-  // Force sync across devices
-  const forceSync = useCallback(async (): Promise<ServiceResponse<UserSettings>> => {
-    if (!userId) {
-      return { status: 'error', error: 'No user ID provided' }
-    }
-
-    try {
-      setError(null)
-
-      const response = await UserSettingsService.syncAcrossDevices(userId)
-
-      if (response.status === 'success' && response.data) {
-        setSettings(response.data)
-
-        // Refresh sync status after force sync
-        setTimeout(refreshSyncStatus, 1000)
-      } else {
-        setError(response.error || 'Failed to sync settings')
-      }
-
-      return response
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-      setError(errorMessage)
-      return { status: 'error', error: errorMessage }
-    }
-  }, [userId, refreshSyncStatus])
-
-  // Export settings
-  const exportSettings = useCallback(async (): Promise<ServiceResponse<any>> => {
-    if (!userId) {
-      return { status: 'error', error: 'No user ID provided' }
-    }
-
-    try {
-      return await UserSettingsService.exportSettings(userId)
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-      return { status: 'error', error: errorMessage }
+      setError(err instanceof Error ? err.message : 'Failed to update settings')
+      throw err
     }
   }, [userId])
-
-  // Import settings
-  const importSettings = useCallback(async (
-    settingsData: Partial<UserSettings>,
-    overwrite: boolean = false
-  ): Promise<ServiceResponse<UserSettings>> => {
-    if (!userId) {
-      return { status: 'error', error: 'No user ID provided' }
-    }
-
-    try {
-      setError(null)
-
-      const response = await UserSettingsService.importSettings(userId, settingsData, overwrite)
-
-      if (response.status === 'success' && response.data) {
-        setSettings(response.data)
-
-        // Refresh sync status after import
-        setTimeout(refreshSyncStatus, 1000)
-      } else {
-        setError(response.error || 'Failed to import settings')
-      }
-
-      return response
-    } catch (err) {
-      const errorMessage = err instanceof Error ? err.message : 'Unknown error'
-      setError(errorMessage)
-      return { status: 'error', error: errorMessage }
-    }
-  }, [userId, refreshSyncStatus])
 
   return {
     settings,
     loading,
     error,
-    isOnline,
-    syncStatus,
-    updateSettings,
-    forceSync,
-    refreshSyncStatus,
-    exportSettings,
-    importSettings
+    updateSettings
   }
-}
-
-/**
- * Hook for accessing specific setting values with type safety
- */
-export function useSettingValue<K extends keyof UserSettings>(
-  userId: string | undefined,
-  key: K,
-  defaultValue?: UserSettings[K]
-): [UserSettings[K] | undefined, (value: UserSettings[K]) => Promise<ServiceResponse<UserSettings>>] {
-  const { settings, updateSettings } = useUserSettings(userId)
-
-  const value = settings?.[key] ?? defaultValue
-
-  const setValue = useCallback(async (newValue: UserSettings[K]) => {
-    return updateSettings({ [key]: newValue } as Partial<UserSettings>)
-  }, [key, updateSettings])
-
-  return [value, setValue]
 }
 
 /**
  * Hook for theme settings specifically
  */
 export function useThemeSettings(userId: string | undefined) {
-  const [theme, setTheme] = useSettingValue(userId, 'theme', 'light')
+  const { settings, updateSettings } = useUserSettings(userId)
+
+  const setTheme = useCallback(async (theme: 'light' | 'dark' | 'auto') => {
+    await updateSettings({ theme })
+  }, [updateSettings])
 
   const toggleTheme = useCallback(async () => {
-    const newTheme = theme === 'light' ? 'dark' : 'light'
-    return setTheme(newTheme)
-  }, [theme, setTheme])
-
-  const setAutoTheme = useCallback(async () => {
-    return setTheme('auto')
-  }, [setTheme])
+    const currentTheme = settings?.theme || 'light'
+    const newTheme = currentTheme === 'light' ? 'dark' : 'light'
+    await setTheme(newTheme)
+  }, [settings?.theme, setTheme])
 
   return {
-    theme,
+    theme: settings?.theme || 'light',
     setTheme,
     toggleTheme,
-    setAutoTheme,
-    isDark: theme === 'dark',
-    isLight: theme === 'light',
-    isAuto: theme === 'auto'
+    isDark: settings?.theme === 'dark',
+    isLight: settings?.theme === 'light',
+    isAuto: settings?.theme === 'auto'
   }
 }
 
@@ -327,31 +113,32 @@ export function useThemeSettings(userId: string | undefined) {
  * Hook for notification settings
  */
 export function useNotificationSettings(userId: string | undefined) {
-  const [notifications, setNotifications] = useSettingValue(userId, 'notifications', {
-    email: true,
-    sms: false,
-    push: true,
-    in_app: true,
-    call_alerts: true,
-    sms_alerts: true,
-    security_alerts: true
-  })
+  const { settings, updateSettings } = useUserSettings(userId)
 
   const updateNotification = useCallback(async (
-    type: keyof NonNullable<typeof notifications>,
+    type: keyof NonNullable<UserSettingsData['notifications']>,
     enabled: boolean
   ) => {
-    if (!notifications) return { status: 'error', error: 'Notifications not initialized' } as ServiceResponse<UserSettings>
+    const currentNotifications = settings?.notifications || {
+      email: true,
+      sms: true,
+      push: true,
+      in_app: true,
+      call_alerts: true,
+      sms_alerts: true,
+      security_alerts: true
+    }
 
-    return setNotifications({
-      ...notifications,
-      [type]: enabled
+    await updateSettings({
+      notifications: {
+        ...currentNotifications,
+        [type]: enabled
+      }
     })
-  }, [notifications, setNotifications])
+  }, [settings?.notifications, updateSettings])
 
   return {
-    notifications,
-    setNotifications,
+    notifications: settings?.notifications,
     updateNotification
   }
 }
@@ -360,31 +147,28 @@ export function useNotificationSettings(userId: string | undefined) {
  * Hook for Retell configuration
  */
 export function useRetellSettings(userId: string | undefined) {
-  const [retellConfig, setRetellConfig] = useSettingValue(userId, 'retell_config', null)
+  const { settings, updateSettings } = useUserSettings(userId)
 
   const updateRetellConfig = useCallback(async (config: {
     api_key?: string
     call_agent_id?: string
     sms_agent_id?: string
   }) => {
-    const newConfig = {
-      ...retellConfig,
-      ...config
-    }
-    return setRetellConfig(newConfig)
-  }, [retellConfig, setRetellConfig])
+    const currentConfig = settings?.retell_config || {}
 
-  const clearRetellConfig = useCallback(async () => {
-    return setRetellConfig(null)
-  }, [setRetellConfig])
+    await updateSettings({
+      retell_config: {
+        ...currentConfig,
+        ...config
+      }
+    })
+  }, [settings?.retell_config, updateSettings])
 
   return {
-    retellConfig,
-    setRetellConfig,
+    retellConfig: settings?.retell_config,
     updateRetellConfig,
-    clearRetellConfig,
-    hasApiKey: !!(retellConfig?.api_key),
-    hasCallAgent: !!(retellConfig?.call_agent_id),
-    hasSmsAgent: !!(retellConfig?.sms_agent_id)
+    hasApiKey: !!(settings?.retell_config?.api_key),
+    hasCallAgent: !!(settings?.retell_config?.call_agent_id),
+    hasSmsAgent: !!(settings?.retell_config?.sms_agent_id)
   }
 }
