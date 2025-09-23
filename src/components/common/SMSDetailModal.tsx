@@ -380,9 +380,9 @@ export const SMSDetailModal: React.FC<SMSDetailModalProps> = ({ message, isOpen,
               </div>
             )}
 
-            {/* Message Content */}
+            {/* Message Thread */}
             <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Message Content</h3>
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Message Thread</h3>
               <div className="bg-white dark:bg-gray-800 rounded border p-4">
                 <p className="text-gray-900 dark:text-gray-100 leading-relaxed whitespace-pre-wrap">{message.message_content}</p>
               </div>
