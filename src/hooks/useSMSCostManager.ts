@@ -9,6 +9,7 @@ interface SMSCostState {
   averageCost: number
   isLoading: boolean
   error: string | null
+  progress: { loaded: number; total: number } | null
 }
 
 interface UseSMSCostManagerOptions {
@@ -25,12 +26,35 @@ export function useSMSCostManager(options: UseSMSCostManagerOptions = {}) {
     totalCost: 0,
     averageCost: 0,
     isLoading: false,
-    error: null
+    error: null,
+    progress: null
   })
 
   const mountedRef = useRef(true)
   const instanceIdRef = useRef(`sms-cost-hook-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`)
   const unsubscribeRef = useRef<(() => void) | null>(null)
+
+  // Store the onProgress callback in a ref to ensure stability
+  const onProgressRef = useRef(options.onProgress)
+
+  // Update the ref when options change
+  useEffect(() => {
+    onProgressRef.current = options.onProgress
+  }, [options.onProgress])
+
+  // Create a stable progress callback wrapper
+  const progressCallback = useCallback((loaded: number, total: number) => {
+    if (!mountedRef.current) return
+
+    // Update progress state
+    setState(prevState => ({
+      ...prevState,
+      progress: { loaded, total }
+    }))
+
+    // Call the original onProgress callback
+    onProgressRef.current?.(loaded, total)
+  }, [])
 
   // Subscribe to cost cache updates
   useEffect(() => {
@@ -100,7 +124,8 @@ export function useSMSCostManager(options: UseSMSCostManagerOptions = {}) {
     setState(prevState => ({
       ...prevState,
       error: null,
-      isLoading: true
+      isLoading: true,
+      progress: { loaded: 0, total: chats.length }
     }))
 
     try {
@@ -120,11 +145,17 @@ export function useSMSCostManager(options: UseSMSCostManagerOptions = {}) {
         }))
       }
 
-      const costs = await smsCostCacheService.loadMultipleChatCosts(chats, options.onProgress)
+      const costs = await smsCostCacheService.loadMultipleChatCosts(chats, progressCallback)
 
       if (!mountedRef.current) return
 
       // Final state update will be handled by the subscriber
+      setState(prevState => ({
+        ...prevState,
+        progress: null,
+        isLoading: false
+      }))
+
       console.log(`[useSMSCostManager] Successfully loaded costs for ${Object.keys(costs).length} chats`)
 
     } catch (error) {
@@ -135,10 +166,11 @@ export function useSMSCostManager(options: UseSMSCostManagerOptions = {}) {
         ...prevState,
         error: error instanceof Error ? error.message : 'Failed to load SMS costs',
         isLoading: false,
-        loadingCosts: {}
+        loadingCosts: {},
+        progress: null
       }))
     }
-  }, [options.onProgress])
+  }, [progressCallback]) // Add dependency on progressCallback
 
   /**
    * Clear all costs (useful when date range changes)
@@ -154,7 +186,8 @@ export function useSMSCostManager(options: UseSMSCostManagerOptions = {}) {
       totalCost: 0,
       averageCost: 0,
       isLoading: false,
-      error: null
+      error: null,
+      progress: null
     })
   }, [])
 
@@ -197,6 +230,7 @@ export function useSMSCostManager(options: UseSMSCostManagerOptions = {}) {
     averageCost: state.averageCost,
     isLoading: state.isLoading,
     error: state.error,
+    progress: state.progress,
 
     // Actions
     loadCostsForChats,

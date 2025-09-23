@@ -188,11 +188,13 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     peakHourCount: 0
   })
 
-  // SMS cost management using cache service
+  // SMS cost management using cache service - stable onProgress callback to prevent infinite loops
+  const onProgress = useCallback((loaded: number, total: number) => {
+    safeLog(`SMS cost loading progress: ${loaded}/${total}`)
+  }, [])
+
   const smsCostManager = useSMSCostManager({
-    onProgress: (loaded, total) => {
-      safeLog(`SMS cost loading progress: ${loaded}/${total}`)
-    }
+    onProgress
   })
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null)
   const [isChatDetailModalOpen, setIsChatDetailModalOpen] = useState(false)
