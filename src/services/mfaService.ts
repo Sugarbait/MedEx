@@ -10,7 +10,7 @@ import * as OTPAuth from 'otpauth'
 import QRCode from 'qrcode'
 import { encryptionService } from './encryption'
 import { auditLogger, AuditAction, ResourceType, AuditOutcome } from './auditLogger'
-import { supabase } from '@/config/supabase'
+import { supabase, supabaseConfig } from '@/config/supabase'
 import { encryptPHI, decryptPHI } from '@/utils/encryption'
 
 export interface MFASecret {
@@ -49,12 +49,18 @@ class TOTPMFAService {
   private activeSessions: Map<string, MFASession> = new Map()
   private failedAttempts: Map<string, { count: number; lastAttempt: Date }> = new Map()
   private readonly SESSION_STORAGE_KEY = 'carexps_mfa_sessions'
+  private lastCloudSyncAttempt = 0
+  private readonly CLOUD_SYNC_COOLDOWN = 120000 // 2 minutes (increased)
+  private cloudSyncFailures = 0
+  private readonly MAX_CLOUD_SYNC_FAILURES = 3
+  private cloudSyncSilentMode = false // Flag to suppress cloud sync messages after failures
 
   constructor() {
     // Load existing sessions from localStorage on service initialization
-    console.log('🔐 MFA Service initializing, loading sessions from storage...')
     this.loadSessionsFromStorage()
-    console.log(`🔐 MFA Service initialized with ${this.activeSessions.size} active sessions`)
+    if (this.activeSessions.size > 0) {
+      console.log(`🔐 MFA Service initialized with ${this.activeSessions.size} active sessions`)
+    }
   }
 
   /**
@@ -240,15 +246,7 @@ class TOTPMFAService {
       }
 
       // Get stored MFA data
-      console.log('MFA Debug - Attempting to get MFA data for user:', userId)
       const mfaData = await this.getMFAData(userId)
-
-      console.log('MFA Debug - MFA data retrieval result:', {
-        hasMfaData: !!mfaData,
-        hasEncryptedSecret: mfaData ? !!mfaData.encryptedSecret : false,
-        isVerified: mfaData ? mfaData.verified : false,
-        isTemporarilyDisabled: mfaData ? mfaData.temporarilyDisabled : false
-      })
 
       if (!mfaData) {
         await auditLogger.logPHIAccess(
@@ -267,7 +265,6 @@ class TOTPMFAService {
 
       // Check if MFA is temporarily disabled
       if (mfaData.temporarilyDisabled) {
-        console.log('MFA Debug - MFA is temporarily disabled for user:', userId)
         return {
           success: false,
           message: 'MFA is temporarily disabled. Please contact your administrator.'
@@ -276,13 +273,6 @@ class TOTPMFAService {
 
       // Decrypt secret
       const secret = await encryptionService.decrypt(mfaData.encryptedSecret)
-
-      console.log('MFA Debug - Secret retrieval:', {
-        hasEncryptedSecret: !!mfaData.encryptedSecret,
-        hasDecryptedSecret: !!secret,
-        secretLength: secret ? secret.length : 0,
-        mfaVerified: mfaData.verified
-      })
 
       // Create TOTP object with the secret
       const totp = new OTPAuth.TOTP({
@@ -294,25 +284,10 @@ class TOTPMFAService {
       })
 
       // Verify token with time window tolerance
-      console.log('MFA Debug - Verification attempt:', {
-        userId,
-        tokenEntered: token,
-        tokenLength: token.length,
-        currentTime: new Date().toISOString(),
-        totpPeriod: this.period,
-        totpWindow: this.window
-      })
-
       const isValid = totp.validate({
         token: token,
         window: this.window
       }) !== null
-
-      console.log('MFA Debug - Verification result:', {
-        isValid,
-        currentTotpToken: totp.generate(),
-        tokenAttempted: token
-      })
 
       if (isValid) {
         // Clear failed attempts
@@ -1112,13 +1087,29 @@ class TOTPMFAService {
         })
 
       if (error) {
-        console.error('Failed to store MFA data in cloud:', error)
+        this.cloudSyncFailures++
+        if (this.cloudSyncFailures >= this.MAX_CLOUD_SYNC_FAILURES) {
+          this.cloudSyncSilentMode = true
+        }
+
+        if (!this.cloudSyncSilentMode) {
+          console.error('Failed to store MFA data in cloud:', error)
+        }
         // Don't throw error - fallback to local storage
       } else {
+        this.cloudSyncFailures = 0 // Reset on success
+        this.cloudSyncSilentMode = false
         console.log('MFA data stored in cloud successfully for cross-device access')
       }
     } catch (error) {
-      console.error('Error storing MFA data in cloud:', error)
+      this.cloudSyncFailures++
+      if (this.cloudSyncFailures >= this.MAX_CLOUD_SYNC_FAILURES) {
+        this.cloudSyncSilentMode = true
+      }
+
+      if (!this.cloudSyncSilentMode) {
+        console.error('Error storing MFA data in cloud:', error)
+      }
       // Don't throw error - fallback to local storage
     }
   }
@@ -1128,31 +1119,53 @@ class TOTPMFAService {
    */
   private async getMFAData(userId: string): Promise<any> {
     try {
-      // PRIORITY 1: Try Supabase first for most up-to-date cross-device data
-      try {
-        const cloudData = await this.syncFromCloud(userId)
-        if (cloudData) {
-          console.log('✅ MFA data retrieved from Supabase (cross-device sync)')
-          return cloudData
+      // PRIORITY 1: Try Supabase first for most up-to-date cross-device data (with rate limiting)
+      const now = Date.now()
+      const shouldTryCloud = (now - this.lastCloudSyncAttempt > this.CLOUD_SYNC_COOLDOWN) &&
+                           (this.cloudSyncFailures < this.MAX_CLOUD_SYNC_FAILURES)
+
+      if (shouldTryCloud) {
+        try {
+          const cloudData = await this.syncFromCloud(userId)
+          if (cloudData) {
+            this.cloudSyncFailures = 0 // Reset on success
+            this.cloudSyncSilentMode = false
+            console.log('✅ MFA data retrieved from Supabase (cross-device sync)')
+            return cloudData
+          }
+        } catch (supabaseError) {
+          this.cloudSyncFailures++
+          if (this.cloudSyncFailures >= this.MAX_CLOUD_SYNC_FAILURES) {
+            this.cloudSyncSilentMode = true
+          }
+
+          if (!this.cloudSyncSilentMode) {
+            console.warn('⚠️ Supabase access failed, trying localStorage fallback:', supabaseError)
+          }
         }
-      } catch (supabaseError) {
-        console.warn('⚠️ Supabase access failed, trying localStorage fallback:', supabaseError)
       }
 
       // PRIORITY 2: Fallback to local storage if Supabase unavailable
       const localData = this.getLocalMFAData(userId)
       if (localData) {
-        console.log('⚠️ Using localStorage fallback (offline mode)')
+        if (!this.cloudSyncSilentMode) {
+          console.log('⚠️ Using localStorage fallback (offline mode)')
+        }
 
         // Try to background sync to Supabase for future cross-device access
         this.backgroundSyncToCloud(userId, localData).catch(error => {
-          console.warn('Background sync to cloud failed:', error)
+          // Silent background sync - only log if not in silent mode
+          if (!this.cloudSyncSilentMode) {
+            console.warn('Background sync to cloud failed:', error)
+          }
         })
 
         return localData
       }
 
-      console.log('❌ No MFA data found in Supabase or localStorage for user:', userId)
+      if (!this.cloudSyncSilentMode) {
+        console.log('❌ No MFA data found in Supabase or localStorage for user:', userId)
+      }
       return null
     } catch (error) {
       console.error('❌ Error retrieving MFA data:', error)
@@ -1214,13 +1227,38 @@ class TOTPMFAService {
    * Background sync local data to Supabase (for when user was offline)
    */
   private async backgroundSyncToCloud(userId: string, localData: any): Promise<void> {
+    // Check cooldown and failure count
+    const now = Date.now()
+    if (now - this.lastCloudSyncAttempt < this.CLOUD_SYNC_COOLDOWN ||
+        this.cloudSyncFailures >= this.MAX_CLOUD_SYNC_FAILURES) {
+      return // Skip sync if in cooldown or too many failures
+    }
+
+    this.lastCloudSyncAttempt = now
+
     try {
-      console.log('🔄 Background syncing local MFA data to Supabase...')
+      if (!this.cloudSyncSilentMode) {
+        console.log('🔄 Background syncing local MFA data to Supabase...')
+      }
       const deviceFingerprint = this.generateUserAgentFingerprint()
       await this.storeCloudMFAData(userId, localData, deviceFingerprint)
-      console.log('✅ Background sync to Supabase completed')
+
+      // Reset failure count and silent mode on success
+      this.cloudSyncFailures = 0
+      this.cloudSyncSilentMode = false
+
+      if (!this.cloudSyncSilentMode) {
+        console.log('✅ Background sync to Supabase completed')
+      }
     } catch (error) {
-      console.warn('⚠️ Background sync to Supabase failed:', error)
+      this.cloudSyncFailures++
+      if (this.cloudSyncFailures >= this.MAX_CLOUD_SYNC_FAILURES) {
+        this.cloudSyncSilentMode = true
+      }
+
+      if (!this.cloudSyncSilentMode) {
+        console.warn('⚠️ Background sync to Supabase failed:', error)
+      }
     }
   }
 
@@ -1258,14 +1296,18 @@ class TOTPMFAService {
       if (error) {
         if (error.code === 'PGRST116') {
           // No MFA config found - this is normal for users without MFA
-          console.log('No MFA configuration found in cloud for user:', userId)
+          if (!this.cloudSyncSilentMode) {
+            console.log('No MFA configuration found in cloud for user:', userId)
+          }
           return null
         }
         throw error
       }
 
       if (!mfaConfig) {
-        console.log('No active MFA configuration found in cloud for user:', userId)
+        if (!this.cloudSyncSilentMode) {
+          console.log('No active MFA configuration found in cloud for user:', userId)
+        }
         return null
       }
 
@@ -1312,13 +1354,24 @@ class TOTPMFAService {
           })
           .eq('user_id', userId)
 
-        console.log('Updated cloud MFA config with current device fingerprint')
+        if (!this.cloudSyncSilentMode) {
+          console.log('Updated cloud MFA config with current device fingerprint')
+        }
       }
 
-      console.log('Successfully synced MFA data from cloud to local storage')
+      if (!this.cloudSyncSilentMode) {
+        console.log('Successfully synced MFA data from cloud to local storage')
+      }
       return decryptedData
     } catch (error) {
-      console.error('Failed to sync MFA data from cloud:', error)
+      this.cloudSyncFailures++
+      if (this.cloudSyncFailures >= this.MAX_CLOUD_SYNC_FAILURES) {
+        this.cloudSyncSilentMode = true
+      }
+
+      if (!this.cloudSyncSilentMode) {
+        console.error('Failed to sync MFA data from cloud:', error)
+      }
       return null
     }
   }

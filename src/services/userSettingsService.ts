@@ -5,7 +5,7 @@
  * with localStorage as cache/fallback. Provides real-time sync across devices.
  */
 
-import { supabase } from '@/config/supabase'
+import { supabase, supabaseConfig } from '@/config/supabase'
 import { Database, UserSettings, ServiceResponse, RealtimeChannel } from '@/types/supabase'
 import { encryptionService } from './encryption'
 import { auditLogger } from './auditLogger'
@@ -69,6 +69,11 @@ class UserSettingsServiceClass {
   private readonly CACHE_TTL = 2 * 60 * 1000 // 2 minutes (aggressive sync)
   private realtimeChannels = new Map<string, SupabaseRealtimeChannel>()
   private subscriptionCallbacks = new Map<string, (settings: UserSettingsData) => void>()
+  private lastSupabaseAttempt = 0
+  private readonly SUPABASE_RETRY_COOLDOWN = 60000 // 60 seconds between attempts (increased)
+  private consecutiveFailures = 0
+  private readonly MAX_CONSECUTIVE_FAILURES = 3
+  private silentMode = false // Flag to suppress console messages after multiple failures
 
   /**
    * Get user settings with Supabase-first approach
@@ -82,42 +87,67 @@ class UserSettingsServiceClass {
         return cached.data
       }
 
-      // PRIORITY 1: Try Supabase for cross-device sync
+      // PRIORITY 1: Try Supabase for cross-device sync (with cooldown)
       let supabaseData: UserSettingsData | null = null
-      try {
-        const { data: settings, error } = await supabase
-          .from('user_settings')
-          .select('*')
-          .eq('user_id', userId)
-          .single()
+      const now = Date.now()
+      const shouldTrySupabase = supabaseConfig.isConfigured() &&
+        (now - this.lastSupabaseAttempt > this.SUPABASE_RETRY_COOLDOWN || this.consecutiveFailures < this.MAX_CONSECUTIVE_FAILURES)
 
-        if (!error && settings) {
-          supabaseData = await this.transformSupabaseToLocal(settings)
-          console.log('✅ User settings loaded from Supabase (cross-device sync)')
+      if (shouldTrySupabase) {
+        try {
+          this.lastSupabaseAttempt = now
+          const { data: settings, error } = await supabase
+            .from('user_settings')
+            .select('*')
+            .eq('user_id', userId)
+            .single()
 
-          // Cache the result
-          this.cache.set(userId, { data: supabaseData, timestamp: Date.now() })
+          if (!error && settings) {
+            supabaseData = await this.transformSupabaseToLocal(settings)
+            this.consecutiveFailures = 0 // Reset failure count on success
+            this.silentMode = false // Reset silent mode on success
+            console.log('✅ User settings loaded from Supabase (cross-device sync)')
 
-          // Store in localStorage as cache
-          this.storeLocalSettings(userId, supabaseData)
+            // Cache the result
+            this.cache.set(userId, { data: supabaseData, timestamp: Date.now() })
 
-          return supabaseData
-        } else if (error.code !== 'PGRST116') {
-          console.warn('⚠️ Supabase settings query failed:', error.message)
+            // Store in localStorage as cache
+            this.storeLocalSettings(userId, supabaseData)
+
+            return supabaseData
+          } else if (error.code !== 'PGRST116') {
+            this.consecutiveFailures++
+            if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) {
+              this.silentMode = true
+            }
+            if (!this.silentMode) {
+              console.warn('⚠️ Supabase settings query failed:', error.message)
+            }
+          }
+        } catch (supabaseError) {
+          this.consecutiveFailures++
+          if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) {
+            this.silentMode = true
+          }
+          if (!this.silentMode) {
+            console.warn('⚠️ Supabase unavailable, using localStorage fallback')
+          }
         }
-      } catch (supabaseError) {
-        console.warn('⚠️ Supabase unavailable, trying localStorage fallback:', supabaseError)
       }
 
       // PRIORITY 2: Fallback to localStorage
       const localData = this.getLocalSettings(userId)
       if (localData) {
-        console.log('⚠️ Using localStorage fallback (offline mode)')
+        if (!this.silentMode) {
+          console.log('⚠️ Using localStorage fallback (offline mode)')
+        }
 
-        // Try to background sync to Supabase
-        this.backgroundSyncToSupabase(userId, localData).catch(error => {
-          console.warn('Background sync to Supabase failed:', error)
-        })
+        // Try to background sync to Supabase (with cooldown)
+        if (supabaseConfig.isConfigured() && this.consecutiveFailures < this.MAX_CONSECUTIVE_FAILURES) {
+          this.backgroundSyncToSupabase(userId, localData).catch(() => {
+            // Silent fail for background sync
+          })
+        }
 
         return localData
       }
@@ -148,28 +178,46 @@ class UserSettingsServiceClass {
       const currentSettings = await this.getUserSettings(userId)
       const newSettings = { ...currentSettings, ...updates }
 
-      // PRIORITY 1: Save to Supabase for cross-device sync
+      // PRIORITY 1: Save to Supabase for cross-device sync (with cooldown)
       let supabaseSuccess = false
-      try {
-        const supabaseData = await this.transformLocalToSupabase(userId, newSettings)
-        const { error } = await supabase
-          .from('user_settings')
-          .upsert(supabaseData, { onConflict: 'user_id' })
+      if (supabaseConfig.isConfigured() && this.consecutiveFailures < this.MAX_CONSECUTIVE_FAILURES) {
+        try {
+          const supabaseData = await this.transformLocalToSupabase(userId, newSettings)
+          const { error } = await supabase
+            .from('user_settings')
+            .upsert(supabaseData, { onConflict: 'user_id' })
 
-        if (!error) {
-          console.log('✅ Settings saved to Supabase (cross-device sync)')
-          supabaseSuccess = true
-        } else {
-          console.warn('⚠️ Supabase save failed:', error.message)
+          if (!error) {
+            this.consecutiveFailures = 0 // Reset on success
+            this.silentMode = false // Reset silent mode on success
+            console.log('✅ Settings saved to Supabase (cross-device sync)')
+            supabaseSuccess = true
+          } else {
+            this.consecutiveFailures++
+            if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) {
+              this.silentMode = true
+            }
+            if (!this.silentMode) {
+              console.warn('⚠️ Supabase save failed:', error.message)
+            }
+          }
+        } catch (supabaseError) {
+          this.consecutiveFailures++
+          if (this.consecutiveFailures >= this.MAX_CONSECUTIVE_FAILURES) {
+            this.silentMode = true
+          }
+          if (!this.silentMode) {
+            console.warn('⚠️ Supabase unavailable for settings save')
+          }
         }
-      } catch (supabaseError) {
-        console.warn('⚠️ Supabase unavailable for settings save:', supabaseError)
       }
 
       // PRIORITY 2: Save to localStorage as cache/fallback
       try {
         this.storeLocalSettings(userId, newSettings)
-        console.log(supabaseSuccess ? '✅ Settings cached locally' : '⚠️ Settings saved to localStorage fallback')
+        if (!this.silentMode) {
+          console.log(supabaseSuccess ? '✅ Settings cached locally' : '⚠️ Settings saved to localStorage fallback')
+        }
       } catch (localError) {
         console.error('❌ localStorage save failed:', localError)
         if (!supabaseSuccess) {
@@ -187,7 +235,9 @@ class UserSettingsServiceClass {
         syncedToSupabase: supabaseSuccess
       })
 
-      console.log('✅ User settings updated successfully')
+      if (!this.silentMode) {
+        console.log('✅ User settings updated successfully')
+      }
       return newSettings
 
     } catch (error) {
@@ -207,11 +257,18 @@ class UserSettingsServiceClass {
    * Subscribe to real-time settings changes for cross-device sync
    */
   subscribeToSettings(userId: string, callback: (settings: UserSettingsData) => void): void {
+    // Skip realtime subscriptions if in localStorage-only mode
+    if (!supabaseConfig.isConfigured() || supabaseConfig.isLocalStorageOnly()) {
+      console.log('📴 Real-time sync disabled - using localStorage-only mode')
+      this.subscriptionCallbacks.set(userId, callback)
+      return
+    }
+
     try {
       // Store callback
       this.subscriptionCallbacks.set(userId, callback)
 
-      // Create realtime channel
+      // Create realtime channel with enhanced error handling
       const channel = supabase
         .channel(`user-settings-${userId}`)
         .on(
@@ -223,8 +280,6 @@ class UserSettingsServiceClass {
             filter: `user_id=eq.${userId}`
           },
           async (payload) => {
-            console.log('🔄 Real-time settings change detected:', payload.eventType)
-
             if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
               try {
                 const newSettings = await this.transformSupabaseToLocal(payload.new as DatabaseUserSettings)
@@ -246,9 +301,11 @@ class UserSettingsServiceClass {
           }
         )
         .subscribe((status) => {
-          console.log('📡 Real-time settings subscription status:', status)
           if (status === 'SUBSCRIBED') {
-            console.log('✅ Real-time settings sync active')
+            console.log('📡 Real-time settings sync active')
+          } else if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+            console.log('📴 Real-time sync unavailable - using localStorage mode')
+            supabaseConfig.setLocalStorageOnly(true)
           }
         })
 
@@ -256,7 +313,8 @@ class UserSettingsServiceClass {
       this.realtimeChannels.set(userId, channel)
 
     } catch (error) {
-      console.error('❌ Failed to setup real-time settings subscription:', error)
+      console.log('📴 Real-time subscription failed - using localStorage mode')
+      supabaseConfig.setLocalStorageOnly(true)
     }
   }
 
@@ -406,7 +464,9 @@ class UserSettingsServiceClass {
    */
   private async backgroundSyncToSupabase(userId: string, settings: UserSettingsData): Promise<void> {
     try {
-      console.log('🔄 Background syncing settings to Supabase...')
+      if (!this.silentMode) {
+        console.log('🔄 Background syncing settings to Supabase...')
+      }
       const supabaseData = await this.transformLocalToSupabase(userId, settings)
 
       const { error } = await supabase
@@ -414,12 +474,20 @@ class UserSettingsServiceClass {
         .upsert(supabaseData, { onConflict: 'user_id' })
 
       if (!error) {
+        this.consecutiveFailures = 0 // Reset on success
+        this.silentMode = false // Reset silent mode
         console.log('✅ Background sync to Supabase completed')
       } else {
-        console.warn('⚠️ Background sync failed:', error.message)
+        this.consecutiveFailures++
+        if (!this.silentMode) {
+          console.warn('⚠️ Background sync failed:', error.message)
+        }
       }
     } catch (error) {
-      console.warn('⚠️ Background sync to Supabase failed:', error)
+      this.consecutiveFailures++
+      if (!this.silentMode) {
+        console.warn('⚠️ Background sync to Supabase failed:', error)
+      }
     }
   }
 

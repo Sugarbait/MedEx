@@ -1,6 +1,7 @@
 import { supabase, supabaseAdmin, hipaaConfig } from '@/config/supabase'
 import { Database, ServiceResponse, PaginatedResponse } from '@/types/supabase'
 import { encryptPHI, decryptPHI, encryptObjectFields, decryptObjectFields, createAuditEntry } from '@/utils/encryption'
+import { connectionState, recordSupabaseSuccess, recordSupabaseFailure } from '@/utils/connectionState'
 import { v4 as uuidv4 } from 'uuid'
 
 type Tables = Database['public']['Tables']
@@ -27,12 +28,15 @@ export class SupabaseService {
         user_agent: navigator.userAgent
       })
     } catch (error) {
+      recordSupabaseFailure(error)
       // Gracefully handle connection failures - don't spam the console
       if (error instanceof Error && (error.message.includes('Failed to fetch') || error.message.includes('ERR_CONNECTION_REFUSED'))) {
         // Silent fail when database is not available
         return
       }
-      console.log('Security event logging unavailable:', error instanceof Error ? error.message : 'Unknown error')
+      if (connectionState.shouldTrySupabase()) {
+        console.log('Security event logging unavailable:', error instanceof Error ? error.message : 'Unknown error')
+      }
     }
   }
 
