@@ -37,6 +37,8 @@ import {
 import { supabase } from '@/config/supabase'
 import { PHIDataHandler, encryptionService } from '@/services/encryption'
 import { auditLogger, AuditAction, ResourceType, AuditOutcome } from '@/services/auditLogger'
+import jsPDF from 'jspdf'
+import { patientIdService } from '@/services/patientIdService'
 
 // CRITICAL FIX: Disable console logging in production to prevent infinite loops
 const isProduction = !import.meta.env.DEV
@@ -512,6 +514,300 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
     }
   }
 
+  // Export all calls in selected date range to PDF
+  const exportAllCallsToPDF = async () => {
+    try {
+      safeLog('🔄 Starting PDF export for all calls in date range:', selectedDateRange)
+
+      // Show loading state
+      const originalButtonText = 'Export Call Report'
+      const button = document.querySelector('[title*="Export all calls"]') as HTMLButtonElement
+      if (button) {
+        button.disabled = true
+        button.innerHTML = '<svg class="animate-spin w-4 h-4 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Generating PDF...'
+      }
+
+      // Get the filtered calls for the current date range (including custom dates)
+      const { start, end } = getDateRangeFromSelection(selectedDateRange, customStartDate, customEndDate)
+      safeLog(`📅 Export date range: ${start.toLocaleString()} to ${end.toLocaleString()}`)
+
+      // Use the already filtered calls from the page state to ensure consistency
+      let callsToExport = filteredCalls.filter(call => {
+        const callDate = new Date(call.start_timestamp || 0)
+        // Double-check the date filtering to ensure accuracy
+        return callDate >= start && callDate <= end
+      })
+
+      if (callsToExport.length === 0) {
+        alert(`No calls found for ${selectedDateRange}. Please select a different date range.`)
+        return
+      }
+
+      // Limit export to prevent performance issues
+      const MAX_CALLS = 50
+      if (callsToExport.length > MAX_CALLS) {
+        const confirmLarge = confirm(`You are about to export ${callsToExport.length} calls. This may take a while and create a large PDF. Would you like to limit to the most recent ${MAX_CALLS} calls instead?`)
+        if (confirmLarge) {
+          callsToExport = callsToExport.slice(0, MAX_CALLS)
+        }
+      }
+
+      safeLog(`📊 Exporting ${callsToExport.length} calls for ${selectedDateRange}`)
+
+      // Create PDF document with error handling
+      let doc: jsPDF
+      try {
+        doc = new jsPDF()
+      } catch (pdfError) {
+        throw new Error(`Failed to create PDF document: ${pdfError instanceof Error ? pdfError.message : 'Unknown PDF error'}`)
+      }
+      let yPosition = 20
+      const pageWidth = doc.internal.pageSize.width
+      const pageHeight = doc.internal.pageSize.height
+      const margin = 20
+
+      // Helper function to add new page if needed
+      const checkNewPage = (requiredSpace = 20) => {
+        if (yPosition + requiredSpace > pageHeight - 30) {
+          doc.addPage()
+          yPosition = 20
+        }
+      }
+
+      // Helper function to format dates
+      const formatDateTime = (timestamp: number) => {
+        const date = new Date(timestamp)
+        return {
+          date: date.toLocaleDateString(),
+          time: date.toLocaleTimeString()
+        }
+      }
+
+      // Title page
+      doc.setFontSize(20)
+      doc.setFont('helvetica', 'bold')
+      doc.text('Call Export Report', pageWidth / 2, yPosition, { align: 'center' })
+      yPosition += 15
+
+      doc.setFontSize(14)
+      doc.setFont('helvetica', 'normal')
+      const displayRange = selectedDateRange === 'custom' ? 'CUSTOM RANGE' : selectedDateRange.toUpperCase()
+      doc.text(`Date Range: ${displayRange}`, pageWidth / 2, yPosition, { align: 'center' })
+      yPosition += 10
+
+      doc.setFontSize(12)
+      doc.text(`From: ${start.toLocaleDateString()} To: ${end.toLocaleDateString()}`, pageWidth / 2, yPosition, { align: 'center' })
+      yPosition += 10
+
+      doc.text(`Total Calls: ${callsToExport.length}`, pageWidth / 2, yPosition, { align: 'center' })
+      yPosition += 10
+
+      doc.text(`Generated: ${new Date().toLocaleString()}`, pageWidth / 2, yPosition, { align: 'center' })
+      yPosition += 20
+
+      // Process each call with async yields to prevent blocking
+      for (let i = 0; i < callsToExport.length; i++) {
+        const call = callsToExport[i]
+
+        // Yield control every 10 calls to prevent blocking and update progress
+        if (i > 0 && i % 10 === 0) {
+          if (button) {
+            const progress = Math.round((i / callsToExport.length) * 100)
+            button.innerHTML = `<svg class="animate-spin w-4 h-4 mr-2" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle><path class="opacity-75" fill="currentColor" d="m4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 714 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Processing ${progress}%...`
+          }
+          await new Promise(resolve => setTimeout(resolve, 10)) // 10ms yield
+        }
+
+        checkNewPage(60) // Ensure enough space for call header
+
+        // Call separator
+        if (i > 0) {
+          doc.setDrawColor(200, 200, 200)
+          doc.line(margin, yPosition, pageWidth - margin, yPosition)
+          yPosition += 10
+        }
+
+        // Call header
+        doc.setFontSize(14)
+        doc.setFont('helvetica', 'bold')
+        doc.text(`Call ${i + 1}: ${call.call_id}`, margin, yPosition)
+        yPosition += 8
+
+        // Basic call info
+        doc.setFontSize(10)
+        doc.setFont('helvetica', 'normal')
+
+        const callDateTime = formatDateTime(call.start_timestamp || 0)
+        doc.text(`Date: ${callDateTime.date} ${callDateTime.time}`, margin, yPosition)
+        yPosition += 6
+
+        // Patient info
+        const phoneNumber = call.call_analysis?.custom_analysis_data?.phone_number ||
+                           call.call_analysis?.custom_analysis_data?.customer_phone_number ||
+                           call.metadata?.phone_number ||
+                           call.from_number ||
+                           call.to_number ||
+                           'Unknown'
+
+        // Get patient ID safely to avoid audit logging issues
+        let patientId = 'PT00000000'
+        try {
+          patientId = phoneNumber !== 'Unknown' ? patientIdService.getPatientId(phoneNumber) : 'PT00000000'
+        } catch (patientError) {
+          safeWarn('Patient ID generation error (using fallback):', patientError)
+          patientId = 'PT00000000'
+        }
+        doc.text(`Patient ID: ${patientId}`, margin, yPosition)
+        yPosition += 6
+
+        doc.text(`Status: ${call.call_status || 'Unknown'}`, margin, yPosition)
+        yPosition += 6
+
+        // Duration and cost info
+        const duration = call.duration_ms ? `${(call.duration_ms / 1000).toFixed(2)}s` : 'Unknown'
+        const totalCostCAD = calculateTotalCallCostCAD(call)
+        const costDisplay = `$${totalCostCAD.toFixed(4)} CAD`
+        doc.text(`Duration: ${duration} | Cost: ${costDisplay}`, margin, yPosition)
+        yPosition += 10
+
+        // Detailed Analysis Section
+        if (call.call_analysis?.custom_analysis_data && Object.keys(call.call_analysis.custom_analysis_data).length > 0) {
+          checkNewPage(40)
+
+          doc.setFontSize(12)
+          doc.setFont('helvetica', 'bold')
+          doc.text('Detailed Analysis:', margin, yPosition)
+          yPosition += 8
+
+          doc.setFontSize(10)
+          doc.setFont('helvetica', 'normal')
+
+          Object.entries(call.call_analysis.custom_analysis_data).forEach(([key, value]) => {
+            checkNewPage(12)
+
+            const displayKey = key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
+            const displayValue = String(value || 'N/A')
+
+            // Handle long values by wrapping text
+            const maxWidth = pageWidth - 2 * margin
+            if (displayValue.length > 60) {
+              const lines = doc.splitTextToSize(`${displayKey}: ${displayValue}`, maxWidth)
+              lines.forEach((line: string) => {
+                checkNewPage(6)
+                doc.text(line, margin, yPosition)
+                yPosition += 6
+              })
+            } else {
+              doc.text(`${displayKey}: ${displayValue}`, margin, yPosition)
+              yPosition += 6
+            }
+          })
+        }
+
+        // Call Summary and Sentiment
+        if (call.call_analysis?.call_summary) {
+          checkNewPage(20)
+
+          doc.setFontSize(12)
+          doc.setFont('helvetica', 'bold')
+          doc.text('Call Summary:', margin, yPosition)
+          yPosition += 8
+
+          doc.setFontSize(10)
+          doc.setFont('helvetica', 'normal')
+          const summaryLines = doc.splitTextToSize(call.call_analysis.call_summary, pageWidth - 2 * margin)
+          summaryLines.forEach((line: string) => {
+            checkNewPage(6)
+            doc.text(line, margin, yPosition)
+            yPosition += 6
+          })
+        }
+
+        if (call.call_analysis?.user_sentiment) {
+          checkNewPage(10)
+          doc.text(`User Sentiment: ${call.call_analysis.user_sentiment}`, margin, yPosition)
+          yPosition += 6
+        }
+
+        // Transcript (if available and not too long)
+        if (call.transcript && call.transcript.length > 0) {
+          checkNewPage(30)
+
+          doc.setFontSize(12)
+          doc.setFont('helvetica', 'bold')
+          doc.text('Call Transcript:', margin, yPosition)
+          yPosition += 8
+
+          doc.setFontSize(9)
+          doc.setFont('helvetica', 'normal')
+
+          // Limit transcript length to keep PDF reasonable
+          const transcriptPreview = call.transcript.length > 1000 ?
+            call.transcript.substring(0, 1000) + '...' : call.transcript
+
+          const transcriptLines = doc.splitTextToSize(transcriptPreview, pageWidth - 2 * margin)
+          transcriptLines.forEach((line: string) => {
+            checkNewPage(5)
+            doc.text(line, margin, yPosition)
+            yPosition += 5
+          })
+
+          if (call.transcript.length > 1000) {
+            doc.setFontSize(9)
+            doc.setFont('helvetica', 'italic')
+            doc.text(`... (transcript truncated for brevity)`, margin, yPosition)
+            yPosition += 8
+          }
+        }
+
+        yPosition += 15 // Space between calls
+      }
+
+      // Footer on last page
+      doc.setFontSize(8)
+      doc.setFont('helvetica', 'italic')
+      doc.text('🤖 Generated with CareXPS Healthcare CRM', margin, pageHeight - 20)
+      doc.text(`Exported by: ${user?.email || 'System'}`, margin, pageHeight - 12)
+      doc.text(`Total Pages: ${doc.getNumberOfPages()}`, pageWidth - margin - 40, pageHeight - 12)
+
+      // Save the PDF
+      const dateStr = new Date().toISOString().split('T')[0]
+      const rangeStr = selectedDateRange === 'custom' ?
+        `${start.toISOString().split('T')[0]}_to_${end.toISOString().split('T')[0]}` :
+        selectedDateRange
+      const filename = `Call-Export-${rangeStr}-${dateStr}.pdf`
+      doc.save(filename)
+
+      safeLog(`✅ PDF export completed: ${filename}`)
+      alert(`Successfully exported ${callsToExport.length} calls to ${filename}`)
+
+    } catch (error) {
+      safeError('❌ PDF export failed:', error)
+
+      // Show detailed error information
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred'
+
+      alert([
+        'Failed to Export PDF. Please try again.',
+        '',
+        'Error Details:',
+        errorMessage,
+        '',
+        'If the problem persists, try:',
+        '• Reducing the date range',
+        '• Refreshing the page',
+        '• Checking your browser console for details'
+      ].join('\n'))
+    } finally {
+      // Restore button state
+      const button = document.querySelector('[title*="Export all calls"]') as HTMLButtonElement
+      if (button) {
+        button.disabled = false
+        button.innerHTML = '<svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>Export Call Report'
+      }
+    }
+  }
+
   const filteredCalls = React.useMemo(() => {
     let searchFilteredCalls = calls
 
@@ -583,7 +879,11 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
             <ZapIcon className="w-4 h-4" />
             Test Toast
           </button>
-          <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors">
+          <button
+            onClick={exportAllCallsToPDF}
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            title={`Export all calls for ${selectedDateRange} to PDF`}
+          >
             <DownloadIcon className="w-4 h-4" />
             Export Call Report
           </button>

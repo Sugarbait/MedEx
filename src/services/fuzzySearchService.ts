@@ -35,15 +35,29 @@ const SMS_SEARCH_CONFIG: FuzzySearchConfig = {
   minMatchCharLength: 3, // Require at least 3 character matches to avoid false positives
   ignoreLocation: true,
   keys: [
+    // Metadata fields
     'metadata.phone_number',
     'metadata.customer_phone_number',
     'metadata.patient_name',
     'metadata.customer_name',
     'metadata.caller_name',
     'metadata.name',
+    // Dynamic variables
     'collected_dynamic_variables.patient_name',
     'collected_dynamic_variables.customer_name',
     'collected_dynamic_variables.name',
+    // Chat analysis fields (detailed analysis from ChatModal)
+    'chat_analysis.chat_summary',
+    'chat_analysis.user_sentiment',
+    'chat_analysis.custom_analysis_data.phone_number',
+    'chat_analysis.custom_analysis_data.customer_phone_number',
+    'chat_analysis.custom_analysis_data.phone',
+    'chat_analysis.custom_analysis_data.contact_number',
+    'chat_analysis.custom_analysis_data.patient_name',
+    'chat_analysis.custom_analysis_data.customer_name',
+    'chat_analysis.custom_analysis_data.caller_name',
+    'chat_analysis.custom_analysis_data.name',
+    // Basic fields
     'chat_id',
     'transcript'
   ]
@@ -56,11 +70,24 @@ const CALLS_SEARCH_CONFIG: FuzzySearchConfig = {
   minMatchCharLength: 3, // Require at least 3 character matches to avoid false positives
   ignoreLocation: true,
   keys: [
+    // Basic call fields
     'patient_id',
+    'transcript',
+    // Metadata fields
     'metadata.patient_name',
     'metadata.customer_name',
     'metadata.phone_number',
-    'transcript'
+    // Call analysis fields (detailed analysis)
+    'call_analysis.call_summary',
+    'call_analysis.user_sentiment',
+    'call_analysis.custom_analysis_data.phone_number',
+    'call_analysis.custom_analysis_data.customer_phone_number',
+    'call_analysis.custom_analysis_data.phone',
+    'call_analysis.custom_analysis_data.contact_number',
+    'call_analysis.custom_analysis_data.patient_name',
+    'call_analysis.custom_analysis_data.customer_name',
+    'call_analysis.custom_analysis_data.caller_name',
+    'call_analysis.custom_analysis_data.name'
   ]
 }
 
@@ -194,11 +221,18 @@ class FuzzySearchService {
     console.log(`[SEARCH] Performing basic SMS search on ${chats.length} chats`)
 
     const results = chats.filter(chat => {
-      // Check phone numbers
+      // Check phone numbers from metadata
       const phoneNumber = chat.metadata?.phone_number || chat.metadata?.customer_phone_number || ''
       if (phoneNumber.toLowerCase().includes(lowerQuery)) return true
 
-      // Check all possible name fields
+      // Check phone numbers from chat analysis
+      const analysisPhoneNumber = chat.chat_analysis?.custom_analysis_data?.phone_number ||
+                                  chat.chat_analysis?.custom_analysis_data?.customer_phone_number ||
+                                  chat.chat_analysis?.custom_analysis_data?.phone ||
+                                  chat.chat_analysis?.custom_analysis_data?.contact_number || ''
+      if (analysisPhoneNumber.toLowerCase().includes(lowerQuery)) return true
+
+      // Check all possible name fields from metadata
       const extractedName = chat.metadata?.patient_name ||
                             chat.metadata?.customer_name ||
                             chat.metadata?.caller_name ||
@@ -208,6 +242,27 @@ class FuzzySearchService {
                             chat.collected_dynamic_variables?.name ||
                             ''
       if (extractedName.toLowerCase().includes(lowerQuery)) return true
+
+      // Check name fields from chat analysis (detailed analysis data)
+      const analysisName = chat.chat_analysis?.custom_analysis_data?.patient_name ||
+                          chat.chat_analysis?.custom_analysis_data?.customer_name ||
+                          chat.chat_analysis?.custom_analysis_data?.caller_name ||
+                          chat.chat_analysis?.custom_analysis_data?.name || ''
+      if (analysisName.toLowerCase().includes(lowerQuery)) return true
+
+      // Check chat analysis summary
+      if (chat.chat_analysis?.chat_summary && chat.chat_analysis.chat_summary.toLowerCase().includes(lowerQuery)) return true
+
+      // Check chat analysis sentiment
+      if (chat.chat_analysis?.user_sentiment && chat.chat_analysis.user_sentiment.toLowerCase().includes(lowerQuery)) return true
+
+      // Search through all custom analysis data fields (detailed analysis from ChatModal)
+      if (chat.chat_analysis?.custom_analysis_data) {
+        for (const [key, value] of Object.entries(chat.chat_analysis.custom_analysis_data)) {
+          if (value && typeof value === 'string' && value.toLowerCase().includes(lowerQuery)) return true
+          if (value && typeof value === 'number' && value.toString().includes(lowerQuery)) return true
+        }
+      }
 
       // Check transcript if it exists
       if (chat.transcript && chat.transcript.toLowerCase().includes(lowerQuery)) return true
@@ -239,11 +294,42 @@ class FuzzySearchService {
     console.log(`[FUZZY SEARCH] Performing basic calls search on ${calls.length} calls`)
 
     const results = calls.filter(call => {
-      return (call.patient_id?.toLowerCase().includes(lowerQuery)) ||
-             (call.metadata?.patient_name?.toLowerCase().includes(lowerQuery)) ||
-             (call.metadata?.customer_name?.toLowerCase().includes(lowerQuery)) ||
-             (call.metadata?.phone_number?.toLowerCase().includes(lowerQuery)) ||
-             (call.transcript?.toLowerCase().includes(lowerQuery))
+      // Check basic call fields
+      if (call.patient_id?.toLowerCase().includes(lowerQuery)) return true
+      if (call.transcript?.toLowerCase().includes(lowerQuery)) return true
+
+      // Check metadata fields
+      if (call.metadata?.patient_name?.toLowerCase().includes(lowerQuery)) return true
+      if (call.metadata?.customer_name?.toLowerCase().includes(lowerQuery)) return true
+      if (call.metadata?.phone_number?.toLowerCase().includes(lowerQuery)) return true
+
+      // Check call analysis fields (detailed analysis data)
+      if (call.call_analysis?.call_summary?.toLowerCase().includes(lowerQuery)) return true
+      if (call.call_analysis?.user_sentiment?.toLowerCase().includes(lowerQuery)) return true
+
+      // Check call analysis custom data
+      if (call.call_analysis?.custom_analysis_data) {
+        // Check specific known fields
+        const analysisPhoneNumber = call.call_analysis.custom_analysis_data.phone_number ||
+                                   call.call_analysis.custom_analysis_data.customer_phone_number ||
+                                   call.call_analysis.custom_analysis_data.phone ||
+                                   call.call_analysis.custom_analysis_data.contact_number || ''
+        if (analysisPhoneNumber.toLowerCase().includes(lowerQuery)) return true
+
+        const analysisName = call.call_analysis.custom_analysis_data.patient_name ||
+                            call.call_analysis.custom_analysis_data.customer_name ||
+                            call.call_analysis.custom_analysis_data.caller_name ||
+                            call.call_analysis.custom_analysis_data.name || ''
+        if (analysisName.toLowerCase().includes(lowerQuery)) return true
+
+        // Search through all custom analysis data fields
+        for (const [key, value] of Object.entries(call.call_analysis.custom_analysis_data)) {
+          if (value && typeof value === 'string' && value.toLowerCase().includes(lowerQuery)) return true
+          if (value && typeof value === 'number' && value.toString().includes(lowerQuery)) return true
+        }
+      }
+
+      return false
     })
 
     console.log(`[FUZZY SEARCH] Basic calls search returned ${results.length} results`)
