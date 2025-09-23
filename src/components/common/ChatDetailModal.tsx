@@ -706,9 +706,6 @@ export const ChatDetailModal: React.FC<ChatDetailModalProps> = ({ chat, isOpen, 
               </div>
             )}
 
-            {/* Chat Notes - Load immediately when modal opens for instant access */}
-            <ChatNotes chatId={chat.chat_id} onNotesChanged={onNotesChanged} />
-
             {/* Message Thread */}
             {displayChat.message_with_tool_calls && displayChat.message_with_tool_calls.length > 0 && (
               <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
@@ -749,6 +746,9 @@ export const ChatDetailModal: React.FC<ChatDetailModalProps> = ({ chat, isOpen, 
                 </div>
               </div>
             )}
+
+            {/* Chat Notes - Now appears after Message Thread for better workflow */}
+            <ChatNotes chatId={chat.chat_id} onNotesChanged={onNotesChanged} />
 
             {/* Actions */}
             <div className="flex flex-wrap gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
