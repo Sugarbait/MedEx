@@ -108,6 +108,14 @@ export const useSessionTimeout = ({
     }
   }, [resetTimeout, enabled])
 
+  // Handle timeout value changes - reset timer with new timeout
+  useEffect(() => {
+    if (enabled && timeoutRef.current) {
+      console.log('⏱️ Session timeout value changed, resetting timer with new timeout:', timeout / 60000, 'minutes')
+      resetTimeout()
+    }
+  }, [timeout, enabled, resetTimeout])
+
   return {
     resetTimeout,
     getTimeRemaining,

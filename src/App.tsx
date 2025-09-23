@@ -95,8 +95,8 @@ const AppContent: React.FC<{
     ThemeManager.initialize()
   }, [location.pathname])
 
-  // Get session timeout from user settings (default 15 minutes)
-  const getUserSessionTimeout = (): number => {
+  // Get session timeout from user settings (default 15 minutes) - make it reactive
+  const [sessionTimeout, setSessionTimeout] = useState(() => {
     try {
       const savedSettings = localStorage.getItem(`settings_${user?.id}`)
       if (savedSettings) {
@@ -107,13 +107,51 @@ const AppContent: React.FC<{
       console.error('Failed to load session timeout setting:', error)
     }
     return 15 * 60 * 1000 // Default 15 minutes
-  }
+  })
 
-  const SESSION_TIMEOUT = getUserSessionTimeout()
+  // Listen for settings updates to update session timeout
+  useEffect(() => {
+    const handleSettingsUpdate = () => {
+      try {
+        const savedSettings = localStorage.getItem(`settings_${user?.id}`)
+        if (savedSettings) {
+          const settings = JSON.parse(savedSettings)
+          const newTimeout = (settings.sessionTimeout || 15) * 60 * 1000
+          if (newTimeout !== sessionTimeout) {
+            console.log('🔄 Session timeout updated:', newTimeout / 60000, 'minutes')
+            setSessionTimeout(newTimeout)
+          }
+        }
+      } catch (error) {
+        console.error('Failed to update session timeout setting:', error)
+      }
+    }
+
+    // Listen for settings changes
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === `settings_${user?.id}` && e.newValue) {
+        handleSettingsUpdate()
+      }
+    }
+
+    // Listen for custom events from SettingsPage
+    const handleCustomSettingsUpdate = () => {
+      setTimeout(handleSettingsUpdate, 100) // Small delay to ensure localStorage is updated
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+    window.addEventListener('userSettingsUpdated', handleCustomSettingsUpdate)
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('userSettingsUpdated', handleCustomSettingsUpdate)
+    }
+  }, [user?.id, sessionTimeout])
+
   const WARNING_TIME = 2 * 60 * 1000 // Show warning 2 minutes before timeout
 
   const { resetTimeout, getTimeRemaining, getTimeRemainingFormatted } = useSessionTimeout({
-    timeout: SESSION_TIMEOUT,
+    timeout: sessionTimeout,
     onTimeout: handleLogout,
     user,
     enabled: !!user && !mfaRequired
