@@ -6,6 +6,7 @@ import { userProfileService } from './services/userProfileService'
 import { retellService } from './services/retellService'
 import { AuthProvider } from './contexts/AuthContext'
 import { SupabaseProvider } from './contexts/SupabaseContext'
+import { CrossDeviceProvider } from './contexts/CrossDeviceContext'
 
 // Import SMS cost test for validation
 import './test/smsCostCalculationTest'
@@ -798,19 +799,21 @@ const App: React.FC = () => {
   return (
     <SupabaseProvider>
       <AuthProvider>
-        <Router>
-          <SPARedirectHandler />
-          <AppContent
-            user={user}
-            mfaRequired={mfaRequired}
-            setMfaRequired={setMfaRequired}
-            sidebarOpen={sidebarOpen}
-            setSidebarOpen={setSidebarOpen}
-            hipaaMode={hipaaMode}
-            handleMFASuccess={handleMFASuccess}
-            handleLogout={handleLogout}
-          />
-        </Router>
+        <CrossDeviceProvider>
+          <Router>
+            <SPARedirectHandler />
+            <AppContent
+              user={user}
+              mfaRequired={mfaRequired}
+              setMfaRequired={setMfaRequired}
+              sidebarOpen={sidebarOpen}
+              setSidebarOpen={setSidebarOpen}
+              hipaaMode={hipaaMode}
+              handleMFASuccess={handleMFASuccess}
+              handleLogout={handleLogout}
+            />
+          </Router>
+        </CrossDeviceProvider>
       </AuthProvider>
     </SupabaseProvider>
   )

@@ -697,6 +697,251 @@ export interface Database {
           metadata?: Json | null
         }
       }
+      user_devices: {
+        Row: {
+          id: string
+          user_id: string
+          device_fingerprint: string
+          device_name: string
+          device_type: 'desktop' | 'mobile' | 'tablet'
+          browser_info: Json
+          os_info: Json
+          is_trusted: boolean
+          is_active: boolean
+          last_seen: string
+          registered_at: string
+          last_sync: string
+          encryption_key_hash: string | null
+          metadata: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          device_fingerprint: string
+          device_name: string
+          device_type: 'desktop' | 'mobile' | 'tablet'
+          browser_info?: Json
+          os_info?: Json
+          is_trusted?: boolean
+          is_active?: boolean
+          last_seen?: string
+          registered_at?: string
+          last_sync?: string
+          encryption_key_hash?: string | null
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          device_fingerprint?: string
+          device_name?: string
+          device_type?: 'desktop' | 'mobile' | 'tablet'
+          browser_info?: Json
+          os_info?: Json
+          is_trusted?: boolean
+          is_active?: boolean
+          last_seen?: string
+          registered_at?: string
+          last_sync?: string
+          encryption_key_hash?: string | null
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      device_sessions: {
+        Row: {
+          id: string
+          user_id: string
+          device_id: string
+          session_token: string
+          azure_session_id: string | null
+          status: 'active' | 'expired' | 'revoked' | 'transferred'
+          started_at: string
+          last_activity: string
+          expires_at: string
+          transfer_token: string | null
+          ip_address: string | null
+          user_agent: string | null
+          sync_enabled: boolean
+          security_level: 'low' | 'standard' | 'high' | 'critical'
+          mfa_verified: boolean
+          metadata: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          device_id: string
+          session_token: string
+          azure_session_id?: string | null
+          status?: 'active' | 'expired' | 'revoked' | 'transferred'
+          started_at?: string
+          last_activity?: string
+          expires_at: string
+          transfer_token?: string | null
+          ip_address?: string | null
+          user_agent?: string | null
+          sync_enabled?: boolean
+          security_level?: 'low' | 'standard' | 'high' | 'critical'
+          mfa_verified?: boolean
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          device_id?: string
+          session_token?: string
+          azure_session_id?: string | null
+          status?: 'active' | 'expired' | 'revoked' | 'transferred'
+          started_at?: string
+          last_activity?: string
+          expires_at?: string
+          transfer_token?: string | null
+          ip_address?: string | null
+          user_agent?: string | null
+          sync_enabled?: boolean
+          security_level?: 'low' | 'standard' | 'high' | 'critical'
+          mfa_verified?: boolean
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+      }
+      sync_queue: {
+        Row: {
+          id: string
+          user_id: string
+          device_id: string
+          operation_type: 'CREATE' | 'UPDATE' | 'DELETE' | 'BULK_UPDATE'
+          table_name: string
+          record_id: string | null
+          data_payload: Json
+          conflict_resolution_strategy: 'last_write_wins' | 'manual_merge' | 'user_prompt' | 'field_level_merge'
+          priority: number
+          status: 'pending' | 'processing' | 'completed' | 'failed' | 'conflict' | 'cancelled'
+          retry_count: number
+          max_retries: number
+          created_at: string
+          scheduled_for: string
+          processed_at: string | null
+          error_message: string | null
+          conflict_data: Json | null
+          checksum: string | null
+          encryption_required: boolean
+          phi_data: boolean
+          metadata: Json
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          device_id: string
+          operation_type: 'CREATE' | 'UPDATE' | 'DELETE' | 'BULK_UPDATE'
+          table_name: string
+          record_id?: string | null
+          data_payload: Json
+          conflict_resolution_strategy?: 'last_write_wins' | 'manual_merge' | 'user_prompt' | 'field_level_merge'
+          priority?: number
+          status?: 'pending' | 'processing' | 'completed' | 'failed' | 'conflict' | 'cancelled'
+          retry_count?: number
+          max_retries?: number
+          created_at?: string
+          scheduled_for?: string
+          processed_at?: string | null
+          error_message?: string | null
+          conflict_data?: Json | null
+          checksum?: string | null
+          encryption_required?: boolean
+          phi_data?: boolean
+          metadata?: Json
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          device_id?: string
+          operation_type?: 'CREATE' | 'UPDATE' | 'DELETE' | 'BULK_UPDATE'
+          table_name?: string
+          record_id?: string | null
+          data_payload?: Json
+          conflict_resolution_strategy?: 'last_write_wins' | 'manual_merge' | 'user_prompt' | 'field_level_merge'
+          priority?: number
+          status?: 'pending' | 'processing' | 'completed' | 'failed' | 'conflict' | 'cancelled'
+          retry_count?: number
+          max_retries?: number
+          created_at?: string
+          scheduled_for?: string
+          processed_at?: string | null
+          error_message?: string | null
+          conflict_data?: Json | null
+          checksum?: string | null
+          encryption_required?: boolean
+          phi_data?: boolean
+          metadata?: Json
+        }
+      }
+      cross_device_sync_events: {
+        Row: {
+          id: string
+          user_id: string
+          source_device_id: string | null
+          target_device_id: string | null
+          event_type: 'sync_start' | 'sync_complete' | 'conflict_detected' | 'conflict_resolved' | 'device_connected' | 'device_disconnected' | 'device_registered' | 'device_revoked' | 'session_transferred' | 'encryption_key_rotated' | 'security_violation'
+          table_name: string | null
+          record_count: number
+          success: boolean
+          error_message: string | null
+          duration_ms: number | null
+          security_context: Json
+          ip_address: string | null
+          user_agent: string | null
+          session_id: string | null
+          metadata: Json
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          source_device_id?: string | null
+          target_device_id?: string | null
+          event_type: 'sync_start' | 'sync_complete' | 'conflict_detected' | 'conflict_resolved' | 'device_connected' | 'device_disconnected' | 'device_registered' | 'device_revoked' | 'session_transferred' | 'encryption_key_rotated' | 'security_violation'
+          table_name?: string | null
+          record_count?: number
+          success?: boolean
+          error_message?: string | null
+          duration_ms?: number | null
+          security_context?: Json
+          ip_address?: string | null
+          user_agent?: string | null
+          session_id?: string | null
+          metadata?: Json
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          source_device_id?: string | null
+          target_device_id?: string | null
+          event_type?: 'sync_start' | 'sync_complete' | 'conflict_detected' | 'conflict_resolved' | 'device_connected' | 'device_disconnected' | 'device_registered' | 'device_revoked' | 'session_transferred' | 'encryption_key_rotated' | 'security_violation'
+          table_name?: string | null
+          record_count?: number
+          success?: boolean
+          error_message?: string | null
+          duration_ms?: number | null
+          security_context?: Json
+          ip_address?: string | null
+          user_agent?: string | null
+          session_id?: string | null
+          metadata?: Json
+          created_at?: string
+        }
+      }
     }
     Views: {
       [_ in never]: never
@@ -733,6 +978,13 @@ export interface Database {
       security_event_severity: 'low' | 'medium' | 'high' | 'critical'
       theme_preference: 'light' | 'dark' | 'auto'
       notification_type: 'email' | 'sms' | 'push' | 'in_app'
+      device_type: 'desktop' | 'mobile' | 'tablet'
+      session_status: 'active' | 'expired' | 'revoked' | 'transferred'
+      security_level: 'low' | 'standard' | 'high' | 'critical'
+      operation_type: 'CREATE' | 'UPDATE' | 'DELETE' | 'BULK_UPDATE'
+      conflict_resolution_strategy: 'last_write_wins' | 'manual_merge' | 'user_prompt' | 'field_level_merge'
+      sync_status: 'pending' | 'processing' | 'completed' | 'failed' | 'conflict' | 'cancelled'
+      sync_event_type: 'sync_start' | 'sync_complete' | 'conflict_detected' | 'conflict_resolved' | 'device_connected' | 'device_disconnected' | 'device_registered' | 'device_revoked' | 'session_transferred' | 'encryption_key_rotated' | 'security_violation'
     }
     CompositeTypes: {
       [_ in never]: never
@@ -854,4 +1106,163 @@ export interface PaginatedResponse<T = any> extends ServiceResponse<T[]> {
   page?: number
   pageSize?: number
   hasMore?: boolean
+}
+
+// Cross-device functionality types
+export interface UserDevice extends Database['public']['Tables']['user_devices']['Row'] {
+  // Extended with computed properties
+  isOnline?: boolean
+  lastSyncDuration?: number
+  syncStatus?: 'up_to_date' | 'syncing' | 'behind' | 'conflict'
+  deviceInfo?: {
+    platform: string
+    browser: string
+    version: string
+    capabilities: string[]
+  }
+}
+
+export interface DeviceSession extends Database['public']['Tables']['device_sessions']['Row'] {
+  // Extended with computed properties
+  isCurrentSession?: boolean
+  timeRemaining?: number
+  canTransfer?: boolean
+  device?: UserDevice
+}
+
+export interface SyncQueueItem extends Database['public']['Tables']['sync_queue']['Row'] {
+  // Extended with computed properties
+  estimatedProcessingTime?: number
+  conflictDetails?: {
+    conflictType: 'field_conflict' | 'timestamp_conflict' | 'version_conflict'
+    conflictingFields: string[]
+    localValue: any
+    remoteValue: any
+    suggestedResolution?: any
+  }
+  retrySchedule?: string
+}
+
+export interface CrossDeviceSyncEvent extends Database['public']['Tables']['cross_device_sync_events']['Row'] {
+  // Extended with computed properties
+  sourceDevice?: UserDevice
+  targetDevice?: UserDevice
+  humanReadableEvent?: string
+  securityRisk?: 'none' | 'low' | 'medium' | 'high' | 'critical'
+}
+
+// Cross-device service response types
+export interface DeviceRegistrationResult {
+  device: UserDevice
+  session: DeviceSession
+  syncRequired: boolean
+  trustLevel: 'untrusted' | 'basic' | 'trusted' | 'verified'
+}
+
+export interface SyncResult {
+  success: boolean
+  syncedTables: string[]
+  conflictsDetected: number
+  conflictsResolved: number
+  errors: SyncError[]
+  duration: number
+  nextSyncScheduled?: string
+}
+
+export interface SyncError {
+  table: string
+  recordId?: string
+  error: string
+  severity: 'warning' | 'error' | 'critical'
+  resolutionSuggestion?: string
+}
+
+export interface ConflictResolutionRequest {
+  conflictId: string
+  table: string
+  recordId: string
+  localData: any
+  remoteData: any
+  conflictType: 'field_conflict' | 'timestamp_conflict' | 'version_conflict'
+  conflictingFields: string[]
+  autoResolutionOptions: ConflictResolutionOption[]
+}
+
+export interface ConflictResolutionOption {
+  strategy: 'take_local' | 'take_remote' | 'merge_fields' | 'manual_edit'
+  description: string
+  previewData?: any
+  confidence: number
+}
+
+// Real-time subscription types for cross-device functionality
+export type CrossDeviceRealtimeChannel =
+  | 'user_devices'
+  | 'device_sessions'
+  | 'sync_queue'
+  | 'cross_device_sync_events'
+  | 'device_presence'
+  | 'sync_conflicts'
+
+export interface DevicePresenceState {
+  deviceId: string
+  userId: string
+  status: 'online' | 'offline' | 'idle' | 'away'
+  lastSeen: string
+  currentActivity?: string
+  syncEnabled: boolean
+}
+
+export interface SyncSubscriptionConfig {
+  userId: string
+  deviceId: string
+  tables: string[]
+  conflictResolution: 'auto' | 'prompt' | 'queue'
+  priority: 'low' | 'normal' | 'high'
+  encryptionRequired: boolean
+}
+
+// Device fingerprinting and security types
+export interface DeviceFingerprint {
+  hardware: {
+    cpu: string
+    memory: number
+    screen: { width: number; height: number; colorDepth: number }
+    timezone: string
+    language: string
+  }
+  browser: {
+    userAgent: string
+    plugins: string[]
+    features: string[]
+    webgl: string
+    canvas: string
+  }
+  network: {
+    connection: string
+    effectiveType?: string
+    downlink?: number
+  }
+  behavioral?: {
+    typingPattern?: number[]
+    mouseMovement?: number[]
+    interactionTiming?: number[]
+  }
+}
+
+export interface DeviceSecurityContext {
+  trustLevel: 'untrusted' | 'basic' | 'trusted' | 'verified'
+  securityFeatures: {
+    encryption: boolean
+    biometrics: boolean
+    secureStorage: boolean
+    certificateValidation: boolean
+  }
+  riskFactors: {
+    newDevice: boolean
+    locationChange: boolean
+    behaviorAnomaly: boolean
+    securityViolations: number
+  }
+  lastSecurityCheck: string
 }
