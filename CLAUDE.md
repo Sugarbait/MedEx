@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # **CareXPS Healthcare CRM - Claude Development Guide**
 
 ## **Project Overview**
@@ -6,12 +10,15 @@ CareXPS is a HIPAA-compliant healthcare CRM built with React/TypeScript and Vite
 
 **Key Features:**
 - AI-powered voice calling via Retell AI
-- SMS management with Twilio integration
-- HIPAA-compliant audit logging and encryption
-- Multi-factor authentication (MFA)
+- SMS management with Twilio integration and cost optimization
+- HIPAA-compliant audit logging and encryption (NIST 800-53 compliant)
+- Multi-factor authentication (MFA) with TOTP
 - Real-time cross-device synchronization
 - Progressive Web App (PWA) capabilities
 - Azure Static Web Apps deployment
+- Demo mode fallback when services unavailable
+- Emergency logout functionality (Ctrl+Shift+L)
+- Advanced fuzzy search and filtering capabilities
 
 ---
 
@@ -25,6 +32,7 @@ npm run dev              # Start development server on port 3000
 # Building
 npm run build           # Production build (no type checking)
 npm run build:check     # Production build with TypeScript checking
+npm run preview         # Preview production build locally
 
 # Testing
 npm run test            # Run Vitest tests
@@ -39,9 +47,10 @@ npm run update:deps     # Update dependencies
 ### **Vite Configuration**
 - **Build Target**: ES2015 with Terser minification
 - **Dev Server**: Port 3000 with security headers
-- **PWA**: Enabled with workbox caching
+- **PWA**: Enabled with workbox caching strategies
 - **Chunks**: Optimized splitting (vendor, html2canvas chunks)
 - **Azure Support**: Auto-copies `staticwebapp.config.json` and `404.html`
+- **Custom Azure Plugin**: Handles static web app deployment files
 
 ---
 
@@ -55,86 +64,78 @@ npm run update:deps     # Update dependencies
 - **State Management**: React Query (@tanstack/react-query)
 - **Forms**: React Hook Form with Zod validation
 - **UI Components**: Custom components with Lucide React icons
+- **Animations**: Framer Motion for smooth interactions
 
 ### **Authentication & Security**
 - **Primary Auth**: Azure AD via MSAL (@azure/msal-browser)
-- **MFA**: TOTP-based multi-factor authentication
+- **MFA**: TOTP-based multi-factor authentication with OTPAuth
 - **Session Management**: Configurable timeout (default 15 min)
-- **Encryption**: AES-256-GCM for PHI data
-- **Audit Logging**: Comprehensive HIPAA-compliant logging
+- **Encryption**: AES-256-GCM for PHI data (NIST compliant)
+- **Audit Logging**: Comprehensive HIPAA-compliant logging per Security Rule § 164.312(b)
+- **Emergency Features**: Ctrl+Shift+L emergency logout
 
 ### **Data Layer**
-- **Database**: Supabase (PostgreSQL)
-- **Real-time**: Supabase realtime subscriptions
-- **Local Storage**: Encrypted localStorage wrapper
-- **Cross-device Sync**: Automatic synchronization
+- **Database**: Supabase (PostgreSQL) with Row Level Security (RLS)
+- **Real-time**: Supabase realtime subscriptions with fallback
+- **Local Storage**: Encrypted localStorage wrapper with migration support
+- **Cross-device Sync**: Automatic synchronization with conflict resolution
 - **Fallback**: localStorage-only mode when Supabase unavailable
+- **Demo Mode**: Offline functionality for development and testing
 
 ### **External Integrations**
 - **Voice AI**: Retell AI for conversational AI calls
-- **SMS**: Twilio for SMS messaging
+- **SMS**: Twilio for SMS messaging with cost tracking
 - **PDF Generation**: jsPDF for report exports
 - **Currency**: Exchange rate APIs for cost calculations
 - **Help Chat**: OpenAI GPT for in-app assistance
+- **QR Codes**: QRCode generation for MFA setup
 
 ---
 
-## **Project Structure**
+## **Service Architecture**
 
-```
-src/
-├── components/           # Reusable UI components
-│   ├── auth/            # Authentication components (MFA, login)
-│   ├── common/          # Shared components (modals, forms)
-│   ├── layout/          # Layout components (header, sidebar, nav)
-│   ├── security/        # Security-related components
-│   ├── settings/        # Settings management components
-│   └── ui/              # Base UI components (buttons, inputs)
-├── contexts/            # React contexts
-│   ├── AuthContext.tsx      # Authentication state
-│   ├── SupabaseContext.tsx  # Supabase client
-│   └── SecurityContext.tsx  # Security settings
-├── hooks/               # Custom React hooks
-│   ├── useSupabaseAuth.ts   # Supabase authentication
-│   ├── useUserSettings.ts   # User preferences
-│   ├── useSessionTimeout.ts # Session management
-│   └── useDebounce.ts       # Utility hooks
-├── pages/               # Route components
-│   ├── DashboardPage.tsx    # Analytics dashboard
-│   ├── CallsPage.tsx        # Voice call management
-│   ├── SMSPage.tsx          # SMS conversations
-│   ├── SettingsPage.tsx     # User settings
-│   └── UserManagementPage.tsx # Admin user management
-├── services/            # Business logic and API services
-│   ├── authService.ts       # Authentication logic
-│   ├── supabaseService.ts   # Database operations
-│   ├── retellService.ts     # Retell AI integration
-│   ├── mfaService.ts        # Multi-factor auth
-│   ├── auditLogger.ts       # HIPAA audit logging
-│   ├── chatService.ts       # Chat/conversation management
-│   ├── notesService.ts      # Notes with cross-device sync
-│   └── userSettingsService.ts # Settings management
-├── types/               # TypeScript type definitions
-│   ├── index.ts            # Core types (User, Call, SMS, etc.)
-│   └── supabase.ts         # Supabase database types
-├── utils/               # Utility functions
-│   ├── encryption.ts       # Encryption utilities
-│   ├── themeManager.ts     # Dark/light theme
-│   └── authenticationMaster.ts # Auth debugging
-├── config/              # Configuration files
-│   ├── supabase.ts         # Supabase client setup
-│   └── msalConfig.ts       # Azure AD configuration
-└── migrations/          # Database migration scripts
-```
+The codebase features an extensive service layer with 40+ specialized services organized by functionality:
 
----
+### **Core Services**
+- **authService**: Azure AD and local authentication
+- **supabaseService**: Database operations and real-time sync
+- **retellService**: AI voice call management
 
-## **Key Patterns & Conventions**
+### **Security Services**
+- **auditLogger / auditService**: HIPAA-compliant audit trail
+- **encryption / secureEncryption**: AES-256-GCM encryption
+- **secureStorage**: Encrypted localStorage management
+- **secureMfaService**: Multi-factor authentication
+- **secureUserDataService**: Protected user data handling
+- **storageSecurityMigration**: Security upgrade migrations
 
-### **Service Layer Pattern**
-All business logic is encapsulated in services with consistent interfaces:
+### **Communication Services**
+- **chatService / optimizedChatService / simpleChatService**: Chat management variants
+- **retellSMSService**: SMS integration with Retell AI
+- **notesService**: Cross-device synchronized notes
+
+### **Cost & Analytics Services**
+- **twilioCostService**: SMS cost tracking and optimization
+- **smsCostCacheService**: Cost data caching
+- **analyticsService**: Usage analytics and reporting
+- **fuzzySearchService**: Advanced search capabilities
+
+### **User Management Services**
+- **userProfileService**: User profile management
+- **userManagementService**: Admin user operations
+- **userSettingsService**: User preferences (multiple variants)
+- **userSyncService**: Cross-device user synchronization
+- **avatarStorageService**: Profile image management
+
+### **Utility Services**
+- **patientIdService**: Consistent patient ID generation
+- **toastNotificationService**: In-app notifications
+- **pdfExportService**: Document generation
+- **optimizedApiService**: API performance optimization
+
+### **Service Pattern**
+All services follow consistent interfaces:
 ```typescript
-// Example service structure
 export const exampleService = {
   // Async operations with error handling
   async getData(): Promise<{ status: 'success' | 'error', data?: any, error?: string }>,
@@ -150,23 +151,147 @@ export const exampleService = {
 }
 ```
 
+---
+
+## **Project Structure**
+
+```
+src/
+├── components/           # Reusable UI components
+│   ├── auth/            # MFA, login, authentication gates
+│   ├── common/          # Modals, forms, shared components
+│   ├── layout/          # Header, sidebar, navigation
+│   ├── security/        # Security-related components
+│   ├── settings/        # Settings management
+│   └── ui/              # Base UI (buttons, inputs, error boundary)
+├── contexts/            # React contexts
+│   ├── AuthContext.tsx      # Authentication state
+│   ├── SupabaseContext.tsx  # Supabase client
+│   └── SecurityContext.tsx  # Security settings
+├── hooks/               # Custom React hooks (15+ hooks)
+│   ├── useSupabaseAuth.ts   # Supabase authentication
+│   ├── useUserSettings.ts   # User preferences
+│   ├── useSessionTimeout.ts # Session management
+│   ├── useDebounce.ts       # Performance optimization
+│   ├── useAutoRefresh.ts    # Automatic data refresh
+│   ├── useNotesCount.ts     # Notes management
+│   └── useOptimizedSMSCosts.ts # Cost optimization
+├── pages/               # Route components
+│   ├── DashboardPage.tsx    # Analytics dashboard
+│   ├── CallsPage.tsx        # Voice call management
+│   ├── SMSPage.tsx          # SMS conversations
+│   ├── SettingsPage.tsx     # User settings
+│   ├── UserManagementPage.tsx # Admin user management
+│   ├── AuditDashboard.tsx   # HIPAA audit viewing
+│   └── MFAPage.tsx          # Multi-factor authentication
+├── services/            # Business logic (40+ services)
+├── types/               # TypeScript type definitions
+├── utils/               # Utility functions (25+ utilities)
+│   ├── encryption.ts       # Encryption utilities
+│   ├── themeManager.ts     # Dark/light theme
+│   ├── authenticationMaster.ts # Auth debugging
+│   └── fixUserIssues.ts    # User data repair utilities
+├── config/              # Configuration files
+├── migrations/          # Database migration scripts
+├── test/                # Vitest test files (8+ tests)
+└── tests/               # Additional test directory
+```
+
+---
+
+## **Key Patterns & Conventions**
+
 ### **Error Handling**
 - **Graceful Degradation**: App works offline with localStorage fallback
 - **User-Friendly Messages**: No technical errors exposed to users
-- **Comprehensive Logging**: All errors logged for debugging
+- **Comprehensive Logging**: All errors logged with PHI redaction
 - **Retry Logic**: Automatic retries with exponential backoff
+- **Demo Mode**: Offline functionality when services unavailable
 
-### **Security Patterns**
+### **Security Patterns (HIPAA Compliance)**
 - **PHI Protection**: All healthcare data encrypted at rest and in transit
-- **Audit Trail**: Every action logged with user, timestamp, and details
+- **Audit Trail**: Every action logged per HIPAA Security Rule § 164.312(b)
 - **Session Security**: Configurable timeouts, emergency logout (Ctrl+Shift+L)
 - **CSP Compliance**: Strict Content Security Policy in production
+- **Data Redaction**: `[REDACTED]` for PHI in all console logs
+- **Encryption Standards**: AES-256-GCM following NIST 800-53
 
 ### **State Management**
 - **Local State**: React useState for component-specific data
 - **Global State**: React Context for user, auth, and settings
 - **Server State**: React Query for data fetching and caching
 - **Persistence**: Custom hooks for localStorage with encryption
+- **Real-time Sync**: Supabase subscriptions with fallback handling
+
+### **React Hooks Stability Patterns**
+**Critical for preventing infinite loops and excessive re-renders:**
+
+```typescript
+// ✅ CORRECT: Stable callback with useCallback and empty deps
+const onProgress = useCallback((loaded: number, total: number) => {
+  safeLog(`Progress: ${loaded}/${total}`)
+}, []) // Empty dependency array for logging callbacks
+
+// ✅ CORRECT: Ref-based callback management for unstable props
+const callbackRef = useRef(options.onCallback)
+useEffect(() => {
+  callbackRef.current = options.onCallback
+}, [options.onCallback])
+
+const stableWrapper = useCallback((data) => {
+  callbackRef.current?.(data)
+}, []) // Stable wrapper with empty deps
+
+// ❌ INCORRECT: Recreating callback on every render
+const manager = useService({
+  onProgress: (loaded, total) => log(`${loaded}/${total}`) // New function each render
+})
+
+// ❌ INCORRECT: Object in dependency array without memoization
+useEffect(() => {
+  loadData()
+}, [chats, manager]) // manager is recreated each render
+```
+
+**Key principles:**
+- Always use `useCallback` with empty `[]` deps for logging/progress callbacks
+- Use refs to store unstable callbacks, access via stable wrapper
+- Memoize objects passed to custom hooks with `useMemo`
+- Prefer stable function references in dependency arrays
+
+---
+
+## **Testing Setup**
+
+### **Framework**: Vitest
+- **Config**: Inherits from Vite configuration
+- **Coverage**: v8 coverage provider
+- **Location**: Tests in `src/test/` and `src/tests/` directories
+- **Playwright**: E2E testing support available
+
+### **Testing Patterns**
+```typescript
+// Service testing example
+import { describe, it, expect, beforeEach } from 'vitest'
+import { exampleService } from '@/services/exampleService'
+
+describe('ExampleService', () => {
+  beforeEach(() => {
+    // Setup before each test
+  })
+
+  it('should handle success case', async () => {
+    const result = await exampleService.getData()
+    expect(result.status).toBe('success')
+  })
+})
+```
+
+### **Test Categories**
+- **Service Tests**: Business logic validation
+- **Security Tests**: Encryption and audit logging
+- **Integration Tests**: API and database operations
+- **Component Tests**: React component behavior
 
 ---
 
@@ -207,33 +332,6 @@ Custom healthcare-focused design system:
 - **Fonts**: Roboto (body), Inter (headings)
 - **Animations**: Shimmer, pulse-soft for loading states
 - **Shadows**: Healthcare-specific shadow utilities
-
----
-
-## **Testing Setup**
-
-### **Framework**: Vitest
-- **Config**: Inherits from Vite configuration
-- **Coverage**: v8 coverage provider
-- **Location**: Tests in `src/test/` directory
-
-### **Testing Patterns**
-```typescript
-// Service testing example
-import { describe, it, expect, beforeEach } from 'vitest'
-import { exampleService } from '@/services/exampleService'
-
-describe('ExampleService', () => {
-  beforeEach(() => {
-    // Setup before each test
-  })
-
-  it('should handle success case', async () => {
-    const result = await exampleService.getData()
-    expect(result.status).toBe('success')
-  })
-})
-```
 
 ---
 
@@ -286,28 +384,6 @@ All tables have RLS policies ensuring users can only access their own data or da
 3. **Follow Security Patterns**: Never bypass encryption or audit logging
 4. **Maintain HIPAA Compliance**: All PHI must be encrypted and audited
 
-### **Common Development Tasks**
-
-#### **Adding a New Service**
-1. Create service in `src/services/`
-2. Export from `src/services/index.ts`
-3. Add TypeScript interfaces to `src/types/index.ts`
-4. Create tests in `src/test/`
-5. Document any new environment variables
-
-#### **Adding a New Page**
-1. Create component in `src/pages/`
-2. Add route to `App.tsx`
-3. Add navigation link in `src/components/layout/Navigation.tsx`
-4. Update `getPageTitle()` function in `App.tsx`
-5. Add any required permissions/MFA protection
-
-#### **Database Changes**
-1. Create migration script in `src/migrations/`
-2. Update TypeScript types in `src/types/supabase.ts`
-3. Update affected services
-4. Test with both Supabase and localStorage fallback modes
-
 ### **Security Considerations**
 - **Never log PHI**: Use `[REDACTED]` in logs for sensitive data
 - **Encrypt at Rest**: All PHI stored in localStorage must be encrypted
@@ -321,42 +397,6 @@ All tables have RLS policies ensuring users can only access their own data or da
 - **Debouncing**: Use debounced inputs for search/filtering
 - **Caching**: Leverage React Query for API data caching
 - **Bundle Optimization**: Keep chunks under 2MB warning limit
-
-### **React Hooks Stability Patterns**
-**Critical for preventing infinite loops and excessive re-renders:**
-
-```typescript
-// ✅ CORRECT: Stable callback with useCallback and empty deps
-const onProgress = useCallback((loaded: number, total: number) => {
-  safeLog(`Progress: ${loaded}/${total}`)
-}, []) // Empty dependency array for logging callbacks
-
-// ✅ CORRECT: Ref-based callback management for unstable props
-const callbackRef = useRef(options.onCallback)
-useEffect(() => {
-  callbackRef.current = options.onCallback
-}, [options.onCallback])
-
-const stableWrapper = useCallback((data) => {
-  callbackRef.current?.(data)
-}, []) // Stable wrapper with empty deps
-
-// ❌ INCORRECT: Recreating callback on every render
-const manager = useService({
-  onProgress: (loaded, total) => log(`${loaded}/${total}`) // New function each render
-})
-
-// ❌ INCORRECT: Object in dependency array without memoization
-useEffect(() => {
-  loadData()
-}, [chats, manager]) // manager is recreated each render
-```
-
-**Key principles:**
-- Always use `useCallback` with empty `[]` deps for logging/progress callbacks
-- Use refs to store unstable callbacks, access via stable wrapper
-- Memoize objects passed to custom hooks with `useMemo`
-- Prefer stable function references in dependency arrays
 
 ---
 
@@ -383,7 +423,7 @@ useEffect(() => {
 ### **Sync Issues**
 - Verify Supabase connection
 - Check real-time subscription status
-- Force refresh user data
+- Force refresh user data using `fixUserIssues.forceRefreshAllUserData()`
 - Check cross-device sync implementation
 
 ### **Supabase WebSocket Connection Errors**
@@ -407,13 +447,36 @@ useEffect(() => {
 
 ---
 
+## **Demo Mode & Development Features**
+
+### **Demo Mode Operation**
+The application includes comprehensive demo mode functionality that activates when external services are unavailable:
+- **Automatic Fallback**: Switches to localStorage-only operation
+- **Full Feature Set**: All functionality available offline
+- **Cost Simulation**: Mock SMS costs and analytics
+- **User Management**: Local user creation and management
+
+### **Emergency Features**
+- **Emergency Logout**: Ctrl+Shift+L for immediate logout and data clearing
+- **Debug Utilities**: Available via `window.fixUserIssues` in browser console
+- **Security Migration**: Automatic upgrade of storage security
+
+### **Development Utilities**
+- **User Issue Fixer**: `fixUserIssues.fixAllUserIssues()` for data repair
+- **Force Refresh**: `fixUserIssues.forceRefreshAllUserData()` for sync issues
+- **Diagnostic Tools**: `fixUserIssues.diagnosePotentialIssues()` for health checks
+
+---
+
 ## **Important Notes for Claude**
 
 1. **Never Bypass Security**: Always maintain encryption and audit logging
 2. **HIPAA Compliance**: This is a healthcare application - treat all patient data as PHI
 3. **Fallback Support**: Ensure features work even when Supabase is unavailable
 4. **Emergency Features**: Respect the Ctrl+Shift+L emergency logout functionality
-5. **Documentation**: Update this file when making architectural changes
+5. **Service Architecture**: Understand the 40+ service ecosystem before making changes
+6. **Demo Mode**: Test changes in both connected and offline modes
+7. **Documentation**: Update this file when making architectural changes
 
 ---
 

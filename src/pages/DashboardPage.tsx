@@ -941,9 +941,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
         <DateRangePicker
           selectedRange={selectedDateRange}
           onRangeChange={(range, customStart, customEnd) => {
@@ -968,22 +968,25 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
             console.log('Dashboard date range changed:', { range, start, end, customStart, customEnd })
           }}
         />
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2 sm:gap-3">
           <button
             onClick={fetchDashboardData}
             disabled={isLoading}
-            className="flex items-center gap-2 px-3 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-3 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors disabled:opacity-50 min-h-[44px]"
+            aria-label="Refresh dashboard data"
           >
             <RefreshCwIcon className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-            Refresh
+            <span className="hidden sm:inline">Refresh</span>
           </button>
           <button
             onClick={handleExportPDF}
             disabled={isExporting || isLoading}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+            aria-label="Export dashboard to PDF"
           >
             <DownloadIcon className={`w-4 h-4 ${isExporting ? 'animate-spin' : ''}`} />
-            {isExporting ? 'Generating PDF...' : 'Export Dashboard Report'}
+            <span className="hidden sm:inline">{isExporting ? 'Generating PDF...' : 'Export Dashboard Report'}</span>
+            <span className="sm:hidden">{isExporting ? 'Generating...' : 'Export'}</span>
           </button>
         </div>
       </div>

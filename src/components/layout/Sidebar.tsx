@@ -115,19 +115,20 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, user }) => {
         }`}
       >
         {/* Header */}
-        <div className="flex items-center justify-between h-16 px-6 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center justify-between h-16 px-4 sm:px-6 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-3">
             <NavLink to="/dashboard" className="hover:opacity-80 transition-opacity">
               <img
                 src="https://nexasync.ca/images/Logo.png"
                 alt="CareXPS Logo"
-                className="h-10 w-auto object-contain cursor-pointer"
+                className="h-8 sm:h-10 w-auto object-contain cursor-pointer"
               />
             </NavLink>
           </div>
           <button
             onClick={onToggle}
-            className="p-1 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 lg:hidden"
+            className="p-2 rounded-md hover:bg-gray-100 dark:hover:bg-gray-800 lg:hidden min-h-[44px] min-w-[44px] flex items-center justify-center"
+            aria-label="Close sidebar"
           >
             <ChevronLeftIcon className="w-5 h-5 text-gray-500 dark:text-gray-400" />
           </button>
@@ -144,11 +145,17 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, user }) => {
               <NavLink
                 key={item.name}
                 to={item.href}
-                className={`group flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-lg transition-all duration-200 ${
+                className={`group flex items-center gap-3 px-3 py-3 sm:py-2 text-sm font-medium rounded-lg transition-all duration-200 min-h-[48px] sm:min-h-[auto] ${
                   isActive
                     ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
                     : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-800'
                 }`}
+                onClick={() => {
+                  // Close sidebar on mobile when navigation item is clicked
+                  if (window.innerWidth < 1024) {
+                    onToggle()
+                  }
+                }}
               >
                 <Icon
                   className={`w-5 h-5 ${

@@ -61,7 +61,8 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
     <div className={`relative ${className}`}>
       <button
         onClick={() => setIsOpen(!isOpen)}
-        className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+        className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300 font-medium focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[44px] text-sm sm:text-base"
+        aria-label="Select date range"
       >
         <CalendarIcon className="w-4 h-4 text-gray-500 dark:text-gray-400 dark:text-gray-500" />
         <span>{getSelectedLabel()}</span>
@@ -69,7 +70,7 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
       </button>
 
       {isOpen && (
-        <div className="absolute top-full left-0 mt-2 w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
+        <div className="absolute top-full left-0 mt-2 w-full sm:w-72 bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg z-50">
           <div className="p-2">
             {!showCustomInputs ? (
               <div className="space-y-1">
@@ -77,11 +78,12 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
                   <button
                     key={option.value}
                     onClick={() => handleRangeSelect(option.value)}
-                    className={`w-full text-left px-3 py-2 rounded-md text-sm hover:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 transition-colors ${
+                    className={`w-full text-left px-3 py-3 sm:py-2 rounded-md text-sm hover:bg-gray-100 dark:bg-gray-700 dark:hover:bg-gray-600 transition-colors min-h-[44px] sm:min-h-[auto] flex items-center ${
                       selectedRange === option.value
                         ? 'bg-blue-50 text-blue-700 font-medium'
                         : 'text-gray-700 dark:text-gray-300'
                     }`}
+                    aria-label={`Select ${option.label} date range`}
                   >
                     {option.label}
                   </button>
@@ -96,7 +98,8 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
                       setShowCustomInputs(false)
                       setIsOpen(false)
                     }}
-                    className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+                    className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 min-h-[44px] min-w-[44px] flex items-center justify-center sm:min-h-[auto] sm:min-w-[auto]"
+                    aria-label="Close custom date picker"
                   >
                     ×
                   </button>
