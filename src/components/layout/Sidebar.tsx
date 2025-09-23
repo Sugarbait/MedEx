@@ -122,6 +122,12 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, user }) => {
                 src="https://nexasync.ca/images/Logo.png"
                 alt="CareXPS Logo"
                 className="h-8 sm:h-10 w-auto object-contain cursor-pointer"
+                onError={(e) => {
+                  // Silently handle image loading errors to reduce console noise
+                  const img = e.target as HTMLImageElement
+                  img.style.display = 'none'
+                }}
+                crossOrigin="anonymous"
               />
             </NavLink>
           </div>

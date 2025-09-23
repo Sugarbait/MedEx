@@ -539,12 +539,16 @@ class PDFExportService {
 
   private async addLogoToPDF(centerX: number, y: number): Promise<void> {
     try {
-      // Load the logo from the URL
+      // Load the logo from the URL with CORS handling
       const logoUrl = 'https://nexasync.ca/images/Logo.png'
-      const response = await fetch(logoUrl)
+      const response = await fetch(logoUrl, {
+        mode: 'cors',
+        cache: 'force-cache'
+      })
 
       if (!response.ok) {
-        throw new Error(`Failed to fetch logo: ${response.status}`)
+        // Silently skip logo if unavailable to reduce console noise
+        return
       }
 
       const blob = await response.blob()
@@ -578,7 +582,9 @@ class PDFExportService {
         reader.readAsDataURL(blob)
       })
     } catch (error) {
-      throw new Error('Failed to load logo image')
+      // Silently skip logo if there's a CORS or network error
+      // This prevents console errors while maintaining PDF generation
+      return
     }
   }
 }

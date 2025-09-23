@@ -149,7 +149,11 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
       setIsConnected(connected)
 
       if (!connected) {
-        console.warn('Supabase not available - running in localStorage-only mode')
+        // Only log this message once per session to reduce console noise
+        if (!sessionStorage.getItem('supabase-context-offline-logged')) {
+          console.log('📱 Running in offline mode')
+          sessionStorage.setItem('supabase-context-offline-logged', 'true')
+        }
         setIsLoading(false)
         return
       }

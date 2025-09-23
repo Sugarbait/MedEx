@@ -6,9 +6,15 @@ const supabaseUrl = (import.meta as any).env?.VITE_SUPABASE_URL
 const supabaseAnonKey = (import.meta as any).env?.VITE_SUPABASE_ANON_KEY
 const supabaseServiceRoleKey = (import.meta as any).env?.VITE_SUPABASE_SERVICE_ROLE_KEY
 
-console.log('🔧 Direct environment check:')
-console.log('- URL:', supabaseUrl ? supabaseUrl.substring(0, 30) + '...' : 'missing')
-console.log('- Anon Key:', supabaseAnonKey ? supabaseAnonKey.substring(0, 20) + '...' : 'missing')
+// Only log detailed environment check in development mode or when explicitly debugging
+if (import.meta.env?.DEV && !sessionStorage.getItem('supabase-config-logged')) {
+  console.log('🔧 Supabase configuration:', {
+    url: supabaseUrl ? '✅ configured' : '❌ missing',
+    anonKey: supabaseAnonKey ? '✅ configured' : '❌ missing',
+    mode: !supabaseUrl || !supabaseAnonKey ? 'localStorage-only' : 'connected'
+  })
+  sessionStorage.setItem('supabase-config-logged', 'true')
+}
 
 // Check for localhost URLs that could cause CSP violations
 if (supabaseUrl && supabaseUrl.includes('localhost')) {
@@ -17,9 +23,12 @@ if (supabaseUrl && supabaseUrl.includes('localhost')) {
   console.error('This suggests a development server is running or environment variables are not loaded correctly.')
 }
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('⚠️ Supabase configuration missing or invalid. Application will operate in localStorage-only mode.')
-  console.warn('To enable Supabase integration, set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env.local file')
+// Only show configuration warning once in development
+if (!supabaseUrl || !supabaseAnonKey && !sessionStorage.getItem('supabase-warning-shown')) {
+  if (import.meta.env?.DEV) {
+    console.warn('⚠️ Operating in localStorage-only mode (dev environment with placeholder keys)')
+  }
+  sessionStorage.setItem('supabase-warning-shown', 'true')
 }
 
 // Client for authenticated user operations
@@ -36,7 +45,11 @@ export const supabaseConfig = {
 
 // Create a silent fallback client that prevents all network calls and console spam
 const createFallbackClient = () => {
-  console.warn('🔌 Supabase not configured - operating in localStorage-only mode')
+  // Only log fallback message once per session to reduce console noise
+  if (!sessionStorage.getItem('fallback-client-logged')) {
+    console.log('🔌 Supabase offline mode active')
+    sessionStorage.setItem('fallback-client-logged', 'true')
+  }
 
   // Create a completely disabled client that prevents any network calls
   const noOpHandler = {
@@ -74,7 +87,11 @@ const createSupabaseClient = () => {
       return createFallbackClient()
     }
 
-    console.log('✅ Creating Supabase client with URL:', supabaseUrl.substring(0, 30) + '...')
+    // Only log client creation once per session
+    if (!sessionStorage.getItem('supabase-client-logged')) {
+      console.log('✅ Supabase client initialized')
+      sessionStorage.setItem('supabase-client-logged', 'true')
+    }
 
     return createClient<Database>(supabaseUrl!, supabaseAnonKey!, {
       auth: {
@@ -99,12 +116,14 @@ const createSupabaseClient = () => {
 
             if (suppressedErrors.some(error => message.toLowerCase().includes(error.toLowerCase()))) {
               // Only log once when going offline, then suppress
-              if (!isLocalStorageOnlyMode) {
-                console.log('📡 Supabase connection unavailable - switching to localStorage-only mode')
+              if (!isLocalStorageOnlyMode && !sessionStorage.getItem('supabase-offline-logged')) {
+                console.log('📡 Connection unavailable - localStorage-only mode active')
+                sessionStorage.setItem('supabase-offline-logged', 'true')
                 supabaseConfig.setLocalStorageOnly(true)
               }
-            } else {
-              console.warn('Supabase Realtime:', message)
+            } else if (!message.toLowerCase().includes('websocket')) {
+              // Suppress WebSocket-specific errors but log other issues
+              console.warn('Supabase:', message)
             }
           } else if (level === 'info' && message.includes('connected')) {
             // Re-enable when connection is restored

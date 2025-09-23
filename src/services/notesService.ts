@@ -11,9 +11,9 @@ import { userIdTranslationService } from './userIdTranslationService'
 
 // CRITICAL FIX: Disable console logging in production to prevent infinite loops
 const isProduction = !import.meta.env.DEV
-const safeLog = isProduction ? () => {} : safeLog
-const safeWarn = isProduction ? () => {} : safeWarn
-const safeError = isProduction ? () => {} : safeError
+const safeLog = isProduction ? () => {} : console.log
+const safeWarn = isProduction ? () => {} : console.warn
+const safeError = isProduction ? () => {} : console.error
 
 export interface Note {
   id: string
@@ -86,14 +86,21 @@ class NotesService {
       // Quick test to ensure Supabase is available for cross-device sync
       const { error } = await supabase.from('notes').select('id').limit(1).maybeSingle()
       if (error) {
-        safeLog('⚠️ Cross-device sync limited: Supabase connection issue')
+        // Only log once per session to reduce console noise
+        if (!sessionStorage.getItem('notes-sync-warning-logged')) {
+          safeLog('📝 Notes: localStorage-only mode')
+          sessionStorage.setItem('notes-sync-warning-logged', 'true')
+        }
         this.isSupabaseAvailable = false
       } else {
-        safeLog('✅ Cross-device sync ready: Supabase connected')
         this.isSupabaseAvailable = true
       }
     } catch (error) {
-      safeLog('⚠️ Cross-device sync limited: Connection error')
+      // Only log connection errors once per session
+      if (!sessionStorage.getItem('notes-connection-error-logged')) {
+        safeLog('📝 Notes: offline mode (connection error)')
+        sessionStorage.setItem('notes-connection-error-logged', 'true')
+      }
       this.isSupabaseAvailable = false
     }
   }

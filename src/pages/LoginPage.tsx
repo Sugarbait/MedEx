@@ -579,8 +579,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             alt="CareXPS Logo"
             className="max-h-20 w-auto mx-auto mb-4 object-contain"
             onError={(e) => {
-              console.error('Logo failed to load from:', e.currentTarget.src)
+              const img = e.target as HTMLImageElement
+              img.style.display = 'none'
             }}
+            crossOrigin="anonymous"
           />
           <p className="text-gray-600 text-sm">Healthcare CRM</p>
           <p className="text-gray-500 text-xs">Secure HIPAA-Compliant Platform</p>
@@ -668,8 +670,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             alt="NexaSync Logo"
             className="h-6 w-auto mx-auto mb-2 opacity-70"
             onError={(e) => {
-              e.currentTarget.style.display = 'none'
+              const img = e.target as HTMLImageElement
+              img.style.display = 'none'
             }}
+            crossOrigin="anonymous"
           />
           <div className="text-xs text-gray-500">
             © 2025 NexaSync. All rights reserved.

@@ -20,12 +20,22 @@ export const Footer: React.FC<FooterProps> = ({ variant = 'default' }) => {
             src="https://nexasync.ca/images/NexaSync-logo.png"
             alt="NexaSync Logo"
             className="h-4 w-auto object-contain opacity-60 dark:hidden"
+            onError={(e) => {
+              const img = e.target as HTMLImageElement
+              img.style.display = 'none'
+            }}
+            crossOrigin="anonymous"
           />
           {/* Dark mode logo */}
           <img
             src="https://nexasync.ca/images/nexasync-white.png"
             alt="NexaSync Logo"
             className="h-4 w-auto object-contain opacity-60 hidden dark:block"
+            onError={(e) => {
+              const img = e.target as HTMLImageElement
+              img.style.display = 'none'
+            }}
+            crossOrigin="anonymous"
           />
           <span className="text-xs">
             © {currentYear} NexaSync. All rights reserved.
