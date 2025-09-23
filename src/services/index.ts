@@ -10,6 +10,7 @@ import { currencyService } from './currencyService'
 import { twilioCostService } from './twilioCostService'
 import { pdfExportService } from './pdfExportService'
 import { patientIdService } from './patientIdService'
+import { fuzzySearchService } from './fuzzySearchService'
 
 // Export cross-device sync services
 export const userSettingsService = userSettingsServiceInstance
@@ -20,7 +21,7 @@ export const auditService = new AuditService()
 export const realtimeService = new RealtimeService()
 
 // Export services
-export { retellService, chatService, avatarStorageService, currencyService, twilioCostService, pdfExportService, patientIdService }
+export { retellService, chatService, avatarStorageService, currencyService, twilioCostService, pdfExportService, patientIdService, fuzzySearchService }
 
 // Export classes and types for direct usage
 export { AuditService, RealtimeService }

@@ -7,6 +7,7 @@ import { SiteHelpChatbot } from '@/components/common/SiteHelpChatbot'
 import { RetellWebClient } from 'retell-client-js-sdk'
 import { retellService, type RetellCall, currencyService, twilioCostService } from '@/services'
 import { notesService } from '@/services/notesService'
+import { fuzzySearchService } from '@/services/fuzzySearchService'
 import {
   PhoneIcon,
   PlayIcon,
@@ -28,7 +29,8 @@ import {
   DollarSignIcon,
   ThumbsUpIcon,
   BarChart3Icon,
-  StickyNoteIcon
+  StickyNoteIcon,
+  ZapIcon
 } from 'lucide-react'
 import { supabase } from '@/config/supabase'
 import { PHIDataHandler, encryptionService } from '@/services/encryption'
@@ -86,6 +88,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [sentimentFilter, setSentimentFilter] = useState('all')
+  const [isFuzzySearchEnabled, setIsFuzzySearchEnabled] = useState(true)
   const [selectedDateRange, setSelectedDateRange] = useState<DateRange>('today')
 
   // State for custom date range
@@ -182,6 +185,13 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
   useEffect(() => {
     fetchCalls()
   }, [currentPage])
+
+  // Initialize fuzzy search engine when calls are loaded
+  useEffect(() => {
+    if (calls.length > 0 && isFuzzySearchEnabled) {
+      fuzzySearchService.initializeCallsSearch(calls)
+    }
+  }, [calls, isFuzzySearchEnabled])
 
   const fetchCalls = async (retryCount = 0) => {
     setLoading(true)
@@ -485,17 +495,33 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
     }
   }
 
-  const filteredCalls = calls.filter(call => {
-    const matchesSearch = !searchTerm ||
-      call.patient_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      call.metadata?.patient_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      call.transcript?.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredCalls = React.useMemo(() => {
+    let searchFilteredCalls = calls
 
-    const matchesStatus = statusFilter === 'all' || call.call_status === statusFilter
-    const matchesSentiment = sentimentFilter === 'all' || call.sentiment_analysis?.overall_sentiment === sentimentFilter
+    // Apply search filter using fuzzy search or fallback to basic search
+    if (searchTerm && searchTerm.trim()) {
+      if (isFuzzySearchEnabled) {
+        try {
+          const fuzzyResults = fuzzySearchService.searchCalls(searchTerm)
+          searchFilteredCalls = fuzzyResults.map(result => result.item)
+        } catch (error) {
+          console.error('Fuzzy search failed, falling back to basic search:', error)
+          searchFilteredCalls = fuzzySearchService.basicCallsSearch(calls, searchTerm)
+        }
+      } else {
+        // Use basic search when fuzzy search is disabled
+        searchFilteredCalls = fuzzySearchService.basicCallsSearch(calls, searchTerm)
+      }
+    }
 
-    return matchesSearch && matchesStatus && matchesSentiment
-  })
+    // Apply status and sentiment filters to search results
+    return searchFilteredCalls.filter(call => {
+      const matchesStatus = statusFilter === 'all' || call.call_status === statusFilter
+      const matchesSentiment = sentimentFilter === 'all' || call.sentiment_analysis?.overall_sentiment === sentimentFilter
+
+      return matchesStatus && matchesSentiment
+    })
+  }, [calls, searchTerm, statusFilter, sentimentFilter, isFuzzySearchEnabled])
 
   return (
     <div className="p-6 space-y-6">
@@ -744,8 +770,19 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
                 placeholder="Search calls by patient name, ID, or content..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full pl-10 pr-12 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               />
+              <button
+                onClick={() => setIsFuzzySearchEnabled(!isFuzzySearchEnabled)}
+                className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-1 rounded transition-colors ${
+                  isFuzzySearchEnabled
+                    ? 'text-blue-600 hover:text-blue-700 bg-blue-50 dark:bg-blue-900/20'
+                    : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                }`}
+                title={isFuzzySearchEnabled ? 'Fuzzy search enabled - click to disable' : 'Basic search - click to enable fuzzy search'}
+              >
+                <ZapIcon className="w-4 h-4" />
+              </button>
             </div>
             <div className="flex gap-3">
               <select

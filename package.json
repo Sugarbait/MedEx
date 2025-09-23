@@ -31,6 +31,7 @@
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
     "framer-motion": "^11.5.4",
+    "fuse.js": "^7.1.0",
     "html2canvas": "^1.4.1",
     "jose": "^5.8.0",
     "jspdf": "^2.5.1",

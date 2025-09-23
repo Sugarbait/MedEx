@@ -12,6 +12,7 @@ import { retellService } from '@/services'
 import { twilioCostService } from '@/services/twilioCostService'
 import { currencyService } from '@/services/currencyService'
 import { userSettingsService } from '@/services'
+import { fuzzySearchService } from '@/services/fuzzySearchService'
 import {
   MessageSquareIcon,
   SendIcon,
@@ -35,7 +36,8 @@ import {
   StopCircleIcon,
   EyeIcon,
   StickyNoteIcon,
-  TrashIcon
+  TrashIcon,
+  ZapIcon
 } from 'lucide-react'
 
 // CRITICAL FIX: Disable console logging in production to prevent infinite loops
@@ -151,6 +153,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   const [searchTerm, setSearchTerm] = useState('')
   const [statusFilter, setStatusFilter] = useState('all')
   const [sentimentFilter, setSentimentFilter] = useState('all')
+  const [isFuzzySearchEnabled, setIsFuzzySearchEnabled] = useState(true)
   const [selectedDateRange, setSelectedDateRange] = useState<DateRange>(() => {
     // Remember last selected date range from localStorage
     const saved = localStorage.getItem('sms_page_date_range')
@@ -619,6 +622,13 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       smsCostManager.loadCostsForChats(chats)
     }
   }, [chats, smsCostManager.loadCostsForChats])
+
+  // Initialize fuzzy search engine when chats are loaded
+  useEffect(() => {
+    if (chats.length > 0 && isFuzzySearchEnabled) {
+      fuzzySearchService.initializeSMSSearch(chats)
+    }
+  }, [chats, isFuzzySearchEnabled])
 
   // ==================================================================================
   // 🔒 LOCKED CODE: CLEAR CACHE FUNCTION - PRODUCTION READY - NO MODIFICATIONS
@@ -1220,32 +1230,34 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
   }, [])
 
-  // Memoized filtered chats for performance
+  // Memoized filtered chats for performance with fuzzy search
   const filteredChats = useMemo(() => {
-    return chats.filter(chat => {
-      const phoneNumber = chat.metadata?.phone_number || chat.metadata?.customer_phone_number || ''
-      const extractedName = chat.metadata?.patient_name ||
-                            chat.metadata?.customer_name ||
-                            chat.metadata?.caller_name ||
-                            chat.metadata?.name ||
-                            chat.collected_dynamic_variables?.patient_name ||
-                            chat.collected_dynamic_variables?.customer_name ||
-                            chat.collected_dynamic_variables?.name ||
-                            null
-      const patientName = extractedName || ''
+    let searchFilteredChats = chats
 
-      const matchesSearch = !debouncedSearchTerm ||
-        phoneNumber.includes(debouncedSearchTerm) ||
-        patientName.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-        chat.transcript.toLowerCase().includes(debouncedSearchTerm.toLowerCase()) ||
-        chat.chat_id.toLowerCase().includes(debouncedSearchTerm.toLowerCase())
+    // Apply search filter using fuzzy search or fallback to basic search
+    if (debouncedSearchTerm && debouncedSearchTerm.trim()) {
+      if (isFuzzySearchEnabled) {
+        try {
+          const fuzzyResults = fuzzySearchService.searchSMS(debouncedSearchTerm)
+          searchFilteredChats = fuzzyResults.map(result => result.item)
+        } catch (error) {
+          console.error('Fuzzy search failed, falling back to basic search:', error)
+          searchFilteredChats = fuzzySearchService.basicSMSSearch(chats, debouncedSearchTerm)
+        }
+      } else {
+        // Use basic search when fuzzy search is disabled
+        searchFilteredChats = fuzzySearchService.basicSMSSearch(chats, debouncedSearchTerm)
+      }
+    }
 
+    // Apply status and sentiment filters to search results
+    return searchFilteredChats.filter(chat => {
       const matchesStatus = debouncedStatusFilter === 'all' || chat.chat_status === debouncedStatusFilter
       const matchesSentiment = debouncedSentimentFilter === 'all' || chat.chat_analysis?.user_sentiment === debouncedSentimentFilter
 
-      return matchesSearch && matchesStatus && matchesSentiment
+      return matchesStatus && matchesSentiment
     })
-  }, [chats, debouncedSearchTerm, debouncedStatusFilter, debouncedSentimentFilter])
+  }, [chats, debouncedSearchTerm, debouncedStatusFilter, debouncedSentimentFilter, isFuzzySearchEnabled])
 
   return (
     <div className="p-6 space-y-6">
@@ -1563,8 +1575,19 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                     placeholder="Search chats by phone number, patient name, or content..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full pl-10 pr-12 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
+                  <button
+                    onClick={() => setIsFuzzySearchEnabled(!isFuzzySearchEnabled)}
+                    className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-1 rounded transition-colors ${
+                      isFuzzySearchEnabled
+                        ? 'text-blue-600 hover:text-blue-700 bg-blue-50 dark:bg-blue-900/20'
+                        : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
+                    }`}
+                    title={isFuzzySearchEnabled ? 'Fuzzy search enabled - click to disable' : 'Basic search - click to enable fuzzy search'}
+                  >
+                    <ZapIcon className="w-4 h-4" />
+                  </button>
                 </div>
                 <div className="flex gap-3">
                   <select
