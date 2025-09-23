@@ -345,6 +345,22 @@ class ToastNotificationService {
   }
 
   /**
+   * Test method to trigger a demo notification (for testing purposes)
+   */
+  triggerTestNotification(type: 'call' | 'sms'): void {
+    const testNotification: ToastNotificationData = {
+      id: `test_${type}_${Date.now()}`,
+      type,
+      title: type === 'call' ? 'Test Call Notification' : 'Test SMS Notification',
+      timestamp: new Date(),
+      recordId: `test_${type}_${Math.random().toString(36).substr(2, 9)}`
+    }
+
+    console.log('🧪 Toast service triggering test notification:', testNotification)
+    this.showNotification(testNotification)
+  }
+
+  /**
    * Cleanup resources
    */
   cleanup(): void {

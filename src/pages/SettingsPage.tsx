@@ -714,6 +714,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
   const handleSessionTimeoutChange = async (timeout: number) => {
     await updateSettings({ sessionTimeout: timeout })
+
+    // Dispatch custom event to notify App.tsx of session timeout change
+    window.dispatchEvent(new CustomEvent('userSettingsUpdated', {
+      detail: { sessionTimeout: timeout }
+    }))
   }
 
 
@@ -788,25 +793,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
   // Test function to trigger demo toast notifications
   const handleTestToastNotification = (type: 'call' | 'sms') => {
-    const testNotification = {
-      id: `test_${type}_${Date.now()}`,
-      type,
-      title: type === 'call' ? 'Test Call Notification' : 'Test SMS Notification',
-      timestamp: new Date(),
-      recordId: `test_${type}_${Math.random().toString(36).substr(2, 9)}`
-    }
+    console.log('🧪 Triggering test toast notification:', type)
 
-    console.log('🧪 Triggering test toast notification:', testNotification)
-
-    // Directly call the toast service's private showNotification method via callback
-    const unsubscribe = toastNotificationService.subscribe((notification) => {
-      // This will be called immediately for our test
-      unsubscribe() // Clean up the subscription
-    })
-
-    // Manually trigger the notification by calling the service's callback
-    // This bypasses the real-time monitoring and directly shows the toast
-    ;(toastNotificationService as any).showNotification(testNotification)
+    // Use the toast service's public test method
+    toastNotificationService.triggerTestNotification(type)
   }
 
   // Helper function to test Supabase connectivity
