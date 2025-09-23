@@ -139,66 +139,24 @@ class FuzzySearchService {
    */
   searchSMS(query: string): FuzzySearchResult<Chat>[] {
     if (!query.trim()) {
-      console.log('[FUZZY SEARCH] SMS search query is empty, returning empty results')
+      console.log('[SEARCH] SMS search query is empty, returning empty results')
       return []
     }
 
-    if (!this.smsSearchEngine) {
-      console.log('[FUZZY SEARCH] SMS search engine not initialized, falling back to basic search')
-      return this.basicSMSSearch(this.smsData, query).map(item => ({ item }))
-    }
+    // ALWAYS use basic search - fuzzy search is causing too many issues
+    console.log(`[SEARCH] Performing SMS search for query with length: ${query.length}`)
+    const basicResults = this.basicSMSSearch(this.smsData, query)
+    console.log(`[SEARCH] SMS search returned ${basicResults.length} results`)
 
-    try {
-      console.log(`[FUZZY SEARCH] Performing SMS search with query length: ${query.length}`)
-      const results = this.smsSearchEngine.search(query)
-      console.log(`[FUZZY SEARCH] SMS fuzzy search returned ${results.length} results`)
+    // Audit log search activity (no actual search terms logged for PHI protection)
+    this.logSearchActivity(
+      'SMS_SEARCH_QUERY',
+      'sms_conversations',
+      basicResults.length,
+      AuditOutcome.SUCCESS
+    )
 
-      // If fuzzy search returns 0 results but we have data, fall back to basic search
-      if (results.length === 0 && this.smsData.length > 0) {
-        console.log(`[FUZZY SEARCH] SMS fuzzy search returned 0 results but we have ${this.smsData.length} items, falling back to basic search`)
-        const basicResults = this.basicSMSSearch(this.smsData, query)
-        console.log(`[FUZZY SEARCH] SMS basic search fallback returned ${basicResults.length} results`)
-
-        // Audit log fallback
-        this.logSearchActivity(
-          'SMS_SEARCH_QUERY',
-          'sms_conversations',
-          basicResults.length,
-          AuditOutcome.SUCCESS,
-          'Fallback to basic search'
-        )
-
-        return basicResults.map(item => ({ item }))
-      }
-
-      // Audit log search activity (no actual search terms logged for PHI protection)
-      this.logSearchActivity(
-        'SMS_SEARCH_QUERY',
-        'sms_conversations',
-        results.length,
-        AuditOutcome.SUCCESS
-      )
-
-      return results.map(result => ({
-        item: result.item,
-        score: result.score,
-        matches: result.matches
-      }))
-    } catch (error) {
-      console.error('[FUZZY SEARCH] SMS search failed:', error)
-      this.logSearchActivity(
-        'SMS_SEARCH_QUERY',
-        'sms_conversations',
-        0,
-        AuditOutcome.FAILURE,
-        error instanceof Error ? error.message : 'Unknown error'
-      )
-
-      // Fall back to basic search on error
-      console.log(`[FUZZY SEARCH] SMS search error, falling back to basic search`)
-      const basicResults = this.basicSMSSearch(this.smsData, query)
-      return basicResults.map(item => ({ item }))
-    }
+    return basicResults.map(item => ({ item }))
   }
 
   /**
@@ -206,66 +164,24 @@ class FuzzySearchService {
    */
   searchCalls(query: string): FuzzySearchResult<Call>[] {
     if (!query.trim()) {
-      console.log('[FUZZY SEARCH] Calls search query is empty, returning empty results')
+      console.log('[SEARCH] Calls search query is empty, returning empty results')
       return []
     }
 
-    if (!this.callsSearchEngine) {
-      console.log('[FUZZY SEARCH] Calls search engine not initialized, falling back to basic search')
-      return this.basicCallsSearch(this.callsData, query).map(item => ({ item }))
-    }
+    // ALWAYS use basic search - fuzzy search is causing too many issues
+    console.log(`[SEARCH] Performing calls search for query with length: ${query.length}`)
+    const basicResults = this.basicCallsSearch(this.callsData, query)
+    console.log(`[SEARCH] Calls search returned ${basicResults.length} results`)
 
-    try {
-      console.log(`[FUZZY SEARCH] Performing calls search with query length: ${query.length}`)
-      const results = this.callsSearchEngine.search(query)
-      console.log(`[FUZZY SEARCH] Calls fuzzy search returned ${results.length} results`)
+    // Audit log search activity (no actual search terms logged for PHI protection)
+    this.logSearchActivity(
+      'CALLS_SEARCH_QUERY',
+      'voice_calls',
+      basicResults.length,
+      AuditOutcome.SUCCESS
+    )
 
-      // If fuzzy search returns 0 results but we have data, fall back to basic search
-      if (results.length === 0 && this.callsData.length > 0) {
-        console.log(`[FUZZY SEARCH] Calls fuzzy search returned 0 results but we have ${this.callsData.length} items, falling back to basic search`)
-        const basicResults = this.basicCallsSearch(this.callsData, query)
-        console.log(`[FUZZY SEARCH] Calls basic search fallback returned ${basicResults.length} results`)
-
-        // Audit log fallback
-        this.logSearchActivity(
-          'CALLS_SEARCH_QUERY',
-          'voice_calls',
-          basicResults.length,
-          AuditOutcome.SUCCESS,
-          'Fallback to basic search'
-        )
-
-        return basicResults.map(item => ({ item }))
-      }
-
-      // Audit log search activity (no actual search terms logged for PHI protection)
-      this.logSearchActivity(
-        'CALLS_SEARCH_QUERY',
-        'voice_calls',
-        results.length,
-        AuditOutcome.SUCCESS
-      )
-
-      return results.map(result => ({
-        item: result.item,
-        score: result.score,
-        matches: result.matches
-      }))
-    } catch (error) {
-      console.error('[FUZZY SEARCH] Calls search failed:', error)
-      this.logSearchActivity(
-        'CALLS_SEARCH_QUERY',
-        'voice_calls',
-        0,
-        AuditOutcome.FAILURE,
-        error instanceof Error ? error.message : 'Unknown error'
-      )
-
-      // Fall back to basic search on error
-      console.log(`[FUZZY SEARCH] Calls search error, falling back to basic search`)
-      const basicResults = this.basicCallsSearch(this.callsData, query)
-      return basicResults.map(item => ({ item }))
-    }
+    return basicResults.map(item => ({ item }))
   }
 
   /**
@@ -275,10 +191,14 @@ class FuzzySearchService {
     if (!query.trim()) return chats
 
     const lowerQuery = query.toLowerCase()
-    console.log(`[FUZZY SEARCH] Performing basic SMS search on ${chats.length} chats`)
+    console.log(`[SEARCH] Performing basic SMS search on ${chats.length} chats`)
 
     const results = chats.filter(chat => {
+      // Check phone numbers
       const phoneNumber = chat.metadata?.phone_number || chat.metadata?.customer_phone_number || ''
+      if (phoneNumber.toLowerCase().includes(lowerQuery)) return true
+
+      // Check all possible name fields
       const extractedName = chat.metadata?.patient_name ||
                             chat.metadata?.customer_name ||
                             chat.metadata?.caller_name ||
@@ -287,14 +207,25 @@ class FuzzySearchService {
                             chat.collected_dynamic_variables?.customer_name ||
                             chat.collected_dynamic_variables?.name ||
                             ''
+      if (extractedName.toLowerCase().includes(lowerQuery)) return true
 
-      return phoneNumber.toLowerCase().includes(lowerQuery) ||
-             extractedName.toLowerCase().includes(lowerQuery) ||
-             chat.transcript.toLowerCase().includes(lowerQuery) ||
-             chat.chat_id.toLowerCase().includes(lowerQuery)
+      // Check transcript if it exists
+      if (chat.transcript && chat.transcript.toLowerCase().includes(lowerQuery)) return true
+
+      // Check chat ID
+      if (chat.chat_id && chat.chat_id.toLowerCase().includes(lowerQuery)) return true
+
+      // Check messages content if available
+      if (chat.messages && Array.isArray(chat.messages)) {
+        for (const msg of chat.messages) {
+          if (msg.content && msg.content.toLowerCase().includes(lowerQuery)) return true
+        }
+      }
+
+      return false
     })
 
-    console.log(`[FUZZY SEARCH] Basic SMS search returned ${results.length} results`)
+    console.log(`[SEARCH] Basic SMS search returned ${results.length} results`)
     return results
   }
 
