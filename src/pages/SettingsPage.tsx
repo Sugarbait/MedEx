@@ -396,7 +396,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
         console.error('🔒 SECURITY: Attempt to disable MFA blocked - MFA is mandatory')
         setErrorMessage('MFA cannot be disabled. MFA is mandatory per company security policy.')
         return
-        }
       }
     } catch (error) {
       console.error('Error toggling MFA:', error)
