@@ -71,8 +71,8 @@ const TOTPLoginVerification: React.FC<TOTPLoginVerificationProps> = ({
         }
       )
 
-      // Use enhanced TOTP verification with automatic fallback detection
-      const result = await totpService.verifyTOTPWithFallback(user.id, verificationCode.trim())
+      // Use simple TOTP verification method (same as working settings page)
+      const result = await totpService.verifyTOTP(user.id, verificationCode.trim(), false)
 
       if (result.success) {
         console.log('✅ SECURITY: TOTP verification successful')
@@ -106,7 +106,7 @@ const TOTPLoginVerification: React.FC<TOTPLoginVerificationProps> = ({
               console.log('✅ SECURITY: Emergency fallback created - retrying verification')
 
               // Retry verification with the newly created fallback
-              const retryResult = await totpService.verifyTOTPWithFallback(user.id, verificationCode.trim())
+              const retryResult = await totpService.verifyTOTP(user.id, verificationCode.trim(), false)
               if (retryResult.success) {
                 console.log('✅ SECURITY: TOTP verification successful after fallback creation')
 
