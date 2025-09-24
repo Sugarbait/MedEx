@@ -149,24 +149,12 @@ class TOTPService {
     try {
       console.log('🔍 TOTP Service: Attempting to verify TOTP for user:', userId)
 
-      // CRITICAL FIX: Check test codes FIRST before any database operations
-      const criticalUserProfiles = ['super-user-456', 'pierre-user-789', 'c550502f-c39d-4bb3-bb8c-d193657fdb24', 'dynamic-pierre-user']
-      if (criticalUserProfiles.includes(userId)) {
-        console.log('🔍 TOTP Service: Critical user detected, checking test codes first')
-        console.log('🔍 TOTP Service: User ID:', userId)
-        console.log('🔍 TOTP Service: Code provided:', code)
-        console.log('🔍 TOTP Service: Code type:', typeof code)
-        console.log('🔍 TOTP Service: Code length:', code.length)
-
-        const testCodes = ['000000', '123456', '999999', '111111']
-        console.log('🔍 TOTP Service: Test codes array:', testCodes)
-        console.log('🔍 TOTP Service: Is code in test codes?', testCodes.includes(code))
-
-        if (testCodes.includes(code)) {
-          console.log('✅ TOTP Service: Critical user test code accepted immediately')
-          return { success: true }
-        }
-        console.log('🔍 TOTP Service: Test code not matched, continuing with normal verification')
+      // Check if TOTP is actually set up for this user
+      const hasSetup = await this.hasTOTPSetup(userId)
+      if (!hasSetup) {
+        console.log('⚠️ TOTP Service: No TOTP setup found for user - auto-approving login')
+        // If TOTP is not set up, allow login without verification
+        return { success: true }
       }
 
       // Try database first with improved error handling
@@ -735,20 +723,7 @@ class TOTPService {
    * Enhanced TOTP verification with automatic fallback detection
    */
   async verifyTOTPWithFallback(userId: string, code: string, enableOnSuccess: boolean = false): Promise<TOTPVerificationResult> {
-    console.log('🔍 TOTP Service: verifyTOTPWithFallback called for:', userId, 'with code:', code)
-
-    // CRITICAL FIX: ABSOLUTE PRIORITY CHECK - Always accept test codes for critical users first
-    const criticalUserProfiles = ['super-user-456', 'pierre-user-789', 'c550502f-c39d-4bb3-bb8c-d193657fdb24', 'dynamic-pierre-user']
-    const testCodes = ['000000', '123456', '999999', '111111']
-
-    console.log('🔍 TOTP Service: Checking if user is critical:', criticalUserProfiles.includes(userId))
-    console.log('🔍 TOTP Service: Checking if code is test code:', testCodes.includes(code))
-
-    if (criticalUserProfiles.includes(userId) && testCodes.includes(code)) {
-      console.log('✅ TOTP Service: IMMEDIATE SUCCESS - Critical user test code accepted')
-      console.log('✅ TOTP Service: Bypassing all other checks for critical user')
-      return { success: true }
-    }
+    console.log('🔍 TOTP Service: verifyTOTPWithFallback called for:', userId)
 
     // First check database health
     const healthStatus = await this.checkDatabaseHealthAndFallback(userId)
@@ -762,12 +737,6 @@ class TOTPService {
         try {
           const parsedData = JSON.parse(localTotpData)
 
-          // Allow common test codes for emergency users
-          const testCodes = ['000000', '123456', '999999', '111111']
-          if (testCodes.includes(code)) {
-            console.log('✅ TOTP Service: Fallback verification successful (test code)')
-            return { success: true }
-          }
 
           // Also check backup codes if they exist
           if (parsedData.backup_codes && parsedData.backup_codes.includes(code)) {
