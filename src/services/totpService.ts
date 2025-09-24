@@ -222,10 +222,15 @@ class TOTPService {
       try {
         // Check if this is a super user with plain text fallback secret
         const superUserProfiles = ['super-user-456', 'pierre-user-789', 'c550502f-c39d-4bb3-bb8c-d193657fdb24', 'dynamic-pierre-user']
+        console.log('🔍 TOTP Service: Checking super user profiles for:', userId)
+        console.log('🔍 TOTP Service: Is super user?', superUserProfiles.includes(userId))
+        console.log('🔍 TOTP Service: totpData.encrypted_secret:', totpData.encrypted_secret)
+        console.log('🔍 TOTP Service: localStorage secret:', localStorage.getItem(`totp_secret_${userId}`))
+
         if (superUserProfiles.includes(userId) && totpData.encrypted_secret === localStorage.getItem(`totp_secret_${userId}`)) {
           // Use plain text secret for super user
           decrypted_secret = totpData.encrypted_secret
-          console.log('🔍 TOTP Service: Using plain text secret for super user')
+          console.log('🔍 TOTP Service: Using plain text secret for super user:', decrypted_secret)
         } else if (totpData.emergency_fallback) {
           // Emergency fallback - use plain text secret
           decrypted_secret = totpData.encrypted_secret
