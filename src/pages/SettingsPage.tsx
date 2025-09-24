@@ -20,10 +20,9 @@ import {
   KeyIcon,
   LinkIcon
 } from 'lucide-react'
-import TOTPSetup from '@/components/auth/TOTPSetup'
-import EnhancedTOTPSetup from '@/components/auth/EnhancedTOTPSetup'
-import EnhancedMFASettings from '@/components/settings/EnhancedMFASettings'
-import { cleanTotpService } from '@/services/cleanTotpService'
+import { FreshMfaSetup } from '@/components/auth/FreshMfaSetup'
+import { FreshMfaService } from '@/services/freshMfaService'
+import { FreshMfaSettings } from '@/components/settings/FreshMfaSettings'
 import { auditLogger } from '@/services/auditLogger'
 import { retellService } from '@/services'
 import { userProfileService } from '@/services/userProfileService'
@@ -35,7 +34,7 @@ import { ThemeManager } from '@/utils/themeManager'
 import { SiteHelpChatbot } from '@/components/common/SiteHelpChatbot'
 import { toastNotificationService, ToastNotificationPreferences } from '@/services/toastNotificationService'
 import { logoService, CompanyLogos } from '@/services/logoService'
-import { useTOTPStatus } from '@/hooks/useTOTPStatus'
+// Removed old TOTP hook - using fresh MFA service directly
 
 interface User {
   id: string
@@ -78,8 +77,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   })
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
-  const [showMFASetup, setShowMFASetup] = useState(false)
-  const [useEnhancedMFA, setUseEnhancedMFA] = useState(true)
+  const [showFreshMfaSetup, setShowFreshMfaSetup] = useState(false)
   const [auditLogs, setAuditLogs] = useState<any[]>([])
   const [isLoadingAudit, setIsLoadingAudit] = useState(false)
   const [fullName, setFullName] = useState(user?.name || '')
@@ -91,16 +89,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   const [companyLogos, setCompanyLogos] = useState<CompanyLogos>({})
   const [logoUploadStatus, setLogoUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle')
 
-  // Get actual TOTP status for MFA toggle
-  const totpStatus = useTOTPStatus(user?.id)
-
-  // Local MFA toggle state for immediate UI feedback
-  const [mfaToggleEnabled, setMfaToggleEnabled] = useState(false)
-
-  // Update local toggle state when totpStatus changes
-  useEffect(() => {
-    setMfaToggleEnabled(totpStatus.isEnabled)
-  }, [totpStatus.isEnabled])
+  // Fresh MFA status state
+  const [freshMfaEnabled, setFreshMfaEnabled] = useState(false)
 
 
   const tabs = [
