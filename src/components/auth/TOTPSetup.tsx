@@ -28,6 +28,8 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
   onSetupComplete,
   onCancel
 }) => {
+  console.log('🎯 TOTPSetup component rendered for:', { userId, userEmail })
+
   const [step, setStep] = useState<'generating' | 'show-qr' | 'verify' | 'backup-codes'>('generating')
   const [setupData, setSetupData] = useState<SetupData | null>(null)
   const [qrCodeDataUrl, setQrCodeDataUrl] = useState<string>('')
@@ -44,10 +46,15 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
 
   const generateTOTPSetup = async () => {
     try {
+      console.log('🚀 TOTPSetup: Starting TOTP setup generation...')
       setError('')
+
+      console.log('🚀 TOTPSetup: Calling totpService.generateTOTPSetup...')
       const setup = await totpService.generateTOTPSetup(userId, userEmail)
+      console.log('🚀 TOTPSetup: TOTP setup received:', setup)
       setSetupData(setup)
 
+      console.log('🚀 TOTPSetup: Generating QR code...')
       // Generate QR code image
       const qrDataUrl = await QRCode.toDataURL(setup.qr_url, {
         width: 256,
@@ -57,12 +64,16 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
           light: '#FFFFFF'
         }
       })
+      console.log('🚀 TOTPSetup: QR code generated successfully')
       setQrCodeDataUrl(qrDataUrl)
 
+      console.log('🚀 TOTPSetup: Moving to show-qr step')
       setStep('show-qr')
+      console.log('🚀 TOTPSetup: Setup generation completed!')
     } catch (error) {
-      console.error('TOTP setup generation failed:', error)
+      console.error('❌ TOTP setup generation failed:', error)
       setError('Failed to generate TOTP setup. Please try again.')
+      setStep('show-qr') // Show the error state so user can see the error
     }
   }
 

@@ -373,28 +373,42 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
   const handleMFAToggle = async (enabled: boolean) => {
     try {
-      console.log('🔒 TOTP toggle:', enabled ? 'enabling' : 'disabling')
+      console.log('🔒 TOTP toggle called:', {
+        enabled: enabled ? 'enabling' : 'disabling',
+        userId: user.id,
+        userEmail: user.email || user.user_metadata?.email,
+        showMFASetup: showMFASetup
+      })
 
       if (enabled) {
+        console.log('🔍 Checking if TOTP is already enabled...')
         const hasSetup = await totpService.isTOTPEnabled(user.id)
+        console.log('🔍 TOTP check result:', hasSetup)
 
         if (!hasSetup) {
-          // No TOTP setup exists - show setup dialog
+          console.log('🚀 No TOTP setup exists - showing setup dialog')
           setShowMFASetup(true)
+          console.log('🚀 showMFASetup state updated to true')
           return
+        } else {
+          console.log('✅ TOTP already enabled for user')
         }
       } else {
+        console.log('🔒 Attempting to disable TOTP...')
         // Allow TOTP to be disabled
         const disabled = await totpService.disableTOTP(user.id)
+        console.log('🔒 TOTP disable result:', disabled)
         if (!disabled) {
+          console.error('❌ Failed to disable TOTP')
           setErrorMessage('Failed to disable TOTP. Please try again.')
           return
         }
         console.log('✅ TOTP disabled for user')
       }
     } catch (error) {
-      console.error('TOTP toggle error:', error)
+      console.error('❌ TOTP toggle error:', error)
       setErrorMessage('Failed to update TOTP settings. Please try again.')
+      return
     }
 
     setSaveStatus('saving')
@@ -1194,15 +1208,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                     )}
                   </div>
                   <div className="flex items-center gap-3">
-                    {!userSettings?.mfaEnabled && (
-                      <button
-                        onClick={() => setShowMFASetup(true)}
-                        className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                      >
-                        <QrCodeIcon className="w-4 h-4" />
-                        Setup MFA
-                      </button>
-                    )}
+                    {/* Always show setup button - user may need to reconfigure TOTP */}
+                    <button
+                      onClick={() => {
+                        console.log('🚀 Setup MFA button clicked - opening dialog')
+                        setShowMFASetup(true)
+                      }}
+                      className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                    >
+                      <QrCodeIcon className="w-4 h-4" />
+                      Setup MFA
+                    </button>
                     {/* EMERGENCY: RESTORE MFA TOGGLE */}
                     <button
                       type="button"

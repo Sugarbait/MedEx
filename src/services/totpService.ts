@@ -52,8 +52,11 @@ class TOTPService {
    */
   async generateTOTPSetup(userId: string, userEmail: string): Promise<TOTPSetupResult> {
     try {
+      console.log('🚀 TOTP Service: Generating TOTP setup for:', { userId, userEmail })
+
       // Generate a random secret
       const secret = new Secret({ size: 32 })
+      console.log('🚀 TOTP Service: Secret generated successfully')
 
       // Create TOTP instance
       const totp = new TOTP({
@@ -75,9 +78,12 @@ class TOTPService {
       const backup_codes = this.generateBackupCodes()
 
       // Encrypt the secret before storing
+      console.log('🔐 TOTP Service: Encrypting secret...')
       const encrypted_secret = encryptPHI(secret.base32)
+      console.log('🔐 TOTP Service: Secret encrypted successfully')
 
       // Store in database
+      console.log('💾 TOTP Service: Storing TOTP data in database...')
       const { error } = await supabase
         .from('user_totp')
         .upsert({
@@ -89,8 +95,11 @@ class TOTPService {
         })
 
       if (error) {
+        console.error('❌ TOTP Service: Database storage failed:', error)
         throw new Error(`Failed to store TOTP setup: ${error.message}`)
       }
+
+      console.log('✅ TOTP Service: TOTP data stored successfully')
 
       return {
         secret: manual_entry_key,
@@ -176,19 +185,30 @@ class TOTPService {
    */
   async isTOTPEnabled(userId: string): Promise<boolean> {
     try {
+      console.log('🔍 TOTP Service: Checking if TOTP enabled for user:', userId)
+
       const { data, error } = await supabase
         .from('user_totp')
         .select('enabled')
         .eq('user_id', userId)
         .single()
 
-      if (error || !data) {
+      console.log('🔍 TOTP Service: Database response:', { data, error })
+
+      if (error) {
+        console.log('🔍 TOTP Service: Database error (user may not have TOTP setup):', error.message)
         return false
       }
 
+      if (!data) {
+        console.log('🔍 TOTP Service: No data returned')
+        return false
+      }
+
+      console.log('🔍 TOTP Service: TOTP enabled status:', data.enabled)
       return data.enabled
     } catch (error) {
-      console.error('TOTP Check Error:', error)
+      console.error('❌ TOTP Check Error:', error)
       return false
     }
   }
