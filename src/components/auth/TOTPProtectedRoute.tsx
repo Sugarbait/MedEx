@@ -1,12 +1,20 @@
 /**
  * TOTP Protected Route - Fresh Implementation
  * Controls access based on TOTP authentication status
+ * Maintains session persistence to prevent repeated MFA prompts
  */
 
 import React, { useState, useEffect } from 'react'
 import { totpService } from '../../services/totpService'
 import TOTPSetup from './TOTPSetup'
 import TOTPVerification from './TOTPVerification'
+
+// Export session cleanup function for logout
+export const clearTOTPSession = (userId: string) => {
+  const sessionKey = `totp_verified_${userId}`
+  localStorage.removeItem(sessionKey)
+  console.log('🚪 SECURITY: TOTP session cleared for user:', userId)
+}
 
 interface TOTPProtectedRouteProps {
   user: any
@@ -42,6 +50,16 @@ const TOTPProtectedRoute: React.FC<TOTPProtectedRouteProps> = ({
     try {
       console.log('🔒 SECURITY: Checking TOTP status for user:', user.id)
 
+      // Check if user already verified TOTP in this session
+      const sessionKey = `totp_verified_${user.id}`
+      const isVerifiedInSession = localStorage.getItem(sessionKey) === 'true'
+
+      if (isVerifiedInSession) {
+        console.log('✅ SECURITY: User already verified TOTP in this session')
+        setStatus('authorized')
+        return
+      }
+
       // Check if user has TOTP enabled
       const hasTOTP = await totpService.isTOTPEnabled(user.id)
 
@@ -61,11 +79,17 @@ const TOTPProtectedRoute: React.FC<TOTPProtectedRouteProps> = ({
 
   const handleSetupComplete = () => {
     console.log('✅ SECURITY: TOTP setup completed')
+    // Mark user as verified in session
+    const sessionKey = `totp_verified_${user.id}`
+    localStorage.setItem(sessionKey, 'true')
     setStatus('authorized')
   }
 
   const handleVerificationSuccess = () => {
     console.log('✅ SECURITY: TOTP verification successful')
+    // Mark user as verified in session
+    const sessionKey = `totp_verified_${user.id}`
+    localStorage.setItem(sessionKey, 'true')
     setStatus('authorized')
   }
 
@@ -164,8 +188,8 @@ const TOTPProtectedRoute: React.FC<TOTPProtectedRouteProps> = ({
   // Show TOTP verification
   if (status === 'verification-required') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-        <div className="w-full">
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center pt-16 p-4">
+        <div className="w-full max-w-md">
           <div className="mb-6 text-center">
             <h1 className="text-2xl font-bold text-gray-900 mb-2">
               Secure Login

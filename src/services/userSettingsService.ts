@@ -68,6 +68,52 @@ class UserSettingsServiceClass {
   private readonly CACHE_TTL = 5 * 60 * 1000 // 5 minutes
   private realtimeChannels = new Map<string, SupabaseRealtimeChannel>()
   private subscriptionCallbacks = new Map<string, (settings: UserSettingsData) => void>()
+  private failedQueries = new Map<string, { count: number; lastAttempt: number }>()
+  private readonly MAX_RETRY_COUNT = 3
+  private readonly RETRY_COOLDOWN = 30000 // 30 seconds
+
+  /**
+   * Check if we should skip Supabase query due to repeated failures
+   */
+  private shouldSkipSupabaseQuery(userId: string): boolean {
+    const failureInfo = this.failedQueries.get(userId)
+    if (!failureInfo) return false
+
+    const now = Date.now()
+    if (failureInfo.count >= this.MAX_RETRY_COUNT &&
+        (now - failureInfo.lastAttempt) < this.RETRY_COOLDOWN) {
+      return true
+    }
+
+    // Reset if cooldown period has passed
+    if (failureInfo.count >= this.MAX_RETRY_COUNT &&
+        (now - failureInfo.lastAttempt) >= this.RETRY_COOLDOWN) {
+      this.failedQueries.delete(userId)
+      return false
+    }
+
+    return false
+  }
+
+  /**
+   * Record a failed query attempt
+   */
+  private recordFailedQuery(userId: string): void {
+    const failureInfo = this.failedQueries.get(userId)
+    if (failureInfo) {
+      failureInfo.count++
+      failureInfo.lastAttempt = Date.now()
+    } else {
+      this.failedQueries.set(userId, { count: 1, lastAttempt: Date.now() })
+    }
+  }
+
+  /**
+   * Clear failure record on successful query
+   */
+  private clearFailureRecord(userId: string): void {
+    this.failedQueries.delete(userId)
+  }
 
   /**
    * Get user settings with simple cloud sync
@@ -80,6 +126,16 @@ class UserSettingsServiceClass {
         return cached.data
       }
 
+      // Check if we should skip Supabase due to repeated failures
+      if (this.shouldSkipSupabaseQuery(userId)) {
+        console.warn(`🚫 Skipping Supabase query for ${userId} due to repeated failures`)
+        const localData = this.getLocalSettings(userId)
+        if (localData) {
+          return localData
+        }
+        return this.getDefaultSettings()
+      }
+
       // Try to load from Supabase
       if (supabaseConfig.isConfigured()) {
         try {
@@ -89,8 +145,17 @@ class UserSettingsServiceClass {
             .eq('user_id', userId)
             .single()
 
-          if (!error && settings) {
+          if (error) {
+            console.warn(`❌ Supabase query failed for ${userId}:`, error.code, error.message)
+            this.recordFailedQuery(userId)
+            throw new Error(`Supabase error: ${error.code}`)
+          }
+
+          if (settings) {
             const localSettings = await this.transformSupabaseToLocal(settings)
+
+            // Success - clear any failure records
+            this.clearFailureRecord(userId)
 
             // Cache and store locally
             this.cache.set(userId, { data: localSettings, timestamp: Date.now() })
@@ -98,8 +163,10 @@ class UserSettingsServiceClass {
 
             return localSettings
           }
-        } catch (supabaseError) {
-          console.warn('Cloud unavailable, using local fallback')
+        } catch (supabaseError: any) {
+          console.warn('🔥 Supabase query failed, using local fallback:', supabaseError.message)
+          this.recordFailedQuery(userId)
+          // Fall through to local fallback
         }
       }
 
@@ -116,6 +183,7 @@ class UserSettingsServiceClass {
 
     } catch (error) {
       console.error('Error getting user settings:', error)
+      this.recordFailedQuery(userId)
       return this.getDefaultSettings()
     }
   }
@@ -129,20 +197,25 @@ class UserSettingsServiceClass {
       const currentSettings = await this.getUserSettings(userId)
       const newSettings = { ...currentSettings, ...updates }
 
-      // Save to Supabase if available
+      // Save to Supabase if available and not blocked by failures
       let cloudSuccess = false
-      if (supabaseConfig.isConfigured()) {
+      if (supabaseConfig.isConfigured() && !this.shouldSkipSupabaseQuery(userId)) {
         try {
           const supabaseData = await this.transformLocalToSupabase(userId, newSettings)
           const { error } = await supabase
             .from('user_settings')
             .upsert(supabaseData, { onConflict: 'user_id' })
 
-          if (!error) {
+          if (error) {
+            console.warn('Failed to save to cloud:', error.code, error.message)
+            this.recordFailedQuery(userId)
+          } else {
             cloudSuccess = true
+            this.clearFailureRecord(userId)
           }
-        } catch (supabaseError) {
-          console.warn('Failed to save to cloud, saving locally')
+        } catch (supabaseError: any) {
+          console.warn('Failed to save to cloud, saving locally:', supabaseError.message)
+          this.recordFailedQuery(userId)
         }
       }
 
@@ -581,8 +654,23 @@ class UserSettingsServiceClass {
   clearCache(userId?: string): void {
     if (userId) {
       this.cache.delete(userId)
+      this.failedQueries.delete(userId) // Also clear failure records
     } else {
       this.cache.clear()
+      this.failedQueries.clear() // Also clear all failure records
+    }
+  }
+
+  /**
+   * Reset failure tracking for a user (useful for retry scenarios)
+   */
+  resetFailureTracking(userId?: string): void {
+    if (userId) {
+      this.failedQueries.delete(userId)
+      console.log(`🔄 Reset failure tracking for user: ${userId}`)
+    } else {
+      this.failedQueries.clear()
+      console.log(`🔄 Reset all failure tracking`)
     }
   }
 }

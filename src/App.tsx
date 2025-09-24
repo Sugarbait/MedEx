@@ -22,7 +22,7 @@ import { useTOTPStatus } from './hooks/useTOTPStatus'
 import { Sidebar } from './components/layout/Sidebar'
 import { Header } from './components/layout/Header'
 import { Footer } from './components/layout/Footer'
-import { TOTPProtectedRoute } from './components/auth/TOTPProtectedRoute'
+import { TOTPProtectedRoute, clearTOTPSession } from './components/auth/TOTPProtectedRoute'
 import { AuditLogger } from './components/security/AuditLogger'
 import { useSessionTimeout } from './hooks/useSessionTimeout'
 import { SessionTimeoutWarning } from './components/common/SessionTimeoutWarning'
@@ -734,7 +734,7 @@ const App: React.FC = () => {
     if (user?.id) {
       try {
         console.log('🔒 Clearing TOTP verification state on logout')
-        // TOTP sessions are handled by individual components
+        clearTOTPSession(user.id)
       } catch (error) {
         console.error('Error clearing TOTP state on logout:', error)
       }
