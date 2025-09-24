@@ -186,7 +186,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
       window.removeEventListener('userDataUpdated', handleUserDataUpdated)
       window.removeEventListener('userProfileUpdated', handleUserProfileUpdated as EventListener)
     }
-  }, [user.id, user?.name])
+  }, [user.id]) // Removed user?.name dependency to prevent infinite loop
 
 
   const tabs = [
@@ -970,44 +970,44 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
     try {
       console.log('Saving full name update for user:', user.id, 'New name:', fullName.trim())
 
-      // Update user profile with the new name
-      const result = await userProfileService.updateUserProfile(user.id, {
-        name: fullName.trim()
-      })
+      // Skip userProfileService to avoid MFA interference - update storage directly
+      console.log('Updating name directly in storage to preserve MFA settings')
 
-      if (result.status === 'error') {
-        throw new Error(result.error || 'Failed to update profile')
-      }
-
-      console.log('Profile service update successful')
-
-      // Update localStorage currentUser
+      // Update localStorage currentUser - PRESERVE ALL EXISTING DATA
       const currentUser = localStorage.getItem('currentUser')
       if (currentUser) {
         try {
           const userData = JSON.parse(currentUser)
           if (userData.id === user.id) {
-            userData.name = fullName.trim()
-            userData.updated_at = new Date().toISOString()
-            localStorage.setItem('currentUser', JSON.stringify(userData))
-            console.log('Updated currentUser with new name')
+            // CRITICAL: Only update the name, preserve everything else (especially MFA)
+            const updatedUser = {
+              ...userData, // Preserve ALL existing data
+              name: fullName.trim(),
+              updated_at: new Date().toISOString()
+            }
+            localStorage.setItem('currentUser', JSON.stringify(updatedUser))
+            console.log('Updated currentUser with new name, preserved MFA and other settings')
           }
         } catch (parseError) {
           console.warn('Failed to update currentUser:', parseError)
         }
       }
 
-      // Update systemUsers in localStorage
+      // Update systemUsers in localStorage - PRESERVE ALL EXISTING DATA
       const systemUsers = localStorage.getItem('systemUsers')
       if (systemUsers) {
         try {
           const users = JSON.parse(systemUsers)
           const userIndex = users.findIndex((u: any) => u.id === user.id)
           if (userIndex >= 0) {
-            users[userIndex].name = fullName.trim()
-            users[userIndex].updated_at = new Date().toISOString()
+            // CRITICAL: Only update the name, preserve everything else (especially MFA)
+            users[userIndex] = {
+              ...users[userIndex], // Preserve ALL existing data
+              name: fullName.trim(),
+              updated_at: new Date().toISOString()
+            }
             localStorage.setItem('systemUsers', JSON.stringify(users))
-            console.log('Updated systemUsers with new name')
+            console.log('Updated systemUsers with new name, preserved MFA and other settings')
           }
         } catch (parseError) {
           console.warn('Failed to update systemUsers:', parseError)
@@ -1026,15 +1026,19 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
         console.warn('Failed to update settings with name:', error)
       }
 
-      // Update individual user profile storage
+      // Update individual user profile storage - PRESERVE ALL EXISTING DATA
       const userProfile = localStorage.getItem(`userProfile_${user.id}`)
       if (userProfile) {
         try {
           const profile = JSON.parse(userProfile)
-          profile.name = fullName.trim()
-          profile.updated_at = new Date().toISOString()
-          localStorage.setItem(`userProfile_${user.id}`, JSON.stringify(profile))
-          console.log('Updated individual user profile with new name')
+          // CRITICAL: Only update the name, preserve everything else (especially MFA)
+          const updatedProfile = {
+            ...profile, // Preserve ALL existing data
+            name: fullName.trim(),
+            updated_at: new Date().toISOString()
+          }
+          localStorage.setItem(`userProfile_${user.id}`, JSON.stringify(updatedProfile))
+          console.log('Updated individual user profile with new name, preserved MFA and other settings')
         } catch (parseError) {
           console.warn('Failed to update user profile:', parseError)
         }
