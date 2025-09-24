@@ -245,7 +245,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         if (totpServiceResult === true || totpSetupExists === true) {
           console.log('🛡️ SECURITY: Super user has MFA enabled - enforcing MFA verification')
           totpEnabled = true
-          totpCheckError = 'Super User Profile - MFA Verification Required'
+          totpCheckError = null // No message needed for normal MFA flow
 
           await auditLogger.logPHIAccess(
             AuditAction.LOGIN,
