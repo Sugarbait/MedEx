@@ -20,8 +20,8 @@ import {
   KeyIcon,
   LinkIcon
 } from 'lucide-react'
-import { MFASetup } from '@/components/auth/MFASetup'
-import { mfaService } from '@/services/mfaService'
+import TOTPSetup from '@/components/auth/TOTPSetup'
+import { totpService } from '@/services/totpService'
 import { auditLogger } from '@/services/auditLogger'
 import { retellService } from '@/services'
 import { userProfileService } from '@/services/userProfileService'
@@ -373,42 +373,28 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
   const handleMFAToggle = async (enabled: boolean) => {
     try {
-      // EMERGENCY: ALLOW MFA TO BE DISABLED
-      console.warn('🚨 EMERGENCY: MFA toggle override - allowing enable/disable')
+      console.log('🔒 TOTP toggle:', enabled ? 'enabling' : 'disabling')
 
       if (enabled) {
-        const hasSetup = await mfaService.hasMFASetup(user.id)
-        const hasEnabled = await mfaService.hasMFAEnabled(user.id)
+        const hasSetup = await totpService.isTOTPEnabled(user.id)
 
-        if (hasSetup && !hasEnabled) {
-          // MFA setup exists but is disabled - re-enable it
-          const reEnabled = await mfaService.enableMFA(user.id)
-          if (!reEnabled) {
-            // Fallback: show setup dialog if re-enable failed
-            setShowMFASetup(true)
-            return
-          }
-          console.log('MFA re-enabled for user:', '[USER-ID-REDACTED - HIPAA PROTECTED]')
-        } else if (!hasSetup) {
-          // No MFA setup exists - show setup dialog
+        if (!hasSetup) {
+          // No TOTP setup exists - show setup dialog
           setShowMFASetup(true)
           return
         }
-      } else if (!enabled) {
-        // EMERGENCY: ALLOW MFA TO BE DISABLED
-        console.warn('🚨 EMERGENCY: Allowing MFA to be disabled')
-        // Allow the disable to proceed
+      } else {
+        // Allow TOTP to be disabled
+        const disabled = await totpService.disableTOTP(user.id)
+        if (!disabled) {
+          setErrorMessage('Failed to disable TOTP. Please try again.')
+          return
+        }
+        console.log('✅ TOTP disabled for user')
       }
     } catch (error) {
-      console.error('Error toggling MFA:', error)
-      // Try to load from cloud
-      const loaded = await mfaService.loadFromCloud(user.id)
-      if (loaded) {
-        console.log('Loaded MFA data from cloud, retrying...')
-        // Retry the operation
-        await handleMFAToggle(enabled)
-        return
-      }
+      console.error('TOTP toggle error:', error)
+      setErrorMessage('Failed to update TOTP settings. Please try again.')
     }
 
     setSaveStatus('saving')
@@ -465,28 +451,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
     }
   }
 
-  const handleMFASetupComplete = async (secret: string, backupCodes?: string[]) => {
-    setShowMFASetup(false)
-    setSaveStatus('saving')
-    setIsLoading(true)
-
-    try {
-      console.log('MFA setup completed, integrating with MFA service...')
-
-      // The MFA service should have already stored the data during the setup process
-      // Let's verify that the MFA service recognizes the setup
-      let mfaActuallyEnabled = false
-      let retryCount = 0
-      const maxRetries = 3
-
-      while (!mfaActuallyEnabled && retryCount < maxRetries) {
-        try {
-          // Wait a moment for any async operations to complete
-          await new Promise(resolve => setTimeout(resolve, 500))
-
-          // Check if MFA service recognizes the setup
-          const hasSetup = await mfaService.hasMFASetup(user.id)
-          mfaActuallyEnabled = await mfaService.hasMFAEnabled(user.id)
+  // TOTP setup completion is handled by TOTPSetup component itself
 
           console.log(`MFA verification attempt ${retryCount + 1}:`, {
             hasSetup,
@@ -2025,11 +1990,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
         </div>
       </div>
 
-      {/* MFA Setup Modal */}
+      {/* TOTP Setup Modal */}
       {showMFASetup && (
-        <MFASetup
-          user={user}
-          onComplete={handleMFASetupComplete}
+        <TOTPSetup
+          userId={user.id}
+          userEmail={user.email || user.user_metadata?.email || 'user@carexps.com'}
+          onSetupComplete={() => {
+            setShowMFASetup(false)
+            window.dispatchEvent(new CustomEvent('userSettingsUpdated'))
+          }}
           onCancel={() => setShowMFASetup(false)}
         />
       )}

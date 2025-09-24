@@ -2,7 +2,7 @@ import React, { useState } from 'react'
 import { ShieldCheckIcon, EyeIcon, EyeOffIcon, AlertCircleIcon } from 'lucide-react'
 import { userManagementService } from '@/services/userManagementService'
 import { userProfileService } from '@/services/userProfileService'
-import { mfaService } from '@/services/mfaService'
+// MFA functionality moved to TOTPProtectedRoute
 import { useCompanyLogos } from '@/hooks/useCompanyLogos'
 import { userSettingsService } from '@/services/userSettingsService'
 import { PasswordDebugger } from '@/utils/passwordDebug'

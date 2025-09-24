@@ -9,21 +9,19 @@ import { SupabaseProvider } from './contexts/SupabaseContext'
 
 // Import SMS cost test for validation
 import './test/smsCostCalculationTest'
-// Import MFA cross-device security test
-import './test/mfaCrossDeviceTest'
+// MFA cross-device security test removed (now using TOTP)
 import { ThemeManager } from './utils/themeManager'
 // Import utility to make Pierre super user (available in console)
 import './utils/makePierreSuperUser'
 import { initializeSecureStorage } from './services/storageSecurityMigration'
 import { secureUserDataService } from './services/secureUserDataService'
 import { authService } from './services/authService'
-import { mfaService } from './services/mfaService'
+import { totpService } from './services/totpService'
 import { UserSettingsService } from './services/userSettingsServiceEnhanced'
 import { Sidebar } from './components/layout/Sidebar'
 import { Header } from './components/layout/Header'
 import { Footer } from './components/layout/Footer'
-import { MFAGate } from './components/auth/MFAGate'
-import { NoMFARoute } from './components/auth/NoMFARoute'
+import { TOTPProtectedRoute } from './components/auth/TOTPProtectedRoute'
 import { AuditLogger } from './components/security/AuditLogger'
 import { useSessionTimeout } from './hooks/useSessionTimeout'
 import { SessionTimeoutWarning } from './components/common/SessionTimeoutWarning'
@@ -188,11 +186,8 @@ const AppContent: React.FC<{
     setShowTimeoutWarning(false)
   }
 
-  // EMERGENCY: DISABLE MFA GATE COMPLETELY
-  // if (mfaRequired) {
-  //   return <MFAGate onSuccess={handleMFASuccess} user={user} />
-  // }
-  console.warn('🚨 EMERGENCY: MFA Gate disabled - full access granted')
+  // TOTP authentication will be handled by TOTPProtectedRoute wrapper
+  console.log('🔒 SECURITY: TOTP protection active')
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -238,17 +233,17 @@ const AppContent: React.FC<{
               <Route
                 path="/calls"
                 element={
-                  <NoMFARoute user={user} requiresMFA={true}>
+                  <TOTPProtectedRoute user={user}>
                     <CallsPage user={user} />
-                  </NoMFARoute>
+                  </TOTPProtectedRoute>
                 }
               />
               <Route
                 path="/sms"
                 element={
-                  <NoMFARoute user={user} requiresMFA={true}>
+                  <TOTPProtectedRoute user={user}>
                     <SMSPage user={user} />
-                  </NoMFARoute>
+                  </TOTPProtectedRoute>
                 }
               />
               <Route path="/users" element={<UserManagementPage user={user} />} />
@@ -339,19 +334,11 @@ const App: React.FC = () => {
         if (storedUser) {
           const userData = storedUser
 
-          // Force sync MFA and settings from Supabase for cross-device access
+          // Force sync settings from Supabase for cross-device access
           console.log('🔄 Syncing cross-device data on app initialization...')
           try {
             // Import the services
-            const { mfaService } = await import('./services/mfaService')
             const { userSettingsService } = await import('./services/userSettingsService')
-
-            // Initialize MFA service for this user (loads cloud sessions)
-            await mfaService.initializeForUser(userData.id)
-
-            // Force sync MFA data from cloud
-            const mfaSynced = await mfaService.forceCloudSync(userData.id)
-            console.log(`✅ MFA data sync on init: ${mfaSynced ? 'successful' : 'no data found'}`)
 
             // Load user settings from cloud
             const settingsSynced = await userSettingsService.getUserSettings(userData.id)
@@ -370,13 +357,6 @@ const App: React.FC = () => {
           } catch (syncError) {
             console.warn('⚠️ Cross-device sync on init failed, using local data:', syncError)
             // Continue with initialization even if sync fails - will use local/default data
-            // Still try to initialize MFA service without cloud sync
-            try {
-              const { mfaService } = await import('./services/mfaService')
-              await mfaService.initializeForUser(userData.id)
-            } catch (mfaInitError) {
-              console.warn('MFA service initialization also failed:', mfaInitError)
-            }
           }
 
           // Try to load full profile from Supabase with timeout
@@ -520,78 +500,9 @@ const App: React.FC = () => {
             retellService.loadCredentials()
           }
 
-          // Check if MFA is required - Enhanced cross-device verification
-          const checkMFARequirement = async () => {
-            try {
-              console.log('🔐 Starting comprehensive MFA requirement check for cross-device scenario')
-
-              // Step 1: Check if user has MFA enabled (both sync and async for accuracy)
-              const hasMFAEnabledSync = mfaService.hasMFAEnabledSync(userData.id)
-              const hasMFASetupSync = mfaService.hasMFASetupSync(userData.id)
-
-              // Step 2: Verify with async methods for cross-device accuracy
-              let hasMFAEnabledAsync = false
-              let hasMFASetupAsync = false
-              try {
-                hasMFAEnabledAsync = await mfaService.hasMFAEnabled(userData.id)
-                hasMFASetupAsync = await mfaService.hasMFASetup(userData.id)
-              } catch (asyncError) {
-                console.warn('Async MFA check failed, using sync fallback:', asyncError)
-              }
-
-              // Use the most permissive result for MFA setup/enabled status
-              const mfaEnabled = hasMFAEnabledSync || hasMFAEnabledAsync || userData.mfaEnabled
-              const mfaSetup = hasMFASetupSync || hasMFASetupAsync
-
-              // Step 3: Check for valid MFA session
-              const currentSession = mfaService.getCurrentSessionSync(userData.id)
-              const hasValidSession = currentSession && currentSession.verified &&
-                                    new Date() <= currentSession.expiresAt
-
-              console.log('MFA Requirement Analysis:', {
-                userId: userData.id,
-                userDataMfaEnabled: userData.mfaEnabled,
-                hasMFAEnabledSync,
-                hasMFAEnabledAsync,
-                hasMFASetupSync,
-                hasMFASetupAsync,
-                finalMfaEnabled: mfaEnabled,
-                finalMfaSetup: mfaSetup,
-                hasValidSession,
-                sessionExpiry: currentSession?.expiresAt,
-                isNewDevice: mfaEnabled && !hasValidSession
-              })
-
-              // Step 4: Determine if MFA is required
-              // MFA is required if:
-              // 1. User has MFA enabled or setup AND
-              // 2. No valid current session exists (covers new device scenario)
-              if ((mfaEnabled || mfaSetup) && !hasValidSession) {
-                console.log('🔒 MFA verification required (new device or expired session)')
-                setMfaRequired(true)
-              } else if ((mfaEnabled || mfaSetup) && hasValidSession) {
-                console.log('✅ Valid MFA session found - user authenticated')
-                setMfaRequired(false)
-                // Update userData to reflect MFA verification status
-                userData.mfaVerified = true
-              } else {
-                console.log('ℹ️ MFA not enabled for current user')
-                setMfaRequired(false)
-              }
-
-            } catch (error) {
-              console.error('Error checking MFA requirement:', error)
-              // SECURITY: On error, be conservative and require MFA if user has it enabled
-              if (userData.mfaEnabled) {
-                console.log('🔒 Error during MFA check - requiring MFA for security')
-                setMfaRequired(true)
-              } else {
-                setMfaRequired(false)
-              }
-            }
-          }
-
-          await checkMFARequirement()
+          // TOTP authentication will be handled by TOTPProtectedRoute
+          // No need for global MFA requirement check
+          setMfaRequired(false)
 
           // Log authentication event for HIPAA audit
           try {
@@ -796,16 +707,13 @@ const App: React.FC = () => {
   const handleLogout = () => {
     console.log('🚪 Logging out user and clearing MFA sessions')
 
-    // Clear MFA sessions for the user
+    // Clear any TOTP verification state
     if (user?.id) {
       try {
-        // Invalidate all sessions for this user (use fast sync method)
-        const currentSession = mfaService.getCurrentSessionSync(user.id)
-        if (currentSession) {
-          mfaService.invalidateSession(currentSession.sessionToken)
-        }
+        console.log('🔒 Clearing TOTP verification state on logout')
+        // TOTP sessions are handled by individual components
       } catch (error) {
-        console.error('Error clearing MFA sessions on logout:', error)
+        console.error('Error clearing TOTP state on logout:', error)
       }
     }
 

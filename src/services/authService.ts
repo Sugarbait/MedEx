@@ -1,7 +1,7 @@
 import { User, MFAChallenge, SessionInfo } from '@/types'
 import { supabase } from '@/config/supabase'
 import { secureLogger } from '@/services/secureLogger'
-import { mfaService } from '@/services/mfaService'
+import { totpService } from '@/services/totpService'
 import { secureStorage } from '@/services/secureStorage'
 import { encryptionService } from '@/services/encryption'
 
@@ -225,14 +225,14 @@ class AuthService {
       // Check MFA verification status and sync MFA data
       let mfaVerified = false
       try {
-        const { mfaService } = await import('./mfaService')
+        const { totpService } = await import('./totpService')
 
         // Force sync MFA data from cloud for cross-device access
-        await mfaService.forceSyncFromCloud(userProfile.id)
+        // TOTP service doesn't require forced sync
 
         // Check if MFA is enabled and verified
-        const mfaEnabled = await mfaService.hasMFAEnabled(userProfile.id)
-        const hasMFASetup = await mfaService.hasMFASetup(userProfile.id)
+        const mfaEnabled = await totpService.isTOTPEnabled(userProfile.id)
+        const hasMFASetup = await totpService.isTOTPEnabled(userProfile.id)
 
         userProfile.mfaEnabled = mfaEnabled || hasMFASetup
         mfaVerified = mfaEnabled
@@ -248,8 +248,8 @@ class AuthService {
         })
 
         // Fallback to basic MFA check
-        const { mfaService } = await import('./mfaService')
-        mfaVerified = await mfaService.hasMFAEnabled(userProfile.id)
+        const { totpService } = await import('./totpService')
+        mfaVerified = await totpService.isTOTPEnabled(userProfile.id)
       }
 
       logger.info('Complete user profile loaded with cross-device sync', userProfile.id, undefined, {
@@ -277,7 +277,7 @@ class AuthService {
       logger.debug('Initiating MFA challenge', userId)
 
       // Check if user has MFA setup
-      const hasMFA = await mfaService.hasMFASetup(userId)
+      const hasMFA = await totpService.isTOTPEnabled(userId)
 
       if (!hasMFA) {
         logger.warn('MFA not setup for user', userId)
@@ -339,7 +339,7 @@ class AuthService {
       }
 
       // Verify TOTP code using MFA service
-      const verificationResult = await mfaService.verifyTOTP(challengeData.user_id, code)
+      const verificationResult = await totpService.verifyTOTP(challengeData.user_id, code)
 
       if (verificationResult.success) {
         // Mark challenge as used

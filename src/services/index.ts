@@ -1,6 +1,6 @@
 // Service instances for easy importing
 import { userSettingsService as userSettingsServiceInstance } from './userSettingsService'
-import { mfaService as mfaServiceInstance } from './mfaService'
+import { totpService as totpServiceInstance } from './totpService'
 import { AuditService } from './auditService'
 import { RealtimeService } from './realtimeService'
 import { retellService } from './retellService'
@@ -14,7 +14,7 @@ import { fuzzySearchService } from './fuzzySearchService'
 
 // Export service instances
 export const userSettingsService = userSettingsServiceInstance
-export const mfaService = mfaServiceInstance
+export const totpService = totpServiceInstance
 
 // Create other singleton instances
 export const auditService = new AuditService()
@@ -35,7 +35,7 @@ export {
 // Export classes and types for direct usage
 export { AuditService, RealtimeService }
 export * from './userSettingsService'
-export * from './mfaService'
+export * from './totpService'
 export * from './supabaseService'
 export * from './retellService'
 export * from './chatService'

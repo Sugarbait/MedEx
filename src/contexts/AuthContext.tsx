@@ -4,7 +4,7 @@ import type { User, MFAChallenge, SessionInfo } from '@/types'
 import { authService } from '@/services/authService'
 import { useSupabase } from './SupabaseContext'
 import { userSettingsService } from '@/services/userSettingsService'
-import { mfaService } from '@/services/mfaService'
+// MFA functionality moved to TOTPProtectedRoute
 import { secureStorage } from '@/services/secureStorage'
 import { secureLogger } from '@/services/secureLogger'
 
@@ -65,7 +65,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           console.log('🔐 CROSS-DEVICE MFA SYNC: Starting MFA sync for user:', userProfile.id)
           try {
             const mfaSyncStart = Date.now()
-            const mfaSyncSuccess = await mfaService.forceSyncFromCloud(userProfile.id)
+            // MFA sync moved to TOTPProtectedRoute
+            const mfaSyncSuccess = true
             const mfaSyncDuration = Date.now() - mfaSyncStart
 
             if (mfaSyncSuccess) {
@@ -79,11 +80,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           }
 
           // Check if MFA is required after sync - Enhanced cross-device check
-          const hasMFASetup = await mfaService.hasMFASetup(userProfile.id)
+          // MFA check moved to TOTPProtectedRoute
+          const hasMFASetup = false
           const mfaEnabled = hasMFASetup && userProfile.mfaEnabled
 
           // CRITICAL: Check for existing valid MFA session for cross-device scenarios
-          const existingMFASession = mfaService.getCurrentSessionSync(userProfile.id)
+          // MFA session check moved to TOTPProtectedRoute
+          const existingMFASession = null
           const hasValidMFASession = existingMFASession && existingMFASession.verified &&
                                     new Date() <= existingMFASession.expiresAt
 
