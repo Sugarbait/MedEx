@@ -373,6 +373,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
   const handleMFAToggle = async (enabled: boolean) => {
     try {
+      // EMERGENCY: ALLOW MFA TO BE DISABLED
+      console.warn('🚨 EMERGENCY: MFA toggle override - allowing enable/disable')
+
       if (enabled) {
         const hasSetup = await mfaService.hasMFASetup(user.id)
         const hasEnabled = await mfaService.hasMFAEnabled(user.id)
@@ -392,10 +395,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
           return
         }
       } else if (!enabled) {
-        // SECURITY POLICY: MFA cannot be disabled - per MFA-SECURITY-POLICY.md
-        console.error('🔒 SECURITY: Attempt to disable MFA blocked - MFA is mandatory')
-        setErrorMessage('MFA cannot be disabled. MFA is mandatory per company security policy.')
-        return
+        // EMERGENCY: ALLOW MFA TO BE DISABLED
+        console.warn('🚨 EMERGENCY: Allowing MFA to be disabled')
+        // Allow the disable to proceed
       }
     } catch (error) {
       console.error('Error toggling MFA:', error)
@@ -1331,15 +1333,20 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                         Setup MFA
                       </button>
                     )}
-                    {/* SECURITY POLICY: MFA toggle removed - MFA is mandatory and cannot be disabled */}
-                    <div className="flex items-center gap-2">
-                      <div className="relative inline-flex h-6 w-11 items-center rounded-full bg-green-600">
-                        <span className="inline-block h-4 w-4 transform rounded-full bg-white translate-x-6" />
-                      </div>
-                      <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">
-                        MANDATORY (Cannot be disabled)
-                      </span>
-                    </div>
+                    {/* EMERGENCY: RESTORE MFA TOGGLE */}
+                    <button
+                      type="button"
+                      onClick={() => handleMFAToggle(!userSettings.mfaEnabled)}
+                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
+                        userSettings.mfaEnabled ? 'bg-blue-600' : 'bg-gray-300'
+                      }`}
+                    >
+                      <span
+                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                          userSettings.mfaEnabled ? 'translate-x-6' : 'translate-x-1'
+                        }`}
+                      />
+                    </button>
                   </div>
                 </div>
 
