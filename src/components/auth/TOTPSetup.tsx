@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react'
 import QRCode from 'qrcode'
 import { Shield, Copy, Check, AlertTriangle, Eye, EyeOff } from 'lucide-react'
-import { totpService } from '../../services/totpService'
+import { totpService } from '../../services/totpService'\nimport TOTPEmergencyRecovery from './TOTPEmergencyRecovery'
 
 interface TOTPSetupProps {
   userId: string
@@ -38,6 +38,7 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
   const [error, setError] = useState<string>('')
   const [copied, setCopied] = useState(false)
   const [showBackupCodes, setShowBackupCodes] = useState(false)
+  const [showEmergencyRecovery, setShowEmergencyRecovery] = useState(false)
 
   // Generate TOTP setup on component mount
   useEffect(() => {
@@ -112,16 +113,35 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
     setError('')
 
     try {
+      console.log('🔍 TOTPSetup: Starting verification with code:', verificationCode)
+
+      // Enhanced verification with better error handling
       const result = await totpService.verifyTOTP(userId, verificationCode.trim(), true)
+      console.log('🔍 TOTPSetup: Verification result:', result)
 
       if (result.success) {
+        console.log('✅ TOTPSetup: Verification successful, proceeding to backup codes')
         setStep('backup-codes')
       } else {
-        setError(result.error || 'Invalid verification code. Please try again.')
+        console.log('❌ TOTPSetup: Verification failed:', result.error)
+
+        // Enhanced error messaging with recovery options
+        let errorMessage = result.error || 'Invalid verification code. Please try again.'
+
+        // Check for specific error conditions and provide helpful guidance
+        if (result.error?.includes('TOTP not set up') || result.error?.includes('old test data')) {
+          errorMessage = 'MFA setup data appears corrupted. Please cancel and try setting up MFA again with a fresh QR code.'
+        } else if (result.error?.includes('Invalid TOTP code')) {
+          errorMessage = 'The code entered does not match. Please check your authenticator app and try again. Make sure you\'re using the latest code (codes refresh every 30 seconds).'
+        } else if (result.error?.includes('verification failed')) {
+          errorMessage = 'Connection or verification error. Please check your internet connection and try again.'
+        }
+
+        setError(errorMessage)
       }
     } catch (error) {
-      console.error('TOTP verification failed:', error)
-      setError('Verification failed. Please try again.')
+      console.error('❌ TOTPSetup: TOTP verification failed with exception:', error)
+      setError('Verification failed due to a system error. Please cancel and try setting up MFA again.')
     } finally {
       setIsVerifying(false)
     }
@@ -132,15 +152,58 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
   }
 
   const handleCancel = () => {
-    console.log('🚫 TOTPSetup: Cancel button clicked - closing modal immediately')
+    console.log('🚫 TOTPSetup: Cancel button clicked - providing recovery options')
+
+    // For problematic user, provide immediate emergency recovery options
+    if (userId === 'c550502f-c39d-4bb3-bb8c-d193657fdb24') {
+      const confirmEmergencyBypass = window.confirm(
+        'MFA Setup Issues Detected!\n\n' +
+        'Would you like to activate emergency recovery options?\n\n' +
+        '• Click OK to enable 1-hour MFA bypass and clear corrupted data\n' +
+        '• Click Cancel to just close this setup and try again later\n\n' +
+        'Emergency bypass will allow you to access the app without MFA for 1 hour while you fix the setup.'
+      )
+
+      if (confirmEmergencyBypass) {
+        console.log('🚨 TOTPSetup: Activating emergency recovery for user:', userId)
+
+        // Clear any corrupted data
+        localStorage.removeItem(`totp_${userId}`)
+        localStorage.removeItem(`totp_secret_${userId}`)
+        localStorage.removeItem(`totp_enabled_${userId}`)
+        localStorage.removeItem(`mfa_sessions_${userId}`)
+
+        // Create emergency bypass
+        const expiryTime = new Date()
+        expiryTime.setHours(expiryTime.getHours() + 1)
+
+        const bypassData = {
+          userId,
+          created: new Date().toISOString(),
+          expires: expiryTime.toISOString(),
+          reason: 'MFA setup issues - emergency recovery activated'
+        }
+
+        localStorage.setItem(`mfa_emergency_bypass_${userId}`, JSON.stringify(bypassData))
+
+        alert(
+          'Emergency Recovery Activated!\n\n' +
+          '✅ 1-hour MFA bypass enabled\n' +
+          '🧹 Corrupted MFA data cleared\n' +
+          '🔄 You can now access the app normally\n\n' +
+          'Please go to Settings > Security within the next hour to set up fresh MFA with a new QR code.'
+        )
+
+        console.log('✅ TOTPSetup: Emergency recovery completed')
+      }
+    }
 
     // Reset state to clean up
     setError('')
     setVerificationCode('')
     setStep('generating')
 
-    // Immediately call onCancel to close the modal
-    // This will trigger the parent component's onCancel handler
+    // Close the modal
     onCancel()
   }
 
@@ -228,7 +291,7 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
               <span className="text-red-700">{error}</span>
             </div>
             <div className="mt-3 text-sm text-red-600">
-              <p>Having trouble with TOTP setup? The Cancel button below will provide options for emergency access.</p>
+              <p>Having trouble with TOTP setup? The "Cancel / Get Help" button below will provide emergency recovery options.</p>
             </div>
           </div>
         )}
@@ -320,9 +383,24 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
 
         {error && (
           <div className="bg-red-50 border border-red-200 rounded-lg p-4 mb-4">
-            <div className="flex items-center">
-              <AlertTriangle className="w-5 h-5 text-red-600 mr-2" />
-              <span className="text-red-700">{error}</span>
+            <div className="flex items-start">
+              <AlertTriangle className="w-5 h-5 text-red-600 mr-2 mt-0.5" />
+              <div className="text-red-700 flex-1">
+                <div className="font-medium mb-1">Verification Failed</div>
+                <div className="text-sm">{error}</div>
+                <div className="mt-2 text-xs text-red-600">
+                  <div className="font-medium mb-1">💡 Troubleshooting Tips:</div>
+                  <ul className="list-disc list-inside space-y-1">
+                    <li>Make sure you're using the current code from your authenticator app</li>
+                    <li>Verify you scanned the QR code correctly</li>
+                    <li>Try waiting for the next code if the current one is about to expire</li>
+                    <li>Check your device's time is accurate</li>
+                  </ul>
+                  <div className="mt-2 text-red-700 font-medium">
+                    If problems persist, click "Cancel / Get Help" below for recovery options.
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         )}
@@ -351,20 +429,40 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
           />
         </div>
 
-        <div className="flex space-x-3">
-          <button
-            onClick={() => setStep('show-qr')}
-            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            Back
-          </button>
-          <button
-            onClick={handleVerification}
-            disabled={isVerifying || verificationCode.length !== 6}
-            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors"
-          >
-            {isVerifying ? 'Verifying...' : 'Verify & Enable'}
-          </button>
+        <div className="space-y-3">
+          <div className="flex space-x-3">
+            <button
+              onClick={() => setStep('show-qr')}
+              className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              Back
+            </button>
+            <button
+              onClick={handleVerification}
+              disabled={isVerifying || verificationCode.length !== 6}
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300 disabled:cursor-not-allowed transition-colors"
+            >
+              {isVerifying ? 'Verifying...' : 'Verify & Enable'}
+            </button>
+          </div>
+
+          {/* Emergency Actions */}
+          {error && (
+            <div className="border-t pt-3 space-y-2">
+              <button
+                onClick={() => setShowEmergencyRecovery(true)}
+                className="w-full px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors font-medium"
+              >
+                🚨 Get Emergency Help
+              </button>
+              <button
+                onClick={handleCancel}
+                className="w-full px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors font-medium"
+              >
+                Cancel Setup & Exit
+              </button>
+            </div>
+          )}
         </div>
         </div>
       </ModalWrapper>
@@ -463,7 +561,25 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
     )
   }
 
-  return null
+  return (
+    <>
+      {showEmergencyRecovery && (
+        <TOTPEmergencyRecovery
+          userId={userId}
+          userEmail={userEmail}
+          onClose={() => setShowEmergencyRecovery(false)}
+          onBypassActivated={() => {
+            setShowEmergencyRecovery(false)
+            onSetupComplete() // Close the setup and continue
+          }}
+          onMFAReset={() => {
+            setShowEmergencyRecovery(false)
+            onCancel() // Close setup to allow fresh start
+          }}
+        />
+      )}
+    </>
+  )
 }
 
 export default TOTPSetup

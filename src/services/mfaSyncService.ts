@@ -333,16 +333,7 @@ class MFASyncService {
           mfaEnabled: true,
           syncVersion: 1
         },
-        {
-          deviceId: 'mobile-device-123',
-          deviceName: 'iPhone 15 Pro',
-          deviceType: 'mobile',
-          userAgent: 'Mobile Safari',
-          lastSeen: new Date(Date.now() - 30 * 60 * 1000),
-          isOnline: true,
-          mfaEnabled: true,
-          syncVersion: 1
-        }
+        // Removed fake iPhone device - only show real devices
       ]
     } catch (error) {
       console.error('Failed to get devices:', error)

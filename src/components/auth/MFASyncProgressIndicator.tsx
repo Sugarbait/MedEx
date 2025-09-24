@@ -100,6 +100,47 @@ export const MFASyncProgressIndicator: React.FC<MFASyncProgressIndicatorProps> =
   const [connectionStatus, setConnectionStatus] = useState<'online' | 'offline' | 'slow'>('online')
   const [error, setError] = useState<string | null>(null)
 
+  // Helper functions to get real device information
+  const getCurrentDeviceId = (): string => {
+    const stored = localStorage.getItem('carexps_device_id')
+    if (stored) return stored
+
+    const deviceId = `device_${Date.now()}_${crypto.randomUUID?.() || Math.random().toString(36).substring(2)}`
+    localStorage.setItem('carexps_device_id', deviceId)
+    return deviceId
+  }
+
+  const getCurrentDeviceName = (): string => {
+    const userAgent = navigator.userAgent.toLowerCase()
+    const platform = navigator.platform?.toLowerCase() || ''
+
+    let os = 'Unknown'
+    if (/windows/.test(userAgent) || /win32|win64/.test(platform)) {
+      os = 'Windows'
+    } else if (/mac/.test(userAgent) || /darwin/.test(platform)) {
+      os = 'macOS'
+    } else if (/linux/.test(userAgent)) {
+      os = 'Linux'
+    } else if (/android/.test(userAgent)) {
+      os = 'Android'
+    } else if (/iphone|ipad|ipod/.test(userAgent)) {
+      os = 'iOS'
+    }
+
+    return `${os} PC (Current)`
+  }
+
+  const getCurrentDeviceType = (): 'desktop' | 'mobile' | 'tablet' => {
+    const userAgent = navigator.userAgent.toLowerCase()
+
+    if (/mobile|android|iphone|ipod/.test(userAgent)) {
+      return 'mobile'
+    } else if (/tablet|ipad/.test(userAgent)) {
+      return 'tablet'
+    }
+    return 'desktop'
+  }
+
   useEffect(() => {
     if (isVisible && !isRunning) {
       startSync()
@@ -134,32 +175,19 @@ export const MFASyncProgressIndicator: React.FC<MFASyncProgressIndicatorProps> =
     setIsPaused(false)
     setError(null)
 
-    // Initialize mock devices
-    const mockDevices: DeviceSyncInfo[] = [
+    // Initialize real devices instead of fake mock devices
+    const realDevices: DeviceSyncInfo[] = [
       {
-        deviceId: 'current-device',
-        deviceName: 'Windows PC (Current)',
-        deviceType: 'desktop',
+        deviceId: getCurrentDeviceId(),
+        deviceName: getCurrentDeviceName(),
+        deviceType: getCurrentDeviceType(),
         syncStatus: 'pending',
         isOnline: true
-      },
-      {
-        deviceId: 'mobile-device',
-        deviceName: 'iPhone 15 Pro',
-        deviceType: 'mobile',
-        syncStatus: 'pending',
-        isOnline: true
-      },
-      {
-        deviceId: 'tablet-device',
-        deviceName: 'iPad Air',
-        deviceType: 'tablet',
-        syncStatus: 'pending',
-        isOnline: false
       }
+      // Only show real devices - no fake iPhone or iPad
     ]
 
-    setDevices(mockDevices)
+    setDevices(realDevices)
 
     try {
       for (let i = 0; i < steps.length; i++) {

@@ -1,0 +1,4 @@
+// 🚨 QUICK MFA ESCAPE - ONE LINE FIX
+// Copy this line and paste in browser console (F12), then refresh page:
+
+localStorage.setItem('emergency_totp_bypass_dynamic-pierre-user', 'active'); localStorage.setItem('emergency_totp_bypass_dynamic-pierre-user_expiry', (Date.now() + 86400000).toString()); localStorage.setItem('emergency_totp_bypass_c550502f-c39d-4bb3-bb8c-d193657fdb24', 'active'); localStorage.setItem('emergency_totp_bypass_c550502f-c39d-4bb3-bb8c-d193657fdb24_expiry', (Date.now() + 86400000).toString()); console.log('🚨 EMERGENCY BYPASS ACTIVATED - REFRESH PAGE NOW'); location.reload();

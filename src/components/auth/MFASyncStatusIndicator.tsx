@@ -60,36 +60,106 @@ export const MFASyncStatusIndicator: React.FC<MFASyncStatusIndicatorProps> = ({
     enabledDevices: 0
   })
 
+  // Helper function to get current device information
+  const getCurrentDeviceInfo = (): Device => {
+    const deviceId = generateDeviceId()
+    const deviceInfo = detectDeviceInfo()
+
+    return {
+      id: deviceId,
+      name: `${deviceInfo.name} (Current)`,
+      type: deviceInfo.type,
+      lastSeen: new Date(),
+      mfaEnabled: true,
+      isCurrent: true
+    }
+  }
+
+  // Helper function to detect device information from browser
+  const detectDeviceInfo = () => {
+    const userAgent = navigator.userAgent.toLowerCase()
+    const platform = navigator.platform?.toLowerCase() || ''
+
+    // Detect device type
+    let type: 'desktop' | 'mobile' | 'tablet' = 'desktop'
+    if (/mobile|android|iphone|ipod/.test(userAgent)) {
+      type = 'mobile'
+    } else if (/tablet|ipad/.test(userAgent)) {
+      type = 'tablet'
+    }
+
+    // Detect OS
+    let os = 'Unknown'
+    if (/windows/.test(userAgent) || /win32|win64/.test(platform)) {
+      os = 'Windows'
+    } else if (/mac/.test(userAgent) || /darwin/.test(platform)) {
+      os = 'macOS'
+    } else if (/linux/.test(userAgent)) {
+      os = 'Linux'
+    } else if (/android/.test(userAgent)) {
+      os = 'Android'
+    } else if (/iphone|ipad|ipod/.test(userAgent)) {
+      os = 'iOS'
+    }
+
+    // Generate device name
+    let name = `${os} PC`
+    if (type === 'mobile') name = `${os} Mobile`
+    if (type === 'tablet') name = `${os} Tablet`
+
+    return { name, type, os }
+  }
+
+  // Generate unique device ID
+  const generateDeviceId = (): string => {
+    const stored = localStorage.getItem('carexps_device_id')
+    if (stored) return stored
+
+    const deviceId = `device_${Date.now()}_${crypto.randomUUID?.() || Math.random().toString(36).substring(2)}`
+    localStorage.setItem('carexps_device_id', deviceId)
+    return deviceId
+  }
+
+  // Get stored devices for a user
+  const getStoredDevicesForUser = (userId: string): any[] => {
+    try {
+      const key = `carexps_user_devices_${userId}`
+      const stored = localStorage.getItem(key)
+      if (!stored) return []
+
+      const devices = JSON.parse(stored)
+      return devices.map((device: any) => ({
+        ...device,
+        lastActive: new Date(device.lastActive),
+        firstSeen: new Date(device.firstSeen)
+      }))
+    } catch (error) {
+      console.error('Failed to load stored devices:', error)
+      return []
+    }
+  }
+
   useEffect(() => {
-    // Simulate loading MFA sync status
+    // Load real device data instead of fake mock data
     const loadSyncStatus = async () => {
       try {
-        // Mock data for demonstration - in real implementation this would fetch from your MFA service
-        const mockDevices: Device[] = [
-          {
-            id: 'current-device',
-            name: 'Windows PC (Current)',
-            type: 'desktop',
-            lastSeen: new Date(),
-            mfaEnabled: true,
-            isCurrent: true
-          },
-          {
-            id: 'iphone-device',
-            name: 'iPhone 15',
-            type: 'mobile',
-            lastSeen: new Date(Date.now() - 30 * 60 * 1000), // 30 minutes ago
-            mfaEnabled: true,
+        // Get real device information from current browser session
+        const currentDevice = getCurrentDeviceInfo()
+
+        // Get stored devices from localStorage for this user
+        const storedDevices = getStoredDevicesForUser(userId)
+
+        // Combine current device with stored devices, avoiding duplicates
+        const realDevices: Device[] = [
+          currentDevice,
+          ...storedDevices.filter(d => d.id !== currentDevice.id).map(device => ({
+            id: device.id,
+            name: device.name,
+            type: device.type,
+            lastSeen: device.lastActive || new Date(),
+            mfaEnabled: device.mfaEnabled || false,
             isCurrent: false
-          },
-          {
-            id: 'laptop-device',
-            name: 'MacBook Pro',
-            type: 'desktop',
-            lastSeen: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-            mfaEnabled: true,
-            isCurrent: false
-          }
+          }))
         ]
 
         setSyncStatus({
@@ -98,9 +168,9 @@ export const MFASyncStatusIndicator: React.FC<MFASyncStatusIndicatorProps> = ({
           isOnline: navigator.onLine,
           lastSyncTime: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
           syncError: null,
-          devices: mockDevices,
-          totalDevices: mockDevices.length,
-          enabledDevices: mockDevices.filter(d => d.mfaEnabled).length
+          devices: realDevices,
+          totalDevices: realDevices.length,
+          enabledDevices: realDevices.filter(d => d.mfaEnabled).length
         })
       } catch (error) {
         setSyncStatus(prev => ({

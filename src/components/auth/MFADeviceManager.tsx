@@ -56,6 +56,124 @@ export const MFADeviceManager: React.FC<MFADeviceManagerProps> = ({
   const [showConfirmRemove, setShowConfirmRemove] = useState<string | null>(null)
   const [showSensitiveInfo, setShowSensitiveInfo] = useState(false)
 
+  // Helper function to get current device information
+  const getCurrentDeviceInfo = (): DeviceInfo => {
+    const deviceId = generateDeviceId()
+    const deviceInfo = detectDeviceInfo()
+
+    return {
+      id: deviceId,
+      name: deviceInfo.name,
+      type: deviceInfo.type,
+      os: deviceInfo.os,
+      browser: deviceInfo.browser,
+      location: 'Unknown', // Would be detected via IP geolocation in production
+      ipAddress: 'Private', // Would be actual IP in production
+      lastActive: new Date(),
+      firstSeen: new Date(),
+      mfaEnabled: true, // Assume current device has MFA enabled
+      isCurrent: true,
+      isTrusted: true,
+      isOnline: true
+    }
+  }
+
+  // Helper function to detect device information from browser
+  const detectDeviceInfo = () => {
+    const userAgent = navigator.userAgent.toLowerCase()
+    const platform = navigator.platform?.toLowerCase() || ''
+
+    // Detect device type
+    let type: 'desktop' | 'mobile' | 'tablet' = 'desktop'
+    if (/mobile|android|iphone|ipod/.test(userAgent)) {
+      type = 'mobile'
+    } else if (/tablet|ipad/.test(userAgent)) {
+      type = 'tablet'
+    }
+
+    // Detect OS
+    let os = 'Unknown'
+    if (/windows/.test(userAgent) || /win32|win64/.test(platform)) {
+      os = 'Windows'
+    } else if (/mac/.test(userAgent) || /darwin/.test(platform)) {
+      os = 'macOS'
+    } else if (/linux/.test(userAgent)) {
+      os = 'Linux'
+    } else if (/android/.test(userAgent)) {
+      os = 'Android'
+    } else if (/iphone|ipad|ipod/.test(userAgent)) {
+      os = 'iOS'
+    }
+
+    // Detect browser
+    let browser = 'Unknown'
+    if (/chrome/.test(userAgent) && !/edge/.test(userAgent)) {
+      browser = 'Chrome'
+    } else if (/firefox/.test(userAgent)) {
+      browser = 'Firefox'
+    } else if (/safari/.test(userAgent) && !/chrome/.test(userAgent)) {
+      browser = 'Safari'
+    } else if (/edge/.test(userAgent)) {
+      browser = 'Edge'
+    }
+
+    // Generate device name
+    let name = `${os} ${type}`
+    if (platform) {
+      name = `${os} PC`
+    }
+
+    return { name, type, os, browser }
+  }
+
+  // Generate unique device ID
+  const generateDeviceId = (): string => {
+    const stored = localStorage.getItem('carexps_device_id')
+    if (stored) return stored
+
+    const deviceId = `device_${Date.now()}_${crypto.randomUUID?.() || Math.random().toString(36).substring(2)}`
+    localStorage.setItem('carexps_device_id', deviceId)
+    return deviceId
+  }
+
+  // Get stored devices for a user
+  const getStoredDevicesForUser = (userId: string): DeviceInfo[] => {
+    try {
+      const key = `carexps_user_devices_${userId}`
+      const stored = localStorage.getItem(key)
+      if (!stored) return []
+
+      const devices = JSON.parse(stored)
+      return devices.map((device: any) => ({
+        ...device,
+        lastActive: new Date(device.lastActive),
+        firstSeen: new Date(device.firstSeen)
+      }))
+    } catch (error) {
+      console.error('Failed to load stored devices:', error)
+      return []
+    }
+  }
+
+  // Store device for a user
+  const storeDeviceForUser = (userId: string, device: DeviceInfo): void => {
+    try {
+      const key = `carexps_user_devices_${userId}`
+      const existingDevices = getStoredDevicesForUser(userId)
+
+      // Update existing device or add new one
+      const updatedDevices = existingDevices.filter(d => d.id !== device.id)
+      updatedDevices.push({
+        ...device,
+        isCurrent: false // Only current session device should be marked as current
+      })
+
+      localStorage.setItem(key, JSON.stringify(updatedDevices))
+    } catch (error) {
+      console.error('Failed to store device:', error)
+    }
+  }
+
   useEffect(() => {
     if (isVisible) {
       loadDevices()
@@ -65,87 +183,19 @@ export const MFADeviceManager: React.FC<MFADeviceManagerProps> = ({
   const loadDevices = async () => {
     setLoading(true)
     try {
-      // Mock device data - in real implementation this would fetch from your MFA/device service
-      const mockDevices: DeviceInfo[] = [
-        {
-          id: 'current-device',
-          name: 'Windows PC - Primary',
-          type: 'desktop',
-          os: 'Windows 11',
-          browser: 'Chrome',
-          location: 'Toronto, ON',
-          ipAddress: '192.168.1.100',
-          lastActive: new Date(),
-          firstSeen: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000), // 30 days ago
-          mfaEnabled: true,
-          isCurrent: true,
-          isTrusted: true,
-          isOnline: true
-        },
-        {
-          id: 'iphone-device',
-          name: 'iPhone 15 Pro',
-          type: 'mobile',
-          os: 'iOS 17.1',
-          browser: 'Safari',
-          location: 'Toronto, ON',
-          ipAddress: '192.168.1.105',
-          lastActive: new Date(Date.now() - 30 * 60 * 1000), // 30 minutes ago
-          firstSeen: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000), // 15 days ago
-          mfaEnabled: true,
-          isCurrent: false,
-          isTrusted: true,
-          batteryLevel: 87,
-          isOnline: true
-        },
-        {
-          id: 'macbook-device',
-          name: 'MacBook Pro M3',
-          type: 'desktop',
-          os: 'macOS 14.1',
-          browser: 'Safari',
-          location: 'Toronto, ON',
-          ipAddress: '192.168.1.102',
-          lastActive: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
-          firstSeen: new Date(Date.now() - 60 * 24 * 60 * 60 * 1000), // 60 days ago
-          mfaEnabled: true,
-          isCurrent: false,
-          isTrusted: true,
-          isOnline: false
-        },
-        {
-          id: 'tablet-device',
-          name: 'iPad Air',
-          type: 'tablet',
-          os: 'iPadOS 17.1',
-          browser: 'Safari',
-          location: 'Montreal, QC',
-          ipAddress: '10.0.1.45',
-          lastActive: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000), // 7 days ago
-          firstSeen: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000), // 90 days ago
-          mfaEnabled: false,
-          isCurrent: false,
-          isTrusted: false,
-          isOnline: false
-        },
-        {
-          id: 'old-device',
-          name: 'Work Laptop (Dell)',
-          type: 'desktop',
-          os: 'Windows 10',
-          browser: 'Firefox',
-          location: 'Unknown',
-          ipAddress: '203.0.113.45',
-          lastActive: new Date(Date.now() - 45 * 24 * 60 * 60 * 1000), // 45 days ago
-          firstSeen: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000), // 180 days ago
-          mfaEnabled: true,
-          isCurrent: false,
-          isTrusted: false,
-          isOnline: false
-        }
-      ]
+      // Get real device information from current browser session
+      const currentDevice = getCurrentDeviceInfo()
 
-      setDevices(mockDevices)
+      // Get stored devices from localStorage for this user
+      const storedDevices = getStoredDevicesForUser(userId)
+
+      // Combine current device with stored devices, avoiding duplicates
+      const allDevices = [currentDevice, ...storedDevices.filter(d => d.id !== currentDevice.id)]
+
+      // Store current device for future reference
+      storeDeviceForUser(userId, currentDevice)
+
+      setDevices(allDevices)
     } catch (error) {
       console.error('Failed to load devices:', error)
     } finally {
@@ -196,8 +246,15 @@ export const MFADeviceManager: React.FC<MFADeviceManagerProps> = ({
 
   const handleRemoveDevice = async (deviceId: string) => {
     try {
-      // In real implementation, this would call your device management API
+      // Remove device from state
       setDevices(prev => prev.filter(d => d.id !== deviceId))
+
+      // Remove device from localStorage
+      const key = `carexps_user_devices_${userId}`
+      const existingDevices = getStoredDevicesForUser(userId)
+      const updatedDevices = existingDevices.filter(d => d.id !== deviceId)
+      localStorage.setItem(key, JSON.stringify(updatedDevices))
+
       setShowConfirmRemove(null)
       setSelectedDevice(null)
     } catch (error) {
