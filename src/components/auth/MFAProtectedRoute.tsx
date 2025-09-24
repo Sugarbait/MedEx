@@ -14,6 +14,11 @@ const hasMFAAccess = (user: any): boolean => {
   if (!user?.id) return false
 
   try {
+    // TEMPORARY: ALLOW ALL ACCESS - MFA DISABLED GLOBALLY
+    // This is a temporary override while MFA is being reset
+    console.warn('🔓 TEMPORARY: MFA ENFORCEMENT DISABLED - ALLOWING ALL ACCESS')
+    return true
+
     // EMERGENCY ACCESS CHECK - One-time bypass for settings access
     const emergencyBypass = sessionStorage.getItem('emergency_mfa_bypass')
     const emergencyExpires = sessionStorage.getItem('emergency_mfa_bypass_expires')
