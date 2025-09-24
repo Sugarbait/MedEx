@@ -233,7 +233,14 @@ const AppContent: React.FC<{
           <main className="flex-1 p-6 overflow-auto">
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
-              <Route path="/dashboard" element={<DashboardPage user={user} />} />
+              <Route
+                path="/dashboard"
+                element={
+                  <TOTPProtectedRoute user={user}>
+                    <DashboardPage user={user} />
+                  </TOTPProtectedRoute>
+                }
+              />
 
               {/* Only show Calls and SMS routes when TOTP setup exists */}
               {totpStatus.hasSetup && (
@@ -265,8 +272,22 @@ const AppContent: React.FC<{
                 </>
               )}
 
-              <Route path="/users" element={<UserManagementPage user={user} />} />
-              <Route path="/settings" element={<SettingsPage user={user} />} />
+              <Route
+                path="/users"
+                element={
+                  <TOTPProtectedRoute user={user}>
+                    <UserManagementPage user={user} />
+                  </TOTPProtectedRoute>
+                }
+              />
+              <Route
+                path="/settings"
+                element={
+                  <TOTPProtectedRoute user={user}>
+                    <SettingsPage user={user} />
+                  </TOTPProtectedRoute>
+                }
+              />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
           </main>
