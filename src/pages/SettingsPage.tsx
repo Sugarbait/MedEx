@@ -21,6 +21,8 @@ import {
   LinkIcon
 } from 'lucide-react'
 import TOTPSetup from '@/components/auth/TOTPSetup'
+import EnhancedTOTPSetup from '@/components/auth/EnhancedTOTPSetup'
+import EnhancedMFASettings from '@/components/settings/EnhancedMFASettings'
 import { totpService } from '@/services/totpService'
 import { auditLogger } from '@/services/auditLogger'
 import { retellService } from '@/services'
@@ -77,6 +79,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
   const [showMFASetup, setShowMFASetup] = useState(false)
+  const [useEnhancedMFA, setUseEnhancedMFA] = useState(true)
   const [auditLogs, setAuditLogs] = useState<any[]>([])
   const [isLoadingAudit, setIsLoadingAudit] = useState(false)
   const [fullName, setFullName] = useState(user?.name || '')
@@ -1278,51 +1281,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
               </h2>
 
               <div className="space-y-6">
-                <div className="flex items-center justify-between">
-                  <div className="flex-1">
-                    <h3 className="font-medium text-gray-900 dark:text-gray-100">Multi-Factor Authentication</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">
-                      Add an extra layer of security to your account with TOTP authenticator
-                    </p>
-                    {totpStatus.isEnabled && (
-                      <div className="flex items-center gap-2 mt-2">
-                        <div className="w-2 h-2 rounded-full bg-green-500" />
-                        <span className="text-xs text-green-600 dark:text-green-400">MFA is properly configured</span>
-                      </div>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-3">
-                    {/* Always show setup button - user may need to reconfigure TOTP */}
-                    <button
-                      onClick={() => {
-                        console.log('🚀 Setup MFA button clicked - opening dialog')
-                        setShowMFASetup(true)
-                      }}
-                      className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-                    >
-                      <QrCodeIcon className="w-4 h-4" />
-                      Setup MFA
-                    </button>
-                    {/* EMERGENCY: RESTORE MFA TOGGLE */}
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        e.stopPropagation();
-                        handleMFAToggle(!mfaToggleEnabled);
-                      }}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                        mfaToggleEnabled ? 'bg-blue-600' : 'bg-gray-300'
-                      }`}
-                    >
-                      <span
-                        className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          mfaToggleEnabled ? 'translate-x-6' : 'translate-x-1'
-                        }`}
-                      />
-                    </button>
-                  </div>
-                </div>
+                {/* Enhanced MFA Settings */}
+                <EnhancedMFASettings
+                  userId={user.id}
+                  onSetupMFA={() => setShowMFASetup(true)}
+                  onToggleMFA={handleMFAToggle}
+                  mfaToggleEnabled={mfaToggleEnabled}
+                  isLoading={isLoading}
+                />
 
                 <div className="flex items-center justify-between">
                   <div className="flex-1">
@@ -1996,15 +1962,29 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
       {/* TOTP Setup Modal */}
       {showMFASetup && (
-        <TOTPSetup
-          userId={user.id}
-          userEmail={user.email || user.user_metadata?.email || 'user@carexps.com'}
-          onSetupComplete={() => {
-            setShowMFASetup(false)
-            window.dispatchEvent(new CustomEvent('userSettingsUpdated'))
-          }}
-          onCancel={() => setShowMFASetup(false)}
-        />
+        <>
+          {useEnhancedMFA ? (
+            <EnhancedTOTPSetup
+              userId={user.id}
+              userEmail={user.email || user.user_metadata?.email || 'user@carexps.com'}
+              onSetupComplete={() => {
+                setShowMFASetup(false)
+                window.dispatchEvent(new CustomEvent('userSettingsUpdated'))
+              }}
+              onCancel={() => setShowMFASetup(false)}
+            />
+          ) : (
+            <TOTPSetup
+              userId={user.id}
+              userEmail={user.email || user.user_metadata?.email || 'user@carexps.com'}
+              onSetupComplete={() => {
+                setShowMFASetup(false)
+                window.dispatchEvent(new CustomEvent('userSettingsUpdated'))
+              }}
+              onCancel={() => setShowMFASetup(false)}
+            />
+          )}
+        </>
       )}
 
 

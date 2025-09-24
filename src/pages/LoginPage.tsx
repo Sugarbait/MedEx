@@ -3,6 +3,7 @@ import { ShieldCheckIcon, EyeIcon, EyeOffIcon, AlertCircleIcon } from 'lucide-re
 import { userManagementService } from '@/services/userManagementService'
 import { userProfileService } from '@/services/userProfileService'
 import TOTPLoginVerification from '@/components/auth/TOTPLoginVerification'
+import CloudSyncTOTPLoginVerification from '@/components/auth/CloudSyncTOTPLoginVerification'
 import { totpService } from '@/services/totpService'
 import { useCompanyLogos } from '@/hooks/useCompanyLogos'
 import { userSettingsService } from '@/services/userSettingsService'
@@ -30,6 +31,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   // MFA verification state
   const [showMFAVerification, setShowMFAVerification] = useState(false)
   const [pendingUser, setPendingUser] = useState<any>(null)
+  const [useCloudSyncMFA, setUseCloudSyncMFA] = useState(true) // Default to enhanced cloud sync MFA
 
   // Emergency admin unlock function (press Ctrl+Shift+U on login page)
   // Emergency credential setup function (press Ctrl+Shift+S on login page)
@@ -921,11 +923,21 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
       {/* MFA Verification Modal */}
       {showMFAVerification && pendingUser && (
-        <TOTPLoginVerification
-          user={pendingUser}
-          onVerificationSuccess={handleMFASuccess}
-          onCancel={handleMFACancel}
-        />
+        <>
+          {useCloudSyncMFA ? (
+            <CloudSyncTOTPLoginVerification
+              user={pendingUser}
+              onVerificationSuccess={handleMFASuccess}
+              onCancel={handleMFACancel}
+            />
+          ) : (
+            <TOTPLoginVerification
+              user={pendingUser}
+              onVerificationSuccess={handleMFASuccess}
+              onCancel={handleMFACancel}
+            />
+          )}
+        </>
       )}
     </div>
   )
