@@ -199,6 +199,22 @@ export interface SessionInfo {
   isActive: boolean
 }
 
+export interface AuthenticationState {
+  isAuthenticated: boolean
+  isLoading: boolean
+  user: (User & { mfaVerified?: boolean }) | null
+  sessionInfo: SessionInfo | null
+  mfaRequired: boolean
+  error: string | null
+}
+
+export interface MFASession {
+  userId: string
+  verified: boolean
+  expiresAt: Date
+  createdAt?: Date
+}
+
 // ============================================================================
 // Chat-related Types (integrated from chatService.ts)
 // ============================================================================

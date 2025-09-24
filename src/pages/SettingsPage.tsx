@@ -91,6 +91,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   // Get actual TOTP status for MFA toggle
   const totpStatus = useTOTPStatus(user?.id)
 
+  // Local MFA toggle state for immediate UI feedback
+  const [mfaToggleEnabled, setMfaToggleEnabled] = useState(false)
+
+  // Update local toggle state when totpStatus changes
+  useEffect(() => {
+    setMfaToggleEnabled(totpStatus.isEnabled)
+  }, [totpStatus.isEnabled])
+
 
   const tabs = [
     { id: 'profile', name: 'Profile', icon: UserIcon },
@@ -376,6 +384,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   }
 
   const handleMFAToggle = async (enabled: boolean) => {
+    // Immediately update local state for instant visual feedback
+    setMfaToggleEnabled(enabled)
+
     try {
       console.log('🔒 TOTP toggle called:', {
         enabled: enabled ? 'enabling' : 'disabling',
@@ -1289,15 +1300,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        handleMFAToggle(!totpStatus.isEnabled);
+                        handleMFAToggle(!mfaToggleEnabled);
                       }}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                        totpStatus.isEnabled ? 'bg-blue-600' : 'bg-gray-300'
+                        mfaToggleEnabled ? 'bg-blue-600' : 'bg-gray-300'
                       }`}
                     >
                       <span
                         className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          totpStatus.isEnabled ? 'translate-x-6' : 'translate-x-1'
+                          mfaToggleEnabled ? 'translate-x-6' : 'translate-x-1'
                         }`}
                       />
                     </button>

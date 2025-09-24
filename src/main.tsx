@@ -66,10 +66,7 @@ import('./utils/emergencyAccess').catch(() => {
   console.log('Emergency access not available')
 })
 
-// Import emergency TOTP fix utility
-import('./utils/totpEmergencyFix').catch(() => {
-  console.log('TOTP emergency fix not available')
-})
+// Emergency TOTP fix utility disabled - MFA now works properly via database
 
 // Import super user setup test utility (for development)
 if (import.meta.env.DEV) {
