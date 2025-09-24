@@ -279,8 +279,33 @@ class TOTPMFAService {
         }
       }
 
-      // Decrypt secret
-      const secret = await encryptionService.decrypt(mfaData.encryptedSecret)
+      // Decrypt secret with error handling
+      let secret: string
+      try {
+        // Validate encrypted data before decryption
+        if (!mfaData.encryptedSecret || typeof mfaData.encryptedSecret !== 'string') {
+          console.error('Invalid encrypted MFA secret format')
+          return {
+            success: false,
+            message: 'MFA configuration error. Please re-setup MFA.'
+          }
+        }
+
+        secret = await encryptionService.decrypt(mfaData.encryptedSecret)
+      } catch (decryptError) {
+        console.error('MFA secret decryption failed:', decryptError)
+        // Clear corrupted MFA data
+        try {
+          await this.clearCorruptedMFAData(userId)
+        } catch (clearError) {
+          console.warn('Failed to clear corrupted MFA data:', clearError)
+        }
+
+        return {
+          success: false,
+          message: 'MFA configuration corrupted. Please contact administrator to reset MFA.'
+        }
+      }
 
       // Create TOTP object with the secret
       const totp = new OTPAuth.TOTP({
@@ -881,6 +906,47 @@ class TOTPMFAService {
       expiresAt: new Date(now.getTime() + duration),
       sessionToken,
       phiAccessEnabled: phiAccess
+    }
+  }
+
+  /**
+   * Clear corrupted MFA data for a user
+   */
+  private async clearCorruptedMFAData(userId: string): Promise<void> {
+    try {
+      // Clear from Supabase
+      const supabase = supabaseService.getClient()
+      if (supabase) {
+        await supabase
+          .from('users')
+          .update({
+            mfa_secret: null,
+            mfa_enabled: false,
+            mfa_verified: false,
+            mfa_backup_codes: null
+          })
+          .eq('id', userId)
+      }
+
+      // Clear from localStorage
+      const keys = [
+        `mfa_persistent_${userId}_${this.getDeviceFingerprint()}`,
+        `mfa_data_${userId}`,
+        `mfa_global_${userId}`,
+        `mfa_simple_${userId}`
+      ]
+
+      keys.forEach(key => {
+        localStorage.removeItem(key)
+      })
+
+      // Clear from memory
+      this.verifiedSessions.delete(userId)
+
+      console.log(`Cleared corrupted MFA data for user: ${userId}`)
+    } catch (error) {
+      console.error('Failed to clear corrupted MFA data:', error)
+      throw error
     }
   }
 
