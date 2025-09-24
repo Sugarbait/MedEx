@@ -707,10 +707,18 @@ const App: React.FC = () => {
 
     // Listen for user profile updates specifically
     const handleUserProfileUpdate = (e: CustomEvent) => {
-      const updatedUserData = e.detail
-      if (updatedUserData && updatedUserData.id === user?.id) {
-        setUser(updatedUserData)
-        console.log('App: User profile updated from event')
+      if (e.detail?.userId === user?.id) {
+        // If only partial data is provided (like just name), merge with existing
+        if (e.detail.name !== undefined) {
+          const updatedUser = { ...user, name: e.detail.name }
+          setUser(updatedUser)
+          localStorage.setItem('currentUser', JSON.stringify(updatedUser))
+          console.log('App: User name updated from event:', e.detail.name)
+        } else if (e.detail.id === user?.id) {
+          // Full user data provided
+          setUser(e.detail)
+          console.log('App: User profile fully updated from event')
+        }
       }
     }
 

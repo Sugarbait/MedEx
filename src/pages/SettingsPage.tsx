@@ -82,7 +82,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   const [useEnhancedMFA, setUseEnhancedMFA] = useState(true)
   const [auditLogs, setAuditLogs] = useState<any[]>([])
   const [isLoadingAudit, setIsLoadingAudit] = useState(false)
-  const [fullName, setFullName] = useState(user?.name || '')
+  const [fullName, setFullName] = useState('')
   const [isEditingName, setIsEditingName] = useState(false)
   const [isSavingName, setIsSavingName] = useState(false)
   const [toastPreferences, setToastPreferences] = useState<ToastNotificationPreferences>(
@@ -101,6 +101,92 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   useEffect(() => {
     setMfaToggleEnabled(totpStatus.isEnabled)
   }, [totpStatus.isEnabled])
+
+  // Load and sync user name from localStorage
+  useEffect(() => {
+    const loadUserName = () => {
+      // Try multiple sources to get the most recent name
+      let latestName = user?.name || ''
+
+      // 1. Check currentUser in localStorage (most recent)
+      try {
+        const currentUser = localStorage.getItem('currentUser')
+        if (currentUser) {
+          const userData = JSON.parse(currentUser)
+          if (userData.id === user.id && userData.name) {
+            latestName = userData.name
+            console.log('Loaded name from currentUser:', latestName)
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to load name from currentUser:', error)
+      }
+
+      // 2. Check userProfile in localStorage
+      try {
+        const userProfile = localStorage.getItem(`userProfile_${user.id}`)
+        if (userProfile) {
+          const profileData = JSON.parse(userProfile)
+          if (profileData.name) {
+            latestName = profileData.name
+            console.log('Loaded name from userProfile:', latestName)
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to load name from userProfile:', error)
+      }
+
+      // 3. Check settings in localStorage
+      try {
+        const settings = localStorage.getItem(`settings_${user.id}`)
+        if (settings) {
+          const settingsData = JSON.parse(settings)
+          if (settingsData.fullName) {
+            latestName = settingsData.fullName
+            console.log('Loaded name from settings:', latestName)
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to load name from settings:', error)
+      }
+
+      setFullName(latestName)
+    }
+
+    // Load on mount
+    loadUserName()
+
+    // Listen for storage changes
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'currentUser' || e.key === `userProfile_${user.id}` || e.key === `settings_${user.id}`) {
+        console.log('Storage change detected, reloading name')
+        loadUserName()
+      }
+    }
+
+    // Listen for custom events
+    const handleUserDataUpdated = () => {
+      console.log('User data updated event received, reloading name')
+      loadUserName()
+    }
+
+    const handleUserProfileUpdated = (e: CustomEvent) => {
+      if (e.detail?.userId === user.id && e.detail?.name) {
+        console.log('User profile updated event received, updating name:', e.detail.name)
+        setFullName(e.detail.name)
+      }
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+    window.addEventListener('userDataUpdated', handleUserDataUpdated)
+    window.addEventListener('userProfileUpdated', handleUserProfileUpdated as EventListener)
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('userDataUpdated', handleUserDataUpdated)
+      window.removeEventListener('userProfileUpdated', handleUserProfileUpdated as EventListener)
+    }
+  }, [user.id, user?.name])
 
 
   const tabs = [
@@ -928,6 +1014,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
         }
       }
 
+      // Save name to settings for persistence
+      try {
+        const settingsKey = `settings_${user.id}`
+        const existingSettings = localStorage.getItem(settingsKey)
+        const settings = existingSettings ? JSON.parse(existingSettings) : {}
+        settings.fullName = fullName.trim()
+        localStorage.setItem(settingsKey, JSON.stringify(settings))
+        console.log('Updated name in settings for persistence')
+      } catch (error) {
+        console.warn('Failed to update settings with name:', error)
+      }
+
       // Update individual user profile storage
       const userProfile = localStorage.getItem(`userProfile_${user.id}`)
       if (userProfile) {
@@ -977,7 +1075,22 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   }
 
   const cancelEditName = () => {
-    setFullName(user?.name || '')
+    // Reload the name from storage to ensure we have the latest
+    let latestName = user?.name || ''
+
+    try {
+      const currentUser = localStorage.getItem('currentUser')
+      if (currentUser) {
+        const userData = JSON.parse(currentUser)
+        if (userData.id === user.id && userData.name) {
+          latestName = userData.name
+        }
+      }
+    } catch (error) {
+      console.warn('Failed to reload name on cancel:', error)
+    }
+
+    setFullName(latestName)
     setIsEditingName(false)
   }
 
