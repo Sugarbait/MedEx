@@ -214,7 +214,9 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
         configured: retellService.isConfigured()
       })
 
-      if (!retellService.isConfigured()) {
+      // Check if Retell API has at minimum an API key configured
+      const hasApiKey = !!retellService.getApiKey()
+      if (!hasApiKey) {
         setError('API not configured. Go to Settings → API Configuration to set up your credentials.')
         setLoading(false)
         return

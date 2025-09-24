@@ -666,11 +666,23 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
         // Continue with localStorage-only credentials
       }
 
-      // Check if Retell API is configured
-      if (!retellService.isConfigured()) {
+      // Check if Retell API has at minimum an API key configured
+      // More flexible check - only require API key, agent IDs are optional
+      const apiKey = retellService.getApiKey()
+      const hasApiKey = !!apiKey
+      console.log('🔍 Dashboard API Key Check:', {
+        apiKey: apiKey ? `${apiKey.substring(0, 8)}...` : 'null',
+        hasApiKey,
+        retellServiceConfigured: retellService.isConfigured()
+      })
+
+      if (!hasApiKey) {
+        console.log('❌ Dashboard: No API key found, showing not-configured warning')
         setRetellStatus('not-configured')
         setIsLoading(false)
         return
+      } else {
+        console.log('✅ Dashboard: API key found, proceeding with data load')
       }
 
       // PERFORMANCE OPTIMIZATION: Skip connection test for faster loading

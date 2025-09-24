@@ -532,8 +532,8 @@ const App: React.FC = () => {
           }
 
           // TOTP authentication will be handled by TOTPProtectedRoute
-          // No need for global MFA requirement check
-          setMfaRequired(false)
+          // MFA requirement will be enforced by individual route protection
+          // Do not globally disable MFA requirement
 
           // Log authentication event for HIPAA audit
           try {
