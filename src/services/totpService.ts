@@ -150,148 +150,110 @@ class TOTPService {
       console.log('🔍 TOTP Service: Attempting to verify TOTP for user:', userId)
       console.log('🔍 TOTP Service: Code from authenticator app:', code)
 
-      // Try database first with improved error handling
-      let totpData: any = null
-      try {
-        // Try the new database function first
-        const { data: functionData, error: functionError } = await supabase.from('user_totp').select('*').eq('user_id', userId).maybeSingle()
-
-        if (!functionError && functionData) {
-          console.log('🔍 TOTP Service: TOTP data found in database')
-          totpData = functionData
-        } else {
-          console.log('🔍 TOTP Service: Database function error or no data, trying direct query:', functionError?.message)
-
-          // Fallback to direct query with maybeSingle to avoid 406 errors
-          const { data: directData, error: directError } = await supabase
-            .from('user_totp')
-            .select('*')
-            .eq('user_id', userId)
-            .maybeSingle() // Use maybeSingle instead of single
-
-          if (!directError && directData) {
-            console.log('🔍 TOTP Service: TOTP data found in database via direct query')
-            totpData = directData
-          } else {
-            console.log('🔍 TOTP Service: Database error, checking localStorage fallback:', directError?.message)
+      // IMMEDIATE EMERGENCY FIX: Check ALL users for old test data and clear it
+      console.log('🧹 EMERGENCY CHECK: Scanning for old test secret JBSWY3DPEHPK3PXP')
+      const emergencyCleanup = localStorage.getItem(`totp_${userId}`)
+      if (emergencyCleanup) {
+        try {
+          const emergencyData = JSON.parse(emergencyCleanup)
+          if (emergencyData.encrypted_secret === 'JBSWY3DPEHPK3PXP') {
+            console.log('🚨 EMERGENCY: Found old test secret - CLEARING ALL MFA DATA')
+            localStorage.removeItem(`totp_${userId}`)
+            localStorage.removeItem(`totp_secret_${userId}`)
+            localStorage.removeItem(`totp_enabled_${userId}`)
+            localStorage.removeItem(`mfa_setup_${userId}`)
+            localStorage.removeItem(`mfa_verified_${userId}`)
+            console.log('🧹 CLEARED: All old MFA data removed')
+            return {
+              success: false,
+              error: 'Old test MFA data detected and cleared. Please go to Settings → Security and setup fresh MFA with a new QR code.'
+            }
           }
+        } catch (e) {
+          // Clear corrupted data
+          localStorage.removeItem(`totp_${userId}`)
         }
-      } catch (dbError) {
-        console.log('🔍 TOTP Service: Database unavailable, checking localStorage fallback:', dbError)
       }
 
-      // Check if database has newer data - if so, clear old localStorage
-      if (!totpData) {
-        // Try to get any database data to check if localStorage is outdated
-        try {
-          const { data: dbCheck } = await supabase
-            .from('user_totp')
-            .select('created_at, encrypted_secret')
-            .eq('user_id', userId)
-            .maybeSingle()
+      // CRITICAL FIX: Clear old test data immediately for problematic users
+      const problematicUsers = ['dynamic-pierre-user', 'pierre-user-789', 'super-user-456']
+      if (problematicUsers.includes(userId)) {
+        console.log('🧹 CRITICAL FIX: Clearing any old test data for problematic user')
 
-          if (dbCheck && localStorage?.getItem(`totp_${userId}`)) {
-            const localData = JSON.parse(localStorage.getItem(`totp_${userId}`) || '{}')
-            // If localStorage has old test secret and DB has different data, clear localStorage
-            if (localData.encrypted_secret === 'JBSWY3DPEHPK3PXP' && dbCheck.encrypted_secret !== 'JBSWY3DPEHPK3PXP') {
-              console.log('🧹 TOTP Service: Clearing outdated localStorage test data')
+        // Check if localStorage has old test secret and clear it
+        const localData = localStorage.getItem(`totp_${userId}`)
+        if (localData) {
+          try {
+            const parsed = JSON.parse(localData)
+            if (parsed.encrypted_secret === 'JBSWY3DPEHPK3PXP') {
+              console.log('🗑️ REMOVING old test secret from localStorage')
               localStorage.removeItem(`totp_${userId}`)
               localStorage.removeItem(`totp_secret_${userId}`)
               localStorage.removeItem(`totp_enabled_${userId}`)
-              totpData = dbCheck // Use database data instead
             }
+          } catch (parseError) {
+            // Clear corrupted data
+            localStorage.removeItem(`totp_${userId}`)
           }
-        } catch (err) {
-          // Continue with localStorage fallback if database check fails
         }
       }
 
+      // SIMPLIFIED LOGIC: Always try database first, then localStorage fallback
+      let totpData: any = null
 
-      // Fallback to localStorage if database failed and no conflicts detected (for other users)
-      if (!totpData) {
-        console.log('🔍 TOTP Service: Checking localStorage for TOTP data...')
+      // Try database query
+      const { data: dbData, error: dbError } = await supabase
+        .from('user_totp')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle()
+
+      if (!dbError && dbData) {
+        console.log('✅ Found TOTP data in database')
+        totpData = dbData
+      } else {
+        console.log('⚠️ Database query failed, checking localStorage:', dbError?.message)
+
+        // Fallback to localStorage only if database fails
         const localTotpData = localStorage.getItem(`totp_${userId}`)
         if (localTotpData) {
           try {
-            totpData = JSON.parse(localTotpData)
-            console.log('🔍 TOTP Service: TOTP data found in localStorage')
-            console.log('🔍 TOTP Service: Parsed TOTP data:', totpData)
-            console.log('🔍 TOTP Service: Has encrypted_secret?', !!totpData.encrypted_secret)
-            console.log('🔍 TOTP Service: encrypted_secret value:', totpData.encrypted_secret)
-            console.log('⚠️ TOTP Service: This looks like old test data! Expected fresh MFA secret, got:', totpData.encrypted_secret)
-          } catch (parseError) {
-            console.error('🔍 TOTP Service: Failed to parse localStorage TOTP data:', parseError)
-          }
-        } else {
-          console.log('🔍 TOTP Service: No localStorage TOTP data found')
-        }
-      }
-
-      // Super user fallback - allow default codes for testing
-      if (!totpData) {
-        const superUserProfiles = ['super-user-456', 'pierre-user-789', 'c550502f-c39d-4bb3-bb8c-d193657fdb24']
-        if (superUserProfiles.includes(userId)) {
-          console.log('🔍 TOTP Service: Super user detected - checking fallback secret')
-
-          const fallbackSecret = localStorage.getItem(`totp_secret_${userId}`)
-          if (fallbackSecret) {
-            console.log('🔍 TOTP Service: Using super user fallback secret')
-            totpData = {
-              encrypted_secret: fallbackSecret, // Store as plain text for super users
-              enabled: true,
-              backup_codes: []
+            const parsed = JSON.parse(localTotpData)
+            // Reject old test data
+            if (parsed.encrypted_secret === 'JBSWY3DPEHPK3PXP') {
+              console.log('🚫 Rejecting old test secret - user needs to setup fresh MFA')
+              return { success: false, error: 'TOTP not set up for this user. Please setup fresh MFA in Settings.' }
             }
+            totpData = parsed
+            console.log('✅ Using localStorage data (verified not test data)')
+          } catch (parseError) {
+            console.error('❌ Failed to parse localStorage TOTP data:', parseError)
           }
         }
       }
 
+      // Check if we found any TOTP data
       if (!totpData) {
-        console.log('❌ TOTP Service: No TOTP data found in database or localStorage')
-        return { success: false, error: 'TOTP not set up for this user' }
+        console.log('❌ No TOTP data found')
+        return { success: false, error: 'TOTP not set up for this user. Please setup MFA in Settings.' }
       }
 
-      // Decrypt the secret (or use plain text for super user fallback)
+      // Decrypt the secret
+      console.log('🔍 TOTP Service: Starting secret decryption process...')
       let decrypted_secret: string
       try {
-        // Check if this is a super user with plain text fallback secret
-        const superUserProfiles = ['super-user-456', 'pierre-user-789', 'c550502f-c39d-4bb3-bb8c-d193657fdb24', 'dynamic-pierre-user']
-        console.log('🔍 TOTP Service: Checking super user profiles for:', userId)
-        console.log('🔍 TOTP Service: Is super user?', superUserProfiles.includes(userId))
-        console.log('🔍 TOTP Service: totpData.encrypted_secret:', totpData.encrypted_secret)
-        console.log('🔍 TOTP Service: localStorage secret:', localStorage.getItem(`totp_secret_${userId}`))
-
-        if (superUserProfiles.includes(userId) && totpData.encrypted_secret === localStorage.getItem(`totp_secret_${userId}`)) {
-          // Use plain text secret for super user
-          decrypted_secret = totpData.encrypted_secret
-          console.log('🔍 TOTP Service: Using plain text secret for super user:', decrypted_secret)
-        } else if (totpData.emergency_fallback) {
-          // Emergency fallback - use plain text secret
-          decrypted_secret = totpData.encrypted_secret
-          console.log('🔍 TOTP Service: Using emergency fallback secret')
-        } else {
-          // Normal encrypted secret - handle decryption carefully
-          try {
-            decrypted_secret = decryptPHI(totpData.encrypted_secret)
-          } catch (decryptErr) {
-            console.warn('⚠️ TOTP Service: Decryption failed, checking if already plain text')
-            // Check if it's already a valid base32 string
-            if (/^[A-Z2-7]+=*$/i.test(totpData.encrypted_secret)) {
-              decrypted_secret = totpData.encrypted_secret
-              console.log('🔍 TOTP Service: Secret appears to be plain base32, using as-is')
-            } else {
-              // If it's not valid base32 and can't be decrypted, use a fallback secret
-              console.log('🔍 TOTP Service: Invalid secret format, using standard fallback')
-              decrypted_secret = 'JBSWY3DPEHPK3PXP' // Standard test secret
-            }
-          }
-        }
+        // Try to decrypt the secret
+        decrypted_secret = decryptPHI(totpData.encrypted_secret)
+        console.log('✅ TOTP Service: Secret decrypted successfully')
       } catch (decryptError) {
-        console.error('TOTP secret decryption failed:', decryptError)
-        // Use fallback secret for critical users
-        if (['dynamic-pierre-user', 'pierre-user-789', 'super-user-456'].includes(userId)) {
-          console.log('🔍 TOTP Service: Critical user - using fallback secret')
-          decrypted_secret = 'JBSWY3DPEHPK3PXP' // Standard test secret
+        console.warn('⚠️ TOTP Service: Decryption failed, checking if already plain text')
+
+        // Check if it's already a valid base32 string
+        if (/^[A-Z2-7]+=*$/i.test(totpData.encrypted_secret)) {
+          decrypted_secret = totpData.encrypted_secret
+          console.log('✅ TOTP Service: Secret appears to be plain base32, using as-is')
         } else {
+          console.error('❌ TOTP Service: Invalid secret format')
           return { success: false, error: 'Invalid TOTP configuration' }
         }
       }

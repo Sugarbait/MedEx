@@ -612,7 +612,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         // Check for known Supabase UUIDs for demo users
         const demoUUIDMap: { [key: string]: string } = {
           'pierre-user-789': 'c550502f-c39d-4bb3-bb8c-d193657fdb24',
-          'super-user-456': 'c550502f-c39d-4bb3-bb8c-d193657fdb24', // This might be wrong, but try it
+          'super-user-456': 'c550502f-c39d-4bb3-bb8c-d193657fdb24',
+          'dynamic-pierre-user': 'c550502f-c39d-4bb3-bb8c-d193657fdb24' // Map login alias to actual user
         }
 
         const supabaseUUID = demoUUIDMap[userId]

@@ -71,8 +71,18 @@ const TOTPLoginVerification: React.FC<TOTPLoginVerificationProps> = ({
         }
       )
 
+      // Map demo user IDs to their actual Supabase UUIDs for MFA verification
+      const demoUUIDMap: { [key: string]: string } = {
+        'pierre-user-789': 'c550502f-c39d-4bb3-bb8c-d193657fdb24',
+        'super-user-456': 'c550502f-c39d-4bb3-bb8c-d193657fdb24',
+        'dynamic-pierre-user': 'c550502f-c39d-4bb3-bb8c-d193657fdb24'
+      }
+
+      const verificationUserId = demoUUIDMap[user.id] || user.id
+      console.log('🔍 SECURITY: Using verification user ID:', verificationUserId, 'for login user:', user.id)
+
       // Use simple TOTP verification method (same as working settings page)
-      const result = await totpService.verifyTOTP(user.id, verificationCode.trim(), false)
+      const result = await totpService.verifyTOTP(verificationUserId, verificationCode.trim(), false)
 
       if (result.success) {
         console.log('✅ SECURITY: TOTP verification successful')
@@ -98,43 +108,10 @@ const TOTPLoginVerification: React.FC<TOTPLoginVerificationProps> = ({
         if (result.error && result.error.includes('TOTP not set up')) {
           const criticalUsers = ['dynamic-pierre-user', 'pierre-user-789', 'super-user-456']
           if (criticalUsers.includes(user.id)) {
-            console.log('🚨 SECURITY: Critical user missing TOTP setup - attempting emergency fallback creation')
+            console.log('🚨 SECURITY: Critical user TOTP setup issue - database check should handle this')
 
-            // Try to create emergency fallback
-            const fallbackCreated = totpService.createEmergencyTOTPFallback(user.id)
-            if (fallbackCreated) {
-              console.log('✅ SECURITY: Emergency fallback created - retrying verification')
-
-              // Retry verification with the newly created fallback
-              const retryResult = await totpService.verifyTOTP(user.id, verificationCode.trim(), false)
-              if (retryResult.success) {
-                console.log('✅ SECURITY: TOTP verification successful after fallback creation')
-
-                // Log successful MFA verification with fallback
-                await auditLogger.logPHIAccess(
-                  AuditAction.LOGIN,
-                  ResourceType.SYSTEM,
-                  `mfa-success-fallback-${user.id}`,
-                  AuditOutcome.SUCCESS,
-                  {
-                    operation: 'mfa_verification_success_fallback',
-                    userId: user.id,
-                    totalAttempts: attempts + 1,
-                    fallbackUsed: true
-                  }
-                )
-
-                onVerificationSuccess()
-                return
-              } else {
-                console.log('❌ SECURITY: TOTP verification still failed after fallback creation')
-                setError('Emergency fallback created. Try using code 000000 or 123456.')
-                return
-              }
-            } else {
-              setError('Failed to create emergency TOTP access. Contact administrator.')
-              return
-            }
+            // No more emergency fallback creation - the database check in verifyTOTP should handle this
+            console.log('ℹ️ SECURITY: User should use Settings to set up fresh MFA or contact admin')
           }
         }
 

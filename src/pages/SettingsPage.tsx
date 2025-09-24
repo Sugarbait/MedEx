@@ -452,6 +452,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
         setUserSettings(prev => ({ ...prev, mfaEnabled: enabled }))
       }, 100)
 
+      // Dispatch events to trigger TOTP status hook refresh (fixes toggle visual state)
+      window.dispatchEvent(new CustomEvent('totpStatusChanged'))
+      window.dispatchEvent(new CustomEvent('userSettingsUpdated'))
+
       console.log(`MFA toggle updated: ${enabled ? 'ENABLED' : 'DISABLED'}. Toggle should now be ${enabled ? 'green' : 'gray'}.`)
 
       setSaveStatus('saved')

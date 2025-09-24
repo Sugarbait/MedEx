@@ -224,7 +224,7 @@ const TOTPProtectedRoute: React.FC<TOTPProtectedRouteProps> = ({
   // Show TOTP verification
   if (status === 'verification-required') {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center pt-16 p-4">
+      <div className="min-h-screen bg-gray-50 flex flex-col items-center pt-8 p-4">
         <div className="w-full max-w-md">
           <div className="mb-6 text-center">
             <h1 className="text-2xl font-bold text-gray-900 mb-2">
