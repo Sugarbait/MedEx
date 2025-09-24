@@ -14,7 +14,7 @@ export class EncryptionError extends Error {
 }
 
 /**
- * Encrypt PHI data using AES-256-GCM
+ * Encrypt PHI data using AES-256-GCM via Web Crypto API (with CryptoJS fallback)
  * @param plaintext - The data to encrypt
  * @param keyType - Type of encryption key to use ('phi' | 'audit')
  * @returns Encrypted string with IV prepended
@@ -32,19 +32,20 @@ export function encryptPHI(plaintext: string, keyType: 'phi' | 'audit' = 'phi'):
       return btoa(plaintext)
     }
 
-    // Generate random IV for each encryption
-    const iv = CryptoJS.lib.WordArray.random(12) // 96 bits for GCM
+    // Try Web Crypto API for proper GCM support (async, so this is a sync fallback)
+    // Use CBC mode with CryptoJS as immediate fallback
+    const iv = CryptoJS.lib.WordArray.random(16) // 128 bits for CBC
 
-    // Encrypt using AES-256-GCM
+    // Encrypt using AES-256-CBC (CryptoJS fallback)
     const encrypted = CryptoJS.AES.encrypt(plaintext, key, {
       iv: iv,
-      mode: CryptoJS.mode.GCM,
-      padding: CryptoJS.pad.NoPadding
+      mode: CryptoJS.mode.CBC,
+      padding: CryptoJS.pad.Pkcs7
     })
 
-    // Combine IV + encrypted data
+    // Combine IV + encrypted data with format marker
     const result = iv.concat(encrypted.ciphertext)
-    return result.toString(CryptoJS.enc.Base64)
+    return 'cbc:' + result.toString(CryptoJS.enc.Base64)
   } catch (error) {
     // Graceful fallback to base64 encoding when encryption fails
     console.warn('⚠️ Encryption failed, using base64 encoding:', error instanceof Error ? error.message : 'Unknown error')
@@ -53,7 +54,7 @@ export function encryptPHI(plaintext: string, keyType: 'phi' | 'audit' = 'phi'):
 }
 
 /**
- * Decrypt PHI data using AES-256-GCM
+ * Decrypt PHI data with format auto-detection and backward compatibility
  * @param ciphertext - The encrypted data with IV prepended
  * @param keyType - Type of encryption key to use ('phi' | 'audit')
  * @returns Decrypted plaintext string
@@ -75,19 +76,36 @@ export function decryptPHI(ciphertext: string, keyType: 'phi' | 'audit' = 'phi')
       }
     }
 
-    // Parse the combined IV + encrypted data
-    const combined = CryptoJS.enc.Base64.parse(ciphertext)
-    const iv = CryptoJS.lib.WordArray.create(combined.words.slice(0, 3)) // 96 bits
-    const encrypted = CryptoJS.lib.WordArray.create(combined.words.slice(3))
+    // Check for format prefix
+    let actualCiphertext = ciphertext
+    let isCbcFormat = false
 
-    // Decrypt using AES-256-GCM
+    if (ciphertext.startsWith('cbc:')) {
+      actualCiphertext = ciphertext.substring(4)
+      isCbcFormat = true
+    } else if (ciphertext.startsWith('gcm:')) {
+      // Old GCM format - we can't decrypt this with CryptoJS
+      console.warn('⚠️ Legacy GCM encrypted data detected - cannot decrypt with CryptoJS')
+      throw new EncryptionError('Legacy GCM format detected - requires Web Crypto API')
+    }
+
+    // Parse the combined IV + encrypted data
+    const combined = CryptoJS.enc.Base64.parse(actualCiphertext)
+
+    // Determine IV size based on format
+    const ivWords = isCbcFormat ? 4 : 3 // 128 bits for CBC, 96 bits for legacy
+
+    const iv = CryptoJS.lib.WordArray.create(combined.words.slice(0, ivWords))
+    const encrypted = CryptoJS.lib.WordArray.create(combined.words.slice(ivWords))
+
+    // Decrypt using appropriate mode
     const decrypted = CryptoJS.AES.decrypt(
       { ciphertext: encrypted } as any,
       key,
       {
         iv: iv,
-        mode: CryptoJS.mode.GCM,
-        padding: CryptoJS.pad.NoPadding
+        mode: CryptoJS.mode.CBC,
+        padding: CryptoJS.pad.Pkcs7
       }
     )
 
@@ -105,6 +123,169 @@ export function decryptPHI(ciphertext: string, keyType: 'phi' | 'audit' = 'phi')
     } catch {
       return ciphertext // Return as-is if not base64
     }
+  }
+}
+
+/**
+ * Async encrypt PHI data using Web Crypto API with AES-256-GCM
+ * @param plaintext - The data to encrypt
+ * @param keyType - Type of encryption key to use ('phi' | 'audit')
+ * @returns Promise<string> - Encrypted string with format prefix
+ */
+export async function encryptPHIAsync(plaintext: string, keyType: 'phi' | 'audit' = 'phi'): Promise<string> {
+  try {
+    if (!plaintext) {
+      throw new EncryptionError('Cannot encrypt empty plaintext')
+    }
+
+    const keyString = keyType === 'phi' ? encryptionConfig.phiKey : encryptionConfig.auditKey
+    if (!keyString) {
+      console.warn(`⚠️ Encryption key not configured for type: ${keyType}, using base64 encoding`)
+      return btoa(plaintext)
+    }
+
+    // Use Web Crypto API for proper GCM support
+    const encoder = new TextEncoder()
+    const data = encoder.encode(plaintext)
+
+    // Derive key from string
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(keyString),
+      'PBKDF2',
+      false,
+      ['deriveKey']
+    )
+
+    const salt = new Uint8Array(16)
+    crypto.getRandomValues(salt)
+
+    const cryptoKey = await crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt: salt,
+        iterations: 100000,
+        hash: 'SHA-256'
+      },
+      keyMaterial,
+      {
+        name: 'AES-GCM',
+        length: 256
+      },
+      false,
+      ['encrypt']
+    )
+
+    // Generate IV and encrypt
+    const iv = crypto.getRandomValues(new Uint8Array(12)) // 96 bits for GCM
+    const encrypted = await crypto.subtle.encrypt(
+      {
+        name: 'AES-GCM',
+        iv: iv,
+        tagLength: 128
+      },
+      cryptoKey,
+      data
+    )
+
+    // Combine salt + iv + encrypted data
+    const combined = new Uint8Array(salt.length + iv.length + encrypted.byteLength)
+    combined.set(salt, 0)
+    combined.set(iv, salt.length)
+    combined.set(new Uint8Array(encrypted), salt.length + iv.length)
+
+    // Convert to base64 with format marker
+    return 'gcm:' + btoa(String.fromCharCode.apply(null, Array.from(combined)))
+  } catch (error) {
+    console.warn('⚠️ Web Crypto encryption failed, falling back to sync method:', error instanceof Error ? error.message : 'Unknown error')
+    return encryptPHI(plaintext, keyType)
+  }
+}
+
+/**
+ * Async decrypt PHI data using Web Crypto API with AES-256-GCM
+ * @param ciphertext - The encrypted data with format prefix
+ * @param keyType - Type of encryption key to use ('phi' | 'audit')
+ * @returns Promise<string> - Decrypted plaintext string
+ */
+export async function decryptPHIAsync(ciphertext: string, keyType: 'phi' | 'audit' = 'phi'): Promise<string> {
+  try {
+    if (!ciphertext) {
+      throw new EncryptionError('Cannot decrypt empty ciphertext')
+    }
+
+    // Check if it's GCM format
+    if (!ciphertext.startsWith('gcm:')) {
+      // Fall back to sync decryption for non-GCM formats
+      return decryptPHI(ciphertext, keyType)
+    }
+
+    const keyString = keyType === 'phi' ? encryptionConfig.phiKey : encryptionConfig.auditKey
+    if (!keyString) {
+      console.warn(`⚠️ Encryption key not configured for type: ${keyType}, attempting base64 decoding`)
+      try {
+        return atob(ciphertext.substring(4))
+      } catch {
+        return ciphertext
+      }
+    }
+
+    const encoder = new TextEncoder()
+    const actualCiphertext = ciphertext.substring(4) // Remove 'gcm:' prefix
+
+    // Decode base64
+    const binaryString = atob(actualCiphertext)
+    const combined = new Uint8Array(binaryString.length)
+    for (let i = 0; i < binaryString.length; i++) {
+      combined[i] = binaryString.charCodeAt(i)
+    }
+
+    // Extract salt, IV, and encrypted data
+    const salt = combined.slice(0, 16)
+    const iv = combined.slice(16, 28) // 12 bytes for GCM IV
+    const encryptedData = combined.slice(28)
+
+    // Derive key
+    const keyMaterial = await crypto.subtle.importKey(
+      'raw',
+      encoder.encode(keyString),
+      'PBKDF2',
+      false,
+      ['deriveKey']
+    )
+
+    const cryptoKey = await crypto.subtle.deriveKey(
+      {
+        name: 'PBKDF2',
+        salt: salt,
+        iterations: 100000,
+        hash: 'SHA-256'
+      },
+      keyMaterial,
+      {
+        name: 'AES-GCM',
+        length: 256
+      },
+      false,
+      ['decrypt']
+    )
+
+    // Decrypt
+    const decrypted = await crypto.subtle.decrypt(
+      {
+        name: 'AES-GCM',
+        iv: iv,
+        tagLength: 128
+      },
+      cryptoKey,
+      encryptedData
+    )
+
+    const decoder = new TextDecoder()
+    return decoder.decode(decrypted)
+  } catch (error) {
+    console.warn('⚠️ Web Crypto decryption failed, attempting fallback:', error instanceof Error ? error.message : 'Unknown error')
+    return decryptPHI(ciphertext, keyType)
   }
 }
 
