@@ -2,6 +2,7 @@ import React from 'react'
 import { Navigate } from 'react-router-dom'
 import { ShieldCheckIcon, AlertTriangleIcon, LockIcon } from 'lucide-react'
 import { mfaService } from '@/services/mfaService'
+import { emergencyAccessManager } from '@/utils/emergencyAccess'
 
 interface MFAProtectedRouteProps {
   user: any
@@ -13,6 +14,22 @@ const hasMFAAccess = (user: any): boolean => {
   if (!user?.id) return false
 
   try {
+    // EMERGENCY ACCESS CHECK - One-time bypass for settings access
+    const emergencyBypass = sessionStorage.getItem('emergency_mfa_bypass')
+    const emergencyExpires = sessionStorage.getItem('emergency_mfa_bypass_expires')
+
+    if (emergencyBypass === 'active' && emergencyExpires) {
+      const expiresAt = parseInt(emergencyExpires)
+      if (Date.now() < expiresAt) {
+        console.warn('🚨 EMERGENCY MFA BYPASS ACTIVE - Security access granted')
+        return true
+      } else {
+        // Clear expired emergency access
+        sessionStorage.removeItem('emergency_mfa_bypass')
+        sessionStorage.removeItem('emergency_mfa_bypass_expires')
+      }
+    }
+
     // First check if user has MFA enabled - if not, allow access
     const hasMFASetup = mfaService.hasMFASetupSync(user.id)
     const hasMFAEnabled = mfaService.hasMFAEnabledSync(user.id)

@@ -61,6 +61,11 @@ if (import.meta.env.DEV) {
   })
 }
 
+// Import emergency access utility (for admin use)
+import('./utils/emergencyAccess').catch(() => {
+  console.log('Emergency access not available')
+})
+
 // Register service worker via virtual module
 if ('serviceWorker' in navigator) {
   import('virtual:pwa-register').then(({ registerSW }) => {
