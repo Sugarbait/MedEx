@@ -404,24 +404,41 @@ class HIPAAAuditLogger {
         throw new Error('Supabase not properly configured - using localStorage fallback')
       }
 
+      // Use only columns that exist in the current table structure
+      // TODO: Add missing columns to audit_logs table: resource_id, source_ip, user_agent, session_id, additional_info, phi_accessed, failure_reason, severity
+      const auditData = {
+        user_id: encryptedEntry.user_id,
+        action: encryptedEntry.action,
+        resource_type: encryptedEntry.resource_type,
+        outcome: encryptedEntry.outcome,
+        timestamp: encryptedEntry.timestamp
+      }
+
+      // Add optional fields that might exist
+      const optionalFields = ['table_name', 'record_id', 'old_values', 'new_values', 'ip_address', 'session_id', 'metadata']
+      optionalFields.forEach(field => {
+        if (field === 'table_name' && !auditData[field]) {
+          auditData[field] = encryptedEntry.resource_type
+        } else if (field === 'record_id' && !auditData[field]) {
+          auditData[field] = encryptedEntry.resource_id
+        } else if (field === 'ip_address' && !auditData[field]) {
+          auditData[field] = encryptedEntry.source_ip
+        } else if (field === 'session_id' && !auditData[field]) {
+          auditData[field] = encryptedEntry.session_id
+        } else if (field === 'metadata' && !auditData[field]) {
+          auditData[field] = {
+            phi_accessed: encryptedEntry.phi_accessed || false,
+            failure_reason: encryptedEntry.failure_reason,
+            additional_info: encryptedEntry.additional_info,
+            user_agent: encryptedEntry.user_agent,
+            severity: 'INFO'
+          }
+        }
+      })
+
       const { error } = await supabase
         .from('audit_logs')
-        .insert([{
-          user_id: encryptedEntry.user_id,
-          action: encryptedEntry.action,
-          resource_type: encryptedEntry.resource_type,
-          resource_id: encryptedEntry.resource_id,
-          outcome: encryptedEntry.outcome,
-          timestamp: encryptedEntry.timestamp,
-          source_ip: encryptedEntry.source_ip,
-          user_agent: encryptedEntry.user_agent,
-          session_id: encryptedEntry.session_id,
-          additional_info: encryptedEntry.additional_info,
-          phi_accessed: encryptedEntry.phi_accessed || false,
-          failure_reason: encryptedEntry.failure_reason,
-          severity: 'INFO',
-          created_at: new Date().toISOString()
-        }])
+        .insert([auditData])
 
       if (error) {
         console.error('Supabase audit log error:', error)

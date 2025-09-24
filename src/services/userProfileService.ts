@@ -58,21 +58,40 @@ export class UserProfileService {
       // Try to load from Supabase first for cross-device sync
       try {
         console.log('UserProfileService: Attempting to load profile from Supabase...')
-        const { data: supabaseUser, error: supabaseError } = await supabase
-          .from('users')
-          .select('*')
-          .eq('id', userId)
-          .single()
+
+        // TEMPORARY FIX: Query by email since current table uses different schema
+        // The existing users table has username, first_name, last_name instead of azure_ad_id, name
+        const userEmail = await this.getUserEmailFromUserId(userId)
+
+        let supabaseUser = null
+        let supabaseError = null
+
+        if (userEmail) {
+          const result = await supabase
+            .from('users')
+            .select('*')
+            .eq('email', userEmail)
+            .single()
+          supabaseUser = result.data
+          supabaseError = result.error
+        }
 
         if (!supabaseError && supabaseUser) {
           console.log('UserProfileService: Profile loaded from Supabase successfully')
+
+          // MAP existing schema to expected format
           const userProfileData: UserProfileData = {
             id: supabaseUser.id,
             email: supabaseUser.email,
-            name: supabaseUser.name,
-            role: supabaseUser.role || 'staff',
-            created_at: supabaseUser.created_at,
-            updated_at: supabaseUser.updated_at || supabaseUser.created_at
+            // Map existing fields to expected format
+            name: supabaseUser.username || `${supabaseUser.first_name || ''} ${supabaseUser.last_name || ''}`.trim() || supabaseUser.email,
+            // Map role from existing values
+            role: this.mapExistingRoleToExpected(supabaseUser.role),
+            mfa_enabled: supabaseUser.mfa_enabled || supabaseUser.is_mfa_enabled || false,
+            settings: {
+              theme: 'light',
+              notifications: {}
+            }
           }
 
           // Cache the result
@@ -1185,6 +1204,62 @@ export class UserProfileService {
     } catch (error) {
       console.warn('Failed to get user email for deletion tracking:', error)
       return null
+    }
+  }
+
+  /**
+   * Get user email from userId (helper for existing schema compatibility)
+   */
+  private static async getUserEmailFromUserId(userId: string): Promise<string | null> {
+    try {
+      // Check localStorage first
+      const currentUser = localStorage.getItem('currentUser')
+      if (currentUser) {
+        const userData = JSON.parse(currentUser)
+        if (userData.id === userId) {
+          return userData.email
+        }
+      }
+
+      // Check userProfile storage
+      const userProfile = localStorage.getItem(`userProfile_${userId}`)
+      if (userProfile) {
+        const profile = JSON.parse(userProfile)
+        return profile.email
+      }
+
+      // Check systemUsers
+      const systemUsers = localStorage.getItem('systemUsers')
+      if (systemUsers) {
+        const users = JSON.parse(systemUsers)
+        const user = users.find((u: any) => u.id === userId)
+        if (user) {
+          return user.email
+        }
+      }
+
+      return null
+    } catch (error) {
+      console.warn('Failed to get user email from userId:', error)
+      return null
+    }
+  }
+
+  /**
+   * Map existing database role values to expected CareXPS role values
+   */
+  private static mapExistingRoleToExpected(existingRole: string): 'admin' | 'healthcare_provider' | 'staff' {
+    if (!existingRole) return 'staff'
+
+    const role = existingRole.toLowerCase()
+
+    // Map existing roles to CareXPS roles
+    if (role === 'admin' || role === 'administrator') {
+      return 'admin'
+    } else if (role === 'provider' || role === 'healthcare_provider' || role === 'doctor' || role === 'physician') {
+      return 'healthcare_provider'
+    } else {
+      return 'staff' // Default fallback
     }
   }
 
