@@ -255,27 +255,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             { operation: 'super_user_mfa_enforced', userId: user.id, email: user.email }
           )
         } else if (totpServiceResult === false && totpSetupExists === false) {
-          // Special handling for dynamic-pierre-user and other critical users that might not have TOTP set up
-          if (user.id === 'dynamic-pierre-user' || user.id === 'pierre-user-789') {
-            console.log('🚨 SECURITY: Critical user without TOTP setup detected - creating emergency fallback')
-
-            // Attempt to create emergency fallback for critical users
-            const fallbackCreated = totpService.createEmergencyTOTPFallback(user.id)
-            if (fallbackCreated) {
-              console.log('✅ SECURITY: Emergency TOTP fallback created for critical user - requiring MFA')
-              totpEnabled = true
-              totpCheckError = 'Emergency TOTP setup created - Use code 000000 or 123456'
-            } else {
-              console.log('❌ SECURITY: Failed to create emergency fallback - allowing login without MFA')
-              totpEnabled = false
-              totpCheckError = null
-            }
-          } else {
-            console.log('🔒 SECURITY: Super user does not have MFA enabled - allowing login without MFA')
-            // Other super users without MFA can proceed without MFA requirement
-            totpEnabled = false
-            totpCheckError = null
-          }
+          console.log('🔒 SECURITY: User does not have MFA enabled - allowing login without MFA')
+          // Users without MFA can proceed without MFA requirement
+          totpEnabled = false
+          totpCheckError = null
         } else {
           // SECURITY FIX: If we can't determine MFA status, default to requiring MFA
           console.warn('🚨 SECURITY: Cannot determine MFA status for super user - REQUIRING MFA for security')
