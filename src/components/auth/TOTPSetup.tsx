@@ -132,16 +132,10 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
   }
 
   const handleCancel = () => {
-    console.log('🚫 TOTPSetup: Cancel button clicked - cleaning up setup state')
+    console.log('🚫 TOTPSetup: Cancel button clicked - closing modal immediately')
 
-    // Clean up any partial setup data
-    setSetupData(null)
-    setQrCodeDataUrl('')
-    setVerificationCode('')
-    setError('')
-    setStep('generating')
-
-    console.log('🚫 TOTPSetup: Setup state cleaned up - calling onCancel')
+    // Immediately call onCancel to close the modal
+    // No need to reset state since component will unmount
     onCancel()
   }
 
