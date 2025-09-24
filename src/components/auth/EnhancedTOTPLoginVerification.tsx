@@ -17,7 +17,7 @@ import {
   Eye,
   EyeOff
 } from 'lucide-react'
-import { totpService } from '../../services/totpService'
+import { cleanTotpService } from '../../services/cleanTotpService'
 import { auditLogger, AuditAction, ResourceType, AuditOutcome } from '../../services/auditLogger'
 
 interface EnhancedTOTPLoginVerificationProps {
@@ -201,7 +201,7 @@ const EnhancedTOTPLoginVerification: React.FC<EnhancedTOTPLoginVerificationProps
       console.log('🔍 SECURITY: Using verification user ID:', verificationUserId, 'for login user:', user.id)
 
       // Use TOTP verification service
-      const result = await totpService.verifyTOTP(verificationUserId, verificationCode.trim(), false)
+      const result = await cleanTotpService.verifyTOTP(verificationUserId, verificationCode.trim(), false)
 
       if (result.success) {
         console.log('✅ SECURITY: TOTP verification successful')

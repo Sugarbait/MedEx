@@ -1,7 +1,7 @@
 import React from 'react'
 import { Navigate } from 'react-router-dom'
 import { ShieldCheckIcon, AlertTriangleIcon, LockIcon } from 'lucide-react'
-import { totpService } from '@/services/totpService'
+import { cleanTotpService } from '@/services/cleanTotpService'
 import { emergencyAccessManager } from '@/utils/emergencyAccess'
 
 interface MFAProtectedRouteProps {
@@ -36,7 +36,7 @@ const hasMFAAccess = (user: any): boolean => {
     }
 
     // First check if user has MFA enabled - if not, allow access
-    // Note: Using simplified check since advanced sync methods not available in totpService
+    // Note: Using simplified check since advanced sync methods not available in cleanTotpService
     const hasMFASetup = false // Will be checked async if needed
     const hasMFAEnabled = false // Will be checked async if needed
 
@@ -56,7 +56,7 @@ const hasMFAAccess = (user: any): boolean => {
     }
 
     // If user has MFA enabled, check for valid session
-    // Note: Session management not available in current totpService
+    // Note: Session management not available in current cleanTotpService
     const currentSession = null // Simplified for current implementation
 
     console.log('MFAProtectedRoute - Session Check:', {

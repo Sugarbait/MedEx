@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect, useRef } from 'react'
 import { Shield, AlertTriangle, RefreshCw } from 'lucide-react'
-import { totpService } from '../../services/totpService'
+import { cleanTotpService } from '../../services/cleanTotpService'
 
 interface TOTPVerificationProps {
   userId: string
@@ -81,7 +81,7 @@ const TOTPVerification: React.FC<TOTPVerificationProps> = ({
     setError('')
 
     try {
-      const result = await totpService.verifyTOTP(userId, code.trim(), false)
+      const result = await cleanTotpService.verifyTOTP(userId, code.trim(), false)
 
       if (result.success) {
         onVerificationSuccess()

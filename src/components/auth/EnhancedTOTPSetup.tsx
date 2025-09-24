@@ -19,7 +19,7 @@ import {
   WifiOff,
   RefreshCw
 } from 'lucide-react'
-import { totpService } from '../../services/totpService'
+import { cleanTotpService } from '../../services/cleanTotpService'
 import MFASyncStatusIndicator from './MFASyncStatusIndicator'
 
 interface EnhancedTOTPSetupProps {
@@ -100,7 +100,7 @@ const EnhancedTOTPSetup: React.FC<EnhancedTOTPSetupProps> = ({
   const generateTOTPSetup = async () => {
     try {
       setError('')
-      const setup = await totpService.generateTOTPSetup(userId, userEmail)
+      const setup = await cleanTotpService.generateTOTPSetup(userId, userEmail)
       setSetupData(setup)
 
       // Generate QR code image
@@ -141,7 +141,7 @@ const EnhancedTOTPSetup: React.FC<EnhancedTOTPSetupProps> = ({
     setError('')
 
     try {
-      const result = await totpService.verifyTOTP(userId, verificationCode.trim(), true)
+      const result = await cleanTotpService.verifyTOTP(userId, verificationCode.trim(), true)
 
       if (result.success) {
         setStep('syncing')

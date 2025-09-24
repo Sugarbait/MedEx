@@ -16,7 +16,7 @@
  */
 
 import React, { useState, useEffect } from 'react'
-import { totpService } from '../../services/totpService'
+import { cleanTotpService } from '../../services/cleanTotpService'
 import TOTPSetup from './TOTPSetup'
 import TOTPVerification from './TOTPVerification'
 
@@ -198,7 +198,7 @@ const TOTPProtectedRoute: React.FC<TOTPProtectedRouteProps> = ({
       }
 
       // Check if user has TOTP enabled
-      const hasTOTP = await totpService.isTOTPEnabled(user.id)
+      const hasTOTP = await cleanTotpService.isTOTPEnabled(user.id)
 
       if (!hasTOTP) {
         console.log('🔒 SECURITY: TOTP not enabled - setup required (TOTP is mandatory)')
