@@ -153,7 +153,15 @@ class TOTPService {
       const criticalUserProfiles = ['super-user-456', 'pierre-user-789', 'c550502f-c39d-4bb3-bb8c-d193657fdb24', 'dynamic-pierre-user']
       if (criticalUserProfiles.includes(userId)) {
         console.log('🔍 TOTP Service: Critical user detected, checking test codes first')
+        console.log('🔍 TOTP Service: User ID:', userId)
+        console.log('🔍 TOTP Service: Code provided:', code)
+        console.log('🔍 TOTP Service: Code type:', typeof code)
+        console.log('🔍 TOTP Service: Code length:', code.length)
+
         const testCodes = ['000000', '123456', '999999', '111111']
+        console.log('🔍 TOTP Service: Test codes array:', testCodes)
+        console.log('🔍 TOTP Service: Is code in test codes?', testCodes.includes(code))
+
         if (testCodes.includes(code)) {
           console.log('✅ TOTP Service: Critical user test code accepted immediately')
           return { success: true }
