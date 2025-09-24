@@ -116,6 +116,37 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
     ] : [])
   ]
 
+  // Listen for API configuration ready event from AuthContext
+  useEffect(() => {
+    const handleApiConfigurationReady = (event: CustomEvent) => {
+      console.log('📡 SettingsPage: API configuration ready event received:', event.detail)
+
+      // Force reload settings from localStorage to get the latest API config
+      try {
+        const savedSettings = localStorage.getItem(`settings_${user.id}`)
+        if (savedSettings) {
+          const parsedSettings = JSON.parse(savedSettings)
+          if (parsedSettings.retellApiKey || parsedSettings.callAgentId || parsedSettings.smsAgentId) {
+            console.log('🔄 SettingsPage: Updating API configuration from localStorage')
+            setUserSettings(prev => ({
+              ...prev,
+              retellApiKey: parsedSettings.retellApiKey,
+              callAgentId: parsedSettings.callAgentId,
+              smsAgentId: parsedSettings.smsAgentId
+            }))
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to load API config from localStorage:', error)
+      }
+    }
+
+    window.addEventListener('apiConfigurationReady', handleApiConfigurationReady as EventListener)
+    return () => {
+      window.removeEventListener('apiConfigurationReady', handleApiConfigurationReady as EventListener)
+    }
+  }, [user.id])
+
   // Load settings using robust service on component mount
   useEffect(() => {
     const loadSettings = async () => {

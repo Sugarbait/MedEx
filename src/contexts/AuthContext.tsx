@@ -219,10 +219,77 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 // Store settings securely
                 await secureStorage.setUserPreference('user_settings', settings, false)
 
+                // Also store in localStorage for immediate access by SettingsPage
+                localStorage.setItem(`settings_${userProfile.id}`, JSON.stringify({
+                  theme: settings?.theme || 'light',
+                  mfaEnabled: userProfile.mfaEnabled || false,
+                  refreshInterval: 30000,
+                  sessionTimeout: settings?.security_preferences?.session_timeout || 15,
+                  notifications: {
+                    calls: settings?.notifications?.call_alerts ?? true,
+                    sms: settings?.notifications?.sms_alerts ?? true,
+                    system: settings?.notifications?.security_alerts ?? true
+                  },
+                  retellApiKey: settings?.retell_config?.api_key,
+                  callAgentId: settings?.retell_config?.call_agent_id,
+                  smsAgentId: settings?.retell_config?.sms_agent_id
+                }))
+
+                // CRITICAL: Initialize retell service with API credentials immediately upon login
+                if (settings?.retell_config) {
+                  console.log('🚀 INITIALIZING RETELL SERVICE with API credentials from login...')
+                  try {
+                    const { retellService } = await import('@/services/retellService')
+                    retellService.updateCredentials(
+                      settings.retell_config.api_key,
+                      settings.retell_config.call_agent_id,
+                      settings.retell_config.sms_agent_id
+                    )
+                    console.log('✅ Retell service initialized with API credentials on login!')
+
+                    // Dispatch event to notify other components that API is ready
+                    window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
+                      detail: {
+                        apiKey: !!settings.retell_config.api_key,
+                        callAgentId: !!settings.retell_config.call_agent_id,
+                        smsAgentId: !!settings.retell_config.sms_agent_id
+                      }
+                    }))
+                  } catch (retellError) {
+                    console.error('❌ Failed to initialize retell service on login:', retellError)
+                  }
+                } else {
+                  console.log('ℹ️ No API credentials found during login - user will need to configure them in Settings')
+                }
+
                 // Subscribe to real-time settings changes
                 userSettingsService.subscribeToSettings(userProfile.id, async (newSettings) => {
                   setUserSettings(newSettings)
                   await secureStorage.setUserPreference('user_settings', newSettings, false)
+
+                  // CRITICAL: Update retell service when settings change
+                  if (newSettings?.retell_config) {
+                    try {
+                      const { retellService } = await import('@/services/retellService')
+                      retellService.updateCredentials(
+                        newSettings.retell_config.api_key,
+                        newSettings.retell_config.call_agent_id,
+                        newSettings.retell_config.sms_agent_id
+                      )
+                      console.log('✅ Retell service updated with new credentials from real-time sync')
+
+                      // Notify components of API configuration update
+                      window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
+                        detail: {
+                          apiKey: !!newSettings.retell_config.api_key,
+                          callAgentId: !!newSettings.retell_config.call_agent_id,
+                          smsAgentId: !!newSettings.retell_config.sms_agent_id
+                        }
+                      }))
+                    } catch (retellError) {
+                      console.error('❌ Failed to update retell service from real-time sync:', retellError)
+                    }
+                  }
 
                   // Dispatch event for UI updates
                   window.dispatchEvent(new CustomEvent('settingsUpdated', {
@@ -238,6 +305,46 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 try {
                   const fallbackSettings = await userSettingsService.getUserSettings(userProfile.id)
                   setUserSettings(fallbackSettings)
+
+                  // Store fallback settings in localStorage for SettingsPage access
+                  localStorage.setItem(`settings_${userProfile.id}`, JSON.stringify({
+                    theme: fallbackSettings?.theme || 'light',
+                    mfaEnabled: userProfile.mfaEnabled || false,
+                    refreshInterval: 30000,
+                    sessionTimeout: fallbackSettings?.security_preferences?.session_timeout || 15,
+                    notifications: {
+                      calls: fallbackSettings?.notifications?.call_alerts ?? true,
+                      sms: fallbackSettings?.notifications?.sms_alerts ?? true,
+                      system: fallbackSettings?.notifications?.security_alerts ?? true
+                    },
+                    retellApiKey: fallbackSettings?.retell_config?.api_key,
+                    callAgentId: fallbackSettings?.retell_config?.call_agent_id,
+                    smsAgentId: fallbackSettings?.retell_config?.sms_agent_id
+                  }))
+
+                  // Also try to initialize retell service with fallback settings
+                  if (fallbackSettings?.retell_config) {
+                    try {
+                      const { retellService } = await import('@/services/retellService')
+                      retellService.updateCredentials(
+                        fallbackSettings.retell_config.api_key,
+                        fallbackSettings.retell_config.call_agent_id,
+                        fallbackSettings.retell_config.sms_agent_id
+                      )
+                      console.log('✅ Retell service initialized with fallback settings')
+
+                      // Dispatch API ready event
+                      window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
+                        detail: {
+                          apiKey: !!fallbackSettings.retell_config.api_key,
+                          callAgentId: !!fallbackSettings.retell_config.call_agent_id,
+                          smsAgentId: !!fallbackSettings.retell_config.sms_agent_id
+                        }
+                      }))
+                    } catch (retellError) {
+                      console.error('❌ Failed to initialize retell service with fallback:', retellError)
+                    }
+                  }
                 } catch (fallbackError) {
                   console.error('Settings fallback also failed:', fallbackError)
                 }
