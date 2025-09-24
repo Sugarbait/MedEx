@@ -2,7 +2,8 @@ import React, { useState } from 'react'
 import { ShieldCheckIcon, EyeIcon, EyeOffIcon, AlertCircleIcon } from 'lucide-react'
 import { userManagementService } from '@/services/userManagementService'
 import { userProfileService } from '@/services/userProfileService'
-// MFA functionality moved to TOTPProtectedRoute
+import TOTPLoginVerification from '@/components/auth/TOTPLoginVerification'
+import { totpService } from '@/services/totpService'
 import { useCompanyLogos } from '@/hooks/useCompanyLogos'
 import { userSettingsService } from '@/services/userSettingsService'
 import { PasswordDebugger } from '@/utils/passwordDebug'
@@ -24,6 +25,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [error, setError] = useState('')
   const { logos } = useCompanyLogos()
   const [warning, setWarning] = useState('')
+
+  // MFA verification state
+  const [showMFAVerification, setShowMFAVerification] = useState(false)
+  const [pendingUser, setPendingUser] = useState<any>(null)
 
   // Emergency admin unlock function (press Ctrl+Shift+U on login page)
   // Emergency credential setup function (press Ctrl+Shift+S on login page)
@@ -151,6 +156,57 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     createUsersIfNeeded()
   }, [])
 
+  // Function to handle successful authentication - check for MFA
+  const handleAuthenticationSuccess = async () => {
+    const currentUser = localStorage.getItem('currentUser')
+    if (!currentUser) {
+      console.error('No current user found after authentication')
+      onLogin()
+      return
+    }
+
+    try {
+      const user = JSON.parse(currentUser)
+      console.log('🔍 Login: Checking if user has TOTP enabled...')
+
+      // Check if user has TOTP enabled
+      const totpEnabled = await totpService.isTOTPEnabled(user.id)
+      console.log('🔍 Login: TOTP enabled status:', totpEnabled)
+
+      if (totpEnabled) {
+        console.log('🔐 Login: TOTP required - showing MFA verification')
+        setPendingUser(user)
+        setShowMFAVerification(true)
+        setIsLoading(false)
+      } else {
+        console.log('✅ Login: No TOTP required - proceeding to dashboard')
+        onLogin()
+      }
+    } catch (error) {
+      console.error('❌ Login: Error checking TOTP status:', error)
+      // If TOTP check fails, proceed without MFA (graceful degradation)
+      onLogin()
+    }
+  }
+
+  // Handle MFA verification success
+  const handleMFASuccess = () => {
+    console.log('✅ Login: MFA verification successful - proceeding to dashboard')
+    setShowMFAVerification(false)
+    setPendingUser(null)
+    onLogin()
+  }
+
+  // Handle MFA verification cancel
+  const handleMFACancel = () => {
+    console.log('🚫 Login: MFA verification canceled - returning to login')
+    setShowMFAVerification(false)
+    setPendingUser(null)
+    setIsLoading(false)
+    // Clear the logged in user since they didn't complete MFA
+    localStorage.removeItem('currentUser')
+  }
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
@@ -225,7 +281,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               console.warn('⚠️ Demo user cross-device sync failed:', syncError)
             }
           }
-          onLogin()
+          await handleAuthenticationSuccess()
           return
         }
       }
@@ -293,7 +349,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
         // Clear failed attempts on successful login
         LoginAttemptTracker.clearFailedAttempts(email)
-        onLogin()
+        await handleAuthenticationSuccess()
       } else {
         // Check for system accounts as fallback (only if user not found in system and not already tried)
         if (!isSystemUser && await handleDemoAccountLogin(email, password)) {
@@ -323,7 +379,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           }
           // Clear failed attempts on successful login
           LoginAttemptTracker.clearFailedAttempts(email)
-          onLogin()
+          await handleAuthenticationSuccess()
         } else {
           // Record failed attempt and show warning
           const attemptResult = LoginAttemptTracker.recordFailedAttempt(email)
@@ -682,6 +738,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           </div>
         </div>
       </div>
+
+      {/* MFA Verification Modal */}
+      {showMFAVerification && pendingUser && (
+        <TOTPLoginVerification
+          user={pendingUser}
+          onVerificationSuccess={handleMFASuccess}
+          onCancel={handleMFACancel}
+        />
+      )}
     </div>
   )
 }

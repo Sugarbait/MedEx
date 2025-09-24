@@ -33,6 +33,7 @@ import { ThemeManager } from '@/utils/themeManager'
 import { SiteHelpChatbot } from '@/components/common/SiteHelpChatbot'
 import { toastNotificationService, ToastNotificationPreferences } from '@/services/toastNotificationService'
 import { logoService, CompanyLogos } from '@/services/logoService'
+import { useTOTPStatus } from '@/hooks/useTOTPStatus'
 
 interface User {
   id: string
@@ -86,6 +87,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   )
   const [companyLogos, setCompanyLogos] = useState<CompanyLogos>({})
   const [logoUploadStatus, setLogoUploadStatus] = useState<'idle' | 'uploading' | 'success' | 'error'>('idle')
+
+  // Get actual TOTP status for MFA toggle
+  const totpStatus = useTOTPStatus(user?.id)
 
 
   const tabs = [
@@ -1200,7 +1204,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                     <p className="text-sm text-gray-600 dark:text-gray-300">
                       Add an extra layer of security to your account with TOTP authenticator
                     </p>
-                    {userSettings?.mfaEnabled && (
+                    {totpStatus.isEnabled && (
                       <div className="flex items-center gap-2 mt-2">
                         <div className="w-2 h-2 rounded-full bg-green-500" />
                         <span className="text-xs text-green-600 dark:text-green-400">MFA is properly configured</span>
@@ -1225,15 +1229,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        handleMFAToggle(!userSettings.mfaEnabled);
+                        handleMFAToggle(!totpStatus.isEnabled);
                       }}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
-                        userSettings.mfaEnabled ? 'bg-blue-600' : 'bg-gray-300'
+                        totpStatus.isEnabled ? 'bg-blue-600' : 'bg-gray-300'
                       }`}
                     >
                       <span
                         className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          userSettings.mfaEnabled ? 'translate-x-6' : 'translate-x-1'
+                          totpStatus.isEnabled ? 'translate-x-6' : 'translate-x-1'
                         }`}
                       />
                     </button>
