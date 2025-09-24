@@ -3,7 +3,7 @@ export interface User {
   azure_ad_id: string
   email: string
   name: string
-  role: 'admin' | 'healthcare_provider' | 'staff'
+  role: 'admin' | 'super_user' | 'healthcare_provider' | 'staff'
   permissions: Permission[]
   lastLogin?: Date
   mfaEnabled: boolean

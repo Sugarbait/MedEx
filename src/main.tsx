@@ -66,6 +66,16 @@ import('./utils/emergencyAccess').catch(() => {
   console.log('Emergency access not available')
 })
 
+// Import super user setup test utility (for development)
+if (import.meta.env.DEV) {
+  import('./utils/testSuperUserSetup').catch(() => {
+    console.log('Super user test utility not available')
+  })
+  import('./utils/finalSuperUserTest').catch(() => {
+    console.log('Final super user test not available')
+  })
+}
+
 // Register service worker via virtual module
 if ('serviceWorker' in navigator) {
   import('virtual:pwa-register').then(({ registerSW }) => {

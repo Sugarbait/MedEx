@@ -44,7 +44,11 @@ const CACHE_EXPIRY_HOURS = 12
 
 export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
   const [isLoading, setIsLoading] = useState(false)
-  const [selectedDateRange, setSelectedDateRange] = useState<DateRange>('today')
+  const [selectedDateRange, setSelectedDateRange] = useState<DateRange>(() => {
+    // Remember last selected date range from localStorage
+    const saved = localStorage.getItem('dashboard_page_date_range')
+    return (saved as DateRange) || 'today'
+  })
   const [isChatbotVisible, setIsChatbotVisible] = useState(false)
 
   // State for custom date range
@@ -946,8 +950,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
         <DateRangePicker
           selectedRange={selectedDateRange}
+          customStartDate={customStartDate}
+          customEndDate={customEndDate}
           onRangeChange={(range, customStart, customEnd) => {
             setSelectedDateRange(range)
+            // Save selected date range to localStorage
+            localStorage.setItem('dashboard_page_date_range', range)
 
             // Handle custom date range
             if (range === 'custom' && customStart && customEnd) {

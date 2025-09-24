@@ -313,28 +313,60 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         await authService.invalidateSession(sessionInfo.sessionId)
       }
 
-      // Clean up settings subscriptions for current user
-      if (user?.id) {
-        userSettingsService.unsubscribeFromSettings(user.id)
-        userSettingsService.clearCache(user.id)
-      } else {
-        // Fallback: clean up all subscriptions and cache
-        userSettingsService.unsubscribeFromSettings()
-        userSettingsService.clearCache()
+      // SECURITY ENHANCEMENT: Comprehensive cleanup on logout
+      try {
+        // Clear TOTP sessions
+        const { clearAllTOTPSessions } = await import('../components/auth/TOTPProtectedRoute')
+        clearAllTOTPSessions()
+
+        // Clean up settings subscriptions for current user
+        if (user?.id) {
+          userSettingsService.unsubscribeFromSettings(user.id)
+          userSettingsService.clearCache(user.id)
+
+          // Clear user-specific localStorage items
+          localStorage.removeItem(`user_settings_${user.id}`)
+          localStorage.removeItem(`settings_${user.id}`)
+          localStorage.removeItem(`totp_verified_${user.id}`)
+          localStorage.removeItem(`totp_session_${user.id}`)
+        } else {
+          // Fallback: clean up all subscriptions and cache
+          userSettingsService.unsubscribeFromSettings()
+          userSettingsService.clearCache()
+
+          // Clear all user-related localStorage items
+          const allKeys = Object.keys(localStorage)
+          allKeys.forEach(key => {
+            if (key.startsWith('user_settings_') ||
+                key.startsWith('settings_') ||
+                key.startsWith('totp_verified_') ||
+                key.startsWith('totp_session_')) {
+              localStorage.removeItem(key)
+            }
+          })
+        }
+
+        // Clear all secure storage
+        await secureStorage.clear()
+
+        // Clear main authentication data
+        localStorage.removeItem('currentUser')
+        localStorage.removeItem('mfa_verified')
+
+        console.log('🚪 SECURITY: Complete authentication cleanup performed')
+      } catch (cleanupError) {
+        console.error('Error during logout cleanup:', cleanupError)
+        // Continue with logout even if cleanup fails
       }
 
-      // Clear all secure storage
-      secureStorage.clear()
-
-      // Clear any localStorage items related to user settings
-      if (user?.id) {
-        localStorage.removeItem(`user_settings_${user.id}`)
+      try {
+        await instance.logoutPopup({
+          postLogoutRedirectUri: window.location.origin,
+          mainWindowRedirectUri: window.location.origin
+        })
+      } catch (msalError) {
+        console.warn('MSAL logout failed, continuing with local cleanup:', msalError)
       }
-
-      await instance.logoutPopup({
-        postLogoutRedirectUri: window.location.origin,
-        mainWindowRedirectUri: window.location.origin
-      })
 
       setUser(null)
       setSessionInfo(null)
@@ -349,6 +381,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       logger.error('Logout error', undefined, undefined, {
         error: error instanceof Error ? error.message : 'Unknown error'
       })
+
+      // SECURITY: Even if logout fails, clear local data
+      try {
+        localStorage.removeItem('currentUser')
+        localStorage.removeItem('mfa_verified')
+        const { clearAllTOTPSessions } = await import('../components/auth/TOTPProtectedRoute')
+        clearAllTOTPSessions()
+      } catch (fallbackError) {
+        console.error('Fallback cleanup also failed:', fallbackError)
+      }
     }
   }
 
@@ -430,34 +472,84 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   }
 
-  // Secure session timeout handling
+  // ENHANCED session timeout handling with proper cleanup
   useEffect(() => {
     if (!sessionInfo || !user) return
 
-    const timeoutDuration = 15 * 60 * 1000 // 15 minutes
+    // Get session timeout from user settings, default to 15 minutes
+    let timeoutDuration = 15 * 60 * 1000 // 15 minutes default
+    try {
+      const savedSettings = localStorage.getItem(`settings_${user.id}`)
+      if (savedSettings) {
+        const settings = JSON.parse(savedSettings)
+        if (settings.sessionTimeout) {
+          timeoutDuration = settings.sessionTimeout * 60 * 1000 // Convert minutes to ms
+        }
+      }
+    } catch (error) {
+      console.error('Failed to load session timeout setting:', error)
+    }
+
     const warningDuration = 2 * 60 * 1000  // 2 minutes before timeout
 
     let timeoutId: NodeJS.Timeout
     let warningTimeoutId: NodeJS.Timeout
     let activityTimer: NodeJS.Timeout
+    let isWarningShown = false
 
     const handleSessionExpiry = async () => {
       logger.warn('Session expired due to inactivity', user.id, sessionInfo.sessionId)
+
+      // SECURITY ENHANCEMENT: Clear all authentication data on timeout
+      try {
+        // Clear TOTP sessions
+        const { clearAllTOTPSessions } = await import('../components/auth/TOTPProtectedRoute')
+        clearAllTOTPSessions()
+
+        // Clear all user data
+        localStorage.removeItem('currentUser')
+        localStorage.removeItem('mfa_verified')
+
+        // Clear secure storage
+        await secureStorage.clear()
+
+        console.log('🚪 SECURITY: All authentication data cleared on session timeout')
+      } catch (error) {
+        console.error('Error clearing authentication data on timeout:', error)
+      }
+
       await logout()
     }
 
     const handleSessionWarning = () => {
+      if (isWarningShown) return // Prevent multiple warnings
+      isWarningShown = true
+
       logger.info('Session expiring soon, showing warning', user.id, sessionInfo.sessionId)
 
       const shouldContinue = window.confirm(
-        'Your session will expire in 2 minutes due to inactivity. Click OK to continue.'
+        'Your session will expire in 2 minutes due to inactivity. Click OK to continue, or Cancel to logout now.'
       )
 
       if (shouldContinue) {
+        // SECURITY ENHANCEMENT: Require MFA re-verification for session extension
+        const lastMFATime = localStorage.getItem(`totp_session_${user.id}`)
+        const now = Date.now()
+        const mfaAge = lastMFATime ? now - parseInt(lastMFATime) : Infinity
+        const MFA_REAUTH_THRESHOLD = 4 * 60 * 60 * 1000 // 4 hours
+
+        if (mfaAge > MFA_REAUTH_THRESHOLD) {
+          alert('For security, you will need to re-verify your identity to continue.')
+          // Clear TOTP sessions to force re-authentication
+          const { clearTOTPSession } = require('../components/auth/TOTPProtectedRoute')
+          clearTOTPSession(user.id)
+        }
+
         refreshSession().catch(() => {
           logger.error('Failed to refresh session on user request')
           logout()
         })
+        isWarningShown = false
       } else {
         logout()
       }
@@ -467,6 +559,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       clearTimeout(timeoutId)
       clearTimeout(warningTimeoutId)
       clearTimeout(activityTimer)
+      isWarningShown = false
 
       // Set warning timer
       warningTimeoutId = setTimeout(handleSessionWarning, timeoutDuration - warningDuration)
@@ -503,6 +596,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     // Initial timeout setup
     resetTimeout()
 
+    // Listen for settings changes that might affect timeout duration
+    const handleSettingsChange = () => {
+      resetTimeout() // Restart with potentially new timeout duration
+    }
+    window.addEventListener('userSettingsUpdated', handleSettingsChange)
+
     // Cleanup
     return () => {
       clearTimeout(timeoutId)
@@ -513,6 +612,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         document.removeEventListener(event, handleActivity, true)
       })
       document.removeEventListener('visibilitychange', handleVisibilityChange)
+      window.removeEventListener('userSettingsUpdated', handleSettingsChange)
 
       logger.debug('Session timeout monitoring cleaned up')
     }

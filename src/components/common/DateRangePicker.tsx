@@ -1,5 +1,10 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { CalendarIcon, ChevronDownIcon } from 'lucide-react'
+
+// Utility function to format date for HTML input
+const formatDateForInput = (date: Date) => {
+  return date.toISOString().split('T')[0]
+}
 
 export type DateRange = 'today' | 'thisWeek' | 'lastWeek' | 'thisMonth' | 'thisYear' | 'custom'
 
@@ -7,17 +12,35 @@ interface DateRangePickerProps {
   selectedRange: DateRange
   onRangeChange: (range: DateRange, customStart?: Date, customEnd?: Date) => void
   className?: string
+  customStartDate?: Date
+  customEndDate?: Date
 }
 
 export const DateRangePicker: React.FC<DateRangePickerProps> = ({
   selectedRange,
   onRangeChange,
-  className = ''
+  className = '',
+  customStartDate: propCustomStartDate,
+  customEndDate: propCustomEndDate
 }) => {
   const [isOpen, setIsOpen] = useState(false)
-  const [customStartDate, setCustomStartDate] = useState('')
-  const [customEndDate, setCustomEndDate] = useState('')
+  const [customStartDate, setCustomStartDate] = useState(() =>
+    propCustomStartDate ? formatDateForInput(propCustomStartDate) : ''
+  )
+  const [customEndDate, setCustomEndDate] = useState(() =>
+    propCustomEndDate ? formatDateForInput(propCustomEndDate) : ''
+  )
   const [showCustomInputs, setShowCustomInputs] = useState(false)
+
+  // Sync internal state with prop changes
+  useEffect(() => {
+    if (propCustomStartDate) {
+      setCustomStartDate(formatDateForInput(propCustomStartDate))
+    }
+    if (propCustomEndDate) {
+      setCustomEndDate(formatDateForInput(propCustomEndDate))
+    }
+  }, [propCustomStartDate, propCustomEndDate])
 
   const dateRangeOptions = [
     { value: 'today' as DateRange, label: 'Today' },
@@ -30,6 +53,11 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
 
   const getSelectedLabel = () => {
     const option = dateRangeOptions.find(opt => opt.value === selectedRange)
+    if (selectedRange === 'custom' && propCustomStartDate && propCustomEndDate) {
+      const startFormatted = propCustomStartDate.toLocaleDateString()
+      const endFormatted = propCustomEndDate.toLocaleDateString()
+      return `${startFormatted} - ${endFormatted}`
+    }
     return option?.label || 'Select Range'
   }
 
@@ -53,9 +81,6 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
     }
   }
 
-  const formatDateForInput = (date: Date) => {
-    return date.toISOString().split('T')[0]
-  }
 
   return (
     <div className={`relative ${className}`}>

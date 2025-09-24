@@ -20,7 +20,7 @@ export interface UserProfileData {
   id: string
   email: string
   name: string
-  role: 'admin' | 'healthcare_provider' | 'staff'
+  role: 'admin' | 'super_user' | 'healthcare_provider' | 'staff'
   avatar?: string
   mfa_enabled?: boolean
   settings: {
@@ -31,20 +31,202 @@ export interface UserProfileData {
     notifications?: any
     [key: string]: any
   }
+  // Cross-device sync metadata
+  lastSynced?: string
+  deviceId?: string
+  syncEnabled?: boolean
+}
+
+interface ProfileSyncEvent {
+  eventType: 'profile_updated' | 'avatar_changed' | 'settings_synced' | 'mfa_changed'
+  userId: string
+  deviceId?: string
+  data: any
+  timestamp: string
 }
 
 /**
- * Service for managing user profiles in Supabase
- * Replaces localStorage-based user profile management
+ * Service for managing user profiles with cross-device synchronization
+ * Integrates with Supabase for cloud sync and real-time updates
  */
 export class UserProfileService {
-  private static cache = new Map<string, { data: CompleteUserProfile; timestamp: number }>()
+  private static cache = new Map<string, { data: CompleteUserProfile; timestamp: number; deviceId?: string }>()
   private static readonly CACHE_TTL = 5 * 60 * 1000 // 5 minutes
+  private static currentDeviceId: string | null = null
+  private static syncListeners = new Map<string, ((event: ProfileSyncEvent) => void)[]>()
+  private static realtimeChannels = new Map<string, any>()
 
   /**
-   * Load user profile from localStorage (fallback mode due to missing Supabase schema)
+   * Initialize cross-device profile sync
    */
-  static async loadUserProfile(userId: string): Promise<ServiceResponse<UserProfileData | null>> {
+  static async initializeCrossDeviceProfileSync(userId: string, deviceId?: string): Promise<{ success: boolean; deviceId: string }> {
+    try {
+      const finalDeviceId = deviceId || this.generateDeviceId()
+      this.currentDeviceId = finalDeviceId
+
+      // Subscribe to profile changes
+      await this.subscribeToProfileChanges(userId)
+
+      console.log(`🔄 PROFILE SYNC: Initialized for user ${userId} on device ${finalDeviceId}`)
+      return { success: true, deviceId: finalDeviceId }
+    } catch (error) {
+      console.error('Failed to initialize profile sync:', error)
+      return { success: false, deviceId: deviceId || '' }
+    }
+  }
+
+  /**
+   * Generate device ID for profile sync
+   */
+  private static generateDeviceId(): string {
+    const stored = localStorage.getItem('carexps_device_id')
+    if (stored) return stored
+
+    const deviceId = `device_${Date.now()}_${crypto.randomUUID?.() || Math.random().toString(36).substring(2)}`
+    localStorage.setItem('carexps_device_id', deviceId)
+    return deviceId
+  }
+
+  /**
+   * Subscribe to real-time profile changes
+   */
+  private static async subscribeToProfileChanges(userId: string): Promise<void> {
+    try {
+      if (!supabase) return
+
+      const channel = supabase
+        .channel(`profile-sync-${userId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'users',
+            filter: `id=eq.${userId}`
+          },
+          async (payload) => {
+            await this.handleProfileChange(payload, userId)
+          }
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'user_settings',
+            filter: `user_id=eq.${userId}`
+          },
+          async (payload) => {
+            await this.handleSettingsChange(payload, userId)
+          }
+        )
+        .subscribe()
+
+      this.realtimeChannels.set(userId, channel)
+      console.log('🔄 Subscribed to profile changes')
+    } catch (error) {
+      console.error('Failed to subscribe to profile changes:', error)
+    }
+  }
+
+  /**
+   * Handle profile changes from other devices
+   */
+  private static async handleProfileChange(payload: any, userId: string): Promise<void> {
+    try {
+      if (payload.eventType === 'UPDATE' && payload.new) {
+        console.log('📥 PROFILE SYNC: Received profile update from another device')
+
+        // Clear cache to ensure fresh data
+        this.cache.delete(userId)
+
+        // Notify listeners
+        const listeners = this.syncListeners.get(userId) || []
+        const event: ProfileSyncEvent = {
+          eventType: 'profile_updated',
+          userId,
+          deviceId: 'remote',
+          data: payload.new,
+          timestamp: new Date().toISOString()
+        }
+
+        listeners.forEach(listener => listener(event))
+
+        // Update localStorage
+        const updatedProfile = this.transformDatabaseUserToProfile(payload.new)
+        if (updatedProfile) {
+          localStorage.setItem(`userProfile_${userId}`, JSON.stringify(updatedProfile))
+          localStorage.setItem('currentUser', JSON.stringify(updatedProfile))
+
+          // Dispatch UI update event
+          window.dispatchEvent(new CustomEvent('crossDeviceProfileSync', {
+            detail: { userId, profile: updatedProfile }
+          }))
+        }
+      }
+    } catch (error) {
+      console.error('Error handling profile change:', error)
+    }
+  }
+
+  /**
+   * Handle settings changes from other devices
+   */
+  private static async handleSettingsChange(payload: any, userId: string): Promise<void> {
+    try {
+      if (payload.eventType === 'UPDATE' || payload.eventType === 'INSERT') {
+        console.log('📥 PROFILE SYNC: Received settings update from another device')
+
+        // Notify listeners
+        const listeners = this.syncListeners.get(userId) || []
+        const event: ProfileSyncEvent = {
+          eventType: 'settings_synced',
+          userId,
+          deviceId: 'remote',
+          data: payload.new,
+          timestamp: new Date().toISOString()
+        }
+
+        listeners.forEach(listener => listener(event))
+      }
+    } catch (error) {
+      console.error('Error handling settings change:', error)
+    }
+  }
+
+  /**
+   * Transform database user to profile format
+   */
+  private static transformDatabaseUserToProfile(dbUser: any): UserProfileData | null {
+    try {
+      return {
+        id: dbUser.id,
+        email: dbUser.email,
+        name: dbUser.name,
+        role: dbUser.role,
+        avatar: dbUser.avatar_url,
+        mfa_enabled: dbUser.mfa_enabled,
+        settings: {
+          theme: 'light',
+          notifications: {}
+        },
+        lastSynced: new Date().toISOString(),
+        deviceId: this.currentDeviceId || undefined,
+        syncEnabled: true
+      }
+    } catch (error) {
+      console.error('Error transforming database user:', error)
+      return null
+    }
+  }
+
+  /**
+   * Load user profile with cross-device sync support
+   */
+  static async loadUserProfile(userId: string, options?: {
+    forceCloudSync?: boolean,
+    deviceId?: string
+  }): Promise<ServiceResponse<UserProfileData | null>> {
     try {
       // Skip Supabase audit logging for now as it may also cause issues
       console.log('UserProfileService: Loading user profile')
@@ -146,9 +328,16 @@ export class UserProfileService {
   }
 
   /**
-   * Save/update user profile to Supabase (replaces localStorage.setItem('currentUser'))
+   * Save/update user profile with cross-device sync
    */
-  static async saveUserProfile(userProfileData: UserProfileData): Promise<ServiceResponse<UserProfileData>> {
+  static async saveUserProfile(
+    userProfileData: UserProfileData,
+    options?: {
+      deviceId?: string,
+      broadcastToOtherDevices?: boolean,
+      syncToCloud?: boolean
+    }
+  ): Promise<ServiceResponse<UserProfileData>> {
     try {
       const userId = userProfileData.id
 
@@ -157,12 +346,53 @@ export class UserProfileService {
       // Skip Supabase operations entirely - tables don't exist or have wrong schema
       console.log('UserProfileService: Using localStorage-only mode for user management')
 
-      // Save to localStorage for immediate availability
+      // Add cross-device sync metadata
       const currentTime = new Date().toISOString()
+      const deviceId = options?.deviceId || this.currentDeviceId || 'unknown'
       const userForStorage = {
         ...userProfileData,
         created_at: currentTime,
-        updated_at: currentTime
+        updated_at: currentTime,
+        lastSynced: currentTime,
+        deviceId,
+        syncEnabled: options?.syncToCloud !== false
+      }
+
+      // Try to save to Supabase first if requested
+      if (options?.syncToCloud !== false) {
+        try {
+          const { error } = await supabase
+            .from('users')
+            .upsert({
+              id: userProfileData.id,
+              email: userProfileData.email,
+              name: userProfileData.name,
+              role: userProfileData.role,
+              mfa_enabled: userProfileData.mfa_enabled || false,
+              avatar_url: userProfileData.avatar,
+              updated_at: currentTime,
+              is_active: true
+            }, { onConflict: 'id' })
+
+          if (error) {
+            console.warn('Supabase profile save failed, continuing with localStorage:', error.message)
+          } else {
+            console.log('✅ Profile saved to Supabase successfully')
+
+            // Notify sync listeners
+            const listeners = this.syncListeners.get(userId) || []
+            const event: ProfileSyncEvent = {
+              eventType: 'profile_updated',
+              userId,
+              deviceId,
+              data: userForStorage,
+              timestamp: currentTime
+            }
+            listeners.forEach(listener => listener(event))
+          }
+        } catch (supabaseError) {
+          console.warn('Supabase profile save error:', supabaseError)
+        }
       }
 
       // Store individual user profile
@@ -248,10 +478,19 @@ export class UserProfileService {
         }
       }
 
-      // Clear cache
-      this.cache.delete(userId)
+      // Update cache with sync metadata
+      this.cache.set(userId, {
+        data: userForStorage as any,
+        timestamp: Date.now(),
+        deviceId
+      })
 
-      return { status: 'success', data: userProfileData }
+      // Broadcast to other devices if enabled
+      if (options?.broadcastToOtherDevices !== false) {
+        console.log('📡 PROFILE SYNC: Changes will be broadcasted to other devices')
+      }
+
+      return { status: 'success', data: userForStorage }
 
     } catch (error: any) {
       await auditLogger.logSecurityEvent('USER_PROFILE_UPDATE_FAILED', 'user_profiles', false, {
@@ -351,7 +590,7 @@ export class UserProfileService {
           id: 'pierre-user-789',
           email: 'pierre@phaetonai.com',
           name: 'Pierre PhaetonAI',
-          role: 'admin',
+          role: 'super_user',
           mfa_enabled: false,
           settings: { theme: 'dark', notifications: {} },
           created_at: defaultCreatedDate,
@@ -923,9 +1162,119 @@ export class UserProfileService {
   }
 
   /**
-   * Update specific user profile fields
+   * Force sync profile from cloud
    */
-  static async updateUserProfile(userId: string, updates: Partial<UserProfileData>): Promise<ServiceResponse<UserProfileData>> {
+  static async forceSyncProfileFromCloud(userId: string): Promise<ServiceResponse<UserProfileData | null>> {
+    try {
+      console.log(`🔄 FORCE PROFILE SYNC: Starting for user ${userId}`)
+
+      // Clear cache first
+      this.cache.delete(userId)
+
+      // Try to get from Supabase
+      try {
+        const { data: user, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('id', userId)
+          .single()
+
+        if (!error && user) {
+          const profile = this.transformDatabaseUserToProfile(user)
+          if (profile) {
+            // Update localStorage
+            localStorage.setItem(`userProfile_${userId}`, JSON.stringify(profile))
+            localStorage.setItem('currentUser', JSON.stringify(profile))
+
+            // Update cache
+            this.cache.set(userId, {
+              data: profile as any,
+              timestamp: Date.now(),
+              deviceId: 'cloud'
+            })
+
+            console.log(`✅ FORCE PROFILE SYNC: Successfully loaded from cloud`)
+            return { status: 'success', data: profile }
+          }
+        }
+      } catch (error) {
+        console.warn('Cloud sync failed, using local fallback:', error)
+      }
+
+      // Fallback to localStorage
+      const localProfile = await this.loadUserProfile(userId)
+      return localProfile
+
+    } catch (error) {
+      console.error('Force profile sync failed:', error)
+      return { status: 'error', error: error instanceof Error ? error.message : 'Sync failed' }
+    }
+  }
+
+  /**
+   * Get profile sync status
+   */
+  static async getProfileSyncStatus(userId: string): Promise<{
+    isEnabled: boolean
+    lastSync: string | null
+    deviceId: string | null
+    cloudAvailable: boolean
+  }> {
+    try {
+      const cached = this.cache.get(userId)
+      const profile = cached?.data as UserProfileData
+
+      return {
+        isEnabled: profile?.syncEnabled || false,
+        lastSync: profile?.lastSynced || null,
+        deviceId: this.currentDeviceId,
+        cloudAvailable: !!supabase
+      }
+    } catch (error) {
+      return {
+        isEnabled: false,
+        lastSync: null,
+        deviceId: null,
+        cloudAvailable: false
+      }
+    }
+  }
+
+  /**
+   * Subscribe to profile sync events
+   */
+  static subscribeToProfileSync(userId: string, callback: (event: ProfileSyncEvent) => void): void {
+    const listeners = this.syncListeners.get(userId) || []
+    listeners.push(callback)
+    this.syncListeners.set(userId, listeners)
+  }
+
+  /**
+   * Unsubscribe from profile sync events
+   */
+  static unsubscribeFromProfileSync(userId: string, callback?: (event: ProfileSyncEvent) => void): void {
+    const listeners = this.syncListeners.get(userId) || []
+
+    if (callback) {
+      const filteredListeners = listeners.filter(l => l !== callback)
+      this.syncListeners.set(userId, filteredListeners)
+    } else {
+      this.syncListeners.delete(userId)
+    }
+  }
+
+  /**
+   * Update specific user profile fields with sync support
+   */
+  static async updateUserProfile(
+    userId: string,
+    updates: Partial<UserProfileData>,
+    options?: {
+      deviceId?: string,
+      syncToCloud?: boolean,
+      broadcastToOtherDevices?: boolean
+    }
+  ): Promise<ServiceResponse<UserProfileData>> {
     try {
       await auditLogger.logSecurityEvent('USER_PROFILE_UPDATE', 'user_profiles', true, { userId, updates: Object.keys(updates) })
 
@@ -967,8 +1316,12 @@ export class UserProfileService {
         console.warn('Supabase update error, continuing with localStorage:', supabaseError)
       }
 
-      // Save updated profile using existing save method (localStorage)
-      const saveResponse = await this.saveUserProfile(updatedProfile)
+      // Save updated profile using existing save method with sync options
+      const saveResponse = await this.saveUserProfile(updatedProfile, {
+        deviceId: options?.deviceId,
+        syncToCloud: options?.syncToCloud,
+        broadcastToOtherDevices: options?.broadcastToOtherDevices
+      })
       if (saveResponse.status === 'error') {
         throw new Error(saveResponse.error)
       }
@@ -1074,6 +1427,71 @@ export class UserProfileService {
         error: error.message
       })
       return { status: 'error', error: error.message }
+    }
+  }
+
+  /**
+   * Sync avatar across devices
+   */
+  static async syncAvatarAcrossDevices(userId: string): Promise<ServiceResponse<string | null>> {
+    try {
+      console.log(`🔄 AVATAR SYNC: Starting for user ${userId}`)
+
+      const result = await avatarStorageService.syncAvatarAcrossDevices(userId)
+
+      if (result.status === 'success' && result.data) {
+        // Notify sync listeners
+        const listeners = this.syncListeners.get(userId) || []
+        const event: ProfileSyncEvent = {
+          eventType: 'avatar_changed',
+          userId,
+          deviceId: this.currentDeviceId || 'unknown',
+          data: { avatarUrl: result.data },
+          timestamp: new Date().toISOString()
+        }
+        listeners.forEach(listener => listener(event))
+
+        console.log(`✅ AVATAR SYNC: Completed successfully`)
+      }
+
+      return result
+    } catch (error) {
+      console.error('Avatar sync failed:', error)
+      return { status: 'error', error: error instanceof Error ? error.message : 'Avatar sync failed' }
+    }
+  }
+
+  /**
+   * Clean up profile sync resources
+   */
+  static cleanupProfileSync(userId?: string): void {
+    if (userId) {
+      // Clean up for specific user
+      this.cache.delete(userId)
+      this.syncListeners.delete(userId)
+
+      // Unsubscribe from real-time channel
+      const channel = this.realtimeChannels.get(userId)
+      if (channel && supabase) {
+        supabase.removeChannel(channel)
+        this.realtimeChannels.delete(userId)
+      }
+
+      console.log(`🧹 Cleaned up profile sync for user: ${userId}`)
+    } else {
+      // Clean up all
+      this.cache.clear()
+      this.syncListeners.clear()
+
+      // Unsubscribe from all channels
+      if (supabase) {
+        this.realtimeChannels.forEach((channel) => {
+          supabase.removeChannel(channel)
+        })
+      }
+      this.realtimeChannels.clear()
+
+      console.log(`🧹 Cleaned up all profile sync resources`)
     }
   }
 
@@ -1248,13 +1666,15 @@ export class UserProfileService {
   /**
    * Map existing database role values to expected CareXPS role values
    */
-  private static mapExistingRoleToExpected(existingRole: string): 'admin' | 'healthcare_provider' | 'staff' {
+  private static mapExistingRoleToExpected(existingRole: string): 'admin' | 'super_user' | 'healthcare_provider' | 'staff' {
     if (!existingRole) return 'staff'
 
     const role = existingRole.toLowerCase()
 
     // Map existing roles to CareXPS roles
-    if (role === 'admin' || role === 'administrator') {
+    if (role === 'super_user' || role === 'superuser' || role === 'super user') {
+      return 'super_user'
+    } else if (role === 'admin' || role === 'administrator') {
       return 'admin'
     } else if (role === 'provider' || role === 'healthcare_provider' || role === 'doctor' || role === 'physician') {
       return 'healthcare_provider'
@@ -1297,3 +1717,10 @@ export class UserProfileService {
 }
 
 export const userProfileService = UserProfileService
+
+// Auto-cleanup on page unload
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    UserProfileService.cleanupProfileSync()
+  })
+}

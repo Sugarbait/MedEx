@@ -13,7 +13,27 @@ import TOTPVerification from './TOTPVerification'
 export const clearTOTPSession = (userId: string) => {
   const sessionKey = `totp_verified_${userId}`
   localStorage.removeItem(sessionKey)
-  console.log('🚪 SECURITY: TOTP session cleared for user:', userId)
+
+  // SECURITY ENHANCEMENT: Clear all TOTP-related session data
+  const allKeys = Object.keys(localStorage)
+  allKeys.forEach(key => {
+    if (key.startsWith('totp_verified_') || key.startsWith('totp_session_')) {
+      localStorage.removeItem(key)
+    }
+  })
+
+  console.log('🚪 SECURITY: All TOTP sessions cleared for user:', userId)
+}
+
+// Clear all TOTP sessions (for complete logout)
+export const clearAllTOTPSessions = () => {
+  const allKeys = Object.keys(localStorage)
+  allKeys.forEach(key => {
+    if (key.startsWith('totp_verified_') || key.startsWith('totp_session_')) {
+      localStorage.removeItem(key)
+    }
+  })
+  console.log('🚪 SECURITY: All TOTP sessions cleared globally')
 }
 
 interface TOTPProtectedRouteProps {
@@ -50,14 +70,26 @@ const TOTPProtectedRoute: React.FC<TOTPProtectedRouteProps> = ({
     try {
       console.log('🔒 SECURITY: Checking TOTP status for user:', user.id)
 
-      // Check if user already verified TOTP in this session
+      // SECURITY ENHANCEMENT: Check if user already verified TOTP in this session with expiration
       const sessionKey = `totp_verified_${user.id}`
+      const sessionTimestampKey = `totp_session_${user.id}`
       const isVerifiedInSession = localStorage.getItem(sessionKey) === 'true'
+      const sessionTimestamp = localStorage.getItem(sessionTimestampKey)
 
-      if (isVerifiedInSession) {
-        console.log('✅ SECURITY: User already verified TOTP in this session')
+      // TOTP sessions expire after 8 hours for security
+      const TOTP_SESSION_TIMEOUT = 8 * 60 * 60 * 1000 // 8 hours in milliseconds
+      const now = Date.now()
+      const sessionAge = sessionTimestamp ? now - parseInt(sessionTimestamp) : TOTP_SESSION_TIMEOUT + 1
+
+      if (isVerifiedInSession && sessionAge < TOTP_SESSION_TIMEOUT) {
+        const remainingTime = TOTP_SESSION_TIMEOUT - sessionAge
+        const remainingHours = Math.floor(remainingTime / (60 * 60 * 1000))
+        console.log(`✅ SECURITY: User already verified TOTP in this session (${remainingHours}h remaining)`)
         setStatus('authorized')
         return
+      } else if (isVerifiedInSession && sessionAge >= TOTP_SESSION_TIMEOUT) {
+        console.log('🔒 SECURITY: TOTP session expired, requiring re-verification')
+        clearTOTPSession(user.id)
       }
 
       // Check if user has TOTP enabled
@@ -79,17 +111,21 @@ const TOTPProtectedRoute: React.FC<TOTPProtectedRouteProps> = ({
 
   const handleSetupComplete = () => {
     console.log('✅ SECURITY: TOTP setup completed')
-    // Mark user as verified in session
+    // Mark user as verified in session with timestamp
     const sessionKey = `totp_verified_${user.id}`
+    const sessionTimestampKey = `totp_session_${user.id}`
     localStorage.setItem(sessionKey, 'true')
+    localStorage.setItem(sessionTimestampKey, Date.now().toString())
     setStatus('authorized')
   }
 
   const handleVerificationSuccess = () => {
     console.log('✅ SECURITY: TOTP verification successful')
-    // Mark user as verified in session
+    // Mark user as verified in session with timestamp
     const sessionKey = `totp_verified_${user.id}`
+    const sessionTimestampKey = `totp_session_${user.id}`
     localStorage.setItem(sessionKey, 'true')
+    localStorage.setItem(sessionTimestampKey, Date.now().toString())
     setStatus('authorized')
   }
 

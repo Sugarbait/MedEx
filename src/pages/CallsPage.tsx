@@ -94,7 +94,11 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
   const [statusFilter, setStatusFilter] = useState('all')
   const [sentimentFilter, setSentimentFilter] = useState('all')
   const [isFuzzySearchEnabled, setIsFuzzySearchEnabled] = useState(true)
-  const [selectedDateRange, setSelectedDateRange] = useState<DateRange>('today')
+  const [selectedDateRange, setSelectedDateRange] = useState<DateRange>(() => {
+    // Remember last selected date range from localStorage
+    const saved = localStorage.getItem('calls_page_date_range')
+    return (saved as DateRange) || 'today'
+  })
 
   // State for custom date range
   const [customStartDate, setCustomStartDate] = useState<Date | undefined>(() => {
@@ -842,8 +846,12 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
       <div className="flex items-center justify-between mb-4">
         <DateRangePicker
           selectedRange={selectedDateRange}
+          customStartDate={customStartDate}
+          customEndDate={customEndDate}
           onRangeChange={(range, customStart, customEnd) => {
             setSelectedDateRange(range)
+            // Save selected date range to localStorage
+            localStorage.setItem('calls_page_date_range', range)
 
             // Handle custom date range
             if (range === 'custom' && customStart && customEnd) {

@@ -727,23 +727,55 @@ const App: React.FC = () => {
     localStorage.setItem('mfa_verified', 'true')
   }
 
-  const handleLogout = () => {
-    console.log('🚪 Logging out user and clearing MFA sessions')
+  const handleLogout = async () => {
+    console.log('🚪 Logging out user and clearing all authentication data')
 
-    // Clear any TOTP verification state
-    if (user?.id) {
-      try {
-        console.log('🔒 Clearing TOTP verification state on logout')
-        clearTOTPSession(user.id)
-      } catch (error) {
-        console.error('Error clearing TOTP state on logout:', error)
+    try {
+      // SECURITY ENHANCEMENT: Comprehensive logout cleanup
+      if (user?.id) {
+        console.log('🔒 Clearing user-specific authentication data on logout')
+
+        // Clear TOTP sessions
+        try {
+          const { clearAllTOTPSessions } = await import('./components/auth/TOTPProtectedRoute')
+          clearAllTOTPSessions()
+        } catch (totpError) {
+          console.error('Error clearing TOTP sessions:', totpError)
+        }
+
+        // Clear user-specific data
+        localStorage.removeItem(`settings_${user.id}`)
+        localStorage.removeItem(`user_settings_${user.id}`)
+      } else {
+        // Clear all TOTP sessions when user ID is not available
+        try {
+          const { clearAllTOTPSessions } = await import('./components/auth/TOTPProtectedRoute')
+          clearAllTOTPSessions()
+        } catch (totpError) {
+          console.error('Error clearing all TOTP sessions:', totpError)
+        }
       }
-    }
 
-    localStorage.removeItem('currentUser')
-    localStorage.removeItem('mfa_verified')
-    setUser(null)
-    setMfaRequired(false)
+      // Clear main authentication data
+      localStorage.removeItem('currentUser')
+      localStorage.removeItem('mfa_verified')
+
+      // Clear any session timeout warnings
+      setShowTimeoutWarning && setShowTimeoutWarning(false)
+
+      // Reset application state
+      setUser(null)
+      setMfaRequired(false)
+
+      console.log('✅ Complete logout cleanup performed')
+    } catch (error) {
+      console.error('Error during logout cleanup:', error)
+      // Still clear basic data even if advanced cleanup fails
+      localStorage.removeItem('currentUser')
+      localStorage.removeItem('mfa_verified')
+      setUser(null)
+      setMfaRequired(false)
+    }
   }
 
   if (isLoading) {
@@ -756,14 +788,20 @@ const App: React.FC = () => {
           <p className="text-gray-600 dark:text-gray-300">Loading CareXPS Healthcare CRM...</p>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Initializing HIPAA-compliant environment</p>
           <button
-            onClick={() => {
-              localStorage.removeItem('currentUser')
-              localStorage.removeItem('mfa_verified')
+            onClick={async () => {
+              try {
+                const { clearAllTOTPSessions } = await import('./components/auth/TOTPProtectedRoute')
+                clearAllTOTPSessions()
+              } catch (error) {
+                console.error('Error clearing TOTP sessions:', error)
+              }
+              localStorage.clear()
+              sessionStorage.clear()
               window.location.reload()
             }}
             className="mt-4 px-4 py-2 text-sm bg-red-500 text-white rounded hover:bg-red-600"
           >
-            Force Logout & Show Login
+            Emergency Logout & Clear All Data
           </button>
           <p className="text-xs text-gray-400 mt-2">Press Ctrl+Shift+L for emergency logout</p>
         </div>

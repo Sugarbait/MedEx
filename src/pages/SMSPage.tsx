@@ -1553,6 +1553,8 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       <div className="flex items-center justify-between mb-4">
         <DateRangePicker
           selectedRange={selectedDateRange}
+          customStartDate={customStartDate}
+          customEndDate={customEndDate}
           onRangeChange={(range, customStart, customEnd) => {
             setSelectedDateRange(range)
             // Save selected date range to localStorage

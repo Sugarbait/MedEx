@@ -727,16 +727,21 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   }
 
   const handleAvatarUpload = async () => {
-    if (!avatarFile || !avatarPreview) return
+    if (!avatarFile || !avatarPreview) {
+      console.warn('Avatar upload called but no file or preview available')
+      return
+    }
 
     setSaveStatus('saving')
     setIsLoading(true)
 
     try {
-      console.log('Uploading avatar')
+      console.log('Uploading avatar for user:', user.id)
+      console.log('Avatar preview type:', typeof avatarPreview)
+      console.log('Avatar file type:', avatarFile.type, 'Size:', avatarFile.size)
 
-      // Use the robust avatar storage service
-      const result = await avatarStorageService.uploadAvatar(user.id, avatarPreview)
+      // Use the file directly instead of the preview for better reliability
+      const result = await avatarStorageService.uploadAvatar(user.id, avatarFile)
 
       if (result.status === 'error') {
         throw new Error(result.error)
@@ -747,20 +752,31 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus('idle'), 2000)
 
-      // Reset file input but keep the avatar preview since it's now saved
+      // Update avatar preview with the new URL
+      if (result.data) {
+        setAvatarPreview(result.data)
+        console.log('Avatar preview updated to:', result.data)
+      }
+
+      // Reset file input now that upload is complete
       setAvatarFile(null)
-      // Update avatar preview with the new URL to ensure it's the latest
-      setAvatarPreview(result.data!)
 
       console.log('Avatar upload completed successfully')
 
-      // Trigger custom event to notify App.tsx of user data change
+      // Trigger custom events to notify other components
       window.dispatchEvent(new Event('userDataUpdated'))
+      window.dispatchEvent(new CustomEvent('avatarUpdated', {
+        detail: { userId: user.id, avatarUrl: result.data }
+      }))
 
     } catch (error) {
       console.error('Failed to upload avatar:', error)
-      setSaveStatus('idle')
-      alert(`Failed to upload avatar: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      setSaveStatus('error')
+      setTimeout(() => setSaveStatus('idle'), 3000)
+
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      console.error('Avatar upload error details:', errorMessage)
+      alert(`Failed to upload avatar: ${errorMessage}`)
     } finally {
       setIsLoading(false)
     }
@@ -810,7 +826,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
     setSaveStatus('saving')
 
     try {
-      console.log('Saving full name update')
+      console.log('Saving full name update for user:', user.id, 'New name:', fullName.trim())
 
       // Update user profile with the new name
       const result = await userProfileService.updateUserProfile(user.id, {
@@ -818,45 +834,87 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
       })
 
       if (result.status === 'error') {
-        throw new Error(result.error)
+        throw new Error(result.error || 'Failed to update profile')
       }
+
+      console.log('Profile service update successful')
 
       // Update localStorage currentUser
       const currentUser = localStorage.getItem('currentUser')
       if (currentUser) {
-        const userData = JSON.parse(currentUser)
-        userData.name = fullName.trim()
-        localStorage.setItem('currentUser', JSON.stringify(userData))
+        try {
+          const userData = JSON.parse(currentUser)
+          if (userData.id === user.id) {
+            userData.name = fullName.trim()
+            userData.updated_at = new Date().toISOString()
+            localStorage.setItem('currentUser', JSON.stringify(userData))
+            console.log('Updated currentUser with new name')
+          }
+        } catch (parseError) {
+          console.warn('Failed to update currentUser:', parseError)
+        }
       }
 
       // Update systemUsers in localStorage
       const systemUsers = localStorage.getItem('systemUsers')
       if (systemUsers) {
-        const users = JSON.parse(systemUsers)
-        const userIndex = users.findIndex((u: any) => u.id === user.id)
-        if (userIndex >= 0) {
-          users[userIndex].name = fullName.trim()
-          localStorage.setItem('systemUsers', JSON.stringify(users))
+        try {
+          const users = JSON.parse(systemUsers)
+          const userIndex = users.findIndex((u: any) => u.id === user.id)
+          if (userIndex >= 0) {
+            users[userIndex].name = fullName.trim()
+            users[userIndex].updated_at = new Date().toISOString()
+            localStorage.setItem('systemUsers', JSON.stringify(users))
+            console.log('Updated systemUsers with new name')
+          }
+        } catch (parseError) {
+          console.warn('Failed to update systemUsers:', parseError)
         }
       }
 
-      console.log('Full name updated successfully')
+      // Update individual user profile storage
+      const userProfile = localStorage.getItem(`userProfile_${user.id}`)
+      if (userProfile) {
+        try {
+          const profile = JSON.parse(userProfile)
+          profile.name = fullName.trim()
+          profile.updated_at = new Date().toISOString()
+          localStorage.setItem(`userProfile_${user.id}`, JSON.stringify(profile))
+          console.log('Updated individual user profile with new name')
+        } catch (parseError) {
+          console.warn('Failed to update user profile:', parseError)
+        }
+      }
+
+      console.log('Full name updated successfully across all storage locations')
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus('idle'), 2000)
       setIsEditingName(false)
 
-      // Trigger custom event to notify App.tsx of user data change
+      // Trigger multiple custom events to ensure all components are notified
       window.dispatchEvent(new Event('userDataUpdated'))
+      window.dispatchEvent(new CustomEvent('userProfileUpdated', {
+        detail: { userId: user.id, name: fullName.trim() }
+      }))
       window.dispatchEvent(new StorageEvent('storage', {
         key: 'currentUser',
-        newValue: JSON.stringify({...user, name: fullName.trim()}),
+        newValue: JSON.stringify({...user, name: fullName.trim(), updated_at: new Date().toISOString()}),
         storageArea: localStorage
       }))
 
+      // Show success message briefly
+      setTimeout(() => {
+        console.log('Name change completed successfully')
+      }, 100)
+
     } catch (error) {
       console.error('Failed to save full name:', error)
-      setSaveStatus('idle')
-      alert(`Failed to save name: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      setSaveStatus('error')
+      setTimeout(() => setSaveStatus('idle'), 3000)
+
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      console.error('Name save error details:', errorMessage)
+      alert(`Failed to save name: ${errorMessage}`)
     } finally {
       setIsSavingName(false)
     }
@@ -1108,7 +1166,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                   <div className="flex gap-2">
                     <input
                       type="text"
-                      value={isEditingName ? fullName : (user?.name || 'Dr. Sarah Johnson')}
+                      value={isEditingName ? fullName : (user?.name || fullName || 'Guest User')}
                       onChange={(e) => setFullName(e.target.value)}
                       readOnly={!isEditingName}
                       className={`flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 focus:outline-none ${

@@ -136,28 +136,57 @@ export class AvatarStorageService {
     try {
       console.log('AvatarStorageService: Getting avatar for userId:', userId)
 
-      // Skip Supabase and use localStorage only for now
+      // Check multiple storage locations in order of preference
+
+      // 1. Check local avatar info cache
       const localAvatar = this.getLocalAvatarInfo(userId)
       if (localAvatar?.url) {
-        console.log('AvatarStorageService: Found local avatar:', localAvatar.url)
-        // In dev mode, don't verify URL accessibility to avoid CORS issues
+        console.log('AvatarStorageService: Found local avatar info:', localAvatar.url.substring(0, 50) + '...')
         return localAvatar.url
       }
 
-      // Final fallback: check for direct base64 storage
+      // 2. Check direct base64 storage
       const base64Avatar = localStorage.getItem(`avatar_data_${userId}`)
-      if (base64Avatar) {
+      if (base64Avatar && base64Avatar.startsWith('data:image/')) {
+        console.log('AvatarStorageService: Found direct base64 avatar')
         return base64Avatar
       }
 
+      // 3. Check currentUser storage
+      const currentUser = localStorage.getItem('currentUser')
+      if (currentUser) {
+        try {
+          const userData = JSON.parse(currentUser)
+          if (userData.id === userId && userData.avatar) {
+            console.log('AvatarStorageService: Found avatar in currentUser')
+            return userData.avatar
+          }
+        } catch (error) {
+          console.warn('Failed to parse currentUser for avatar:', error)
+        }
+      }
+
+      // 4. Check systemUsers array
+      const systemUsers = localStorage.getItem('systemUsers')
+      if (systemUsers) {
+        try {
+          const users = JSON.parse(systemUsers)
+          const user = users.find((u: any) => u.id === userId)
+          if (user?.avatar) {
+            console.log('AvatarStorageService: Found avatar in systemUsers')
+            return user.avatar
+          }
+        } catch (error) {
+          console.warn('Failed to parse systemUsers for avatar:', error)
+        }
+      }
+
+      console.log('AvatarStorageService: No avatar found for user')
       return null
 
     } catch (error) {
       console.warn('Error getting avatar URL:', error)
-
-      // Final fallback to localStorage only
-      const localAvatar = this.getLocalAvatarInfo(userId)
-      return localAvatar?.url || null
+      return null
     }
   }
 
@@ -446,8 +475,11 @@ export class AvatarStorageService {
       // 2. Update localStorage cache
       if (avatarInfo) {
         localStorage.setItem(`avatar_${userId}`, JSON.stringify(avatarInfo))
+        // Also store the direct avatar data for easy access
+        localStorage.setItem(`avatar_data_${userId}`, avatarInfo.url)
       } else {
         localStorage.removeItem(`avatar_${userId}`)
+        localStorage.removeItem(`avatar_data_${userId}`)
       }
 
       // 3. Update systemUsers in localStorage

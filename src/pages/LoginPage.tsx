@@ -207,7 +207,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     let totpEnabled = false
     let totpCheckError = null
 
-    // MANDATORY MFA FOR SUPER USER PROFILES
+    // MANDATORY MFA FOR SUPER USER PROFILES - SECURE IMPLEMENTATION
     const superUserProfiles = [
       'super-user-456',   // elmfarrell@yahoo.com
       'pierre-user-789',  // pierre@phaetonai.com
@@ -219,19 +219,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         (user.email && ['elmfarrell@yahoo.com', 'pierre@phaetonai.com'].includes(user.email.toLowerCase()))
 
     if (isSuperUser) {
-      console.log('🔍 SECURITY: SUPER USER DETECTED - checking MFA status')
+      console.log('🔍 SECURITY: SUPER USER DETECTED - checking MFA status with FAIL-SECURE defaults')
 
-      // Clear any forced MFA flags for super users to ensure clean state
-      // (Remove any previous incorrect forced MFA setup)
-      const forcedMfaKey = `totp_enabled_${user.id}`
-      const existingForced = localStorage.getItem(forcedMfaKey)
-      if (existingForced === 'true') {
-        console.log('🧹 SECURITY: Removing forced MFA flag for super user to check actual status')
-        localStorage.removeItem(forcedMfaKey)
-        localStorage.removeItem(`totp_secret_${user.id}`) // Also remove any fallback secret
-      }
-
-      // Check if the super user actually has MFA enabled
+      // SECURITY FIX: For super users, we still enforce strict MFA checks
+      // No special bypasses - super users must have proper MFA setup
       try {
         const [totpServiceResult, totpSetupExists] = await Promise.all([
           totpService.isTOTPEnabled(user.id).catch(err => {
@@ -244,7 +235,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           })
         ])
 
-        // For super users, if they have MFA enabled, enforce it strictly
+        // SECURITY ENHANCEMENT: Fail-secure approach for super users
         if (totpServiceResult === true || totpSetupExists === true) {
           console.log('🛡️ SECURITY: Super user has MFA enabled - enforcing MFA verification')
           totpEnabled = true
@@ -258,12 +249,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             { operation: 'super_user_mfa_enforced', userId: user.id, email: user.email }
           )
         } else if (totpServiceResult === false && totpSetupExists === false) {
-          console.log('✅ SECURITY: Super user does not have MFA enabled - allowing login without MFA')
-          totpEnabled = false
+          console.log('🔒 SECURITY: Super user does not have MFA enabled - REQUIRING MFA SETUP for security')
+          // SECURITY FIX: Even super users without MFA should be prompted to set it up
+          totpEnabled = true
+          totpCheckError = 'Super User Profile - MFA Setup Required for Enhanced Security'
         } else {
-          // If we can't determine MFA status for super users, be more permissive since they're system accounts
-          console.warn('⚠️ SECURITY: Cannot determine MFA status for super user - allowing login without MFA')
-          totpEnabled = false
+          // SECURITY FIX: If we can't determine MFA status, default to requiring MFA
+          console.warn('🚨 SECURITY: Cannot determine MFA status for super user - REQUIRING MFA for security')
+          totpEnabled = true
+          totpCheckError = 'Super User Profile - MFA Status Unknown - Security Verification Required'
         }
 
         console.log('🔍 SECURITY: Super User TOTP Status Check Results:', {
@@ -272,11 +266,22 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           totpServiceResult,
           totpSetupExists,
           finalTotpEnabled: totpEnabled,
-          hasError: !!totpCheckError
+          hasError: !!totpCheckError,
+          securityPolicy: 'FAIL_SECURE'
         })
       } catch (error: any) {
-        console.error('❌ SECURITY: Super user TOTP check failed - allowing login without MFA:', error)
-        totpEnabled = false // For super users, be permissive if checks fail
+        console.error('❌ SECURITY: Super user TOTP check failed - REQUIRING MFA for security:', error)
+        // SECURITY FIX: When checks fail, require MFA instead of allowing bypass
+        totpEnabled = true
+        totpCheckError = `Super User TOTP check failed: ${error.message || 'Unknown error'} - MFA Required`
+
+        await auditLogger.logPHIAccess(
+          AuditAction.LOGIN_FAILURE,
+          ResourceType.SYSTEM,
+          `login-super-user-mfa-check-failed-${user.id}`,
+          AuditOutcome.FAILURE,
+          { operation: 'super_user_mfa_check_failed', userId: user.id, error: error.message }
+        )
       }
     } else {
       try {
@@ -868,9 +873,6 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 <input type="checkbox" className="mr-2" />
                 Remember me
               </label>
-              <button type="button" className="text-sm text-blue-600 hover:underline">
-                Forgot password?
-              </button>
             </div>
 
             <button
