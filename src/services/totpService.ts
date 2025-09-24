@@ -148,14 +148,7 @@ class TOTPService {
   async verifyTOTP(userId: string, code: string, enableOnSuccess: boolean = false): Promise<TOTPVerificationResult> {
     try {
       console.log('🔍 TOTP Service: Attempting to verify TOTP for user:', userId)
-
-      // Check if TOTP is actually set up for this user
-      const hasSetup = await this.hasTOTPSetup(userId)
-      if (!hasSetup) {
-        console.log('⚠️ TOTP Service: No TOTP setup found for user - auto-approving login')
-        // If TOTP is not set up, allow login without verification
-        return { success: true }
-      }
+      console.log('🔍 TOTP Service: Code from authenticator app:', code)
 
       // Try database first with improved error handling
       let totpData: any = null
