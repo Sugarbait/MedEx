@@ -133,7 +133,8 @@
       "Bash(start \"I:\\Apps Back Up\\CareXPS CRM\\test-cross-device-sync.html\")",
       "Bash(start http://localhost:3000/dashboard)",
       "Bash(start \"I:\\Apps Back Up\\CareXPS CRM\\test-browser-supabase.html\")",
-      "Bash(SUPABASE_DB_URL=\"postgresql://postgres:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwa3Nsdm15ZGZkZXZkZnRpZWNrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjkwMDI5NSwiZXhwIjoyMDYyNDc2Mjk1fQ.5Nwr-DrgL63DwPMH2egxgdjoHGhAxCvIrz2SMTMKqD0@db.cpkslvmydfdevdftieck.supabase.co:5432/postgres\" npx supabase db push)"
+      "Bash(SUPABASE_DB_URL=\"postgresql://postgres:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwa3Nsdm15ZGZkZXZkZnRpZWNrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjkwMDI5NSwiZXhwIjoyMDYyNDc2Mjk1fQ.5Nwr-DrgL63DwPMH2egxgdjoHGhAxCvIrz2SMTMKqD0@db.cpkslvmydfdevdftieck.supabase.co:5432/postgres\" npx supabase db push)",
+      "Bash(start http://localhost:3001/dashboard)"
     ],
     "deny": [],
     "ask": []

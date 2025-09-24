@@ -23,7 +23,7 @@ import { Sidebar } from './components/layout/Sidebar'
 import { Header } from './components/layout/Header'
 import { Footer } from './components/layout/Footer'
 import { MFAGate } from './components/auth/MFAGate'
-import { MFAProtectedRoute } from './components/auth/MFAProtectedRoute'
+import { NoMFARoute } from './components/auth/NoMFARoute'
 import { AuditLogger } from './components/security/AuditLogger'
 import { useSessionTimeout } from './hooks/useSessionTimeout'
 import { SessionTimeoutWarning } from './components/common/SessionTimeoutWarning'
@@ -236,17 +236,17 @@ const AppContent: React.FC<{
               <Route
                 path="/calls"
                 element={
-                  <MFAProtectedRoute user={user} requiresMFA={true}>
+                  <NoMFARoute user={user} requiresMFA={true}>
                     <CallsPage user={user} />
-                  </MFAProtectedRoute>
+                  </NoMFARoute>
                 }
               />
               <Route
                 path="/sms"
                 element={
-                  <MFAProtectedRoute user={user} requiresMFA={true}>
+                  <NoMFARoute user={user} requiresMFA={true}>
                     <SMSPage user={user} />
-                  </MFAProtectedRoute>
+                  </NoMFARoute>
                 }
               />
               <Route path="/users" element={<UserManagementPage user={user} />} />
