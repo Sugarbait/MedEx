@@ -6,13 +6,15 @@ import { useState, useEffect } from 'react'
 import { totpService } from '../services/totpService'
 
 interface TOTPStatus {
-  isEnabled: boolean
+  hasSetup: boolean    // Whether TOTP setup exists (for route visibility)
+  isEnabled: boolean   // Whether TOTP is fully enabled
   isLoading: boolean
   error: string | null
 }
 
 export const useTOTPStatus = (userId: string | undefined): TOTPStatus => {
   const [status, setStatus] = useState<TOTPStatus>({
+    hasSetup: false,
     isEnabled: false,
     isLoading: true,
     error: null
@@ -22,6 +24,7 @@ export const useTOTPStatus = (userId: string | undefined): TOTPStatus => {
     const checkTOTPStatus = async () => {
       if (!userId) {
         setStatus({
+          hasSetup: false,
           isEnabled: false,
           isLoading: false,
           error: null
@@ -32,9 +35,14 @@ export const useTOTPStatus = (userId: string | undefined): TOTPStatus => {
       try {
         setStatus(prev => ({ ...prev, isLoading: true, error: null }))
 
-        const isEnabled = await totpService.isTOTPEnabled(userId)
+        // Check both setup existence and enabled status
+        const [hasSetup, isEnabled] = await Promise.all([
+          totpService.hasTOTPSetup(userId),
+          totpService.isTOTPEnabled(userId)
+        ])
 
         setStatus({
+          hasSetup,
           isEnabled,
           isLoading: false,
           error: null
@@ -42,6 +50,7 @@ export const useTOTPStatus = (userId: string | undefined): TOTPStatus => {
       } catch (error) {
         console.error('Failed to check TOTP status:', error)
         setStatus({
+          hasSetup: false,
           isEnabled: false,
           isLoading: false,
           error: 'Failed to check TOTP status'

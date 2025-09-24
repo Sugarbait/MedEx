@@ -1,6 +1,7 @@
 import React from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useCompanyLogos } from '@/hooks/useCompanyLogos'
+import { useTOTPStatus } from '@/hooks/useTOTPStatus'
 import {
   HomeIcon,
   PhoneIcon,
@@ -21,41 +22,29 @@ interface SidebarProps {
   user: any
 }
 
-const hasMFAAccess = (user: any): boolean => {
-  if (!user?.id) return false
+const hasMFAAccess = (totpStatus: any): boolean => {
+  // Use TOTP setup status to determine if protected routes should be shown
+  const hasAccess = totpStatus.hasSetup && !totpStatus.isLoading
 
-  try {
-    // TOTP verification is handled by TOTPProtectedRoute
-    // If user reaches this point, they're already verified
-    const currentSession = { verified: true }
+  console.log('Sidebar TOTP Access Check:', {
+    hasSetup: totpStatus.hasSetup,
+    isEnabled: totpStatus.isEnabled,
+    isLoading: totpStatus.isLoading,
+    error: totpStatus.error,
+    finalAccess: hasAccess
+  })
 
-    console.log('Sidebar MFA Access Check:', {
-      userId: user.id,
-      userEmail: user.email,
-      hasValidSession: !!currentSession,
-      sessionExpiry: currentSession?.expiresAt,
-      mfaVerifiedFallback: localStorage.getItem('mfa_verified') === 'true'
-    })
-
-    // Return true if valid session exists OR fallback verification is true
-    const hasAccess = !!currentSession || localStorage.getItem('mfa_verified') === 'true'
-
-    if (hasAccess) {
-      console.log('✅ User has MFA access - showing full sidebar')
-    } else {
-      console.log('🔒 User lacks MFA access - showing limited sidebar')
-    }
-
-    return hasAccess
-  } catch (error) {
-    console.error('Error checking MFA access:', error)
-    // Fallback to localStorage check
-    return localStorage.getItem('mfa_verified') === 'true'
+  if (hasAccess) {
+    console.log('✅ User has TOTP setup - showing protected routes in sidebar')
+  } else {
+    console.log('🔒 User lacks TOTP setup - hiding protected routes in sidebar')
   }
+
+  return hasAccess
 }
 
-const getNavigationItems = (user: any) => {
-  const hasMFA = hasMFAAccess(user)
+const getNavigationItems = (user: any, totpStatus: any) => {
+  const hasMFA = hasMFAAccess(totpStatus)
 
   return [
     {
@@ -100,6 +89,7 @@ const getNavigationItems = (user: any) => {
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, user }) => {
   const location = useLocation()
   const { logos } = useCompanyLogos()
+  const totpStatus = useTOTPStatus(user?.id)
 
   return (
     <>
@@ -141,7 +131,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, user }) => {
 
         {/* Navigation */}
         <nav className="flex-1 p-4 space-y-2">
-          {getNavigationItems(user).map((item) => {
+          {getNavigationItems(user, totpStatus).map((item) => {
             const Icon = item.icon
             const isActive = location.pathname === item.href
 

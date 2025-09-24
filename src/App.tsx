@@ -235,8 +235,8 @@ const AppContent: React.FC<{
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<DashboardPage user={user} />} />
 
-              {/* Only show Calls and SMS routes when TOTP is enabled */}
-              {totpStatus.isEnabled && (
+              {/* Only show Calls and SMS routes when TOTP setup exists */}
+              {totpStatus.hasSetup && (
                 <>
                   <Route
                     path="/calls"
@@ -257,8 +257,8 @@ const AppContent: React.FC<{
                 </>
               )}
 
-              {/* Redirect to dashboard if trying to access Calls/SMS without TOTP */}
-              {!totpStatus.isLoading && !totpStatus.isEnabled && (
+              {/* Redirect to dashboard if trying to access Calls/SMS without TOTP setup */}
+              {!totpStatus.isLoading && !totpStatus.hasSetup && (
                 <>
                   <Route path="/calls" element={<Navigate to="/dashboard" replace />} />
                   <Route path="/sms" element={<Navigate to="/dashboard" replace />} />

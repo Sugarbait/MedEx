@@ -274,15 +274,23 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
         <div className="mb-6">
           <input
             type="text"
+            inputMode="numeric"
+            pattern="[0-9]*"
             value={verificationCode}
             onChange={(e) => {
               const value = e.target.value.replace(/\D/g, '').slice(0, 6)
               setVerificationCode(value)
               setError('')
             }}
+            onInput={(e) => {
+              // Additional handling to ensure smooth typing
+              const target = e.target as HTMLInputElement
+              target.setSelectionRange(target.value.length, target.value.length)
+            }}
             placeholder="000000"
             className="w-full text-center text-2xl font-mono p-4 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
             maxLength={6}
+            autoFocus
             autoComplete="off"
           />
         </div>

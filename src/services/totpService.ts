@@ -204,6 +204,52 @@ class TOTPService {
   }
 
   /**
+   * Check if user has TOTP setup (regardless of enabled status)
+   */
+  async hasTOTPSetup(userId: string): Promise<boolean> {
+    try {
+      console.log('🔍 TOTP Service: Checking if TOTP setup exists for user:', userId)
+
+      // Try database first
+      try {
+        const { data, error } = await supabase
+          .from('user_totp')
+          .select('id')
+          .eq('user_id', userId)
+          .single()
+
+        if (!error && data) {
+          console.log('🔍 TOTP Service: TOTP setup found in database')
+          return true
+        } else if (error) {
+          console.log('🔍 TOTP Service: Database error, checking localStorage fallback:', error.message)
+        }
+      } catch (dbError) {
+        console.log('🔍 TOTP Service: Database unavailable, checking localStorage fallback:', dbError)
+      }
+
+      // Fallback to localStorage
+      console.log('🔍 TOTP Service: Checking localStorage for TOTP setup...')
+      const localTotpData = localStorage.getItem(`totp_${userId}`)
+      if (localTotpData) {
+        try {
+          JSON.parse(localTotpData) // Just check if it's valid JSON
+          console.log('🔍 TOTP Service: TOTP setup found in localStorage')
+          return true
+        } catch (parseError) {
+          console.error('🔍 TOTP Service: Failed to parse localStorage TOTP data:', parseError)
+        }
+      }
+
+      console.log('🔍 TOTP Service: No TOTP setup found in database or localStorage')
+      return false
+    } catch (error) {
+      console.error('❌ TOTP Setup Check Error:', error)
+      return false
+    }
+  }
+
+  /**
    * Check if user has TOTP enabled
    */
   async isTOTPEnabled(userId: string): Promise<boolean> {
