@@ -180,7 +180,33 @@ class TOTPService {
         console.log('🔍 TOTP Service: Database unavailable, checking localStorage fallback:', dbError)
       }
 
-      // Fallback to localStorage if database failed
+      // Check if database has newer data - if so, clear old localStorage
+      if (!totpData) {
+        // Try to get any database data to check if localStorage is outdated
+        try {
+          const { data: dbCheck } = await supabase
+            .from('user_totp')
+            .select('created_at, encrypted_secret')
+            .eq('user_id', userId)
+            .maybeSingle()
+
+          if (dbCheck && localStorage?.getItem(`totp_${userId}`)) {
+            const localData = JSON.parse(localStorage.getItem(`totp_${userId}`) || '{}')
+            // If localStorage has old test secret and DB has different data, clear localStorage
+            if (localData.encrypted_secret === 'JBSWY3DPEHPK3PXP' && dbCheck.encrypted_secret !== 'JBSWY3DPEHPK3PXP') {
+              console.log('🧹 TOTP Service: Clearing outdated localStorage test data')
+              localStorage.removeItem(`totp_${userId}`)
+              localStorage.removeItem(`totp_secret_${userId}`)
+              localStorage.removeItem(`totp_enabled_${userId}`)
+              totpData = dbCheck // Use database data instead
+            }
+          }
+        } catch (err) {
+          // Continue with localStorage fallback if database check fails
+        }
+      }
+
+      // Fallback to localStorage if database failed and no conflicts detected
       if (!totpData) {
         console.log('🔍 TOTP Service: Checking localStorage for TOTP data...')
         const localTotpData = localStorage.getItem(`totp_${userId}`)
@@ -191,6 +217,7 @@ class TOTPService {
             console.log('🔍 TOTP Service: Parsed TOTP data:', totpData)
             console.log('🔍 TOTP Service: Has encrypted_secret?', !!totpData.encrypted_secret)
             console.log('🔍 TOTP Service: encrypted_secret value:', totpData.encrypted_secret)
+            console.log('⚠️ TOTP Service: This looks like old test data! Expected fresh MFA secret, got:', totpData.encrypted_secret)
           } catch (parseError) {
             console.error('🔍 TOTP Service: Failed to parse localStorage TOTP data:', parseError)
           }
