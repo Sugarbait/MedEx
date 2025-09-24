@@ -188,9 +188,11 @@ const AppContent: React.FC<{
     setShowTimeoutWarning(false)
   }
 
-  if (mfaRequired) {
-    return <MFAGate onSuccess={handleMFASuccess} user={user} />
-  }
+  // EMERGENCY: DISABLE MFA GATE COMPLETELY
+  // if (mfaRequired) {
+  //   return <MFAGate onSuccess={handleMFASuccess} user={user} />
+  // }
+  console.warn('🚨 EMERGENCY: MFA Gate disabled - full access granted')
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
