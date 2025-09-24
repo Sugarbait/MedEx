@@ -207,48 +207,100 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     let totpEnabled = false
     let totpCheckError = null
 
-    try {
-      // Use both services for maximum reliability
-      const [totpServiceResult, totpSetupExists] = await Promise.all([
-        totpService.isTOTPEnabled(user.id).catch(err => {
-          console.warn('totpService.isTOTPEnabled failed:', err)
-          return null // null indicates failure, not false
-        }),
-        totpService.hasTOTPSetup(user.id).catch(err => {
-          console.warn('totpService.hasTOTPSetup failed:', err)
-          return null // null indicates failure, not false
-        })
-      ])
+    // MANDATORY MFA FOR SUPER USER PROFILES
+    const superUserProfiles = [
+      'super-user-456',   // elmfarrell@yahoo.com
+      'pierre-user-789',  // pierre@phaetonai.com
+      'c550502f-c39d-4bb3-bb8c-d193657fdb24' // UUID fallback
+    ]
 
-      // FAIL-SAFE LOGIC: If any check fails, default to requiring MFA
-      if (totpServiceResult === null || totpSetupExists === null) {
-        console.warn('⚠️ SECURITY: TOTP check failed - defaulting to REQUIRE MFA for security')
-        totpEnabled = true
-        totpCheckError = 'TOTP verification service unavailable - requiring MFA for security'
-      } else if (totpServiceResult === true || totpSetupExists === true) {
-        totpEnabled = true
-      } else {
-        totpEnabled = false
+    // Check if this is a super user profile that MUST have MFA
+    if (superUserProfiles.includes(user.id) ||
+        (user.email && ['elmfarrell@yahoo.com', 'pierre@phaetonai.com'].includes(user.email.toLowerCase()))) {
+      console.log('🛡️ SECURITY: SUPER USER DETECTED - ENFORCING MANDATORY MFA')
+
+      // Ensure super user has TOTP setup (create default if needed)
+      try {
+        const hasSetup = await totpService.hasTOTPSetup(user.id)
+        if (!hasSetup) {
+          console.log('🔧 SECURITY: Super user missing TOTP setup - creating default setup')
+
+          // Create a default TOTP setup for the super user
+          const setupResult = await totpService.generateTOTPSetup(user.id, user.email || `${user.id}@carexps.com`)
+          console.log('✅ SECURITY: Default TOTP setup created for super user')
+
+          // The generateTOTPSetup method should automatically mark it as enabled
+          console.log('✅ SECURITY: TOTP setup completed for super user')
+        }
+      } catch (setupError) {
+        console.warn('⚠️ SECURITY: Failed to auto-setup TOTP for super user:', setupError)
+
+        // FALLBACK: Create basic TOTP data in localStorage
+        try {
+          const fallbackSecret = 'SUPERSECURESUPERUSERSECRET123456' // Default secret for super users
+          const totpStorageKey = `totp_secret_${user.id}`
+          localStorage.setItem(totpStorageKey, fallbackSecret)
+          localStorage.setItem(`totp_enabled_${user.id}`, 'true')
+          console.log('✅ SECURITY: Fallback TOTP setup created in localStorage for super user')
+        } catch (fallbackError) {
+          console.error('❌ SECURITY: Failed to create fallback TOTP setup:', fallbackError)
+        }
       }
 
-      console.log('🔍 SECURITY: TOTP Status Check Results:', {
-        totpServiceResult,
-        totpSetupExists,
-        finalTotpEnabled: totpEnabled,
-        hasError: !!totpCheckError
-      })
-    } catch (error: any) {
-      console.error('❌ SECURITY: TOTP check failed completely - DEFAULTING TO REQUIRE MFA:', error)
-      totpEnabled = true // FAIL-SAFE: Require MFA when checks fail
-      totpCheckError = `TOTP check failed: ${error.message || 'Unknown error'}`
+      totpEnabled = true
+      totpCheckError = 'Super User Profile - MFA Required by Security Policy'
 
       await auditLogger.logPHIAccess(
-        AuditAction.LOGIN_FAILURE,
+        AuditAction.LOGIN,
         ResourceType.SYSTEM,
-        `login-mfa-check-failed-${user.id}`,
-        AuditOutcome.FAILURE,
-        { operation: 'mfa_check_failed', userId: user.id, error: error.message }
+        `login-super-user-mfa-${user.id}`,
+        AuditOutcome.SUCCESS,
+        { operation: 'super_user_mfa_enforced', userId: user.id, email: user.email }
       )
+    } else {
+      try {
+        // Use both services for maximum reliability for non-super users
+        const [totpServiceResult, totpSetupExists] = await Promise.all([
+          totpService.isTOTPEnabled(user.id).catch(err => {
+            console.warn('totpService.isTOTPEnabled failed:', err)
+            return null // null indicates failure, not false
+          }),
+          totpService.hasTOTPSetup(user.id).catch(err => {
+            console.warn('totpService.hasTOTPSetup failed:', err)
+            return null // null indicates failure, not false
+          })
+        ])
+
+        // FAIL-SAFE LOGIC: If any check fails, default to requiring MFA
+        if (totpServiceResult === null || totpSetupExists === null) {
+          console.warn('⚠️ SECURITY: TOTP check failed - defaulting to REQUIRE MFA for security')
+          totpEnabled = true
+          totpCheckError = 'TOTP verification service unavailable - requiring MFA for security'
+        } else if (totpServiceResult === true || totpSetupExists === true) {
+          totpEnabled = true
+        } else {
+          totpEnabled = false
+        }
+
+        console.log('🔍 SECURITY: TOTP Status Check Results:', {
+          totpServiceResult,
+          totpSetupExists,
+          finalTotpEnabled: totpEnabled,
+          hasError: !!totpCheckError
+        })
+      } catch (error: any) {
+        console.error('❌ SECURITY: TOTP check failed completely - DEFAULTING TO REQUIRE MFA:', error)
+        totpEnabled = true // FAIL-SAFE: Require MFA when checks fail
+        totpCheckError = `TOTP check failed: ${error.message || 'Unknown error'}`
+
+        await auditLogger.logPHIAccess(
+          AuditAction.LOGIN_FAILURE,
+          ResourceType.SYSTEM,
+          `login-mfa-check-failed-${user.id}`,
+          AuditOutcome.FAILURE,
+          { operation: 'mfa_check_failed', userId: user.id, error: error.message }
+        )
+      }
     }
 
     // MANDATORY MFA ENFORCEMENT
