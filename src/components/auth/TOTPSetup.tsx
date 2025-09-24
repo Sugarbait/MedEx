@@ -44,6 +44,21 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
     generateTOTPSetup()
   }, [])
 
+  // Handle escape key to cancel setup
+  useEffect(() => {
+    const handleEscapeKey = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        console.log('🚫 TOTPSetup: Escape key pressed - canceling setup')
+        handleCancel()
+      }
+    }
+
+    document.addEventListener('keydown', handleEscapeKey)
+    return () => {
+      document.removeEventListener('keydown', handleEscapeKey)
+    }
+  }, [])
+
   const generateTOTPSetup = async () => {
     try {
       console.log('🚀 TOTPSetup: Starting TOTP setup generation...')
@@ -72,8 +87,8 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
       console.log('🚀 TOTPSetup: Setup generation completed!')
     } catch (error) {
       console.error('❌ TOTP setup generation failed:', error)
-      setError('Failed to generate TOTP setup. Please try again.')
-      setStep('show-qr') // Show the error state so user can see the error
+      setError('Failed to generate TOTP setup. Please try again or cancel.')
+      setStep('show-qr') // Show the error state so user can see the error and cancel if needed
     }
   }
 
@@ -116,6 +131,20 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
     onSetupComplete()
   }
 
+  const handleCancel = () => {
+    console.log('🚫 TOTPSetup: Cancel button clicked - cleaning up setup state')
+
+    // Clean up any partial setup data
+    setSetupData(null)
+    setQrCodeDataUrl('')
+    setVerificationCode('')
+    setError('')
+    setStep('generating')
+
+    console.log('🚫 TOTPSetup: Setup state cleaned up - calling onCancel')
+    onCancel()
+  }
+
   const formatBackupCodes = (codes: string[]) => {
     return codes.map((code, index) => (
       <div key={index} className="font-mono text-sm bg-gray-100 p-2 rounded border">
@@ -139,7 +168,7 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
         <div className="bg-white rounded-lg shadow-lg p-6 relative">
           {/* Close button */}
           <button
-            onClick={onCancel}
+            onClick={handleCancel}
             className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl font-bold w-6 h-6 flex items-center justify-center"
           >
             ×
@@ -166,7 +195,7 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
         <div className="bg-white rounded-lg shadow-lg p-6 relative">
           {/* Close button */}
           <button
-            onClick={onCancel}
+            onClick={handleCancel}
             className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl font-bold w-6 h-6 flex items-center justify-center"
           >
             ×
@@ -224,17 +253,29 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
 
         <div className="flex space-x-3">
           <button
-            onClick={onCancel}
+            onClick={handleCancel}
             className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
           >
             Cancel
           </button>
-          <button
-            onClick={() => setStep('verify')}
-            className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            Next: Verify
-          </button>
+          {error ? (
+            <button
+              onClick={() => {
+                setError('')
+                generateTOTPSetup()
+              }}
+              className="flex-1 px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 transition-colors"
+            >
+              Retry Setup
+            </button>
+          ) : (
+            <button
+              onClick={() => setStep('verify')}
+              className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            >
+              Next: Verify
+            </button>
+          )}
         </div>
         </div>
       </ModalWrapper>
@@ -247,7 +288,7 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
         <div className="bg-white rounded-lg shadow-lg p-6 relative">
           {/* Close button */}
           <button
-            onClick={onCancel}
+            onClick={handleCancel}
             className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl font-bold w-6 h-6 flex items-center justify-center"
           >
             ×
@@ -321,7 +362,7 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
         <div className="bg-white rounded-lg shadow-lg p-6 relative">
           {/* Close button */}
           <button
-            onClick={onCancel}
+            onClick={handleCancel}
             className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl font-bold w-6 h-6 flex items-center justify-center"
           >
             ×
