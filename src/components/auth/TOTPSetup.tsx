@@ -124,26 +124,53 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
     ))
   }
 
+  // Modal wrapper for all steps
+  const ModalWrapper: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="max-w-lg mx-4 relative">
+        {children}
+      </div>
+    </div>
+  )
+
   if (step === 'generating') {
     return (
-      <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
-        <div className="text-center">
-          <Shield className="w-12 h-12 text-blue-600 mx-auto mb-4" />
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">
-            Setting up Two-Factor Authentication
-          </h2>
-          <div className="animate-pulse">
-            <div className="bg-gray-200 h-4 rounded mb-2"></div>
-            <div className="bg-gray-200 h-4 rounded w-3/4 mx-auto"></div>
+      <ModalWrapper>
+        <div className="bg-white rounded-lg shadow-lg p-6 relative">
+          {/* Close button */}
+          <button
+            onClick={onCancel}
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl font-bold w-6 h-6 flex items-center justify-center"
+          >
+            ×
+          </button>
+          <div className="text-center">
+            <Shield className="w-12 h-12 text-blue-600 mx-auto mb-4" />
+            <h2 className="text-xl font-semibold text-gray-900 mb-2">
+              Setting up Two-Factor Authentication
+            </h2>
+            <p className="text-gray-600 mb-4">Generating TOTP setup...</p>
+            <div className="animate-pulse">
+              <div className="bg-gray-200 h-4 rounded mb-2"></div>
+              <div className="bg-gray-200 h-4 rounded w-3/4 mx-auto"></div>
+            </div>
           </div>
         </div>
-      </div>
+      </ModalWrapper>
     )
   }
 
   if (step === 'show-qr') {
     return (
-      <div className="max-w-lg mx-auto bg-white rounded-lg shadow-lg p-6">
+      <ModalWrapper>
+        <div className="bg-white rounded-lg shadow-lg p-6 relative">
+          {/* Close button */}
+          <button
+            onClick={onCancel}
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl font-bold w-6 h-6 flex items-center justify-center"
+          >
+            ×
+          </button>
         <div className="text-center mb-6">
           <Shield className="w-12 h-12 text-blue-600 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 mb-2">
@@ -209,13 +236,22 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
             Next: Verify
           </button>
         </div>
-      </div>
+        </div>
+      </ModalWrapper>
     )
   }
 
   if (step === 'verify') {
     return (
-      <div className="max-w-md mx-auto bg-white rounded-lg shadow-lg p-6">
+      <ModalWrapper>
+        <div className="bg-white rounded-lg shadow-lg p-6 relative">
+          {/* Close button */}
+          <button
+            onClick={onCancel}
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl font-bold w-6 h-6 flex items-center justify-center"
+          >
+            ×
+          </button>
         <div className="text-center mb-6">
           <Shield className="w-12 h-12 text-blue-600 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 mb-2">
@@ -266,13 +302,22 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
             {isVerifying ? 'Verifying...' : 'Verify & Enable'}
           </button>
         </div>
-      </div>
+        </div>
+      </ModalWrapper>
     )
   }
 
   if (step === 'backup-codes') {
     return (
-      <div className="max-w-lg mx-auto bg-white rounded-lg shadow-lg p-6">
+      <ModalWrapper>
+        <div className="bg-white rounded-lg shadow-lg p-6 relative">
+          {/* Close button */}
+          <button
+            onClick={onCancel}
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl font-bold w-6 h-6 flex items-center justify-center"
+          >
+            ×
+          </button>
         <div className="text-center mb-6">
           <Shield className="w-12 h-12 text-green-600 mx-auto mb-4" />
           <h2 className="text-xl font-semibold text-gray-900 mb-2">
@@ -349,7 +394,8 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
             I've Saved My Backup Codes
           </button>
         </div>
-      </div>
+        </div>
+      </ModalWrapper>
     )
   }
 

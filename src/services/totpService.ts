@@ -82,24 +82,47 @@ class TOTPService {
       const encrypted_secret = encryptPHI(secret.base32)
       console.log('🔐 TOTP Service: Secret encrypted successfully')
 
-      // Store in database
+      // Store in database with fallback to localStorage
       console.log('💾 TOTP Service: Storing TOTP data in database...')
-      const { error } = await supabase
-        .from('user_totp')
-        .upsert({
+      try {
+        const { error } = await supabase
+          .from('user_totp')
+          .upsert({
+            user_id: userId,
+            encrypted_secret,
+            backup_codes: backup_codes.map(code => encryptPHI(code)),
+            enabled: false, // Not enabled until first successful verification
+            created_at: new Date().toISOString()
+          })
+
+        if (error) {
+          console.warn('⚠️ TOTP Service: Supabase storage failed, using localStorage:', error.message)
+          // Fallback to localStorage
+          const totpData = {
+            user_id: userId,
+            encrypted_secret,
+            backup_codes: backup_codes.map(code => encryptPHI(code)),
+            enabled: false,
+            created_at: new Date().toISOString()
+          }
+          localStorage.setItem(`totp_${userId}`, JSON.stringify(totpData))
+          console.log('✅ TOTP Service: TOTP data stored in localStorage fallback')
+        } else {
+          console.log('✅ TOTP Service: TOTP data stored successfully in database')
+        }
+      } catch (dbError) {
+        console.warn('⚠️ TOTP Service: Database unavailable, using localStorage fallback:', dbError)
+        // Fallback to localStorage
+        const totpData = {
           user_id: userId,
           encrypted_secret,
           backup_codes: backup_codes.map(code => encryptPHI(code)),
-          enabled: false, // Not enabled until first successful verification
+          enabled: false,
           created_at: new Date().toISOString()
-        })
-
-      if (error) {
-        console.error('❌ TOTP Service: Database storage failed:', error)
-        throw new Error(`Failed to store TOTP setup: ${error.message}`)
+        }
+        localStorage.setItem(`totp_${userId}`, JSON.stringify(totpData))
+        console.log('✅ TOTP Service: TOTP data stored in localStorage fallback')
       }
-
-      console.log('✅ TOTP Service: TOTP data stored successfully')
 
       return {
         secret: manual_entry_key,
@@ -187,26 +210,41 @@ class TOTPService {
     try {
       console.log('🔍 TOTP Service: Checking if TOTP enabled for user:', userId)
 
-      const { data, error } = await supabase
-        .from('user_totp')
-        .select('enabled')
-        .eq('user_id', userId)
-        .single()
+      // Try database first
+      try {
+        const { data, error } = await supabase
+          .from('user_totp')
+          .select('enabled')
+          .eq('user_id', userId)
+          .single()
 
-      console.log('🔍 TOTP Service: Database response:', { data, error })
+        console.log('🔍 TOTP Service: Database response:', { data, error })
 
-      if (error) {
-        console.log('🔍 TOTP Service: Database error (user may not have TOTP setup):', error.message)
-        return false
+        if (error) {
+          console.log('🔍 TOTP Service: Database error, checking localStorage fallback:', error.message)
+        } else if (data) {
+          console.log('🔍 TOTP Service: TOTP enabled status from database:', data.enabled)
+          return data.enabled
+        }
+      } catch (dbError) {
+        console.log('🔍 TOTP Service: Database unavailable, checking localStorage fallback:', dbError)
       }
 
-      if (!data) {
-        console.log('🔍 TOTP Service: No data returned')
-        return false
+      // Fallback to localStorage
+      console.log('🔍 TOTP Service: Checking localStorage for TOTP data...')
+      const localTotpData = localStorage.getItem(`totp_${userId}`)
+      if (localTotpData) {
+        try {
+          const parsedData = JSON.parse(localTotpData)
+          console.log('🔍 TOTP Service: TOTP enabled status from localStorage:', parsedData.enabled)
+          return parsedData.enabled || false
+        } catch (parseError) {
+          console.error('🔍 TOTP Service: Failed to parse localStorage TOTP data:', parseError)
+        }
       }
 
-      console.log('🔍 TOTP Service: TOTP enabled status:', data.enabled)
-      return data.enabled
+      console.log('🔍 TOTP Service: No TOTP data found in database or localStorage')
+      return false
     } catch (error) {
       console.error('❌ TOTP Check Error:', error)
       return false
