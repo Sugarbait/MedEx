@@ -165,23 +165,35 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
   if (step === 'generating') {
     return (
       <ModalWrapper>
-        <div className="bg-white rounded-lg shadow-lg p-6 relative">
+        <div className="bg-white rounded-lg shadow-lg p-8 relative max-w-md mx-auto">
           {/* Close button */}
           <button
             onClick={handleCancel}
-            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl font-bold w-6 h-6 flex items-center justify-center"
+            className="absolute top-4 right-4 text-gray-400 hover:text-gray-600 text-xl font-bold w-8 h-8 flex items-center justify-center rounded-full hover:bg-gray-100 transition-colors"
           >
             ×
           </button>
+
           <div className="text-center">
-            <Shield className="w-12 h-12 text-blue-600 mx-auto mb-4" />
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">
-              Setting up Two-Factor Authentication
+            {/* Professional loading icon */}
+            <div className="w-16 h-16 mx-auto mb-6 relative">
+              <div className="w-16 h-16 border-4 border-blue-100 rounded-full"></div>
+              <div className="w-16 h-16 border-4 border-blue-600 border-t-transparent rounded-full animate-spin absolute top-0 left-0"></div>
+              <Shield className="w-6 h-6 text-blue-600 absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2" />
+            </div>
+
+            <h2 className="text-xl font-semibold text-gray-900 mb-3">
+              Initializing Security Setup
             </h2>
-            <p className="text-gray-600 mb-4">Generating TOTP setup...</p>
-            <div className="animate-pulse">
-              <div className="bg-gray-200 h-4 rounded mb-2"></div>
-              <div className="bg-gray-200 h-4 rounded w-3/4 mx-auto"></div>
+            <p className="text-gray-600 text-sm leading-relaxed">
+              Please wait while we prepare your two-factor authentication configuration...
+            </p>
+
+            {/* Professional progress indicator */}
+            <div className="mt-6">
+              <div className="w-full bg-gray-200 rounded-full h-1">
+                <div className="bg-blue-600 h-1 rounded-full animate-pulse" style={{width: '60%'}}></div>
+              </div>
             </div>
           </div>
         </div>
