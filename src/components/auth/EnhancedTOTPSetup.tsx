@@ -17,7 +17,7 @@ import {
   Clock,
   Wifi,
   WifiOff,
-  Sync
+  RefreshCw
 } from 'lucide-react'
 import { totpService } from '../../services/totpService'
 import MFASyncStatusIndicator from './MFASyncStatusIndicator'
@@ -455,7 +455,7 @@ const EnhancedTOTPSetup: React.FC<EnhancedTOTPSetupProps> = ({
           {/* Sync Preview */}
           <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4 mb-6">
             <div className="flex items-center gap-2 mb-3">
-              <Sync className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+              <RefreshCw className="w-4 h-4 text-blue-600 dark:text-blue-400" />
               <span className="text-sm font-medium text-blue-900 dark:text-blue-100">
                 What happens next?
               </span>

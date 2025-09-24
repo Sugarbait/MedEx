@@ -16,8 +16,7 @@ import {
   Wifi,
   Battery,
   Chrome,
-  Safari,
-  Firefox,
+  Globe,
   Eye,
   EyeOff,
   RefreshCw
@@ -172,9 +171,9 @@ export const MFADeviceManager: React.FC<MFADeviceManagerProps> = ({
       case 'chrome':
         return <Chrome className={iconClass} />
       case 'safari':
-        return <Safari className={iconClass} />
+        return <Globe className={iconClass} />
       case 'firefox':
-        return <Firefox className={iconClass} />
+        return <Globe className={iconClass} />
       default:
         return <Globe className={iconClass} />
     }
