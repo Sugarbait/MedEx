@@ -457,10 +457,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
       setSaveStatus('saved')
       setTimeout(() => setSaveStatus('idle'), 2000)
 
-      // Refresh page to apply MFA changes
-      setTimeout(() => {
-        window.location.reload()
-      }, 1000)
+      // No longer auto-refresh - allow user to manually refresh if needed
+      console.log('✅ MFA toggle completed successfully without page refresh')
     } catch (error) {
       console.error('Failed to update MFA setting:', error)
       setSaveStatus('idle')
