@@ -974,6 +974,123 @@ export class UserManagementService {
   }
 
   /**
+   * Disable user account (lock them out) - super users only
+   */
+  static async disableUser(userId: string, reason?: string): Promise<ServiceResponse<boolean>> {
+    try {
+      console.log('UserManagementService: Disabling user account:', userId)
+
+      // Update user in database
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
+          is_locked: true,
+          locked_reason: reason || 'Account disabled by super user',
+          locked_at: new Date().toISOString()
+        })
+        .eq('id', userId)
+
+      if (updateError) {
+        throw updateError
+      }
+
+      // Update in localStorage
+      const systemUsers = localStorage.getItem('systemUsers')
+      if (systemUsers) {
+        try {
+          const users = JSON.parse(systemUsers)
+          const userIndex = users.findIndex((u: any) => u.id === userId)
+          if (userIndex >= 0) {
+            users[userIndex].isLocked = true
+            localStorage.setItem('systemUsers', JSON.stringify(users))
+          }
+        } catch (parseError) {
+          console.warn('Failed to update localStorage:', parseError)
+        }
+      }
+
+      console.log('✅ User account disabled successfully')
+
+      // Log the action
+      await auditLogger.logSecurityEvent(
+        'USER_DISABLED',
+        'users',
+        true,
+        {
+          userId,
+          reason: reason || 'Disabled by super user',
+          disabledBy: 'super_user'
+        }
+      )
+
+      return { status: 'success', data: true }
+
+    } catch (error: any) {
+      console.error('❌ Failed to disable user:', error)
+      return { status: 'error', error: error.message }
+    }
+  }
+
+  /**
+   * Enable user account (unlock them) - super users only
+   */
+  static async enableUser(userId: string): Promise<ServiceResponse<boolean>> {
+    try {
+      console.log('UserManagementService: Enabling user account:', userId)
+
+      // Clear lockout in database
+      const { error: updateError } = await supabase
+        .from('users')
+        .update({
+          is_locked: false,
+          locked_reason: null,
+          locked_at: null,
+          failed_login_attempts: 0,
+          last_failed_login: null
+        })
+        .eq('id', userId)
+
+      if (updateError) {
+        throw updateError
+      }
+
+      // Update in localStorage
+      const systemUsers = localStorage.getItem('systemUsers')
+      if (systemUsers) {
+        try {
+          const users = JSON.parse(systemUsers)
+          const userIndex = users.findIndex((u: any) => u.id === userId)
+          if (userIndex >= 0) {
+            users[userIndex].isLocked = false
+            localStorage.setItem('systemUsers', JSON.stringify(users))
+          }
+        } catch (parseError) {
+          console.warn('Failed to update localStorage:', parseError)
+        }
+      }
+
+      console.log('✅ User account enabled successfully')
+
+      // Log the action
+      await auditLogger.logSecurityEvent(
+        'USER_ENABLED',
+        'users',
+        true,
+        {
+          userId,
+          enabledBy: 'super_user'
+        }
+      )
+
+      return { status: 'success', data: true }
+
+    } catch (error: any) {
+      console.error('❌ Failed to enable user:', error)
+      return { status: 'error', error: error.message }
+    }
+  }
+
+  /**
    * Clear account lockout for a user (for super users)
    */
   static async clearAccountLockout(userId: string): Promise<ServiceResponse<boolean>> {

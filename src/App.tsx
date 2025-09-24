@@ -13,6 +13,8 @@ import './test/smsCostCalculationTest'
 import { ThemeManager } from './utils/themeManager'
 // Import utility to make Pierre super user (available in console)
 import './utils/makePierreSuperUser'
+// Import utility to make multiple super users (available in console)
+import './utils/makeSuperUsers'
 import { initializeSecureStorage } from './services/storageSecurityMigration'
 import { secureUserDataService } from './services/secureUserDataService'
 import { authService } from './services/authService'

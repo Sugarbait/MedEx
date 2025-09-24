@@ -85,6 +85,7 @@ export const SimpleUserManager: React.FC = () => {
         email: newUser.email,
         role: newUser.role as any,
         mfa_enabled: false,
+        is_locked: true, // New profiles are disabled by default until enabled by super user
         settings: {}
       }
 
@@ -97,7 +98,7 @@ export const SimpleUserManager: React.FC = () => {
       const response = await userManagementService.createSystemUser(userData, credentials)
 
       if (response.status === 'success') {
-        alert(`User ${newUser.email} created successfully!`)
+        alert(`User ${newUser.email} created successfully! Account is disabled by default - enable it when ready.`)
         setShowAddUser(false)
         setNewUser({ name: '', email: '', password: '', role: 'healthcare_provider' })
         await loadUsers()
@@ -160,6 +161,45 @@ export const SimpleUserManager: React.FC = () => {
       await loadUsers()
     } catch (error: any) {
       alert(`Failed to unlock account: ${error.message}`)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleDisableUser = async (userId: string, email: string) => {
+    // Prevent disabling super users and demo users
+    if (email.toLowerCase() === 'elmfarrell@yahoo.com' ||
+        email.toLowerCase() === 'pierre@phaetonai.com' ||
+        email.toLowerCase() === 'demo@carexps.com' ||
+        email.toLowerCase() === 'guest@email.com') {
+      alert('Cannot disable super users or demo accounts')
+      return
+    }
+
+    if (!confirm(`Are you sure you want to disable ${email}? They will not be able to log in.`)) {
+      return
+    }
+
+    setIsLoading(true)
+    try {
+      await userManagementService.disableUser(userId, 'Disabled by super user')
+      alert(`Account ${email} disabled successfully`)
+      await loadUsers()
+    } catch (error: any) {
+      alert(`Failed to disable account: ${error.message}`)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleEnableUser = async (userId: string, email: string) => {
+    setIsLoading(true)
+    try {
+      await userManagementService.enableUser(userId)
+      alert(`Account ${email} enabled successfully`)
+      await loadUsers()
+    } catch (error: any) {
+      alert(`Failed to enable account: ${error.message}`)
     } finally {
       setIsLoading(false)
     }
@@ -289,14 +329,30 @@ export const SimpleUserManager: React.FC = () => {
                       >
                         <Key className="w-4 h-4" />
                       </button>
-                      {user.isLocked && (
+                      {user.isLocked ? (
                         <button
-                          onClick={() => handleUnlockUser(user.id, user.email)}
+                          onClick={() => handleEnableUser(user.id, user.email)}
                           className="p-1 text-green-600 hover:bg-green-50 rounded"
-                          title="Unlock Account"
+                          title="Enable Account"
+                          disabled={isLoading}
                         >
                           <Unlock className="w-4 h-4" />
                         </button>
+                      ) : (
+                        // Only show disable button for non-super users and non-demo users
+                        !(user.email.toLowerCase() === 'elmfarrell@yahoo.com' ||
+                          user.email.toLowerCase() === 'pierre@phaetonai.com' ||
+                          user.email.toLowerCase() === 'demo@carexps.com' ||
+                          user.email.toLowerCase() === 'guest@email.com') && (
+                          <button
+                            onClick={() => handleDisableUser(user.id, user.email)}
+                            className="p-1 text-red-600 hover:bg-red-50 rounded"
+                            title="Disable Account"
+                            disabled={isLoading}
+                          >
+                            <Lock className="w-4 h-4" />
+                          </button>
+                        )
                       )}
                       <button
                         onClick={() => handleDeleteUser(user.id, user.email)}

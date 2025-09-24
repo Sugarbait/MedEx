@@ -246,6 +246,15 @@ class ToastNotificationService {
   private handleNewCall(callRecord: any): void {
     if (!this.shouldShowNotification()) return
 
+    // Only show notifications for records created in the last 5 minutes
+    const recordTime = new Date(callRecord.start_timestamp || callRecord.created_at || Date.now())
+    const fiveMinutesAgo = Date.now() - (5 * 60 * 1000)
+
+    if (recordTime.getTime() < fiveMinutesAgo) {
+      console.log(`🔔 Skipping notification for old call record: ${callRecord.call_id} (created ${recordTime.toISOString()})`)
+      return
+    }
+
     const notificationId = `call_${callRecord.call_id}_${Date.now()}`
 
     // Check for recent duplicates
@@ -255,7 +264,7 @@ class ToastNotificationService {
       id: notificationId,
       type: 'call',
       title: 'New Call Record Received',
-      timestamp: new Date(callRecord.start_timestamp || callRecord.created_at || Date.now()),
+      timestamp: recordTime,
       recordId: callRecord.call_id
     }
 
@@ -268,6 +277,15 @@ class ToastNotificationService {
   private handleNewSMS(smsRecord: any): void {
     if (!this.shouldShowNotification()) return
 
+    // Only show notifications for records created in the last 5 minutes
+    const recordTime = new Date(smsRecord.created_at || Date.now())
+    const fiveMinutesAgo = Date.now() - (5 * 60 * 1000)
+
+    if (recordTime.getTime() < fiveMinutesAgo) {
+      console.log(`🔔 Skipping notification for old SMS record: ${smsRecord.chat_id} (created ${recordTime.toISOString()})`)
+      return
+    }
+
     const notificationId = `sms_${smsRecord.chat_id}_${Date.now()}`
 
     // Check for recent duplicates
@@ -277,7 +295,7 @@ class ToastNotificationService {
       id: notificationId,
       type: 'sms',
       title: 'New SMS Record Received',
-      timestamp: new Date(smsRecord.created_at || Date.now()),
+      timestamp: recordTime,
       recordId: smsRecord.chat_id
     }
 

@@ -208,8 +208,8 @@ const TOTPProtectedRoute: React.FC<TOTPProtectedRouteProps> = ({
   // Show TOTP setup if not configured
   if (status === 'setup-required') {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
-        <div className="w-full">
+      <div className="min-h-screen bg-gray-50 pt-16 p-4">
+        <div className="w-full max-w-lg mx-auto">
           <div className="mb-6 text-center">
             <h1 className="text-2xl font-bold text-gray-900 mb-2">
               Security Setup Required
@@ -235,8 +235,8 @@ const TOTPProtectedRoute: React.FC<TOTPProtectedRouteProps> = ({
   // Show TOTP verification
   if (status === 'verification-required') {
     return (
-      <div className="min-h-screen bg-gray-50 flex flex-col items-center pt-8 p-4">
-        <div className="w-full max-w-md">
+      <div className="min-h-screen bg-gray-50 pt-16 p-4">
+        <div className="w-full max-w-md mx-auto">
           <div className="mb-6 text-center">
             <h1 className="text-2xl font-bold text-gray-900 mb-2">
               Secure Login

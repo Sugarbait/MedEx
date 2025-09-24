@@ -370,7 +370,7 @@ export class AvatarStorageService {
   }
 
   /**
-   * Upload to Supabase Storage
+   * Upload to Supabase Storage with improved error handling
    */
   private static async uploadToSupabaseStorage(
     userId: string,
@@ -378,6 +378,20 @@ export class AvatarStorageService {
   ): Promise<ServiceResponse<string> & { storagePath?: string }> {
     try {
       const fileName = `${userId}/avatar_${Date.now()}.jpg`
+
+      // First, try to ensure the bucket exists
+      const { data: buckets, error: bucketListError } = await supabase.storage.listBuckets()
+
+      if (bucketListError) {
+        console.warn('Cannot access storage buckets, using localStorage fallback:', bucketListError.message)
+        return this.fallbackToLocalStorage(userId, blob)
+      }
+
+      const avatarBucket = buckets?.find(bucket => bucket.name === this.STORAGE_BUCKET)
+      if (!avatarBucket) {
+        console.warn('Avatar bucket does not exist, using localStorage fallback. Please create "avatars" bucket in Supabase.')
+        return this.fallbackToLocalStorage(userId, blob)
+      }
 
       const { data: uploadData, error: uploadError } = await supabase.storage
         .from(this.STORAGE_BUCKET)
