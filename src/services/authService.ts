@@ -1,7 +1,7 @@
 import { User, MFAChallenge, SessionInfo } from '@/types'
 import { supabase } from '@/config/supabase'
 import { secureLogger } from '@/services/secureLogger'
-import { totpService } from '@/services/totpService'
+import { FreshMfaService } from '@/services/freshMfaService'
 import { secureStorage } from '@/services/secureStorage'
 import { encryptionService } from '@/services/encryption'
 
@@ -222,17 +222,12 @@ class AuthService {
         })
       }
 
-      // Check MFA verification status and sync MFA data
+      // Check MFA verification status using Fresh MFA Service
       let mfaVerified = false
       try {
-        const { totpService } = await import('./totpService')
-
-        // Force sync MFA data from cloud for cross-device access
-        // TOTP service doesn't require forced sync
-
-        // Check if MFA is enabled and verified
-        const mfaEnabled = await totpService.isTOTPEnabled(userProfile.id)
-        const hasMFASetup = await totpService.isTOTPEnabled(userProfile.id)
+        // Check if MFA is enabled using Fresh MFA Service
+        const mfaEnabled = await FreshMfaService.isMfaEnabled(userProfile.id)
+        const hasMFASetup = mfaEnabled // Fresh MFA uses simple enabled/disabled state
 
         userProfile.mfaEnabled = mfaEnabled || hasMFASetup
         mfaVerified = mfaEnabled
@@ -247,9 +242,13 @@ class AuthService {
           error: mfaError instanceof Error ? mfaError.message : 'Unknown error'
         })
 
-        // Fallback to basic MFA check
-        const { totpService } = await import('./totpService')
-        mfaVerified = await totpService.isTOTPEnabled(userProfile.id)
+        // Fallback to basic MFA check using Fresh MFA Service
+        try {
+          mfaVerified = await FreshMfaService.isMfaEnabled(userProfile.id)
+        } catch (fallbackError) {
+          console.warn('Fresh MFA fallback also failed:', fallbackError)
+          mfaVerified = false
+        }
       }
 
       logger.info('Complete user profile loaded with cross-device sync', userProfile.id, undefined, {
@@ -276,8 +275,8 @@ class AuthService {
     try {
       logger.debug('Initiating MFA challenge', userId)
 
-      // Check if user has MFA setup
-      const hasMFA = await totpService.isTOTPEnabled(userId)
+      // Check if user has MFA setup using Fresh MFA Service
+      const hasMFA = await FreshMfaService.isMfaEnabled(userId)
 
       if (!hasMFA) {
         logger.warn('MFA not setup for user', userId)
@@ -338,10 +337,10 @@ class AuthService {
         return false
       }
 
-      // Verify TOTP code using MFA service
-      const verificationResult = await totpService.verifyTOTP(challengeData.user_id, code)
+      // Verify TOTP code using Fresh MFA Service
+      const verificationResult = await FreshMfaService.verifyLoginCode(challengeData.user_id, code)
 
-      if (verificationResult.success) {
+      if (verificationResult) {
         // Mark challenge as used
         await supabase
           .from('mfa_challenges')

@@ -2,9 +2,8 @@ import React, { useState } from 'react'
 import { ShieldCheckIcon, EyeIcon, EyeOffIcon, AlertCircleIcon } from 'lucide-react'
 import { userManagementService } from '@/services/userManagementService'
 import { userProfileService } from '@/services/userProfileService'
-import TOTPLoginVerification from '@/components/auth/TOTPLoginVerification'
-import CloudSyncTOTPLoginVerification from '@/components/auth/CloudSyncTOTPLoginVerification'
-import { totpService } from '@/services/totpService'
+import { FreshMfaVerification } from '@/components/auth/FreshMfaVerification'
+import { FreshMfaService } from '@/services/freshMfaService'
 import { useCompanyLogos } from '@/hooks/useCompanyLogos'
 import { userSettingsService } from '@/services/userSettingsService'
 import { auditLogger, AuditAction, ResourceType, AuditOutcome } from '@/services/auditLogger'
@@ -226,22 +225,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       // SECURITY FIX: For super users, we still enforce strict MFA checks
       // No special bypasses - super users must have proper MFA setup
       try {
-        // First check database health and create fallback if needed for critical users
-        const healthStatus = await totpService.checkDatabaseHealthAndFallback(user.id)
-        if (!healthStatus.healthy && healthStatus.usingFallback) {
-          console.log('🚨 SECURITY: Database unhealthy, emergency fallback created for super user')
-        }
+        // Check MFA status using Fresh MFA Service
+        let totpServiceResult = null
+        let totpSetupExists = null
 
-        const [totpServiceResult, totpSetupExists] = await Promise.all([
-          totpService.isTOTPEnabled(user.id).catch(err => {
-            console.warn('totpService.isTOTPEnabled failed for super user:', err)
-            return null // null indicates failure, not false
-          }),
-          totpService.hasTOTPSetup(user.id).catch(err => {
-            console.warn('totpService.hasTOTPSetup failed for super user:', err)
-            return null // null indicates failure, not false
-          })
-        ])
+        try {
+          totpServiceResult = await FreshMfaService.isMfaEnabled(user.id)
+          totpSetupExists = totpServiceResult // Fresh MFA uses single enabled state
+        } catch (err) {
+          console.warn('FreshMfaService.isMfaEnabled failed for super user:', err)
+          totpServiceResult = null
+          totpSetupExists = null
+        }
 
         // SECURITY ENHANCEMENT: Fail-secure approach for super users
         if (totpServiceResult === true || totpSetupExists === true) {
@@ -293,23 +288,18 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       }
     } else {
       try {
-        // Check database health for regular users as well
-        const healthStatus = await totpService.checkDatabaseHealthAndFallback(user.id)
-        if (!healthStatus.healthy) {
-          console.log('⚠️ SECURITY: Database unhealthy for regular user, may need fallback handling')
-        }
+        // Check MFA status using Fresh MFA Service for regular users
+        let totpServiceResult = null
+        let totpSetupExists = null
 
-        // Use both services for maximum reliability for non-super users
-        const [totpServiceResult, totpSetupExists] = await Promise.all([
-          totpService.isTOTPEnabled(user.id).catch(err => {
-            console.warn('totpService.isTOTPEnabled failed:', err)
-            return null // null indicates failure, not false
-          }),
-          totpService.hasTOTPSetup(user.id).catch(err => {
-            console.warn('totpService.hasTOTPSetup failed:', err)
-            return null // null indicates failure, not false
-          })
-        ])
+        try {
+          totpServiceResult = await FreshMfaService.isMfaEnabled(user.id)
+          totpSetupExists = totpServiceResult // Fresh MFA uses single enabled state
+        } catch (err) {
+          console.warn('FreshMfaService.isMfaEnabled failed:', err)
+          totpServiceResult = null
+          totpSetupExists = null
+        }
 
         // FAIL-SAFE LOGIC: If any check fails, default to requiring MFA
         if (totpServiceResult === null || totpSetupExists === null) {
@@ -923,21 +913,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
       {/* MFA Verification Modal */}
       {showMFAVerification && pendingUser && (
-        <>
-          {useCloudSyncMFA ? (
-            <CloudSyncTOTPLoginVerification
-              user={pendingUser}
-              onVerificationSuccess={handleMFASuccess}
-              onCancel={handleMFACancel}
-            />
-          ) : (
-            <TOTPLoginVerification
-              user={pendingUser}
-              onVerificationSuccess={handleMFASuccess}
-              onCancel={handleMFACancel}
-            />
-          )}
-        </>
+        <FreshMfaVerification
+          userId={pendingUser.id}
+          userEmail={pendingUser.email}
+          onVerificationSuccess={handleMFASuccess}
+          onCancel={handleMFACancel}
+        />
       )}
     </div>
   )

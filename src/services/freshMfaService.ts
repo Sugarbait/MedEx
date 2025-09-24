@@ -8,7 +8,7 @@
  * - Clean database storage
  */
 
-import { OTPAuth } from 'otpauth'
+import * as OTPAuth from 'otpauth'
 import QRCode from 'qrcode'
 import { supabase } from '../config/supabase'
 

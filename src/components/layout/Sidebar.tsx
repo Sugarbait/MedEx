@@ -1,7 +1,7 @@
 import React from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useCompanyLogos } from '@/hooks/useCompanyLogos'
-import { useTOTPStatus } from '@/hooks/useTOTPStatus'
+// Removed old TOTP hook - using fresh MFA service
 import {
   HomeIcon,
   PhoneIcon,
@@ -89,7 +89,7 @@ const getNavigationItems = (user: any, totpStatus: any) => {
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, user }) => {
   const location = useLocation()
   const { logos } = useCompanyLogos()
-  const totpStatus = useTOTPStatus(user?.id)
+  // Fresh MFA status will be checked via service when needed
 
   return (
     <>

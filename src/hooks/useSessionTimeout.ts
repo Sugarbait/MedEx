@@ -49,9 +49,8 @@ export const useSessionTimeout = ({
 
         // SECURITY ENHANCEMENT: Clear all authentication data on timeout
         try {
-          // Clear TOTP sessions
-          const { clearAllTOTPSessions } = await import('../components/auth/TOTPProtectedRoute')
-          clearAllTOTPSessions()
+          // Clear MFA sessions
+          localStorage.removeItem('freshMfaVerified')
 
           // Clear main authentication data
           localStorage.removeItem('currentUser')
@@ -140,8 +139,6 @@ export const useSessionTimeout = ({
           }
 
           // Clear all authentication data immediately
-          const { clearAllTOTPSessions } = await import('../components/auth/TOTPProtectedRoute')
-          clearAllTOTPSessions()
           localStorage.clear()
           sessionStorage.clear()
 

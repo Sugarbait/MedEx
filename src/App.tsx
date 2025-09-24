@@ -18,13 +18,13 @@ import './utils/makeSuperUsers'
 import { initializeSecureStorage } from './services/storageSecurityMigration'
 import { secureUserDataService } from './services/secureUserDataService'
 import { authService } from './services/authService'
-import { totpService } from './services/totpService'
+// Removed old TOTP service - using fresh MFA service
 import { UserSettingsService } from './services/userSettingsServiceEnhanced'
-import { useTOTPStatus } from './hooks/useTOTPStatus'
+// Removed old TOTP hook - using fresh MFA service
 import { Sidebar } from './components/layout/Sidebar'
 import { Header } from './components/layout/Header'
 import { Footer } from './components/layout/Footer'
-import { TOTPProtectedRoute, clearTOTPSession } from './components/auth/TOTPProtectedRoute'
+// Removed old TOTP protected route - using fresh MFA components
 import { AuditLogger } from './components/security/AuditLogger'
 import { useSessionTimeout } from './hooks/useSessionTimeout'
 import { SessionTimeoutWarning } from './components/common/SessionTimeoutWarning'
@@ -95,8 +95,7 @@ const AppContent: React.FC<{
   const pageTitle = getPageTitle(location.pathname)
   const [showTimeoutWarning, setShowTimeoutWarning] = useState(false)
 
-  // Check TOTP status to conditionally render protected routes
-  const totpStatus = useTOTPStatus(user?.id)
+  // Fresh MFA status will be checked via service
 
   // Ensure theme persistence on navigation
   useEffect(() => {
@@ -192,8 +191,8 @@ const AppContent: React.FC<{
     setShowTimeoutWarning(false)
   }
 
-  // TOTP authentication will be handled by TOTPProtectedRoute wrapper
-  console.log('🔒 SECURITY: TOTP protection active')
+  // Fresh MFA authentication will be handled by individual pages
+  console.log('🔒 SECURITY: Fresh MFA protection available')
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
@@ -237,50 +236,21 @@ const AppContent: React.FC<{
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route
                 path="/dashboard"
-                element={
-                  <TOTPProtectedRoute user={user}>
-                    <DashboardPage user={user} />
-                  </TOTPProtectedRoute>
-                }
+                element={<DashboardPage user={user} />}
               />
 
-              {/* Only show Calls and SMS routes when TOTP setup exists */}
-              {totpStatus.hasSetup && (
-                <>
-                  <Route
-                    path="/calls"
-                    element={
-                      <TOTPProtectedRoute user={user}>
-                        <CallsPage user={user} />
-                      </TOTPProtectedRoute>
-                    }
-                  />
-                  <Route
-                    path="/sms"
-                    element={
-                      <TOTPProtectedRoute user={user}>
-                        <SMSPage user={user} />
-                      </TOTPProtectedRoute>
-                    }
-                  />
-                </>
-              )}
-
-              {/* Redirect to dashboard if trying to access Calls/SMS without TOTP setup */}
-              {!totpStatus.isLoading && !totpStatus.hasSetup && (
-                <>
-                  <Route path="/calls" element={<Navigate to="/dashboard" replace />} />
-                  <Route path="/sms" element={<Navigate to="/dashboard" replace />} />
-                </>
-              )}
+              <Route
+                path="/calls"
+                element={<CallsPage user={user} />}
+              />
+              <Route
+                path="/sms"
+                element={<SMSPage user={user} />}
+              />
 
               <Route
                 path="/users"
-                element={
-                  <TOTPProtectedRoute user={user}>
-                    <UserManagementPage user={user} />
-                  </TOTPProtectedRoute>
-                }
+                element={<UserManagementPage user={user} />}
               />
               <Route
                 path="/settings"
@@ -529,12 +499,10 @@ const App: React.FC = () => {
             retellService.loadCredentials()
           }
 
-          // 🔒 MFA LOCKDOWN PROTECTION 🔒
-          // TOTP authentication will be handled by TOTPProtectedRoute
-          // MFA requirement will be enforced by individual route protection
+          // 🔒 FRESH MFA PROTECTION 🔒
+          // Fresh MFA authentication will be handled by individual components
+          // MFA requirement will be enforced by page-level protection
           // ⚠️ CRITICAL: Do not globally disable MFA requirement
-          // ⚠️ NEVER add setMfaRequired(false) here - this bypasses all MFA security
-          // See: MFA-LOCKDOWN-PROTECTION.md for complete security requirements
 
           // Log authentication event for HIPAA audit
           try {
@@ -757,24 +725,25 @@ const App: React.FC = () => {
       if (user?.id) {
         console.log('🔒 Clearing user-specific authentication data on logout')
 
-        // Clear TOTP sessions
+        // Clear MFA sessions
         try {
-          const { clearAllTOTPSessions } = await import('./components/auth/TOTPProtectedRoute')
-          clearAllTOTPSessions()
-        } catch (totpError) {
-          console.error('Error clearing TOTP sessions:', totpError)
+          // Clear any fresh MFA sessions if needed
+          localStorage.removeItem('freshMfaVerified')
+          console.log('✅ Fresh MFA sessions cleared')
+        } catch (mfaError) {
+          console.error('Error clearing MFA sessions:', mfaError)
         }
 
         // Clear user-specific data
         localStorage.removeItem(`settings_${user.id}`)
         localStorage.removeItem(`user_settings_${user.id}`)
       } else {
-        // Clear all TOTP sessions when user ID is not available
+        // Clear all MFA sessions when user ID is not available
         try {
-          const { clearAllTOTPSessions } = await import('./components/auth/TOTPProtectedRoute')
-          clearAllTOTPSessions()
-        } catch (totpError) {
-          console.error('Error clearing all TOTP sessions:', totpError)
+          localStorage.removeItem('freshMfaVerified')
+          console.log('✅ Fresh MFA sessions cleared (no user ID)')
+        } catch (mfaError) {
+          console.error('Error clearing all MFA sessions:', mfaError)
         }
       }
 
@@ -810,13 +779,7 @@ const App: React.FC = () => {
           <p className="text-gray-600 dark:text-gray-300">Loading CareXPS Healthcare CRM...</p>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Initializing HIPAA-compliant environment</p>
           <button
-            onClick={async () => {
-              try {
-                const { clearAllTOTPSessions } = await import('./components/auth/TOTPProtectedRoute')
-                clearAllTOTPSessions()
-              } catch (error) {
-                console.error('Error clearing TOTP sessions:', error)
-              }
+            onClick={() => {
               localStorage.clear()
               sessionStorage.clear()
               window.location.reload()

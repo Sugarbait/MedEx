@@ -422,9 +422,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       // SECURITY ENHANCEMENT: Comprehensive cleanup on logout
       try {
-        // Clear TOTP sessions
-        const { clearAllTOTPSessions } = await import('../components/auth/TOTPProtectedRoute')
-        clearAllTOTPSessions()
+        // Clear MFA sessions
+        localStorage.removeItem('freshMfaVerified')
+        console.log('✅ Fresh MFA sessions cleared')
 
         // Clean up settings subscriptions for current user
         if (user?.id) {
@@ -434,8 +434,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           // Clear user-specific localStorage items
           localStorage.removeItem(`user_settings_${user.id}`)
           localStorage.removeItem(`settings_${user.id}`)
-          localStorage.removeItem(`totp_verified_${user.id}`)
-          localStorage.removeItem(`totp_session_${user.id}`)
+          localStorage.removeItem('freshMfaVerified')
         } else {
           // Fallback: clean up all subscriptions and cache
           userSettingsService.unsubscribeFromSettings()
@@ -446,8 +445,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           allKeys.forEach(key => {
             if (key.startsWith('user_settings_') ||
                 key.startsWith('settings_') ||
-                key.startsWith('totp_verified_') ||
-                key.startsWith('totp_session_')) {
+                key.startsWith('freshMfaVerified_')) {
               localStorage.removeItem(key)
             }
           })
@@ -493,8 +491,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       try {
         localStorage.removeItem('currentUser')
         localStorage.removeItem('mfa_verified')
-        const { clearAllTOTPSessions } = await import('../components/auth/TOTPProtectedRoute')
-        clearAllTOTPSessions()
+        localStorage.removeItem('freshMfaVerified')
+        console.log('✅ All MFA sessions cleared on logout failure')
       } catch (fallbackError) {
         console.error('Fallback cleanup also failed:', fallbackError)
       }
@@ -609,9 +607,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       // SECURITY ENHANCEMENT: Clear all authentication data on timeout
       try {
-        // Clear TOTP sessions
-        const { clearAllTOTPSessions } = await import('../components/auth/TOTPProtectedRoute')
-        clearAllTOTPSessions()
+        // Clear MFA sessions
+        localStorage.removeItem('freshMfaVerified')
+        console.log('✅ Fresh MFA sessions cleared on timeout')
 
         // Clear all user data
         localStorage.removeItem('currentUser')
@@ -640,16 +638,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       if (shouldContinue) {
         // SECURITY ENHANCEMENT: Require MFA re-verification for session extension
-        const lastMFATime = localStorage.getItem(`totp_session_${user.id}`)
+        const lastMFATime = localStorage.getItem('freshMfaVerified')
         const now = Date.now()
         const mfaAge = lastMFATime ? now - parseInt(lastMFATime) : Infinity
         const MFA_REAUTH_THRESHOLD = 4 * 60 * 60 * 1000 // 4 hours
 
         if (mfaAge > MFA_REAUTH_THRESHOLD) {
           alert('For security, you will need to re-verify your identity to continue.')
-          // Clear TOTP sessions to force re-authentication
-          const { clearTOTPSession } = require('../components/auth/TOTPProtectedRoute')
-          clearTOTPSession(user.id)
+          // Clear MFA sessions to force re-authentication
+          localStorage.removeItem('freshMfaVerified')
+          console.log('✅ Fresh MFA session cleared for re-authentication')
         }
 
         refreshSession().catch(() => {
