@@ -188,9 +188,14 @@ class TOTPService {
           try {
             totpData = JSON.parse(localTotpData)
             console.log('🔍 TOTP Service: TOTP data found in localStorage')
+            console.log('🔍 TOTP Service: Parsed TOTP data:', totpData)
+            console.log('🔍 TOTP Service: Has encrypted_secret?', !!totpData.encrypted_secret)
+            console.log('🔍 TOTP Service: encrypted_secret value:', totpData.encrypted_secret)
           } catch (parseError) {
             console.error('🔍 TOTP Service: Failed to parse localStorage TOTP data:', parseError)
           }
+        } else {
+          console.log('🔍 TOTP Service: No localStorage TOTP data found')
         }
       }
 
