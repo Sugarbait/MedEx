@@ -303,6 +303,34 @@ export class RetellService {
   }
 
   /**
+   * Clean API key by removing encryption prefixes (cbc:, gcm:, etc.)
+   */
+  private cleanApiKey(apiKey: string): string {
+    if (!apiKey) return ''
+
+    let cleaned = apiKey
+
+    // Remove common encryption prefixes
+    if (cleaned.includes('cbc:')) {
+      cleaned = cleaned.split('cbc:').pop() || cleaned
+    }
+    if (cleaned.includes('gcm:')) {
+      cleaned = cleaned.split('gcm:').pop() || cleaned
+    }
+    if (cleaned.includes('aes:')) {
+      cleaned = cleaned.split('aes:').pop() || cleaned
+    }
+
+    console.log('API key cleaned:', {
+      original: apiKey.substring(0, 20) + '...',
+      cleaned: cleaned.substring(0, 20) + '...',
+      hadPrefix: apiKey !== cleaned
+    })
+
+    return cleaned
+  }
+
+  /**
    * Get authorization headers for API requests
    */
   private getHeaders(): HeadersInit {
@@ -310,8 +338,11 @@ export class RetellService {
       this.loadCredentials()
     }
 
+    // Clean the API key before using it in the Authorization header
+    const cleanedApiKey = this.cleanApiKey(this.apiKey)
+
     return {
-      'Authorization': `Bearer ${this.apiKey}`,
+      'Authorization': `Bearer ${cleanedApiKey}`,
       'Content-Type': 'application/json',
       'User-Agent': 'CareXPS-CRM/1.0.0'
     }
@@ -329,10 +360,12 @@ export class RetellService {
    */
   public async testConnection(): Promise<{ success: boolean; message: string }> {
     try {
+      const cleanedApiKey = this.cleanApiKey(this.apiKey)
       console.log('Testing API connection with:', {
         baseUrl: this.baseUrl,
         hasApiKey: !!this.apiKey,
-        apiKeyPrefix: this.apiKey ? this.apiKey.substring(0, 20) + '...' : 'none'
+        originalApiKeyPrefix: this.apiKey ? this.apiKey.substring(0, 20) + '...' : 'none',
+        cleanedApiKeyPrefix: cleanedApiKey ? cleanedApiKey.substring(0, 20) + '...' : 'none'
       })
 
       if (!this.apiKey) {
