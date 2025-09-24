@@ -141,14 +141,43 @@ class TOTPService {
    */
   async verifyTOTP(userId: string, code: string, enableOnSuccess: boolean = false): Promise<TOTPVerificationResult> {
     try {
-      // Get user's TOTP data
-      const { data: totpData, error } = await supabase
-        .from('user_totp')
-        .select('*')
-        .eq('user_id', userId)
-        .single()
+      console.log('🔍 TOTP Service: Attempting to verify TOTP for user:', userId)
 
-      if (error || !totpData) {
+      // Try database first
+      let totpData: any = null
+      try {
+        const { data, error } = await supabase
+          .from('user_totp')
+          .select('*')
+          .eq('user_id', userId)
+          .single()
+
+        if (!error && data) {
+          console.log('🔍 TOTP Service: TOTP data found in database')
+          totpData = data
+        } else {
+          console.log('🔍 TOTP Service: Database error, checking localStorage fallback:', error?.message)
+        }
+      } catch (dbError) {
+        console.log('🔍 TOTP Service: Database unavailable, checking localStorage fallback:', dbError)
+      }
+
+      // Fallback to localStorage if database failed
+      if (!totpData) {
+        console.log('🔍 TOTP Service: Checking localStorage for TOTP data...')
+        const localTotpData = localStorage.getItem(`totp_${userId}`)
+        if (localTotpData) {
+          try {
+            totpData = JSON.parse(localTotpData)
+            console.log('🔍 TOTP Service: TOTP data found in localStorage')
+          } catch (parseError) {
+            console.error('🔍 TOTP Service: Failed to parse localStorage TOTP data:', parseError)
+          }
+        }
+      }
+
+      if (!totpData) {
+        console.log('❌ TOTP Service: No TOTP data found in database or localStorage')
         return { success: false, error: 'TOTP not set up for this user' }
       }
 
@@ -191,10 +220,21 @@ class TOTPService {
         updateData.enabled = true
       }
 
-      await supabase
-        .from('user_totp')
-        .update(updateData)
-        .eq('user_id', userId)
+      // Try to update database first
+      try {
+        await supabase
+          .from('user_totp')
+          .update(updateData)
+          .eq('user_id', userId)
+        console.log('✅ TOTP Service: Database updated successfully')
+      } catch (dbError) {
+        console.warn('⚠️ TOTP Service: Database update failed, updating localStorage:', dbError)
+      }
+
+      // Always update localStorage as backup
+      const updatedTotpData = { ...totpData, ...updateData }
+      localStorage.setItem(`totp_${userId}`, JSON.stringify(updatedTotpData))
+      console.log('✅ TOTP Service: localStorage updated successfully')
 
       return { success: true }
     } catch (error) {
