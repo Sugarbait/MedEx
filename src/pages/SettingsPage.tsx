@@ -70,7 +70,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   const [isChatbotVisible, setIsChatbotVisible] = useState(false)
   const [userSettings, setUserSettings] = useState<LocalUserSettings>({
     // Don't set default theme - let it load from storage
-    mfaEnabled: false,
+    mfaEnabled: true, // SECURITY POLICY: MFA is mandatory, never false
     refreshInterval: 30000 // Default to 30 seconds
   })
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
@@ -167,7 +167,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
           // Set default settings on error
           const defaultSettings = {
             theme: 'light',
-            mfaEnabled: user?.mfa_enabled || false,
+            mfaEnabled: true, // SECURITY POLICY: MFA is always mandatory
             refreshInterval: 30000,
             sessionTimeout: 15,
             notifications: {
@@ -187,7 +187,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
         // Set default settings on error
         const errorDefaultSettings = {
           theme: 'light',
-          mfaEnabled: user?.mfa_enabled || false,
+          mfaEnabled: true, // SECURITY POLICY: MFA is always mandatory
           refreshInterval: 30000,
           sessionTimeout: 15,
           notifications: {
@@ -300,7 +300,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
         },
         security_preferences: {
           session_timeout: updatedSettings.sessionTimeout || 15,
-          require_mfa: updatedSettings.mfaEnabled || false,
+          require_mfa: true, // SECURITY POLICY: MFA is always mandatory, never false
           password_expiry_reminder: true,
           login_notifications: true
         }
@@ -392,11 +392,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
           return
         }
       } else if (!enabled) {
-        const hasEnabled = await mfaService.hasMFAEnabled(user.id)
-        if (hasEnabled) {
-          // Temporarily disable MFA (preserve setup)
-          await mfaService.disableMFA(user.id)
-          console.log('MFA temporarily disabled for user:', '[USER-ID-REDACTED - HIPAA PROTECTED]')
+        // SECURITY POLICY: MFA cannot be disabled - per MFA-SECURITY-POLICY.md
+        console.error('🔒 SECURITY: Attempt to disable MFA blocked - MFA is mandatory')
+        setErrorMessage('MFA cannot be disabled. MFA is mandatory per company security policy.')
+        return
         }
       }
     } catch (error) {
@@ -1333,17 +1332,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                         Setup MFA
                       </button>
                     )}
-                    <button
-                      onClick={() => handleMFAToggle(!userSettings?.mfaEnabled)}
-                      disabled={isLoading}
-                      className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
-                        userSettings?.mfaEnabled ? 'bg-green-600' : 'bg-gray-300'
-                      } disabled:opacity-50`}
-                    >
-                      <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                        userSettings?.mfaEnabled ? 'translate-x-6' : 'translate-x-1'
-                      }`} />
-                    </button>
+                    {/* SECURITY POLICY: MFA toggle removed - MFA is mandatory and cannot be disabled */}
+                    <div className="flex items-center gap-2">
+                      <div className="relative inline-flex h-6 w-11 items-center rounded-full bg-green-600">
+                        <span className="inline-block h-4 w-4 transform rounded-full bg-white translate-x-6" />
+                      </div>
+                      <span className="text-xs text-gray-600 dark:text-gray-400 font-medium">
+                        MANDATORY (Cannot be disabled)
+                      </span>
+                    </div>
                   </div>
                 </div>
 

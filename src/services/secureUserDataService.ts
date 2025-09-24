@@ -49,7 +49,7 @@ class SecureUserDataService {
         email: userData.email,
         name: userData.name,
         role: userData.role,
-        mfa_enabled: userData.mfa_enabled || userData.mfaEnabled || false,
+        mfa_enabled: true, // SECURITY POLICY: MFA is always mandatory
         last_login: userData.last_login || userData.lastLogin,
         is_active: userData.is_active !== undefined ? userData.is_active : (userData.isActive !== undefined ? userData.isActive : true),
         created_at: userData.created_at || userData.createdAt,

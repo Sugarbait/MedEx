@@ -25,10 +25,11 @@ const hasMFAAccess = (user: any): boolean => {
       userMfaEnabled: user.mfaEnabled
     })
 
-    // If user doesn't have MFA enabled, allow access
+    // SECURITY POLICY: MFA IS MANDATORY - Never allow access without MFA
+    // Per MFA-SECURITY-POLICY.md: MFA must always be enabled and enforced
     if (!hasMFAEnabled && !user.mfaEnabled) {
-      console.log('✅ User has MFA disabled - allowing access')
-      return true
+      console.log('🔒 SECURITY: User lacks MFA setup - access denied (MFA is mandatory)')
+      return false
     }
 
     // If user has MFA enabled, check for valid session
@@ -107,12 +108,12 @@ export const MFAProtectedRoute: React.FC<MFAProtectedRouteProps> = ({
 
                   {!user?.mfa_enabled ? (
                     <div className="mt-4">
-                      <p className="font-medium">Steps to gain access:</p>
+                      <p className="font-medium">MFA Setup Required (Mandatory Security Policy):</p>
                       <ol className="mt-2 list-decimal list-inside space-y-1">
                         <li>Go to Settings → Security & Privacy</li>
-                        <li>Enable Multi-Factor Authentication</li>
-                        <li>Complete the MFA setup process</li>
-                        <li>Return to this page and verify your identity</li>
+                        <li>Complete Multi-Factor Authentication setup (Required)</li>
+                        <li>MFA cannot be disabled per company security policy</li>
+                        <li>Return to this page after MFA verification</li>
                       </ol>
                     </div>
                   ) : localStorage.getItem(`mfa_secret_${user.id}`) ? (

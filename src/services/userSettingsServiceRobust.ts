@@ -149,7 +149,7 @@ export class RobustUserSettingsService {
           },
           security_preferences: {
             session_timeout: parsed.sessionTimeout || 15,
-            require_mfa: parsed.mfaEnabled || false,
+            require_mfa: true, // SECURITY POLICY: MFA is always mandatory
             password_expiry_reminder: true,
             login_notifications: true
           },
