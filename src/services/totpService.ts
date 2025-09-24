@@ -258,14 +258,6 @@ class TOTPService {
         }
       }
 
-      // Secondary check for test codes after secret retrieval (redundant safety)
-      if (criticalUserProfiles.includes(userId)) {
-        const testCodes = ['000000', '123456', '999999', '111111']
-        if (testCodes.includes(code)) {
-          console.log('✅ TOTP Service: Critical user test code accepted (secondary check)')
-          return { success: true }
-        }
-      }
 
       // Create TOTP instance with stored secret
       const totp = new TOTP({
@@ -281,14 +273,6 @@ class TOTPService {
       const delta = totp.validate({ token: code, window: 1 })
 
       if (delta === null) {
-        // Final check for test codes before backup code verification
-        if (criticalUserProfiles.includes(userId)) {
-          const testCodes = ['000000', '123456', '999999', '111111']
-          if (testCodes.includes(code)) {
-            console.log('✅ TOTP Service: Critical user test code accepted (final check)')
-            return { success: true }
-          }
-        }
 
         // Check if it's a backup code (with improved error handling)
         try {
@@ -298,14 +282,6 @@ class TOTPService {
           }
         } catch (backupError) {
           console.warn('⚠️ TOTP Service: Backup code verification failed:', backupError)
-          // For critical users, if backup verification fails, still allow test codes
-          if (criticalUserProfiles.includes(userId)) {
-            const testCodes = ['000000', '123456', '999999', '111111']
-            if (testCodes.includes(code)) {
-              console.log('✅ TOTP Service: Critical user test code accepted (backup fallback)')
-              return { success: true }
-            }
-          }
           return { success: false, error: 'Invalid TOTP code' }
         }
       }
