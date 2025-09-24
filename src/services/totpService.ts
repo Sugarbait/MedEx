@@ -5,7 +5,7 @@
  */
 
 import { TOTP, Secret } from 'otpauth'
-import { encryptString, decryptString } from '../utils/encryption'
+import { encryptPHI, decryptPHI } from '../utils/encryption'
 import { supabase } from '../config/supabase'
 
 interface TOTPConfig {
@@ -75,7 +75,7 @@ class TOTPService {
       const backup_codes = this.generateBackupCodes()
 
       // Encrypt the secret before storing
-      const encrypted_secret = encryptString(secret.base32)
+      const encrypted_secret = encryptPHI(secret.base32)
 
       // Store in database
       const { error } = await supabase
@@ -83,7 +83,7 @@ class TOTPService {
         .upsert({
           user_id: userId,
           encrypted_secret,
-          backup_codes: backup_codes.map(code => encryptString(code)),
+          backup_codes: backup_codes.map(code => encryptPHI(code)),
           enabled: false, // Not enabled until first successful verification
           created_at: new Date().toISOString()
         })
@@ -123,7 +123,7 @@ class TOTPService {
       // Decrypt the secret
       let decrypted_secret: string
       try {
-        decrypted_secret = decryptString(totpData.encrypted_secret)
+        decrypted_secret = decryptPHI(totpData.encrypted_secret)
       } catch (decryptError) {
         console.error('TOTP secret decryption failed:', decryptError)
         return { success: false, error: 'Invalid TOTP configuration' }
@@ -243,7 +243,7 @@ class TOTPService {
       // Decrypt and check each backup code
       for (const encryptedCode of totpData.backup_codes) {
         try {
-          const decryptedCode = decryptString(encryptedCode)
+          const decryptedCode = decryptPHI(encryptedCode)
           if (decryptedCode === code) {
             // Remove the used backup code
             const updatedCodes = totpData.backup_codes.filter(c => c !== encryptedCode)
