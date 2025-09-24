@@ -6,7 +6,8 @@
 import React, { useState, useEffect } from 'react'
 import QRCode from 'qrcode'
 import { Shield, Copy, Check, AlertTriangle, Eye, EyeOff } from 'lucide-react'
-import { totpService } from '../../services/totpService'\nimport TOTPEmergencyRecovery from './TOTPEmergencyRecovery'
+import { totpService } from '../../services/totpService'
+import TOTPEmergencyRecovery from './TOTPEmergencyRecovery'
 
 interface TOTPSetupProps {
   userId: string
