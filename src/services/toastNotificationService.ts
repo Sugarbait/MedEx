@@ -1,8 +1,13 @@
 /**
- * Toast Notification Service
+ * Toast Notification Service - Enhanced Strict Mode
  *
- * Provides real-time toast notifications for new Call and SMS records
- * with cross-device synchronization and user preference integration
+ * Provides real-time toast notifications for TRULY NEW Call and SMS records ONLY.
+ * Features comprehensive filtering to ensure no old notifications are ever shown:
+ * - Session-based tracking prevents pre-existing record notifications
+ * - Ultra-strict 30-second window for new record acceptance
+ * - Automatic queue cleanup for stale notifications
+ * - Multiple timestamp validation safeguards
+ * - Cross-device synchronization with user preference integration
  */
 
 import { supabase } from '@/config/supabase'
@@ -36,13 +41,23 @@ class ToastNotificationService {
     }
   }
 
+  // Session tracking to prevent showing pre-existing records
+  private serviceStartTime: number = 0
+  private monitoringStartTime: number = 0
+
   // Deduplication tracking
   private recentNotifications = new Map<string, number>()
   private readonly DEDUP_WINDOW = 5000 // 5 seconds
 
+  // Much stricter time window for truly new records
+  private readonly NEW_RECORD_WINDOW = 30000 // 30 seconds (reduced from 5 minutes)
+
   // Tab visibility tracking
   private isTabVisible = true
   private pendingNotifications: ToastNotificationData[] = []
+
+  // Maximum age for queued notifications (2 minutes)
+  private readonly MAX_QUEUE_AGE = 2 * 60 * 1000
 
   /**
    * Initialize the toast notification service
@@ -50,7 +65,12 @@ class ToastNotificationService {
   async initialize(userId: string): Promise<void> {
     if (this.isInitialized) return
 
-    console.log('🔔 Initializing Toast Notification Service...')
+    // Record service start time to prevent showing pre-existing records
+    this.serviceStartTime = Date.now()
+
+    console.log('🔔 Initializing Toast Notification Service...', {
+      serviceStartTime: new Date(this.serviceStartTime).toISOString()
+    })
 
     // Load user preferences
     await this.loadUserPreferences(userId)
@@ -64,7 +84,7 @@ class ToastNotificationService {
     }
 
     this.isInitialized = true
-    console.log('✅ Toast Notification Service initialized')
+    console.log('✅ Toast Notification Service initialized with strict new-record filtering')
   }
 
   /**
@@ -93,6 +113,8 @@ class ToastNotificationService {
         await this.setupRealtimeMonitoring()
       } else if (!preferences.enabled && (this.callsChannel || this.smsChannel)) {
         this.stopRealtimeMonitoring()
+        // Clear any pending notifications when disabling
+        this.pendingNotifications = []
       }
     }
 
@@ -155,12 +177,24 @@ class ToastNotificationService {
       const wasVisible = this.isTabVisible
       this.isTabVisible = !document.hidden
 
-      // If tab becomes visible and we have pending notifications, show them
+      // If tab becomes visible and we have pending notifications, show only fresh ones
       if (!wasVisible && this.isTabVisible && this.pendingNotifications.length > 0) {
-        console.log(`🔔 Tab visible again, showing ${this.pendingNotifications.length} pending notifications`)
+        const now = Date.now()
 
-        // Show notifications with a small delay to avoid overwhelming
-        this.pendingNotifications.forEach((notification, index) => {
+        // Filter out stale notifications that are older than MAX_QUEUE_AGE
+        const freshNotifications = this.pendingNotifications.filter(notification => {
+          const age = now - notification.timestamp.getTime()
+          const isFresh = age <= this.MAX_QUEUE_AGE
+          if (!isFresh) {
+            console.log(`🔔 Discarding stale queued notification: ${notification.title} (age: ${Math.round(age/1000)}s)`)
+          }
+          return isFresh
+        })
+
+        console.log(`🔔 Tab visible again, showing ${freshNotifications.length} fresh notifications (discarded ${this.pendingNotifications.length - freshNotifications.length} stale)`)
+
+        // Show fresh notifications with a small delay to avoid overwhelming
+        freshNotifications.forEach((notification, index) => {
           setTimeout(() => {
             this.showNotification(notification)
           }, index * 500) // Stagger by 500ms
@@ -176,7 +210,12 @@ class ToastNotificationService {
    */
   private async setupRealtimeMonitoring(): Promise<void> {
     try {
-      console.log('🔔 Setting up real-time monitoring for new records...')
+      // Record when monitoring starts to ensure we only show records created after this point
+      this.monitoringStartTime = Date.now()
+
+      console.log('🔔 Setting up real-time monitoring for new records...', {
+        monitoringStartTime: new Date(this.monitoringStartTime).toISOString()
+      })
 
       // Monitor calls table for new records
       this.callsChannel = supabase
@@ -241,19 +280,54 @@ class ToastNotificationService {
   }
 
   /**
+   * Validate if a record is truly new and should trigger a notification
+   */
+  private isRecordTrulyNew(recordTimestamp: string | Date, recordId: string): boolean {
+    const recordTime = new Date(recordTimestamp).getTime()
+    const now = Date.now()
+
+    // Check 1: Record must be created after service started monitoring
+    if (recordTime < this.monitoringStartTime) {
+      console.log(`🔔 Rejecting notification: Record ${recordId} created before monitoring started (${new Date(recordTime).toISOString()} < ${new Date(this.monitoringStartTime).toISOString()})`)
+      return false
+    }
+
+    // Check 2: Record must be created after service initialization (backup safeguard)
+    if (recordTime < this.serviceStartTime) {
+      console.log(`🔔 Rejecting notification: Record ${recordId} created before service initialization (${new Date(recordTime).toISOString()} < ${new Date(this.serviceStartTime).toISOString()})`)
+      return false
+    }
+
+    // Check 3: Record must be very recent (within NEW_RECORD_WINDOW)
+    const age = now - recordTime
+    if (age > this.NEW_RECORD_WINDOW) {
+      console.log(`🔔 Rejecting notification: Record ${recordId} too old (age: ${Math.round(age/1000)}s, limit: ${this.NEW_RECORD_WINDOW/1000}s)`)
+      return false
+    }
+
+    // Check 4: Record must not be from the future (clock skew protection)
+    const maxFutureSkew = 30000 // 30 seconds
+    if (recordTime > now + maxFutureSkew) {
+      console.log(`🔔 Rejecting notification: Record ${recordId} appears to be from the future (${new Date(recordTime).toISOString()})`)
+      return false
+    }
+
+    return true
+  }
+
+  /**
    * Handle new call record
    */
   private handleNewCall(callRecord: any): void {
     if (!this.shouldShowNotification()) return
 
-    // Only show notifications for records created in the last 5 minutes
-    const recordTime = new Date(callRecord.start_timestamp || callRecord.created_at || Date.now())
-    const fiveMinutesAgo = Date.now() - (5 * 60 * 1000)
-
-    if (recordTime.getTime() < fiveMinutesAgo) {
-      console.log(`🔔 Skipping notification for old call record: ${callRecord.call_id} (created ${recordTime.toISOString()})`)
+    // Use strict validation to ensure record is truly new
+    const recordTimestamp = callRecord.start_timestamp || callRecord.created_at
+    if (!recordTimestamp || !this.isRecordTrulyNew(recordTimestamp, callRecord.call_id)) {
       return
     }
+
+    const recordTime = new Date(recordTimestamp)
 
     const notificationId = `call_${callRecord.call_id}_${Date.now()}`
 
@@ -277,14 +351,13 @@ class ToastNotificationService {
   private handleNewSMS(smsRecord: any): void {
     if (!this.shouldShowNotification()) return
 
-    // Only show notifications for records created in the last 5 minutes
-    const recordTime = new Date(smsRecord.created_at || Date.now())
-    const fiveMinutesAgo = Date.now() - (5 * 60 * 1000)
-
-    if (recordTime.getTime() < fiveMinutesAgo) {
-      console.log(`🔔 Skipping notification for old SMS record: ${smsRecord.chat_id} (created ${recordTime.toISOString()})`)
+    // Use strict validation to ensure record is truly new
+    const recordTimestamp = smsRecord.created_at
+    if (!recordTimestamp || !this.isRecordTrulyNew(recordTimestamp, smsRecord.chat_id)) {
       return
     }
+
+    const recordTime = new Date(recordTimestamp)
 
     const notificationId = `sms_${smsRecord.chat_id}_${Date.now()}`
 
@@ -334,9 +407,34 @@ class ToastNotificationService {
     if (this.isTabVisible) {
       this.showNotification(notification)
     } else {
+      // Clean stale notifications from queue before adding new one
+      this.cleanStaleQueuedNotifications()
+
       // Queue for when tab becomes visible
       this.pendingNotifications.push(notification)
       console.log(`🔔 Notification queued (tab not visible): ${notification.title}`)
+    }
+  }
+
+  /**
+   * Clean stale notifications from the queue
+   */
+  private cleanStaleQueuedNotifications(): void {
+    const now = Date.now()
+    const originalCount = this.pendingNotifications.length
+
+    this.pendingNotifications = this.pendingNotifications.filter(notification => {
+      const age = now - notification.timestamp.getTime()
+      const isFresh = age <= this.MAX_QUEUE_AGE
+      if (!isFresh) {
+        console.log(`🔔 Removing stale queued notification: ${notification.title} (age: ${Math.round(age/1000)}s)`)
+      }
+      return isFresh
+    })
+
+    const removedCount = originalCount - this.pendingNotifications.length
+    if (removedCount > 0) {
+      console.log(`🔔 Cleaned ${removedCount} stale notifications from queue (${this.pendingNotifications.length} remaining)`)
     }
   }
 
@@ -363,6 +461,28 @@ class ToastNotificationService {
   }
 
   /**
+   * Get debug information about the service state
+   */
+  getDebugInfo(): any {
+    const now = Date.now()
+    return {
+      isInitialized: this.isInitialized,
+      serviceStartTime: this.serviceStartTime > 0 ? new Date(this.serviceStartTime).toISOString() : 'Not set',
+      monitoringStartTime: this.monitoringStartTime > 0 ? new Date(this.monitoringStartTime).toISOString() : 'Not set',
+      serviceAge: this.serviceStartTime > 0 ? Math.round((now - this.serviceStartTime) / 1000) + 's' : 'N/A',
+      monitoringAge: this.monitoringStartTime > 0 ? Math.round((now - this.monitoringStartTime) / 1000) + 's' : 'N/A',
+      newRecordWindow: this.NEW_RECORD_WINDOW / 1000 + 's',
+      maxQueueAge: this.MAX_QUEUE_AGE / 1000 + 's',
+      isTabVisible: this.isTabVisible,
+      pendingNotifications: this.pendingNotifications.length,
+      recentNotifications: this.recentNotifications.size,
+      hasCallsChannel: !!this.callsChannel,
+      hasSmsChannel: !!this.smsChannel,
+      preferences: this.preferences
+    }
+  }
+
+  /**
    * Test method to trigger a demo notification (for testing purposes)
    */
   triggerTestNotification(type: 'call' | 'sms'): void {
@@ -386,8 +506,13 @@ class ToastNotificationService {
     this.callbacks.clear()
     this.recentNotifications.clear()
     this.pendingNotifications = []
+
+    // Reset timing variables to prevent issues with re-initialization
+    this.serviceStartTime = 0
+    this.monitoringStartTime = 0
+
     this.isInitialized = false
-    console.log('🔔 Toast Notification Service cleaned up')
+    console.log('🔔 Toast Notification Service cleaned up (timing variables reset)')
   }
 }
 

@@ -14,7 +14,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { totpService } from '../services/totpService'
+import { cleanTotpService } from '../services/cleanTotpService'
 
 interface TOTPStatus {
   hasSetup: boolean    // Whether TOTP setup exists (for route visibility)
@@ -48,8 +48,8 @@ export const useTOTPStatus = (userId: string | undefined): TOTPStatus => {
 
         // Check both setup existence and enabled status
         const [hasSetup, isEnabled] = await Promise.all([
-          totpService.hasTOTPSetup(userId),
-          totpService.isTOTPEnabled(userId)
+          cleanTotpService.hasTOTPSetup(userId),
+          cleanTotpService.isTOTPEnabled(userId)
         ])
 
         setStatus({

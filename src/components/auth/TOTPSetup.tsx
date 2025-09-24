@@ -6,7 +6,7 @@
 import React, { useState, useEffect } from 'react'
 import QRCode from 'qrcode'
 import { Shield, Copy, Check, AlertTriangle, Eye, EyeOff } from 'lucide-react'
-import { totpService } from '../../services/totpService'
+import { cleanTotpService } from '../../services/cleanTotpService'
 import TOTPEmergencyRecovery from './TOTPEmergencyRecovery'
 
 interface TOTPSetupProps {
@@ -66,8 +66,8 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
       console.log('🚀 TOTPSetup: Starting TOTP setup generation...')
       setError('')
 
-      console.log('🚀 TOTPSetup: Calling totpService.generateTOTPSetup...')
-      const setup = await totpService.generateTOTPSetup(userId, userEmail)
+      console.log('🚀 TOTPSetup: Calling cleanTotpService.generateTOTPSetup...')
+      const setup = await cleanTotpService.generateTOTPSetup(userId, userEmail)
       console.log('🚀 TOTPSetup: TOTP setup received:', setup)
       setSetupData(setup)
 
@@ -117,7 +117,7 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
       console.log('🔍 TOTPSetup: Starting verification with code:', verificationCode)
 
       // Enhanced verification with better error handling
-      const result = await totpService.verifyTOTP(userId, verificationCode.trim(), true)
+      const result = await cleanTotpService.verifyTOTP(userId, verificationCode.trim(), true)
       console.log('🔍 TOTPSetup: Verification result:', result)
 
       if (result.success) {

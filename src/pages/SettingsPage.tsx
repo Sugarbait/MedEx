@@ -23,7 +23,7 @@ import {
 import TOTPSetup from '@/components/auth/TOTPSetup'
 import EnhancedTOTPSetup from '@/components/auth/EnhancedTOTPSetup'
 import EnhancedMFASettings from '@/components/settings/EnhancedMFASettings'
-import { totpService } from '@/services/totpService'
+import { cleanTotpService } from '@/services/cleanTotpService'
 import { auditLogger } from '@/services/auditLogger'
 import { retellService } from '@/services'
 import { userProfileService } from '@/services/userProfileService'
@@ -431,7 +431,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
       if (enabled) {
         console.log('🔍 Checking if TOTP is already enabled...')
-        const hasSetup = await totpService.isTOTPEnabled(user.id)
+        const hasSetup = await cleanTotpService.isTOTPEnabled(user.id)
         console.log('🔍 TOTP check result:', hasSetup)
 
         if (!hasSetup) {
@@ -445,7 +445,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
       } else {
         console.log('🔒 Attempting to disable TOTP...')
         // Allow TOTP to be disabled
-        const disabled = await totpService.disableTOTP(user.id)
+        const disabled = await cleanTotpService.disableTOTP(user.id)
         console.log('🔒 TOTP disable result:', disabled)
         if (!disabled) {
           console.error('❌ Failed to disable TOTP')

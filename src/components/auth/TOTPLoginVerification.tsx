@@ -16,7 +16,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { Shield, AlertTriangle, Clock } from 'lucide-react'
-import { totpService } from '../../services/totpService'
+import { cleanTotpService } from '../../services/cleanTotpService'
 import { auditLogger, AuditAction, ResourceType, AuditOutcome } from '../../services/auditLogger'
 
 interface TOTPLoginVerificationProps {
@@ -92,8 +92,8 @@ const TOTPLoginVerification: React.FC<TOTPLoginVerificationProps> = ({
       const verificationUserId = demoUUIDMap[user.id] || user.id
       console.log('🔍 SECURITY: Using verification user ID:', verificationUserId, 'for login user:', user.id)
 
-      // Use simple TOTP verification method (same as working settings page)
-      const result = await totpService.verifyTOTP(verificationUserId, verificationCode.trim(), false)
+      // Use clean TOTP verification method to fix Base32 decryption errors
+      const result = await cleanTotpService.verifyTOTP(verificationUserId, verificationCode.trim(), false)
 
       if (result.success) {
         console.log('✅ SECURITY: TOTP verification successful')
@@ -184,28 +184,27 @@ const TOTPLoginVerification: React.FC<TOTPLoginVerificationProps> = ({
           console.log('🚨 SECURITY: Database connectivity issue for critical user - attempting emergency fallback')
 
           try {
-            // Check database health and auto-create fallback if needed
-            const healthStatus = await totpService.checkDatabaseHealthAndFallback(user.id)
-            if (!healthStatus.healthy && healthStatus.usingFallback) {
-              setError('Database connectivity issue detected. Emergency fallback created. Try code 000000 or 123456.')
+            // Perform emergency cleanup to clear corrupted data
+            const cleanupSuccess = await cleanTotpService.emergencyCleanup(user.id)
+            if (cleanupSuccess) {
+              setError('MFA data corruption detected and cleaned up. Please contact administrator to set up fresh MFA.')
 
-              // Log fallback creation due to connectivity issue
+              // Log cleanup due to connectivity issue
               await auditLogger.logPHIAccess(
                 AuditAction.LOGIN,
                 ResourceType.SYSTEM,
-                `mfa-connectivity-fallback-${user.id}`,
+                `mfa-connectivity-cleanup-${user.id}`,
                 AuditOutcome.SUCCESS,
                 {
-                  operation: 'mfa_connectivity_fallback',
+                  operation: 'mfa_connectivity_cleanup',
                   userId: user.id,
                   originalError: error.message,
-                  fallbackCreated: true
+                  cleanupSuccess: true
                 }
               )
-              return
             }
           } catch (fallbackError) {
-            console.error('❌ SECURITY: Failed to create connectivity fallback:', fallbackError)
+            console.error('❌ SECURITY: Failed to perform emergency cleanup:', fallbackError)
           }
         }
       }

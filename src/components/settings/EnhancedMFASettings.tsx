@@ -23,6 +23,9 @@ import {
 import { useTOTPStatus } from '../../hooks/useTOTPStatus'
 import MFASyncStatusIndicator from '../auth/MFASyncStatusIndicator'
 import MFADeviceManager from '../auth/MFADeviceManager'
+import { mfaSyncService } from '../../services/mfaSyncService'
+import { mfaBackendService } from '../../services/mfaBackendService'
+import { syncManager } from '../../services/crossDeviceSyncManager'
 
 interface EnhancedMFASettingsProps {
   userId: string
@@ -61,25 +64,67 @@ export const EnhancedMFASettings: React.FC<EnhancedMFASettingsProps> = ({
   })
 
   useEffect(() => {
-    // Simulate loading sync state
+    // Load real sync state from services
     const loadSyncState = async () => {
       try {
-        // Mock data - in real implementation this would fetch from your sync service
+        // Get real MFA configuration and sync status
+        const { config: mfaConfig, syncStatus: mfaSyncStatus } = await mfaSyncService.getMFAConfig(userId)
+
+        // Get real device information
+        const devices = await mfaSyncService.getDevicesWithMFA(userId)
+        const enabledDevices = devices.filter(device => device.mfaEnabled)
+
+        // Get cross-device sync status
+        const crossDeviceSyncStatus = syncManager.getSyncStatus(userId)
+
+        // Get MFA backend status
+        const mfaStatus = await mfaBackendService.getMFAStatus(userId)
+
         setSyncState(prev => ({
           ...prev,
-          lastSyncTime: new Date(Date.now() - 5 * 60 * 1000), // 5 minutes ago
-          devicesCount: 3,
-          enabledDevicesCount: totpStatus.isEnabled ? 3 : 0
+          lastSyncTime: mfaSyncStatus.lastSyncTime,
+          devicesCount: devices.length,
+          enabledDevicesCount: enabledDevices.length,
+          isSyncing: false,
+          syncError: mfaSyncStatus.error || (crossDeviceSyncStatus?.syncHealth === 'error' ? 'Sync error detected' : null)
         }))
       } catch (error) {
+        console.error('Failed to load real sync state:', error)
         setSyncState(prev => ({
           ...prev,
-          syncError: 'Failed to load sync status'
+          syncError: 'Failed to load sync status',
+          devicesCount: 1, // Fallback to at least current device
+          enabledDevicesCount: totpStatus.isEnabled ? 1 : 0
         }))
       }
     }
 
     loadSyncState()
+
+    // Subscribe to real-time sync status updates
+    const unsubscribeFromSyncStatus = mfaSyncService.subscribeToSyncStatus((mfaStatus) => {
+      setSyncState(prev => ({
+        ...prev,
+        isOnline: mfaStatus.isOnline,
+        lastSyncTime: mfaStatus.lastSyncTime,
+        syncError: mfaStatus.error,
+        isSyncing: false // Will be managed by our component state
+      }))
+    })
+
+    // Subscribe to cross-device sync events if available
+    let unsubscribeFromCrossDeviceSync: (() => void) | null = null
+    try {
+      syncManager.subscribeToSyncEvents(userId, (event) => {
+        if (event.trigger === 'mfa_change' || event.trigger === 'manual') {
+          // Reload sync state when MFA-related sync events occur
+          loadSyncState()
+        }
+      })
+      unsubscribeFromCrossDeviceSync = () => syncManager.unsubscribeFromSyncEvents(userId)
+    } catch (error) {
+      console.warn('Cross-device sync subscription failed:', error)
+    }
 
     // Listen for online/offline status changes
     const handleOnline = () => setSyncState(prev => ({ ...prev, isOnline: true }))
@@ -91,13 +136,16 @@ export const EnhancedMFASettings: React.FC<EnhancedMFASettingsProps> = ({
     return () => {
       window.removeEventListener('online', handleOnline)
       window.removeEventListener('offline', handleOffline)
+      unsubscribeFromSyncStatus()
+      unsubscribeFromCrossDeviceSync?.()
     }
-  }, [totpStatus.isEnabled])
+  }, [userId, totpStatus.isEnabled])
 
   const getStatusColor = () => {
     if (syncState.syncError) return 'text-red-600 dark:text-red-400'
     if (!syncState.isOnline) return 'text-yellow-600 dark:text-yellow-400'
     if (syncState.isSyncing) return 'text-blue-600 dark:text-blue-400'
+    if (totpStatus.isEnabled && syncState.devicesCount > 0) return 'text-green-600 dark:text-green-400'
     if (totpStatus.isEnabled) return 'text-green-600 dark:text-green-400'
     return 'text-gray-500 dark:text-gray-400'
   }
@@ -106,7 +154,8 @@ export const EnhancedMFASettings: React.FC<EnhancedMFASettingsProps> = ({
     if (syncState.syncError) return 'Sync Error'
     if (!syncState.isOnline) return 'Offline Mode'
     if (syncState.isSyncing) return 'Syncing...'
-    if (totpStatus.isEnabled) return 'Synchronized'
+    if (totpStatus.isEnabled && syncState.devicesCount > 1) return 'Multi-Device Sync'
+    if (totpStatus.isEnabled) return 'Active'
     return 'Not Configured'
   }
 
@@ -120,17 +169,49 @@ export const EnhancedMFASettings: React.FC<EnhancedMFASettingsProps> = ({
     return date.toLocaleTimeString()
   }
 
-  const handleManualSync = () => {
+  const handleManualSync = async () => {
     setSyncState(prev => ({ ...prev, isSyncing: true, syncError: null }))
 
-    // Simulate sync process
-    setTimeout(() => {
+    try {
+      // Force sync using real sync service
+      const syncResult = await mfaSyncService.forceSyncMFA(userId)
+
+      if (syncResult.success) {
+        // Also trigger cross-device sync if available
+        try {
+          await syncManager.forceFullSync(userId)
+        } catch (crossSyncError) {
+          console.warn('Cross-device sync failed, but MFA sync succeeded:', crossSyncError)
+        }
+
+        // Reload sync state after successful sync
+        const { config: mfaConfig, syncStatus: mfaSyncStatus } = await mfaSyncService.getMFAConfig(userId)
+        const devices = await mfaSyncService.getDevicesWithMFA(userId)
+        const enabledDevices = devices.filter(device => device.mfaEnabled)
+
+        setSyncState(prev => ({
+          ...prev,
+          isSyncing: false,
+          lastSyncTime: new Date(),
+          devicesCount: devices.length,
+          enabledDevicesCount: enabledDevices.length,
+          syncError: null
+        }))
+      } else {
+        setSyncState(prev => ({
+          ...prev,
+          isSyncing: false,
+          syncError: syncResult.error || 'Manual sync failed'
+        }))
+      }
+    } catch (error) {
+      console.error('Manual sync failed:', error)
       setSyncState(prev => ({
         ...prev,
         isSyncing: false,
-        lastSyncTime: new Date()
+        syncError: error instanceof Error ? error.message : 'Manual sync failed'
       }))
-    }, 2000)
+    }
   }
 
   return (
