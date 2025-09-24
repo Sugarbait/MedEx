@@ -141,7 +141,7 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
 
   const formatBackupCodes = (codes: string[]) => {
     return codes.map((code, index) => (
-      <div key={index} className="font-mono text-sm bg-gray-100 p-2 rounded border">
+      <div key={index} className="font-mono text-sm bg-gray-100 dark:bg-gray-700 p-2 rounded border border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100">
         {code}
       </div>
     ))
@@ -383,10 +383,10 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
           </p>
         </div>
 
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4 mb-6">
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4 mb-6">
           <div className="flex items-start">
-            <AlertTriangle className="w-5 h-5 text-amber-600 mr-2 mt-0.5" />
-            <div className="text-amber-800 text-sm">
+            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 mr-2 mt-0.5" />
+            <div className="text-amber-800 dark:text-amber-200 text-sm">
               <strong>Important:</strong> These backup codes can be used to access your account if you lose your authenticator device. Each code can only be used once.
             </div>
           </div>
@@ -394,10 +394,10 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
 
         <div className="mb-6">
           <div className="flex items-center justify-between mb-3">
-            <span className="text-sm font-medium text-gray-700">Backup Codes</span>
+            <span className="text-sm font-medium text-gray-700 dark:text-gray-200">Backup Codes</span>
             <button
               onClick={() => setShowBackupCodes(!showBackupCodes)}
-              className="text-sm text-blue-600 hover:text-blue-700 flex items-center"
+              className="text-sm text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 flex items-center"
             >
               {showBackupCodes ? (
                 <>
