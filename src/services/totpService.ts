@@ -474,14 +474,33 @@ class TOTPService {
    */
   async disableTOTP(userId: string): Promise<boolean> {
     try {
+      console.log('🔒 TOTP Service: Disabling TOTP for user:', userId)
+
+      // Delete from database
       const { error } = await supabase
         .from('user_totp')
         .delete()
         .eq('user_id', userId)
 
-      return !error
+      if (error) {
+        console.error('❌ Database delete error:', error)
+        return false
+      }
+
+      // Clear localStorage cache to prevent stale data on refresh
+      const totpKey = `totp_${userId}`
+      localStorage.removeItem(totpKey)
+      console.log('🧹 Cleared localStorage TOTP data for user:', userId)
+
+      // Dispatch event to update UI components
+      window.dispatchEvent(new CustomEvent('totpStatusChanged', {
+        detail: { userId, isEnabled: false }
+      }))
+
+      console.log('✅ TOTP successfully disabled for user:', userId)
+      return true
     } catch (error) {
-      console.error('TOTP Disable Error:', error)
+      console.error('❌ TOTP Disable Error:', error)
       return false
     }
   }

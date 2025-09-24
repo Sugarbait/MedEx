@@ -415,13 +415,22 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
         console.log('🔒 TOTP disable result:', disabled)
         if (!disabled) {
           console.error('❌ Failed to disable TOTP')
+          // Revert local state since disable failed
+          setMfaToggleEnabled(true)
           setErrorMessage('Failed to disable TOTP. Please try again.')
           return
         }
         console.log('✅ TOTP disabled for user')
+
+        // Dispatch event to notify other components
+        window.dispatchEvent(new CustomEvent('totpStatusChanged', {
+          detail: { userId: user.id, isEnabled: false }
+        }))
       }
     } catch (error) {
       console.error('❌ TOTP toggle error:', error)
+      // Revert local state since operation failed
+      setMfaToggleEnabled(!enabled)
       setErrorMessage('Failed to update TOTP settings. Please try again.')
       return
     }
