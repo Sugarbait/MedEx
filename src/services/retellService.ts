@@ -140,15 +140,22 @@ export class RetellService {
         const supabaseCallAgentId = retellConfig.call_agent_id || ''
         const supabaseSmsAgentId = retellConfig.sms_agent_id || ''
 
-        // Only update if Supabase has newer/different data
-        if (supabaseApiKey && (supabaseApiKey !== this.apiKey ||
+        // Check if user has manually set API key recently (within last 5 minutes)
+        const settings = JSON.parse(localStorage.getItem(`settings_${currentUser.id}`) || '{}')
+        const manualKeyTimestamp = settings.retellApiKeyLastUpdated || 0
+        const fiveMinutesAgo = Date.now() - (5 * 60 * 1000)
+        const hasRecentManualKey = manualKeyTimestamp > fiveMinutesAgo
+
+        // Check if we should sync from Supabase
+        if (hasRecentManualKey) {
+          console.log('🔒 Skipping Supabase sync - API key was manually set recently. Manual key protected for', Math.round((manualKeyTimestamp - fiveMinutesAgo) / 1000 / 60), 'more minutes')
+        } else if (supabaseApiKey && (supabaseApiKey !== this.apiKey ||
             supabaseCallAgentId !== this.callAgentId ||
             supabaseSmsAgentId !== this.smsAgentId)) {
 
-          console.log('Syncing newer credentials from Supabase to localStorage')
+          console.log('Syncing newer credentials from Supabase to localStorage (no recent manual override)')
 
           // Update localStorage to match Supabase
-          const settings = JSON.parse(localStorage.getItem(`settings_${currentUser.id}`) || '{}')
           if (supabaseApiKey) settings.retellApiKey = supabaseApiKey
           if (supabaseCallAgentId) settings.callAgentId = supabaseCallAgentId
           if (supabaseSmsAgentId) settings.smsAgentId = supabaseSmsAgentId
@@ -160,6 +167,8 @@ export class RetellService {
           if (supabaseSmsAgentId) this.smsAgentId = supabaseSmsAgentId
 
           console.log('Successfully synced credentials from Supabase')
+        } else {
+          console.log('No newer credentials found in Supabase, keeping current settings')
         }
       }
     } catch (error) {
@@ -182,6 +191,13 @@ export class RetellService {
       settings.retellApiKey = apiKey
       settings.callAgentId = callAgentId
       settings.smsAgentId = smsAgentId
+
+      // Mark when API key was manually updated to prevent automatic overwrites
+      if (apiKey && apiKey !== settings.retellApiKey) {
+        settings.retellApiKeyLastUpdated = Date.now()
+        console.log('🔒 API key manually updated - preventing auto-overwrites for 5 minutes')
+      }
+
       localStorage.setItem(`settings_${currentUser.id}`, JSON.stringify(settings))
 
       // Update current instance

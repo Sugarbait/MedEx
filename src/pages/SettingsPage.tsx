@@ -529,7 +529,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
   // API Configuration Functions
   const handleApiKeyUpdate = async (apiKey: string) => {
-    const newSettings = { retellApiKey: apiKey }
+    const newSettings = {
+      retellApiKey: apiKey,
+      // Mark as manually updated to prevent auto-overwrite
+      retellApiKeyLastUpdated: Date.now()
+    }
     await updateSettings(newSettings)
 
     // Get the most current settings from localStorage to avoid stale state
