@@ -690,6 +690,16 @@ export class RobustUserSettingsService {
 
     if (encrypted.retell_config?.api_key) {
       try {
+        const apiKey = encrypted.retell_config.api_key
+
+        // Check if already encrypted (contains encryption prefixes)
+        if (apiKey.includes('cbc:') || apiKey.includes('gcm:') || apiKey.includes('aes:')) {
+          console.log('🔒 API key already encrypted, skipping re-encryption')
+          // Already encrypted, don't encrypt again
+          return encrypted
+        }
+
+        console.log('🔒 Encrypting clean API key for secure storage')
         encrypted.retell_config = {
           ...encrypted.retell_config,
           api_key: encryptPHI(encrypted.retell_config.api_key)
