@@ -1,7 +1,18 @@
 /**
+ * 🔒 LOCKED DOWN - NEVER TO BE MODIFIED 🔒
+ *
  * TOTP Protected Route - Fresh Implementation
  * Controls access based on TOTP authentication status
  * Maintains session persistence to prevent repeated MFA prompts
+ *
+ * ⚠️ CRITICAL SECURITY WARNING ⚠️
+ * This file is PERMANENTLY PROTECTED and must NEVER be modified.
+ * Route protection is CRITICAL for MFA enforcement and HIPAA compliance.
+ *
+ * MFA LOCKDOWN EFFECTIVE: December 24, 2024
+ * PROTECTION LEVEL: MAXIMUM - DO NOT TOUCH
+ *
+ * See: MFA-LOCKDOWN-PROTECTION.md for complete lockdown details
  */
 
 import React, { useState, useEffect } from 'react'

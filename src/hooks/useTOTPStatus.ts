@@ -1,5 +1,16 @@
 /**
+ * 🔒 LOCKED DOWN - NEVER TO BE MODIFIED 🔒
+ *
  * Hook to check TOTP status for conditional rendering
+ *
+ * ⚠️ CRITICAL SECURITY WARNING ⚠️
+ * This file is PERMANENTLY PROTECTED and must NEVER be modified.
+ * TOTP status management is CRITICAL for MFA enforcement.
+ *
+ * MFA LOCKDOWN EFFECTIVE: December 24, 2024
+ * PROTECTION LEVEL: MAXIMUM - DO NOT TOUCH
+ *
+ * See: MFA-LOCKDOWN-PROTECTION.md for complete lockdown details
  */
 
 import { useState, useEffect } from 'react'

@@ -531,9 +531,12 @@ const App: React.FC = () => {
             retellService.loadCredentials()
           }
 
+          // 🔒 MFA LOCKDOWN PROTECTION 🔒
           // TOTP authentication will be handled by TOTPProtectedRoute
           // MFA requirement will be enforced by individual route protection
-          // Do not globally disable MFA requirement
+          // ⚠️ CRITICAL: Do not globally disable MFA requirement
+          // ⚠️ NEVER add setMfaRequired(false) here - this bypasses all MFA security
+          // See: MFA-LOCKDOWN-PROTECTION.md for complete security requirements
 
           // Log authentication event for HIPAA audit
           try {

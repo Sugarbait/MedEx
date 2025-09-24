@@ -1,7 +1,18 @@
 /**
+ * 🔒 LOCKED DOWN - NEVER TO BE MODIFIED 🔒
+ *
  * TOTP Service - Time-based One-Time Password Implementation
  * Built from scratch for CareXPS Healthcare CRM
  * Implements RFC 6238 TOTP standard with secure encryption
+ *
+ * ⚠️ CRITICAL SECURITY WARNING ⚠️
+ * This file is PERMANENTLY PROTECTED and must NEVER be modified.
+ * Any changes risk compromising HIPAA compliance and patient data security.
+ *
+ * MFA LOCKDOWN EFFECTIVE: December 24, 2024
+ * PROTECTION LEVEL: MAXIMUM - DO NOT TOUCH
+ *
+ * See: MFA-LOCKDOWN-PROTECTION.md for complete lockdown details
  */
 
 import { TOTP, Secret } from 'otpauth'

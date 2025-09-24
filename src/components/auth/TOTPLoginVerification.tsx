@@ -1,6 +1,17 @@
 /**
+ * 🔒 LOCKED DOWN - NEVER TO BE MODIFIED 🔒
+ *
  * TOTP Login Verification Component
  * Shows MFA verification screen during login process
+ *
+ * ⚠️ CRITICAL SECURITY WARNING ⚠️
+ * This file is PERMANENTLY PROTECTED and must NEVER be modified.
+ * Login MFA verification is CRITICAL for authentication security.
+ *
+ * MFA LOCKDOWN EFFECTIVE: December 24, 2024
+ * PROTECTION LEVEL: MAXIMUM - DO NOT TOUCH
+ *
+ * See: MFA-LOCKDOWN-PROTECTION.md for complete lockdown details
  */
 
 import React, { useState, useEffect } from 'react'
