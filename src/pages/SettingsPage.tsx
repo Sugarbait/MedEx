@@ -1209,8 +1209,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                       onClick={(e) => {
                         e.preventDefault();
                         e.stopPropagation();
-                        console.warn('🚨 EMERGENCY: MFA toggle clicked - showing setup dialog');
-                        setShowMFASetup(true);
+                        handleMFAToggle(!userSettings.mfaEnabled);
                       }}
                       className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 ${
                         userSettings.mfaEnabled ? 'bg-blue-600' : 'bg-gray-300'

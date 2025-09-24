@@ -18,6 +18,7 @@ import { secureUserDataService } from './services/secureUserDataService'
 import { authService } from './services/authService'
 import { totpService } from './services/totpService'
 import { UserSettingsService } from './services/userSettingsServiceEnhanced'
+import { useTOTPStatus } from './hooks/useTOTPStatus'
 import { Sidebar } from './components/layout/Sidebar'
 import { Header } from './components/layout/Header'
 import { Footer } from './components/layout/Footer'
@@ -91,6 +92,9 @@ const AppContent: React.FC<{
   const location = useLocation()
   const pageTitle = getPageTitle(location.pathname)
   const [showTimeoutWarning, setShowTimeoutWarning] = useState(false)
+
+  // Check TOTP status to conditionally render protected routes
+  const totpStatus = useTOTPStatus(user?.id)
 
   // Ensure theme persistence on navigation
   useEffect(() => {
@@ -230,22 +234,37 @@ const AppContent: React.FC<{
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="/dashboard" element={<DashboardPage user={user} />} />
-              <Route
-                path="/calls"
-                element={
-                  <TOTPProtectedRoute user={user}>
-                    <CallsPage user={user} />
-                  </TOTPProtectedRoute>
-                }
-              />
-              <Route
-                path="/sms"
-                element={
-                  <TOTPProtectedRoute user={user}>
-                    <SMSPage user={user} />
-                  </TOTPProtectedRoute>
-                }
-              />
+
+              {/* Only show Calls and SMS routes when TOTP is enabled */}
+              {totpStatus.isEnabled && (
+                <>
+                  <Route
+                    path="/calls"
+                    element={
+                      <TOTPProtectedRoute user={user}>
+                        <CallsPage user={user} />
+                      </TOTPProtectedRoute>
+                    }
+                  />
+                  <Route
+                    path="/sms"
+                    element={
+                      <TOTPProtectedRoute user={user}>
+                        <SMSPage user={user} />
+                      </TOTPProtectedRoute>
+                    }
+                  />
+                </>
+              )}
+
+              {/* Redirect to dashboard if trying to access Calls/SMS without TOTP */}
+              {!totpStatus.isLoading && !totpStatus.isEnabled && (
+                <>
+                  <Route path="/calls" element={<Navigate to="/dashboard" replace />} />
+                  <Route path="/sms" element={<Navigate to="/dashboard" replace />} />
+                </>
+              )}
+
               <Route path="/users" element={<UserManagementPage user={user} />} />
               <Route path="/settings" element={<SettingsPage user={user} />} />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
