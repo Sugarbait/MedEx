@@ -134,8 +134,13 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
   const handleCancel = () => {
     console.log('🚫 TOTPSetup: Cancel button clicked - closing modal immediately')
 
+    // Reset state to clean up
+    setError('')
+    setVerificationCode('')
+    setStep('generating')
+
     // Immediately call onCancel to close the modal
-    // No need to reset state since component will unmount
+    // This will trigger the parent component's onCancel handler
     onCancel()
   }
 
@@ -222,6 +227,9 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
               <AlertTriangle className="w-5 h-5 text-red-600 mr-2" />
               <span className="text-red-700">{error}</span>
             </div>
+            <div className="mt-3 text-sm text-red-600">
+              <p>Having trouble with TOTP setup? The Cancel button below will provide options for emergency access.</p>
+            </div>
           </div>
         )}
 
@@ -260,9 +268,10 @@ const TOTPSetup: React.FC<TOTPSetupProps> = ({
         <div className="flex space-x-3">
           <button
             onClick={handleCancel}
-            className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+            className="flex-1 px-4 py-2 border border-red-300 text-red-700 rounded-lg hover:bg-red-50 hover:border-red-400 transition-colors font-medium"
+            title="Cancel setup and see emergency access options"
           >
-            Cancel
+            Cancel / Get Help
           </button>
           {error ? (
             <button

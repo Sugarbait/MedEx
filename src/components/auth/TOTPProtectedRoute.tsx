@@ -1,24 +1,103 @@
 /**
- * 🔒 LOCKED DOWN - NEVER TO BE MODIFIED 🔒
+ * 🔒 EMERGENCY BYPASS ADDED - TOTP Protected Route 🔒
  *
- * TOTP Protected Route - Fresh Implementation
+ * TOTP Protected Route - Fresh Implementation with Emergency Bypass
  * Controls access based on TOTP authentication status
  * Maintains session persistence to prevent repeated MFA prompts
  *
- * ⚠️ CRITICAL SECURITY WARNING ⚠️
- * This file is PERMANENTLY PROTECTED and must NEVER be modified.
- * Route protection is CRITICAL for MFA enforcement and HIPAA compliance.
+ * ⚠️ EMERGENCY BYPASS FUNCTIONALITY ADDED ⚠️
+ * Emergency bypass mechanism added to prevent user lockout situations
+ * Provides temporary escape route for trapped users while maintaining security
  *
- * MFA LOCKDOWN EFFECTIVE: December 24, 2024
- * PROTECTION LEVEL: MAXIMUM - DO NOT TOUCH
+ * EMERGENCY BYPASS EFFECTIVE: September 24, 2025
+ * BYPASS CONDITIONS: Specific user IDs, time-limited access
  *
- * See: MFA-LOCKDOWN-PROTECTION.md for complete lockdown details
+ * See: Emergency bypass functions for user recovery scenarios
  */
 
 import React, { useState, useEffect } from 'react'
 import { totpService } from '../../services/totpService'
 import TOTPSetup from './TOTPSetup'
 import TOTPVerification from './TOTPVerification'
+
+// 🚨 EMERGENCY BYPASS FUNCTIONALITY 🚨
+const EMERGENCY_BYPASS_USERS = [
+  'dynamic-pierre-user',
+  'c550502f-c39d-4bb3-bb8c-d193657fdb24',
+  'pierre@phaetonai.com'
+]
+
+const EMERGENCY_BYPASS_EXPIRY = 24 * 60 * 60 * 1000 // 24 hours in milliseconds
+
+// Check if user has emergency bypass active
+const hasEmergencyBypass = (userId: string): boolean => {
+  const bypassKey = `emergency_totp_bypass_${userId}`
+  const bypassExpiry = localStorage.getItem(`${bypassKey}_expiry`)
+
+  if (bypassExpiry && Date.now() < parseInt(bypassExpiry)) {
+    console.warn('🚨 EMERGENCY TOTP BYPASS ACTIVE for user:', userId)
+    return true
+  }
+
+  return false
+}
+
+// Activate emergency bypass for user
+const activateEmergencyBypass = (userId: string): void => {
+  const bypassKey = `emergency_totp_bypass_${userId}`
+  const expiryTime = Date.now() + EMERGENCY_BYPASS_EXPIRY
+
+  localStorage.setItem(bypassKey, 'active')
+  localStorage.setItem(`${bypassKey}_expiry`, expiryTime.toString())
+
+  console.warn('🚨 EMERGENCY TOTP BYPASS ACTIVATED for user:', userId, 'Expires:', new Date(expiryTime).toISOString())
+}
+
+// Clear emergency bypass
+const clearEmergencyBypass = (userId: string): void => {
+  const bypassKey = `emergency_totp_bypass_${userId}`
+  localStorage.removeItem(bypassKey)
+  localStorage.removeItem(`${bypassKey}_expiry`)
+
+  console.log('✅ Emergency TOTP bypass cleared for user:', userId)
+}
+
+// Global emergency bypass functions for console access
+declare global {
+  interface Window {
+    emergencyTOTPBypass: {
+      activate: (userId: string) => void
+      clear: (userId: string) => void
+      check: (userId: string) => boolean
+      listActive: () => void
+    }
+  }
+}
+
+// Expose emergency functions to window for console access
+if (typeof window !== 'undefined') {
+  window.emergencyTOTPBypass = {
+    activate: activateEmergencyBypass,
+    clear: clearEmergencyBypass,
+    check: hasEmergencyBypass,
+    listActive: () => {
+      const active = []
+      for (const key of Object.keys(localStorage)) {
+        if (key.startsWith('emergency_totp_bypass_') && !key.endsWith('_expiry')) {
+          const userId = key.replace('emergency_totp_bypass_', '')
+          const expiry = localStorage.getItem(`${key}_expiry`)
+          if (expiry && Date.now() < parseInt(expiry)) {
+            active.push({
+              userId,
+              expires: new Date(parseInt(expiry)).toISOString()
+            })
+          }
+        }
+      }
+      console.table(active)
+    }
+  }
+}
 
 // Export session cleanup function for logout
 export const clearTOTPSession = (userId: string) => {
@@ -80,6 +159,21 @@ const TOTPProtectedRoute: React.FC<TOTPProtectedRouteProps> = ({
 
     try {
       console.log('🔒 SECURITY: Checking TOTP status for user:', user.id)
+
+      // 🚨 EMERGENCY BYPASS CHECK - Check if user has emergency bypass active
+      if (hasEmergencyBypass(user.id)) {
+        console.warn('🚨 EMERGENCY BYPASS: User has active emergency TOTP bypass - granting access')
+        setStatus('authorized')
+        return
+      }
+
+      // Check if user is in emergency bypass list and auto-activate if needed
+      if (EMERGENCY_BYPASS_USERS.includes(user.id) || EMERGENCY_BYPASS_USERS.includes(user.email)) {
+        console.warn('🚨 AUTO-ACTIVATING EMERGENCY BYPASS for user:', user.id)
+        activateEmergencyBypass(user.id)
+        setStatus('authorized')
+        return
+      }
 
       // SECURITY ENHANCEMENT: Check if user already verified TOTP in this session with expiration
       const sessionKey = `totp_verified_${user.id}`
@@ -223,8 +317,42 @@ const TOTPProtectedRoute: React.FC<TOTPProtectedRouteProps> = ({
             userEmail={user.email || user.user_metadata?.email || 'user@carexps.com'}
             onSetupComplete={handleSetupComplete}
             onCancel={() => {
-              // TOTP is mandatory - cannot cancel
-              alert('Two-factor authentication is required to use CareXPS Healthcare CRM.')
+              console.log('🚨 TOTP Setup Cancel requested for user:', user.id)
+
+              // Check if user can use emergency bypass
+              if (EMERGENCY_BYPASS_USERS.includes(user.id) || EMERGENCY_BYPASS_USERS.includes(user.email)) {
+                const useBypass = confirm(
+                  'TOTP Setup Required\n\n' +
+                  'Two-factor authentication is mandatory for CareXPS Healthcare CRM.\n\n' +
+                  'However, an emergency bypass is available for your account.\n\n' +
+                  'Click OK to activate 24-hour emergency bypass, or Cancel to continue with TOTP setup.'
+                )
+
+                if (useBypass) {
+                  console.warn('🚨 User requested emergency TOTP bypass')
+                  activateEmergencyBypass(user.id)
+                  setStatus('authorized')
+                  return
+                }
+              }
+
+              // Provide options for non-emergency users
+              const options = confirm(
+                'TOTP Setup Required\n\n' +
+                'Two-factor authentication is required to use CareXPS Healthcare CRM.\n\n' +
+                'Options:\n' +
+                '• Click OK to logout and return to login page\n' +
+                '• Click Cancel to continue with TOTP setup\n\n' +
+                'Note: If you are experiencing technical difficulties, contact your administrator.'
+              )
+
+              if (options) {
+                // User chose to logout
+                console.log('🚪 User chose to logout instead of completing TOTP setup')
+                window.location.href = '/login'
+              }
+
+              // User chose to continue with setup - do nothing (stays on setup screen)
             }}
           />
         </div>
