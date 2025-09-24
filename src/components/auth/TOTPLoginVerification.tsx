@@ -71,17 +71,6 @@ const TOTPLoginVerification: React.FC<TOTPLoginVerificationProps> = ({
         }
       )
 
-      // DIRECT FIX: Check test codes for critical users BEFORE any database calls
-      const criticalUsers = ['dynamic-pierre-user', 'pierre-user-789', 'super-user-456', 'c550502f-c39d-4bb3-bb8c-d193657fdb24']
-      const testCodes = ['000000', '123456', '999999', '111111']
-
-      if (criticalUsers.includes(user.id) && testCodes.includes(verificationCode.trim())) {
-        console.log('✅ SECURITY: Direct test code verification successful for critical user')
-        // Skip all database operations for critical users with test codes
-        onVerificationSuccess()
-        return
-      }
-
       // Use simple TOTP verification method (same as working settings page)
       const result = await totpService.verifyTOTP(user.id, verificationCode.trim(), false)
 

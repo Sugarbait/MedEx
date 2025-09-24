@@ -165,11 +165,11 @@ class TOTPService {
       let totpData: any = null
       try {
         // Try the new database function first
-        const { data: functionData, error: functionError } = await supabase.rpc('get_user_totp', { target_user_id: userId })
+        const { data: functionData, error: functionError } = await supabase.from('user_totp').select('*').eq('user_id', userId).maybeSingle()
 
-        if (!functionError && functionData && functionData.length > 0) {
-          console.log('🔍 TOTP Service: TOTP data found in database via function')
-          totpData = functionData[0]
+        if (!functionError && functionData) {
+          console.log('🔍 TOTP Service: TOTP data found in database')
+          totpData = functionData
         } else {
           console.log('🔍 TOTP Service: Database function error or no data, trying direct query:', functionError?.message)
 
@@ -378,10 +378,10 @@ class TOTPService {
       // Try database first with improved error handling
       try {
         // Try the new database function first
-        const { data: functionData, error: functionError } = await supabase.rpc('get_user_totp', { target_user_id: userId })
+        const { data: functionData, error: functionError } = await supabase.from('user_totp').select('*').eq('user_id', userId).maybeSingle()
 
-        if (!functionError && functionData && functionData.length > 0) {
-          console.log('🔍 TOTP Service: TOTP setup found in database via function')
+        if (!functionError && functionData) {
+          console.log('🔍 TOTP Service: TOTP setup found in database')
           return true
         } else {
           console.log('🔍 TOTP Service: Database function error or no data, trying direct query:', functionError?.message)
@@ -452,7 +452,7 @@ class TOTPService {
       // Try database first with improved error handling
       try {
         // Use the new database function for better error handling
-        const { data, error } = await supabase.rpc('get_user_totp', { target_user_id: userId })
+        const { data, error } = await supabase.from('user_totp').select('*').eq('user_id', userId).maybeSingle()
 
         if (error) {
           console.log('🔍 TOTP Service: Database function error, trying direct query:', error.message)
@@ -593,10 +593,10 @@ class TOTPService {
   async getRemainingBackupCodes(userId: string): Promise<number> {
     try {
       // Try database first with improved error handling
-      const { data: functionData, error: functionError } = await supabase.rpc('get_user_totp', { target_user_id: userId })
+      const { data: functionData, error: functionError } = await supabase.from('user_totp').select('*').eq('user_id', userId).maybeSingle()
 
-      if (!functionError && functionData && functionData.length > 0) {
-        return functionData[0].backup_codes?.length || 0
+      if (!functionError && functionData) {
+        return functionData.backup_codes?.length || 0
       }
 
       // Fallback to direct query
