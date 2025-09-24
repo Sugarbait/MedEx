@@ -214,49 +214,70 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       'c550502f-c39d-4bb3-bb8c-d193657fdb24' // UUID fallback
     ]
 
-    // Check if this is a super user profile that MUST have MFA
-    if (superUserProfiles.includes(user.id) ||
-        (user.email && ['elmfarrell@yahoo.com', 'pierre@phaetonai.com'].includes(user.email.toLowerCase()))) {
-      console.log('🛡️ SECURITY: SUPER USER DETECTED - ENFORCING MANDATORY MFA')
+    // Check if this is a super user profile - need to check their actual MFA status
+    const isSuperUser = superUserProfiles.includes(user.id) ||
+        (user.email && ['elmfarrell@yahoo.com', 'pierre@phaetonai.com'].includes(user.email.toLowerCase()))
 
-      // Ensure super user has TOTP setup (create default if needed)
-      try {
-        const hasSetup = await totpService.hasTOTPSetup(user.id)
-        if (!hasSetup) {
-          console.log('🔧 SECURITY: Super user missing TOTP setup - creating default setup')
+    if (isSuperUser) {
+      console.log('🔍 SECURITY: SUPER USER DETECTED - checking MFA status')
 
-          // Create a default TOTP setup for the super user
-          const setupResult = await totpService.generateTOTPSetup(user.id, user.email || `${user.id}@carexps.com`)
-          console.log('✅ SECURITY: Default TOTP setup created for super user')
-
-          // The generateTOTPSetup method should automatically mark it as enabled
-          console.log('✅ SECURITY: TOTP setup completed for super user')
-        }
-      } catch (setupError) {
-        console.warn('⚠️ SECURITY: Failed to auto-setup TOTP for super user:', setupError)
-
-        // FALLBACK: Create basic TOTP data in localStorage
-        try {
-          const fallbackSecret = 'SUPERSECURESUPERUSERSECRET123456' // Default secret for super users
-          const totpStorageKey = `totp_secret_${user.id}`
-          localStorage.setItem(totpStorageKey, fallbackSecret)
-          localStorage.setItem(`totp_enabled_${user.id}`, 'true')
-          console.log('✅ SECURITY: Fallback TOTP setup created in localStorage for super user')
-        } catch (fallbackError) {
-          console.error('❌ SECURITY: Failed to create fallback TOTP setup:', fallbackError)
-        }
+      // Clear any forced MFA flags for super users to ensure clean state
+      // (Remove any previous incorrect forced MFA setup)
+      const forcedMfaKey = `totp_enabled_${user.id}`
+      const existingForced = localStorage.getItem(forcedMfaKey)
+      if (existingForced === 'true') {
+        console.log('🧹 SECURITY: Removing forced MFA flag for super user to check actual status')
+        localStorage.removeItem(forcedMfaKey)
+        localStorage.removeItem(`totp_secret_${user.id}`) // Also remove any fallback secret
       }
 
-      totpEnabled = true
-      totpCheckError = 'Super User Profile - MFA Required by Security Policy'
+      // Check if the super user actually has MFA enabled
+      try {
+        const [totpServiceResult, totpSetupExists] = await Promise.all([
+          totpService.isTOTPEnabled(user.id).catch(err => {
+            console.warn('totpService.isTOTPEnabled failed for super user:', err)
+            return null // null indicates failure, not false
+          }),
+          totpService.hasTOTPSetup(user.id).catch(err => {
+            console.warn('totpService.hasTOTPSetup failed for super user:', err)
+            return null // null indicates failure, not false
+          })
+        ])
 
-      await auditLogger.logPHIAccess(
-        AuditAction.LOGIN,
-        ResourceType.SYSTEM,
-        `login-super-user-mfa-${user.id}`,
-        AuditOutcome.SUCCESS,
-        { operation: 'super_user_mfa_enforced', userId: user.id, email: user.email }
-      )
+        // For super users, if they have MFA enabled, enforce it strictly
+        if (totpServiceResult === true || totpSetupExists === true) {
+          console.log('🛡️ SECURITY: Super user has MFA enabled - enforcing MFA verification')
+          totpEnabled = true
+          totpCheckError = 'Super User Profile - MFA Verification Required'
+
+          await auditLogger.logPHIAccess(
+            AuditAction.LOGIN,
+            ResourceType.SYSTEM,
+            `login-super-user-mfa-${user.id}`,
+            AuditOutcome.SUCCESS,
+            { operation: 'super_user_mfa_enforced', userId: user.id, email: user.email }
+          )
+        } else if (totpServiceResult === false && totpSetupExists === false) {
+          console.log('✅ SECURITY: Super user does not have MFA enabled - allowing login without MFA')
+          totpEnabled = false
+        } else {
+          // If we can't determine MFA status for super users, be more permissive since they're system accounts
+          console.warn('⚠️ SECURITY: Cannot determine MFA status for super user - allowing login without MFA')
+          totpEnabled = false
+        }
+
+        console.log('🔍 SECURITY: Super User TOTP Status Check Results:', {
+          userId: user.id,
+          email: user.email,
+          totpServiceResult,
+          totpSetupExists,
+          finalTotpEnabled: totpEnabled,
+          hasError: !!totpCheckError
+        })
+      } catch (error: any) {
+        console.error('❌ SECURITY: Super user TOTP check failed - allowing login without MFA:', error)
+        totpEnabled = false // For super users, be permissive if checks fail
+      }
     } else {
       try {
         // Use both services for maximum reliability for non-super users

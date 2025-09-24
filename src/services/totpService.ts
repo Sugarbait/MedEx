@@ -288,16 +288,18 @@ class TOTPService {
     try {
       console.log('🔍 TOTP Service: Checking if TOTP setup exists for user:', userId)
 
-      // Super user profiles - check fallback data first
+      // Super user profiles - check fallback data ONLY if they actually have MFA configured
       const superUserProfiles = ['super-user-456', 'pierre-user-789', 'c550502f-c39d-4bb3-bb8c-d193657fdb24']
       if (superUserProfiles.includes(userId)) {
-        console.log('🔍 TOTP Service: Super user detected - checking fallback setup')
+        console.log('🔍 TOTP Service: Super user detected - checking if MFA is actually configured')
 
-        // Check localStorage for super user fallback
+        // Check localStorage for super user fallback ONLY if explicitly enabled
         const fallbackEnabled = localStorage.getItem(`totp_enabled_${userId}`)
         if (fallbackEnabled === 'true') {
           console.log('🔍 TOTP Service: Super user TOTP setup found in localStorage fallback')
           return true
+        } else {
+          console.log('🔍 TOTP Service: Super user does not have MFA configured in fallback storage')
         }
       }
 
@@ -347,16 +349,18 @@ class TOTPService {
     try {
       console.log('🔍 TOTP Service: Checking if TOTP enabled for user:', userId)
 
-      // Super user profiles - check fallback data first
+      // Super user profiles - check fallback data ONLY if they actually have MFA configured
       const superUserProfiles = ['super-user-456', 'pierre-user-789', 'c550502f-c39d-4bb3-bb8c-d193657fdb24']
       if (superUserProfiles.includes(userId)) {
-        console.log('🔍 TOTP Service: Super user detected - checking fallback enabled status')
+        console.log('🔍 TOTP Service: Super user detected - checking if MFA is actually enabled')
 
-        // Check localStorage for super user fallback
+        // Check localStorage for super user fallback ONLY if explicitly enabled
         const fallbackEnabled = localStorage.getItem(`totp_enabled_${userId}`)
         if (fallbackEnabled === 'true') {
           console.log('🔍 TOTP Service: Super user TOTP enabled in localStorage fallback')
           return true
+        } else {
+          console.log('🔍 TOTP Service: Super user does not have MFA enabled in fallback storage')
         }
       }
 
