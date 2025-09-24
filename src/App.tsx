@@ -284,11 +284,7 @@ const AppContent: React.FC<{
               />
               <Route
                 path="/settings"
-                element={
-                  <TOTPProtectedRoute user={user}>
-                    <SettingsPage user={user} />
-                  </TOTPProtectedRoute>
-                }
+                element={<SettingsPage user={user} />}
               />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>
