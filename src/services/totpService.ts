@@ -206,18 +206,6 @@ class TOTPService {
         }
       }
 
-      // EMERGENCY FIX: Skip localStorage for dynamic-pierre-user to force fresh MFA
-      if (!totpData && userId === 'dynamic-pierre-user') {
-        console.log('🚨 EMERGENCY: Skipping localStorage for dynamic-pierre-user - forcing fresh MFA setup')
-        console.log('🧹 EMERGENCY: Clearing any existing localStorage data for this user')
-        localStorage?.removeItem(`totp_${userId}`)
-        localStorage?.removeItem(`totp_secret_${userId}`)
-        localStorage?.removeItem(`totp_enabled_${userId}`)
-
-        // Force return no data so login proceeds without MFA (user can set up fresh)
-        console.log('✅ EMERGENCY: User should now be able to login without MFA and set up fresh')
-        return { success: true, error: 'MFA reset - please set up fresh MFA in Settings' }
-      }
 
       // Fallback to localStorage if database failed and no conflicts detected (for other users)
       if (!totpData) {
