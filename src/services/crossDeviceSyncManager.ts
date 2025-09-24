@@ -12,7 +12,7 @@ import { auditLogger } from './auditLogger'
 import { userSettingsService } from './userSettingsService'
 import { userProfileService } from './userProfileService'
 import { conflictResolver } from './crossDeviceConflictResolver'
-import { secureMfaService } from './secureMfaService'
+import { secureTotpService } from './secureTotpService'
 
 export interface SyncSession {
   userId: string
@@ -277,9 +277,9 @@ class CrossDeviceSyncManager {
       console.log(`🔐 SYNCING MFA: Configuration for user ${userId}`)
 
       // Get MFA status from secure service
-      const mfaStatus = await secureMfaService.getMfaStatus(userId)
+      const mfaEnabled = await secureTotpService.isTOTPEnabled(userId)
 
-      if (mfaStatus.enabled) {
+      if (mfaEnabled) {
         // Check if MFA config needs to be synced across devices
         const deviceMfaConfigs = await this.getMfaDeviceConfigurations(userId)
 
@@ -361,4 +361,284 @@ class CrossDeviceSyncManager {
 
   /**
    * Handle logout and cleanup
-   */\n  async handleLogout(userId: string): Promise<void> {\n    try {\n      console.log(`🚪 SYNC MANAGER: Handling logout for user ${userId}`)\n\n      // Trigger final sync\n      await this.triggerSync('logout', userId, this.currentDeviceId || '', { finalSync: true })\n\n      // Stop periodic sync\n      this.stopPeriodicSync(userId)\n\n      // Clean up real-time listeners\n      await this.cleanupRealtimeListeners(userId)\n\n      // Mark session as inactive\n      const session = this.activeSessions.get(userId)\n      if (session && supabaseConfig.isConfigured()) {\n        await this.deactivateSyncSession(session)\n      }\n\n      // Clean up local state\n      this.activeSessions.delete(userId)\n      this.syncStatus.delete(userId)\n      this.eventListeners.delete(userId)\n\n      // Clean up service caches\n      userSettingsService.cleanupCrossDeviceSync(userId)\n      userProfileService.cleanupProfileSync(userId)\n      conflictResolver.cleanup(userId)\n\n      // Log logout\n      await auditLogger.logSecurityEvent('SYNC_SESSION_ENDED', 'user_sessions', true, {\n        userId,\n        reason: 'user_logout'\n      })\n\n      console.log(`✅ SYNC MANAGER: Logout cleanup completed for user ${userId}`)\n\n    } catch (error) {\n      console.error('Error during logout cleanup:', error)\n    }\n  }\n\n  /**\n   * Get sync status for a user\n   */\n  getSyncStatus(userId: string): SyncStatus | null {\n    return this.syncStatus.get(userId) || null\n  }\n\n  /**\n   * Get active session\n   */\n  getActiveSession(userId: string): SyncSession | null {\n    return this.activeSessions.get(userId) || null\n  }\n\n  /**\n   * Subscribe to sync events\n   */\n  subscribeToSyncEvents(userId: string, callback: (event: SyncTriggerEvent) => void): void {\n    const listeners = this.eventListeners.get(userId) || []\n    listeners.push(callback)\n    this.eventListeners.set(userId, listeners)\n  }\n\n  /**\n   * Unsubscribe from sync events\n   */\n  unsubscribeFromSyncEvents(userId: string, callback?: (event: SyncTriggerEvent) => void): void {\n    const listeners = this.eventListeners.get(userId) || []\n    \n    if (callback) {\n      const filteredListeners = listeners.filter(l => l !== callback)\n      this.eventListeners.set(userId, filteredListeners)\n    } else {\n      this.eventListeners.delete(userId)\n    }\n  }\n\n  /**\n   * Force full sync for all data\n   */\n  async forceFullSync(userId: string): Promise<{ success: boolean; message?: string }> {\n    try {\n      console.log(`🔄 FORCE FULL SYNC: Starting for user ${userId}`)\n\n      const result = await this.triggerSync('manual', userId, this.currentDeviceId || '', {\n        fullSync: true,\n        forced: true\n      })\n\n      return {\n        success: result.success,\n        message: result.message || 'Full sync completed'\n      }\n    } catch (error) {\n      return {\n        success: false,\n        message: error instanceof Error ? error.message : 'Full sync failed'\n      }\n    }\n  }\n\n  /**\n   * Private helper methods\n   */\n\n  private generateDeviceId(): string {\n    const stored = localStorage.getItem('carexps_device_id')\n    if (stored) return stored\n\n    const deviceId = `device_${Date.now()}_${crypto.randomUUID?.() || Math.random().toString(36).substring(2)}`\n    localStorage.setItem('carexps_device_id', deviceId)\n    return deviceId\n  }\n\n  private generateSessionToken(): string {\n    return `session_${Date.now()}_${crypto.randomUUID?.() || Math.random().toString(36).substring(2)}`\n  }\n\n  private detectDeviceType(): 'desktop' | 'mobile' | 'tablet' {\n    const userAgent = navigator.userAgent.toLowerCase()\n    if (/mobile|android|iphone|ipod/.test(userAgent)) return 'mobile'\n    if (/tablet|ipad/.test(userAgent)) return 'tablet'\n    return 'desktop'\n  }\n\n  private async registerSyncSession(session: SyncSession): Promise<void> {\n    try {\n      const { error } = await supabase\n        .from('device_sessions')\n        .upsert({\n          id: session.sessionToken,\n          user_id: session.userId,\n          device_id: session.deviceId,\n          session_token: session.sessionToken,\n          status: 'active',\n          started_at: session.startedAt,\n          last_activity: session.lastActivity,\n          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours\n          sync_enabled: session.syncEnabled,\n          security_level: session.securityLevel,\n          mfa_verified: session.mfaVerified,\n          metadata: {\n            browserInfo: {\n              userAgent: navigator.userAgent,\n              language: navigator.language\n            }\n          }\n        }, { onConflict: 'session_token' })\n\n      if (error) {\n        console.warn('Failed to register sync session:', error)\n      }\n    } catch (error) {\n      console.error('Error registering sync session:', error)\n    }\n  }\n\n  private async deactivateSyncSession(session: SyncSession): Promise<void> {\n    try {\n      const { error } = await supabase\n        .from('device_sessions')\n        .update({\n          status: 'expired',\n          last_activity: new Date().toISOString()\n        })\n        .eq('session_token', session.sessionToken)\n\n      if (error) {\n        console.warn('Failed to deactivate sync session:', error)\n      }\n    } catch (error) {\n      console.error('Error deactivating sync session:', error)\n    }\n  }\n\n  private startPeriodicSync(userId: string, interval: number): void {\n    this.stopPeriodicSync(userId) // Clear any existing interval\n\n    const intervalId = window.setInterval(async () => {\n      try {\n        await this.triggerSync('periodic', userId, this.currentDeviceId || '')\n      } catch (error) {\n        console.error('Periodic sync failed:', error)\n      }\n    }, interval)\n\n    this.periodicSyncIntervals.set(userId, intervalId)\n    console.log(`⏰ Periodic sync started for user ${userId} (${interval}ms interval)`)\n  }\n\n  private stopPeriodicSync(userId: string): void {\n    const intervalId = this.periodicSyncIntervals.get(userId)\n    if (intervalId) {\n      window.clearInterval(intervalId)\n      this.periodicSyncIntervals.delete(userId)\n      console.log(`⏹️ Periodic sync stopped for user ${userId}`)\n    }\n  }\n\n  private async setupRealtimeListeners(userId: string, deviceId: string): Promise<void> {\n    // Real-time listeners are handled by individual services\n    // This is just for coordination\n    console.log(`👂 Setting up real-time listeners for user ${userId} on device ${deviceId}`)\n  }\n\n  private async cleanupRealtimeListeners(userId: string): Promise<void> {\n    // Cleanup is handled by individual services\n    console.log(`🧹 Cleaning up real-time listeners for user ${userId}`)\n  }\n\n  private updateLastActivity(userId: string): void {\n    const session = this.activeSessions.get(userId)\n    if (session) {\n      session.lastActivity = new Date().toISOString()\n      this.activeSessions.set(userId, session)\n    }\n  }\n\n  private updateSyncStatus(userId: string, updates: Partial<SyncStatus>): void {\n    const currentStatus = this.syncStatus.get(userId)\n    if (currentStatus) {\n      const updatedStatus = { ...currentStatus, ...updates }\n      this.syncStatus.set(userId, updatedStatus)\n    }\n  }\n\n  private notifyEventListeners(userId: string, event: SyncTriggerEvent): void {\n    const listeners = this.eventListeners.get(userId) || []\n    listeners.forEach(listener => {\n      try {\n        listener(event)\n      } catch (error) {\n        console.error('Error in sync event listener:', error)\n      }\n    })\n  }\n\n  /**\n   * Global cleanup\n   */\n  cleanup(): void {\n    // Stop all periodic syncs\n    this.periodicSyncIntervals.forEach((intervalId) => {\n      window.clearInterval(intervalId)\n    })\n    this.periodicSyncIntervals.clear()\n\n    // Clear all state\n    this.activeSessions.clear()\n    this.syncStatus.clear()\n    this.eventListeners.clear()\n\n    // Clean up individual services\n    userSettingsService.cleanupCrossDeviceSync()\n    userProfileService.cleanupProfileSync()\n    conflictResolver.cleanup()\n\n    console.log('🧹 Sync manager cleaned up completely')\n  }\n}\n\n// Export singleton instance\nexport const syncManager = new CrossDeviceSyncManager()\n\n// Auto-cleanup on page unload\nif (typeof window !== 'undefined') {\n  window.addEventListener('beforeunload', () => {\n    syncManager.cleanup()\n  })\n\n  // Handle visibility change for activity tracking\n  document.addEventListener('visibilitychange', () => {\n    if (!document.hidden && syncManager['currentUserId']) {\n      // Trigger sync when page becomes visible again\n      syncManager.triggerSync('manual', syncManager['currentUserId'], syncManager['currentDeviceId'] || '')\n    }\n  })\n}
+   */
+  async handleLogout(userId: string): Promise<void> {
+    try {
+      console.log(`🚪 SYNC MANAGER: Handling logout for user ${userId}`)
+
+      // Trigger final sync
+      await this.triggerSync('logout', userId, this.currentDeviceId || '', { finalSync: true })
+
+      // Stop periodic sync
+      this.stopPeriodicSync(userId)
+
+      // Clean up real-time listeners
+      await this.cleanupRealtimeListeners(userId)
+
+      // Mark session as inactive
+      const session = this.activeSessions.get(userId)
+      if (session && supabaseConfig.isConfigured()) {
+        await this.deactivateSyncSession(session)
+      }
+
+      // Clean up local state
+      this.activeSessions.delete(userId)
+      this.syncStatus.delete(userId)
+      this.eventListeners.delete(userId)
+
+      // Clean up service caches
+      userSettingsService.cleanupCrossDeviceSync(userId)
+      userProfileService.cleanupProfileSync(userId)
+      conflictResolver.cleanup(userId)
+
+      // Log logout
+      await auditLogger.logSecurityEvent('SYNC_SESSION_ENDED', 'user_sessions', true, {
+        userId,
+        reason: 'user_logout'
+      })
+
+      console.log(`✅ SYNC MANAGER: Logout cleanup completed for user ${userId}`)
+
+    } catch (error) {
+      console.error('Error during logout cleanup:', error)
+    }
+  }
+
+  /**
+   * Get sync status for a user
+   */
+  getSyncStatus(userId: string): SyncStatus | null {
+    return this.syncStatus.get(userId) || null
+  }
+
+  /**
+   * Get active session
+   */
+  getActiveSession(userId: string): SyncSession | null {
+    return this.activeSessions.get(userId) || null
+  }
+
+  /**
+   * Subscribe to sync events
+   */
+  subscribeToSyncEvents(userId: string, callback: (event: SyncTriggerEvent) => void): void {
+    const listeners = this.eventListeners.get(userId) || []
+    listeners.push(callback)
+    this.eventListeners.set(userId, listeners)
+  }
+
+  /**
+   * Unsubscribe from sync events
+   */
+  unsubscribeFromSyncEvents(userId: string, callback?: (event: SyncTriggerEvent) => void): void {
+    const listeners = this.eventListeners.get(userId) || []
+
+    if (callback) {
+      const filteredListeners = listeners.filter(l => l !== callback)
+      this.eventListeners.set(userId, filteredListeners)
+    } else {
+      this.eventListeners.delete(userId)
+    }
+  }
+
+  /**
+   * Force full sync for all data
+   */
+  async forceFullSync(userId: string): Promise<{ success: boolean; message?: string }> {
+    try {
+      console.log(`🔄 FORCE FULL SYNC: Starting for user ${userId}`)
+
+      const result = await this.triggerSync('manual', userId, this.currentDeviceId || '', {
+        fullSync: true,
+        forced: true
+      })
+
+      return {
+        success: result.success,
+        message: result.message || 'Full sync completed'
+      }
+    } catch (error) {
+      return {
+        success: false,
+        message: error instanceof Error ? error.message : 'Full sync failed'
+      }
+    }
+  }
+
+  /**
+   * Private helper methods
+   */
+
+  private generateDeviceId(): string {
+    const stored = localStorage.getItem('carexps_device_id')
+    if (stored) return stored
+
+    const deviceId = `device_${Date.now()}_${crypto.randomUUID?.() || Math.random().toString(36).substring(2)}`
+    localStorage.setItem('carexps_device_id', deviceId)
+    return deviceId
+  }
+
+  private generateSessionToken(): string {
+    return `session_${Date.now()}_${crypto.randomUUID?.() || Math.random().toString(36).substring(2)}`
+  }
+
+  private detectDeviceType(): 'desktop' | 'mobile' | 'tablet' {
+    const userAgent = navigator.userAgent.toLowerCase()
+    if (/mobile|android|iphone|ipod/.test(userAgent)) return 'mobile'
+    if (/tablet|ipad/.test(userAgent)) return 'tablet'
+    return 'desktop'
+  }
+
+  private async registerSyncSession(session: SyncSession): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('device_sessions')
+        .upsert({
+          id: session.sessionToken,
+          user_id: session.userId,
+          device_id: session.deviceId,
+          session_token: session.sessionToken,
+          status: 'active',
+          started_at: session.startedAt,
+          last_activity: session.lastActivity,
+          expires_at: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
+          sync_enabled: session.syncEnabled,
+          security_level: session.securityLevel,
+          mfa_verified: session.mfaVerified,
+          metadata: {
+            browserInfo: {
+              userAgent: navigator.userAgent,
+              language: navigator.language
+            }
+          }
+        }, { onConflict: 'session_token' })
+
+      if (error) {
+        console.warn('Failed to register sync session:', error)
+      }
+    } catch (error) {
+      console.error('Error registering sync session:', error)
+    }
+  }
+
+  private async deactivateSyncSession(session: SyncSession): Promise<void> {
+    try {
+      const { error } = await supabase
+        .from('device_sessions')
+        .update({
+          status: 'expired',
+          last_activity: new Date().toISOString()
+        })
+        .eq('session_token', session.sessionToken)
+
+      if (error) {
+        console.warn('Failed to deactivate sync session:', error)
+      }
+    } catch (error) {
+      console.error('Error deactivating sync session:', error)
+    }
+  }
+
+  private startPeriodicSync(userId: string, interval: number): void {
+    this.stopPeriodicSync(userId) // Clear any existing interval
+
+    const intervalId = window.setInterval(async () => {
+      try {
+        await this.triggerSync('periodic', userId, this.currentDeviceId || '')
+      } catch (error) {
+        console.error('Periodic sync failed:', error)
+      }
+    }, interval)
+
+    this.periodicSyncIntervals.set(userId, intervalId)
+    console.log(`⏰ Periodic sync started for user ${userId} (${interval}ms interval)`)
+  }
+
+  private stopPeriodicSync(userId: string): void {
+    const intervalId = this.periodicSyncIntervals.get(userId)
+    if (intervalId) {
+      window.clearInterval(intervalId)
+      this.periodicSyncIntervals.delete(userId)
+      console.log(`⏹️ Periodic sync stopped for user ${userId}`)
+    }
+  }
+
+  private async setupRealtimeListeners(userId: string, deviceId: string): Promise<void> {
+    // Real-time listeners are handled by individual services
+    // This is just for coordination
+    console.log(`👂 Setting up real-time listeners for user ${userId} on device ${deviceId}`)
+  }
+
+  private async cleanupRealtimeListeners(userId: string): Promise<void> {
+    // Cleanup is handled by individual services
+    console.log(`🧹 Cleaning up real-time listeners for user ${userId}`)
+  }
+
+  private updateLastActivity(userId: string): void {
+    const session = this.activeSessions.get(userId)
+    if (session) {
+      session.lastActivity = new Date().toISOString()
+      this.activeSessions.set(userId, session)
+    }
+  }
+
+  private updateSyncStatus(userId: string, updates: Partial<SyncStatus>): void {
+    const currentStatus = this.syncStatus.get(userId)
+    if (currentStatus) {
+      const updatedStatus = { ...currentStatus, ...updates }
+      this.syncStatus.set(userId, updatedStatus)
+    }
+  }
+
+  private notifyEventListeners(userId: string, event: SyncTriggerEvent): void {
+    const listeners = this.eventListeners.get(userId) || []
+    listeners.forEach(listener => {
+      try {
+        listener(event)
+      } catch (error) {
+        console.error('Error in sync event listener:', error)
+      }
+    })
+  }
+
+  /**
+   * Global cleanup
+   */
+  cleanup(): void {
+    // Stop all periodic syncs
+    this.periodicSyncIntervals.forEach((intervalId) => {
+      window.clearInterval(intervalId)
+    })
+    this.periodicSyncIntervals.clear()
+
+    // Clear all state
+    this.activeSessions.clear()
+    this.syncStatus.clear()
+    this.eventListeners.clear()
+
+    // Clean up individual services
+    userSettingsService.cleanupCrossDeviceSync()
+    userProfileService.cleanupProfileSync()
+    conflictResolver.cleanup()
+
+    console.log('🧹 Sync manager cleaned up completely')
+  }
+}
+
+// Export singleton instance
+export const syncManager = new CrossDeviceSyncManager()
+
+// Auto-cleanup on page unload
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeunload', () => {
+    syncManager.cleanup()
+  })
+
+  // Handle visibility change for activity tracking
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && syncManager['currentUserId']) {
+      // Trigger sync when page becomes visible again
+      syncManager.triggerSync('manual', syncManager['currentUserId'], syncManager['currentDeviceId'] || '')
+    }
+  })
+}

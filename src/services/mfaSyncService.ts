@@ -3,7 +3,7 @@
  * Provides graceful offline handling and smart retry logic
  */
 
-import { encrypt, decrypt } from '../utils/encryption'
+import { encryptPHI, decryptPHI } from '../utils/encryption'
 
 export interface MFAConfiguration {
   userId: string
@@ -486,7 +486,7 @@ class MFASyncService {
 
   // Local storage operations
   private async saveMFAConfigLocal(config: MFAConfiguration): Promise<void> {
-    const encryptedConfig = encrypt(JSON.stringify(config))
+    const encryptedConfig = encryptPHI(JSON.stringify(config))
     localStorage.setItem(`mfa_config_${config.userId}`, encryptedConfig)
   }
 
@@ -495,7 +495,7 @@ class MFASyncService {
       const encryptedConfig = localStorage.getItem(`mfa_config_${userId}`)
       if (!encryptedConfig) return null
 
-      const decryptedConfig = decrypt(encryptedConfig)
+      const decryptedConfig = decryptPHI(encryptedConfig)
       return JSON.parse(decryptedConfig)
     } catch (error) {
       console.error('Failed to get local MFA config:', error)
