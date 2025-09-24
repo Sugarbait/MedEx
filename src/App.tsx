@@ -327,16 +327,7 @@ const App: React.FC = () => {
 
     const loadUser = async () => {
       try {
-        // Add emergency logout function (press Ctrl+Shift+L to force logout)
-        window.addEventListener('keydown', (e) => {
-          if (e.ctrlKey && e.shiftKey && e.key === 'L') {
-            e.preventDefault()
-            console.log('🚪 Emergency logout triggered')
-            localStorage.removeItem('currentUser')
-            localStorage.removeItem('mfa_verified')
-            window.location.reload()
-          }
-        })
+        console.log('🔄 App.tsx: Starting loadUser function...')
 
         // Use localStorage directly for stability
         let storedUser = null
@@ -535,8 +526,12 @@ const App: React.FC = () => {
           }
         }
       } catch (error) {
-        console.error('Error loading user:', error)
+        console.error('❌ App.tsx: Error loading user:', error)
+        // Clear any potentially corrupted data
+        localStorage.removeItem('currentUser')
+        setUser(null)
       } finally {
+        console.log('✅ App.tsx: loadUser completed, setting loading to false')
         setIsLoading(false)
       }
     }
@@ -699,7 +694,16 @@ const App: React.FC = () => {
       ThemeManager.initialize()
     }
 
-    loadUser()
+    // Execute loadUser with timeout protection
+    Promise.race([
+      loadUser(),
+      new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Loading timeout')), 10000)
+      )
+    ]).catch(error => {
+      console.warn('⚠️ App.tsx: LoadUser timed out or failed:', error.message)
+      setIsLoading(false)
+    })
 
     // Add event listeners
     window.addEventListener('storage', handleStorageChange)
