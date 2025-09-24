@@ -551,6 +551,35 @@ export interface Database {
           metadata?: Json
         }
       }
+      user_totp: {
+        Row: {
+          id: string
+          user_id: string
+          encrypted_secret: string
+          backup_codes: Json
+          enabled: boolean
+          created_at: string
+          last_used_at: string | null
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          encrypted_secret: string
+          backup_codes?: Json
+          enabled?: boolean
+          created_at?: string
+          last_used_at?: string | null
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          encrypted_secret?: string
+          backup_codes?: Json
+          enabled?: boolean
+          created_at?: string
+          last_used_at?: string | null
+        }
+      }
       data_retention_policies: {
         Row: {
           id: string
