@@ -110,6 +110,45 @@ class RetellService {
         })
 
         // Note: Decryption will happen automatically in getDecryptedApiKey() when needed
+      } else {
+        // CRITICAL FIX: If currentUser is not available yet, try to find settings files
+        // This handles the timing issue where AuthContext hasn't set currentUser yet
+        console.log('Fresh RetellService - currentUser not found, scanning for user settings files...')
+
+        try {
+          // Look for any settings files in localStorage that contain API keys
+          const allKeys = Object.keys(localStorage)
+          const settingsKeys = allKeys.filter(key => key.startsWith('settings_') && key !== 'settings_undefined')
+
+          console.log('Fresh RetellService - Found settings keys:', settingsKeys)
+
+          for (const key of settingsKeys) {
+            const settings = JSON.parse(localStorage.getItem(key) || '{}')
+            if (settings.retellApiKey) {
+              this.apiKey = settings.retellApiKey
+              this.callAgentId = settings.callAgentId || ''
+              this.smsAgentId = settings.smsAgentId || ''
+
+              console.log('Fresh RetellService - Found credentials in', key, ':', {
+                hasApiKey: !!this.apiKey,
+                apiKeyPrefix: this.apiKey ? this.apiKey.substring(0, 15) + '...' : 'none',
+                callAgentId: this.callAgentId || 'not set',
+                smsAgentId: this.smsAgentId || 'not set'
+              })
+
+              // Found credentials, break out of loop
+              break
+            }
+          }
+
+          // If still no credentials found, try to use fallback credentials
+          if (!this.apiKey) {
+            console.log('Fresh RetellService - No user credentials found, checking if fallback credentials should be used...')
+            // Don't automatically use fallback here - let forceUpdateCredentials handle this
+          }
+        } catch (scanError) {
+          console.warn('Fresh RetellService - Error scanning for settings files:', scanError)
+        }
       }
     } catch (error) {
       console.error('Error loading credentials from localStorage:', error)

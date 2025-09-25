@@ -292,13 +292,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                     console.log('✅ Retell service initialized with API credentials on login!')
 
                     // Dispatch event to notify other components that API is ready
-                    window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
-                      detail: {
-                        apiKey: !!settings.retell_config.api_key,
-                        callAgentId: !!settings.retell_config.call_agent_id,
-                        smsAgentId: !!settings.retell_config.sms_agent_id
-                      }
-                    }))
+                    // Add a small delay to ensure all other initialization is complete
+                    setTimeout(() => {
+                      window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
+                        detail: {
+                          apiKey: !!settings.retell_config.api_key,
+                          callAgentId: !!settings.retell_config.call_agent_id,
+                          smsAgentId: !!settings.retell_config.sms_agent_id
+                        }
+                      }))
+                      console.log('📡 API configuration ready event dispatched')
+                    }, 100) // 100ms delay to ensure Dashboard has time to set up listeners
                   } catch (retellError) {
                     console.error('❌ Failed to initialize retell service on login:', retellError)
                   }
@@ -311,13 +315,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                     console.log('✅ Retell service initialized with fallback credentials!')
 
                     // Dispatch event to notify other components that API is ready
-                    window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
-                      detail: {
-                        apiKey: true,
-                        callAgentId: true,
-                        smsAgentId: true
-                      }
-                    }))
+                    // Add a small delay to ensure all other initialization is complete
+                    setTimeout(() => {
+                      window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
+                        detail: {
+                          apiKey: true,
+                          callAgentId: true,
+                          smsAgentId: true
+                        }
+                      }))
+                      console.log('📡 API configuration ready event dispatched (fallback credentials)')
+                    }, 100) // 100ms delay to ensure Dashboard has time to set up listeners
                   } catch (retellError) {
                     console.error('❌ Failed to initialize retell service with fallback credentials:', retellError)
                   }
@@ -343,13 +351,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                       console.log('✅ Retell service updated with new credentials from real-time sync')
 
                       // Notify components of API configuration update
-                      window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
-                        detail: {
-                          apiKey: !!newSettings.retell_config.api_key,
-                          callAgentId: !!newSettings.retell_config.call_agent_id,
-                          smsAgentId: !!newSettings.retell_config.sms_agent_id
-                        }
-                      }))
+                      // Add a small delay to ensure all other initialization is complete
+                      setTimeout(() => {
+                        window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
+                          detail: {
+                            apiKey: !!newSettings.retell_config.api_key,
+                            callAgentId: !!newSettings.retell_config.call_agent_id,
+                            smsAgentId: !!newSettings.retell_config.sms_agent_id
+                          }
+                        }))
+                        console.log('📡 API configuration ready event dispatched (real-time sync)')
+                      }, 100) // 100ms delay to ensure components have time to process
                     } catch (retellError) {
                       console.error('❌ Failed to update retell service from real-time sync:', retellError)
                     }
@@ -361,13 +373,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                       console.log('✅ Retell service updated with fallback credentials from real-time sync')
 
                       // Notify components of API configuration update
-                      window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
-                        detail: {
-                          apiKey: true,
-                          callAgentId: true,
-                          smsAgentId: true
-                        }
-                      }))
+                      // Add a small delay to ensure all other initialization is complete
+                      setTimeout(() => {
+                        window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
+                          detail: {
+                            apiKey: true,
+                            callAgentId: true,
+                            smsAgentId: true
+                          }
+                        }))
+                        console.log('📡 API configuration ready event dispatched (real-time sync fallback)')
+                      }, 100) // 100ms delay to ensure components have time to process
                     } catch (retellError) {
                       console.error('❌ Failed to update retell service with fallback credentials:', retellError)
                     }
@@ -416,13 +432,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                       console.log('✅ Retell service initialized with fallback settings')
 
                       // Dispatch API ready event
-                      window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
-                        detail: {
-                          apiKey: !!fallbackSettings.retell_config.api_key,
-                          callAgentId: !!fallbackSettings.retell_config.call_agent_id,
-                          smsAgentId: !!fallbackSettings.retell_config.sms_agent_id
-                        }
-                      }))
+                      // Add a small delay to ensure all other initialization is complete
+                      setTimeout(() => {
+                        window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
+                          detail: {
+                            apiKey: !!fallbackSettings.retell_config.api_key,
+                            callAgentId: !!fallbackSettings.retell_config.call_agent_id,
+                            smsAgentId: !!fallbackSettings.retell_config.sms_agent_id
+                          }
+                        }))
+                        console.log('📡 API configuration ready event dispatched (fallback settings)')
+                      }, 100) // 100ms delay to ensure components have time to process
                     } catch (retellError) {
                       console.error('❌ Failed to initialize retell service with fallback:', retellError)
                     }

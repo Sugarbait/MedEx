@@ -686,8 +686,21 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
 
       // Check if Retell API has at minimum an API key configured
       // More flexible check - only require API key, agent IDs are optional
-      const apiKey = retellService.getApiKey()
-      const hasApiKey = !!apiKey
+      let apiKey = retellService.getApiKey()
+      let hasApiKey = !!apiKey
+
+      // CRITICAL FIX: If no API key found, force reload credentials to handle timing issues
+      if (!hasApiKey) {
+        console.log('🔄 Dashboard: No API key found on first check, forcing credential reload...')
+        retellService.loadCredentials() // Force synchronous reload
+        apiKey = retellService.getApiKey()
+        hasApiKey = !!apiKey
+        console.log('🔍 Dashboard: After forced reload:', {
+          apiKey: apiKey ? `${apiKey.substring(0, 8)}...` : 'null',
+          hasApiKey,
+          retellServiceConfigured: retellService.isConfigured()
+        })
+      }
       console.log('🔍 Dashboard API Key Check:', {
         apiKey: apiKey ? `${apiKey.substring(0, 8)}...` : 'null',
         hasApiKey,
