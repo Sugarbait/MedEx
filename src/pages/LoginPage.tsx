@@ -380,8 +380,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         AuditOutcome.SUCCESS,
         { operation: 'login_success_no_mfa', userId: user.id }
       )
-      // Set login timestamp to prevent double MFA check
-      localStorage.setItem('loginTimestamp', Date.now().toString())
+      // Login completed successfully without MFA requirement
       onLogin()
     }
   }
@@ -406,8 +405,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
     setShowMFAVerification(false)
     setPendingUser(null)
-    // Set login timestamp to prevent double MFA check
-    localStorage.setItem('loginTimestamp', Date.now().toString())
+    // Complete login after successful MFA verification
     onLogin()
   }
 
