@@ -197,21 +197,51 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
           )
         }
       } else {
-        console.log('No API keys found, using empty state')
-        setApiKeys({
-          retell_api_key: '',
-          call_agent_id: '',
-          sms_agent_id: ''
-        })
+        console.log('No API keys found, using default values and saving to cloud')
+        const defaultApiKeys = {
+          retell_api_key: 'key_c3f084f5ca67781070e188b47d7f',
+          call_agent_id: 'agent_447a1b9da540237693b0440df6',
+          sms_agent_id: 'agent_643486efd4b5a0e9d7e094ab99'
+        }
+
+        setApiKeys(defaultApiKeys)
+
+        // Save defaults to localStorage immediately
+        if (currentUser.id) {
+          const settings = JSON.parse(localStorage.getItem(`settings_${currentUser.id}`) || '{}')
+          settings.retellApiKey = defaultApiKeys.retell_api_key
+          settings.callAgentId = defaultApiKeys.call_agent_id
+          settings.smsAgentId = defaultApiKeys.sms_agent_id
+          localStorage.setItem(`settings_${currentUser.id}`, JSON.stringify(settings))
+          console.log('Saved default API keys to localStorage')
+        }
+
+        // Save defaults to cloud for cross-device sync
+        try {
+          await enhancedUserService.updateUserApiKeys(user.id, defaultApiKeys)
+          console.log('Saved default API keys to cloud storage for cross-device sync')
+        } catch (cloudError) {
+          console.warn('Failed to save default API keys to cloud:', cloudError)
+        }
+
+        // Update retell service
+        retellService.updateCredentials(
+          defaultApiKeys.retell_api_key,
+          defaultApiKeys.call_agent_id,
+          defaultApiKeys.sms_agent_id
+        )
       }
     } catch (err: any) {
       console.error('Exception loading API keys:', err)
       setError(`Failed to load API keys: ${err.message}`)
-      setApiKeys({
-        retell_api_key: '',
-        call_agent_id: '',
-        sms_agent_id: ''
-      })
+      const defaultApiKeys = {
+        retell_api_key: 'key_c3f084f5ca67781070e188b47d7f',
+        call_agent_id: 'agent_447a1b9da540237693b0440df6',
+        sms_agent_id: 'agent_643486efd4b5a0e9d7e094ab99'
+      }
+
+      setApiKeys(defaultApiKeys)
+      console.log('Using default API keys due to loading error')
     } finally {
       setIsLoading(false)
     }
