@@ -131,12 +131,18 @@ class RetellService {
         return decrypted
       } catch (error) {
         console.error('Fresh RetellService - Decryption failed, using fallback:', error)
-        // Fallback: remove prefix
-        return this.apiKey.split(':').pop() || this.apiKey
+        // Fallback: remove prefix and use what remains
+        const parts = this.apiKey.split(':')
+        if (parts.length > 1) {
+          const fallbackKey = parts[parts.length - 1] // Get the last part after ':'
+          console.log('Fresh RetellService - Using fallback key extraction')
+          return fallbackKey
+        }
+        return this.apiKey // Return original if no ':' found
       }
     }
 
-    // Not encrypted
+    // Not encrypted, return as-is
     return this.apiKey
   }
 
@@ -301,7 +307,7 @@ class RetellService {
   }
 
   /**
-   * Fetch chat history
+   * Fetch chat history using v2 API
    */
   public async getChatHistory(): Promise<ChatListResponse> {
     try {
@@ -311,15 +317,29 @@ class RetellService {
         throw new Error('Retell AI API key not configured')
       }
 
+      // Use the v2 API endpoint for consistency
+      const requestBody: any = {
+        sort_order: 'descending',
+        limit: Math.min(1000, 1000)
+      }
+
+      // Add SMS agent filter if configured
+      if (this.smsAgentId && this.smsAgentId.trim()) {
+        requestBody.filter_criteria = {
+          agent_id: [this.smsAgentId]
+        }
+      }
+
       console.log('Fresh RetellService - Chat request:', {
-        url: `${this.baseUrl}/list-chat`,
-        smsAgentId: this.smsAgentId
+        url: `${this.baseUrl}/v2/list-chats`,
+        body: requestBody
       })
 
       const headers = await this.getHeaders()
-      const response = await fetch(`${this.baseUrl}/list-chat`, {
-        method: 'GET',
-        headers
+      const response = await fetch(`${this.baseUrl}/v2/list-chats`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(requestBody)
       })
 
       console.log('Fresh RetellService - Chat response status:', response.status)
@@ -337,29 +357,26 @@ class RetellService {
         keys: data ? Object.keys(data) : 'null'
       })
 
-      // Parse response
-      let allChats: RetellChat[] = []
+      // Parse response similar to calls
+      let chats: RetellChat[] = []
+      let pagination_key: string | undefined = undefined
+      let has_more = false
+
       if (Array.isArray(data)) {
-        allChats = data
-      } else if (data && data.chats && Array.isArray(data.chats)) {
-        allChats = data.chats
-      } else if (data && data.data && Array.isArray(data.data)) {
-        allChats = data.data
+        chats = data
+        has_more = data.length >= 1000
+      } else if (data && typeof data === 'object') {
+        chats = data.chats || data.data || []
+        pagination_key = data.pagination_key
+        has_more = data.has_more || !!pagination_key
       }
 
-      // Filter by SMS agent if configured
-      let filteredChats = allChats
-      if (this.smsAgentId && this.smsAgentId.trim()) {
-        filteredChats = allChats.filter(chat => chat.agent_id === this.smsAgentId)
-        console.log(`Fresh RetellService - Filtered ${filteredChats.length} chats for agent ${this.smsAgentId}`)
-      }
-
-      console.log('Fresh RetellService - Final chats:', filteredChats.length)
+      console.log('Fresh RetellService - Parsed chats:', chats.length)
 
       return {
-        chats: filteredChats,
-        pagination_key: undefined,
-        has_more: false
+        chats,
+        pagination_key,
+        has_more
       }
     } catch (error) {
       console.error('Fresh RetellService - Error fetching chats:', error)
@@ -378,15 +395,31 @@ class RetellService {
     console.log('Fresh RetellService - Credentials updated')
 
     // Also update localStorage with plain text values for UI display
+    this.updateLocalStorageCredentials(apiKey, callAgentId, smsAgentId)
+  }
+
+  /**
+   * Update localStorage with plain text credentials for UI display
+   */
+  private updateLocalStorageCredentials(apiKey?: string, callAgentId?: string, smsAgentId?: string): void {
     try {
       const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
       if (currentUser.id) {
         const settings = JSON.parse(localStorage.getItem(`settings_${currentUser.id}`) || '{}')
 
         // Store plain text values in localStorage for UI display
-        if (apiKey !== undefined) settings.retellApiKey = apiKey
-        if (callAgentId !== undefined) settings.callAgentId = callAgentId
-        if (smsAgentId !== undefined) settings.smsAgentId = smsAgentId
+        if (apiKey !== undefined) {
+          settings.retellApiKey = apiKey
+          console.log(`Fresh RetellService - Set API key in localStorage: ${apiKey.substring(0, 15)}...`)
+        }
+        if (callAgentId !== undefined) {
+          settings.callAgentId = callAgentId
+          console.log(`Fresh RetellService - Set call agent ID: ${callAgentId}`)
+        }
+        if (smsAgentId !== undefined) {
+          settings.smsAgentId = smsAgentId
+          console.log(`Fresh RetellService - Set SMS agent ID: ${smsAgentId}`)
+        }
 
         localStorage.setItem(`settings_${currentUser.id}`, JSON.stringify(settings))
 
@@ -395,6 +428,22 @@ class RetellService {
     } catch (error) {
       console.error('Error updating localStorage credentials:', error)
     }
+  }
+
+  /**
+   * Force update credentials with the correct API key
+   */
+  public forceUpdateCredentials(): void {
+    console.log('Fresh RetellService - Force updating with correct credentials')
+
+    // Set the known correct values
+    this.updateCredentials(
+      'key_c3f084f5ca67781070e188b47d7f',
+      'agent_447a1b9da540237693b0440df6',
+      'agent_643486efd4b5a0e9d7e094ab99'
+    )
+
+    console.log('Fresh RetellService - Force update completed')
   }
 
   /**
