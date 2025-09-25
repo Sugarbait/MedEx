@@ -987,28 +987,18 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     setError('')
 
     try {
-      // SAFE FIX: Ensure both services are properly loaded before sync
-      safeLog('🔄 [SMSPage] Starting safe API synchronization...')
+      // DASHBOARD PATTERN: Simple approach that works reliably
+      safeLog('🔄 [SMSPage] Using proven Dashboard pattern for API initialization...')
 
-      // Step 1: Ensure retellService has credentials loaded
-      await retellService.ensureCredentialsLoaded()
+      // Step 1: Load credentials with Supabase sync (exactly like Dashboard)
+      await retellService.loadCredentialsAsync()
 
-      // Step 2: Synchronize with retellService (localStorage + Supabase sync)
+      // Step 2: Synchronize credentials with retellService for chatService (exactly like Dashboard)
       await chatService.syncWithRetellService()
 
-      // Step 3: If sync failed, try direct reload as fallback
-      if (!chatService.isConfigured()) {
-        safeLog('🔧 [SMSPage] Sync failed, attempting direct credential reload...')
-        chatService.reloadCredentials()
-
-        // Brief delay to allow reload to complete
-        await new Promise(resolve => setTimeout(resolve, 100))
-      }
-
-      safeLog('✅ [SMSPage] Synchronization result:', {
+      safeLog('✅ [SMSPage] Dashboard pattern applied:', {
         retellConfigured: retellService.isConfigured(),
-        chatConfigured: chatService.isConfigured(),
-        hasApiKey: !!chatService.isConfigured()
+        chatConfigured: chatService.isConfigured()
       })
 
       if (!chatService.isConfigured()) {
@@ -1618,12 +1608,14 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     startMonitoring()
 
     // Listen for focus events to restart monitoring after navigation
-    const handleFocus = () => {
-      console.log('🛡️ [SMSPage] Window focused - restarting API monitoring and syncing chatService')
-      chatService.syncWithRetellService().catch(() => {
-        // Fallback to regular reload if sync fails
-        chatService.reloadCredentials()
-      })
+    const handleFocus = async () => {
+      console.log('🛡️ [SMSPage] Window focused - using Dashboard pattern sync')
+      try {
+        await retellService.loadCredentialsAsync()
+        await chatService.syncWithRetellService()
+      } catch (error) {
+        console.error('Focus sync error:', error)
+      }
       startMonitoring()
     }
 
@@ -1649,17 +1641,11 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       console.log('🧭 [SMSPage] Navigation detected - simulating refresh behavior...')
 
       try {
-        // Same synchronization process that works on refresh
-        await retellService.ensureCredentialsLoaded()
+        // DASHBOARD PATTERN: Use the exact same approach that works on Dashboard
+        await retellService.loadCredentialsAsync()
         await chatService.syncWithRetellService()
 
-        // Force reload if sync didn't work
-        if (!chatService.isConfigured()) {
-          console.log('🔄 [SMSPage] Navigation sync incomplete, forcing reload...')
-          chatService.reloadCredentials()
-        }
-
-        console.log('✅ [SMSPage] Navigation sync completed:', {
+        console.log('✅ [SMSPage] Dashboard pattern navigation sync completed:', {
           retellConfigured: retellService.isConfigured(),
           chatConfigured: chatService.isConfigured()
         })
