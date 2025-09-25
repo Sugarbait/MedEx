@@ -5,6 +5,9 @@ import { environmentConfig } from './environmentLoader'
 const azureClientId = environmentConfig.azureClientId || '12345678-1234-1234-1234-123456789012'
 const azureTenantId = environmentConfig.azureTenantId || '87654321-4321-4321-4321-210987654321'
 
+// For localhost development, use less strict authentication
+const isLocalhost = window.location.hostname === 'localhost'
+
 // MSAL configuration
 const msalConfig: Configuration = {
   auth: {

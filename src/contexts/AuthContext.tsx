@@ -42,8 +42,15 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  const { instance, accounts } = useMsal()
-  const isAuthenticated = useIsAuthenticated()
+  // Check if we're in demo mode (localhost with fake Azure credentials)
+  const isDemoMode = window.location.hostname === 'localhost' &&
+    (import.meta.env.VITE_AZURE_CLIENT_ID === '12345678-1234-1234-1234-123456789012' ||
+     !import.meta.env.VITE_AZURE_CLIENT_ID)
+
+  // Only use MSAL hooks if not in demo mode
+  const msalData = isDemoMode ? { instance: null, accounts: [] } : useMsal()
+  const { instance, accounts } = msalData
+  const isAuthenticated = isDemoMode ? true : useIsAuthenticated()
   const { supabase } = useSupabase()
   const [user, setUser] = useState<User | null>(null)
   const [isLoading, setIsLoading] = useState(true)
@@ -56,6 +63,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     const initializeAuth = async () => {
       setIsLoading(true)
       try {
+        if (isDemoMode) {
+          // Demo mode - create a mock user for development
+          console.log('🔧 DEMO MODE: Creating demo user for development')
+          const demoUser: User = {
+            id: 'demo-user-123',
+            email: 'demo@localhost.dev',
+            name: 'Demo User',
+            role: 'admin',
+            is_super_user: true,
+            is_enabled: true,
+            profile_status: 'enabled'
+          }
+          setUser(demoUser)
+          setMfaRequired(false) // Skip MFA in demo mode
+          setIsLoading(false)
+          return
+        }
+
         if (isAuthenticated && accounts.length > 0) {
           const account = accounts[0]
           logger.debug('Initializing authentication', account.homeAccountId)

@@ -88,10 +88,26 @@ if ('serviceWorker' in navigator) {
   })
 }
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
-  <React.StrictMode>
-    <MsalProvider instance={msalInstance}>
+// Check if we're in localhost development mode with fake Azure credentials
+const isDevMode = window.location.hostname === 'localhost' &&
+  (import.meta.env.VITE_AZURE_CLIENT_ID === '12345678-1234-1234-1234-123456789012' ||
+   !import.meta.env.VITE_AZURE_CLIENT_ID)
+
+if (isDevMode) {
+  console.log('🔧 DEVELOPMENT MODE: Using demo authentication (Azure credentials are placeholder)')
+  // Render without MSAL for development demo mode
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
       <App />
-    </MsalProvider>
-  </React.StrictMode>,
-)
+    </React.StrictMode>,
+  )
+} else {
+  // Production mode with proper Azure authentication
+  ReactDOM.createRoot(document.getElementById('root')!).render(
+    <React.StrictMode>
+      <MsalProvider instance={msalInstance}>
+        <App />
+      </MsalProvider>
+    </React.StrictMode>,
+  )
+}
