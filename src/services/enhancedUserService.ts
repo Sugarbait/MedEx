@@ -164,7 +164,9 @@ export class EnhancedUserService {
         display_name: profileData?.display_name,
         first_name: profileData?.first_name,
         last_name: profileData?.last_name,
-        department: profileData?.department,
+        department: profileData?.department || (settingsData?.retell_config ? (() => {
+          try { return JSON.parse(settingsData.retell_config)?.fallback_department } catch { return undefined }
+        })() : undefined),
         phone: profileData?.phone,
         is_active: profileData?.is_active || false,
         encrypted_retell_api_key: profileData?.encrypted_retell_api_key,
@@ -216,7 +218,7 @@ export class EnhancedUserService {
         if (userError) throw userError
       }
 
-      // Update user_profiles table
+      // Update user_profiles table with fallback for missing columns
       const profileData: any = {
         updated_at: new Date().toISOString()
       }
@@ -224,17 +226,61 @@ export class EnhancedUserService {
       if (profileUpdates.display_name !== undefined) profileData.display_name = profileUpdates.display_name
       if (profileUpdates.first_name !== undefined) profileData.first_name = profileUpdates.first_name
       if (profileUpdates.last_name !== undefined) profileData.last_name = profileUpdates.last_name
-      if (profileUpdates.department !== undefined) profileData.department = profileUpdates.department
       if (profileUpdates.phone !== undefined) profileData.phone = profileUpdates.phone
 
-      const { error: profileError } = await supabase
-        .from('user_profiles')
-        .upsert({
-          user_id: userId,
-          ...profileData
-        })
+      // First try with all fields including department
+      let profileError = null
+      try {
+        if (profileUpdates.department !== undefined) profileData.department = profileUpdates.department
 
-      if (profileError) throw profileError
+        const { error } = await supabase
+          .from('user_profiles')
+          .upsert({
+            user_id: userId,
+            ...profileData
+          })
+
+        profileError = error
+      } catch (error: any) {
+        profileError = error
+      }
+
+      // If department column doesn't exist, retry without it and store in user_settings instead
+      if (profileError && profileError.message && profileError.message.includes('department')) {
+        console.log('Department column not found in user_profiles, storing in user_settings as fallback')
+
+        // Remove department from profileData and retry
+        const { department, ...profileDataWithoutDepartment } = profileData
+
+        const { error: retryError } = await supabase
+          .from('user_profiles')
+          .upsert({
+            user_id: userId,
+            ...profileDataWithoutDepartment
+          })
+
+        if (retryError) throw retryError
+
+        // Store department in user_settings as fallback
+        if (profileUpdates.department !== undefined) {
+          const { error: deptError } = await supabase
+            .from('user_settings')
+            .upsert({
+              user_id: userId,
+              retell_config: JSON.stringify({
+                fallback_department: profileUpdates.department
+              }),
+              updated_at: new Date().toISOString()
+            })
+
+          if (deptError) {
+            console.warn('Could not store department in user_settings:', deptError)
+            // Don't throw - department storage is not critical
+          }
+        }
+      } else if (profileError) {
+        throw profileError
+      }
 
       // Update user_settings table for profile name persistence
       const settingsData: any = {
