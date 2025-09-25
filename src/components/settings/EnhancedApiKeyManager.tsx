@@ -48,11 +48,6 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
     success: boolean
     message: string
   } | null>(null)
-  const [storageMethod, setStorageMethod] = useState<string | null>(null)
-  const [schemaStatus, setSchemaStatus] = useState<{
-    hasAgentConfig: boolean
-    hasRetellKey: boolean
-  } | null>(null)
 
   // Visibility states for sensitive fields
   const [showApiKey, setShowApiKey] = useState(false)
@@ -62,25 +57,9 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
 
-  useEffect(() => {
-    loadApiKeys()
-    checkSchemaStatus()
-  }, [user.id])
-
-  const checkSchemaStatus = async () => {
-    try {
-      const testResult = await apiKeyFallbackService.testSchemaHandling(user.id)
-      setSchemaStatus(testResult.schemaSupported)
-      setStorageMethod(testResult.fallbackMethod)
-    } catch (error) {
-      console.warn('Could not check schema status:', error)
-    }
-  }
-
   // Load API keys on component mount
   useEffect(() => {
     loadApiKeys()
-    checkSchemaStatus()
   }, [user.id])
 
   // Track unsaved changes
@@ -709,133 +688,6 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
             )}
           </div>
 
-          {/* Storage Method Information Panel */}
-          {(storageMethod || schemaStatus) && (
-            <div className={`border rounded-lg p-4 ${
-              storageMethod === 'user_profiles_full'
-                ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700'
-                : storageMethod === 'user_profiles_partial_plus_user_settings'
-                ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700'
-                : 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-700'
-            }`}>
-              <div className="flex items-center gap-2 mb-3">
-                <div className={`w-5 h-5 ${
-                  storageMethod === 'user_profiles_full'
-                    ? 'text-green-600 dark:text-green-400'
-                    : storageMethod === 'user_profiles_partial_plus_user_settings'
-                    ? 'text-yellow-600 dark:text-yellow-400'
-                    : 'text-orange-600 dark:text-orange-400'
-                }`}>
-                  {storageMethod === 'user_profiles_full' ? (
-                    <Check />
-                  ) : (
-                    <AlertTriangle />
-                  )}
-                </div>
-                <h3 className={`font-medium ${
-                  storageMethod === 'user_profiles_full'
-                    ? 'text-green-900 dark:text-green-100'
-                    : storageMethod === 'user_profiles_partial_plus_user_settings'
-                    ? 'text-yellow-900 dark:text-yellow-100'
-                    : 'text-orange-900 dark:text-orange-100'
-                }`}>
-                  Storage Method Status
-                </h3>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className={`text-sm ${
-                    storageMethod === 'user_profiles_full'
-                      ? 'text-green-700 dark:text-green-300'
-                      : storageMethod === 'user_profiles_partial_plus_user_settings'
-                      ? 'text-yellow-700 dark:text-yellow-300'
-                      : 'text-orange-700 dark:text-orange-300'
-                  }`}>
-                    Database Schema
-                  </span>
-                  <span className={`text-xs ${
-                    storageMethod === 'user_profiles_full'
-                      ? 'text-green-600 dark:text-green-400'
-                      : storageMethod === 'user_profiles_partial_plus_user_settings'
-                      ? 'text-yellow-600 dark:text-yellow-400'
-                      : 'text-orange-600 dark:text-orange-400'
-                  }`}>
-                    {storageMethod === 'user_profiles_full'
-                      ? 'Complete (Optimal)'
-                      : storageMethod === 'user_profiles_partial_plus_user_settings'
-                      ? 'Partial (Backup method active)'
-                      : 'Incomplete (Fallback method active)'}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className={`text-sm ${
-                    storageMethod === 'user_profiles_full'
-                      ? 'text-green-700 dark:text-green-300'
-                      : storageMethod === 'user_profiles_partial_plus_user_settings'
-                      ? 'text-yellow-700 dark:text-yellow-300'
-                      : 'text-orange-700 dark:text-orange-300'
-                  }`}>
-                    Storage Location
-                  </span>
-                  <span className={`text-xs ${
-                    storageMethod === 'user_profiles_full'
-                      ? 'text-green-600 dark:text-green-400'
-                      : storageMethod === 'user_profiles_partial_plus_user_settings'
-                      ? 'text-yellow-600 dark:text-yellow-400'
-                      : 'text-orange-600 dark:text-orange-400'
-                  }`}>
-                    {storageMethod === 'user_profiles_full'
-                      ? 'Primary Database'
-                      : storageMethod === 'user_profiles_partial_plus_user_settings'
-                      ? 'Mixed (Profile + Settings)'
-                      : storageMethod === 'user_settings_or_localStorage'
-                      ? 'Settings Table'
-                      : 'Local Storage'}
-                  </span>
-                </div>
-
-                {schemaStatus && (
-                  <div className="mt-3 p-2 bg-white dark:bg-gray-800 rounded text-xs space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span>Agent Config Column:</span>
-                      <span className={schemaStatus.hasAgentConfig ? 'text-green-600' : 'text-red-600'}>
-                        {schemaStatus.hasAgentConfig ? 'Available' : 'Missing'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Retell Key Column:</span>
-                      <span className={schemaStatus.hasRetellKey ? 'text-green-600' : 'text-red-600'}>
-                        {schemaStatus.hasRetellKey ? 'Available' : 'Missing'}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className={`mt-3 text-xs ${
-                storageMethod === 'user_profiles_full'
-                  ? 'text-green-700 dark:text-green-300'
-                  : storageMethod === 'user_profiles_partial_plus_user_settings'
-                  ? 'text-yellow-700 dark:text-yellow-300'
-                  : 'text-orange-700 dark:text-orange-300'
-              }`}>
-                {storageMethod === 'user_profiles_full' && (
-                  'Your API keys are being stored using the optimal method in the primary database.'
-                )}
-                {storageMethod === 'user_profiles_partial_plus_user_settings' && (
-                  'Your API keys are being stored using a backup method due to partial database schema. Performance may be slightly reduced.'
-                )}
-                {storageMethod === 'user_settings_or_localStorage' && (
-                  'Your API keys are being stored using a fallback method. Please contact your administrator to update the database schema for optimal performance.'
-                )}
-                {storageMethod === 'localStorage_fallback' && (
-                  'Your API keys are being stored locally due to database connection issues. They will sync when the connection is restored.'
-                )}
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>
