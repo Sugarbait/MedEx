@@ -159,16 +159,6 @@ export const FreshMfaVerification: React.FC<FreshMfaVerificationProps> = ({
         </button>
       </div>
 
-      {/* Help Section */}
-      <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-        <h3 className="text-sm font-medium text-gray-900 mb-2">Having trouble?</h3>
-        <ul className="text-xs text-gray-600 space-y-1">
-          <li>• Make sure your device's time is correct</li>
-          <li>• Try refreshing your authenticator app</li>
-          <li>• Wait for the code to refresh if it's about to expire</li>
-          <li>• Check that you're using the correct account in your app</li>
-        </ul>
-      </div>
 
       {/* Back/Cancel Button */}
       {showCancel && onCancel && (

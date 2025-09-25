@@ -352,15 +352,26 @@ const App: React.FC = () => {
               hasValidMfaSession = sessionAge < MAX_MFA_SESSION_AGE
             }
 
+            // Also check if just logged in (within last 5 seconds)
+            const loginTimestamp = localStorage.getItem('loginTimestamp')
+            const justLoggedIn = loginTimestamp && (Date.now() - parseInt(loginTimestamp) < 5000)
+
+            if (justLoggedIn) {
+              // Clear the login timestamp to prevent re-triggering
+              localStorage.removeItem('loginTimestamp')
+            }
+
             console.log('🔐 App MFA Status Check:', {
               userId: userData.id,
               mfaEnabled,
               hasValidMfaSession,
+              justLoggedIn,
               requiresVerification: mfaEnabled && !hasValidMfaSession
             })
 
             // If MFA is required and user doesn't have valid session, show MFA verification
-            if (mfaEnabled && !hasValidMfaSession) {
+            // But skip if just logged in (MFA was already handled by LoginPage)
+            if (mfaEnabled && !hasValidMfaSession && !justLoggedIn) {
               console.log('🔐 MANDATORY MFA required - showing MFA verification screen')
               setPendingMfaUser(userData)
               setIsLoading(false)

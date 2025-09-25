@@ -235,19 +235,6 @@ export const MandatoryMfaLogin: React.FC<MandatoryMfaLoginProps> = ({
             </p>
           </div>
 
-          <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4 mb-6">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-              <div>
-                <h3 className="font-medium text-amber-900 dark:text-amber-100 text-sm">
-                  HIPAA Compliance Notice
-                </h3>
-                <p className="text-amber-800 dark:text-amber-200 text-sm mt-1">
-                  Multi-factor authentication is mandatory for accessing healthcare data in compliance with HIPAA security requirements.
-                </p>
-              </div>
-            </div>
-          </div>
 
           <FreshMfaVerification
             userId={user.id}
