@@ -9,17 +9,20 @@
  */
 
 import React, { useState, useEffect } from 'react'
-import { Shield, ShieldCheck, Settings, AlertCircle, CheckCircle } from 'lucide-react'
+import { Shield, ShieldCheck, Settings, AlertCircle, CheckCircle, X } from 'lucide-react'
 import { FreshMfaService } from '../../services/freshMfaService'
+import { FreshMfaSetup } from '../auth/FreshMfaSetup'
 
 interface FreshMfaSettingsProps {
   userId: string
-  onSetupMfa: () => void
+  userEmail?: string
+  onSetupMfa?: () => void
   className?: string
 }
 
 export const FreshMfaSettings: React.FC<FreshMfaSettingsProps> = ({
   userId,
+  userEmail = 'user@carexps.com',
   onSetupMfa,
   className = ''
 }) => {
@@ -27,6 +30,7 @@ export const FreshMfaSettings: React.FC<FreshMfaSettingsProps> = ({
   const [isLoading, setIsLoading] = useState(true)
   const [isUpdating, setIsUpdating] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [showSetupModal, setShowSetupModal] = useState(false)
 
   /**
    * Load MFA status on component mount
@@ -59,8 +63,9 @@ export const FreshMfaSettings: React.FC<FreshMfaSettingsProps> = ({
    */
   const handleMfaToggle = async (enabled: boolean) => {
     if (enabled && !isMfaEnabled) {
-      // User wants to enable MFA - show setup
-      onSetupMfa()
+      // User wants to enable MFA - show setup modal
+      setShowSetupModal(true)
+      if (onSetupMfa) onSetupMfa()
     } else if (!enabled && isMfaEnabled) {
       // User wants to disable MFA
       setIsUpdating(true)
@@ -182,28 +187,19 @@ export const FreshMfaSettings: React.FC<FreshMfaSettingsProps> = ({
               disabled={isUpdating}
               className="sr-only peer"
             />
-            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-blue-600"></div>
+            <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-600"></div>
           </label>
         </div>
 
         {/* Setup Button */}
         {!isMfaEnabled && (
           <button
-            onClick={() => handleMfaToggle(true)}
+            onClick={() => setShowSetupModal(true)}
             disabled={isUpdating}
             className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
           >
-            {isUpdating ? (
-              <>
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                Setting up...
-              </>
-            ) : (
-              <>
-                <Settings className="w-5 h-5 mr-2" />
-                Setup MFA
-              </>
-            )}
+            <Settings className="w-5 h-5 mr-2" />
+            Setup MFA
           </button>
         )}
 
@@ -233,6 +229,65 @@ export const FreshMfaSettings: React.FC<FreshMfaSettingsProps> = ({
           We strongly recommend keeping it enabled to protect your healthcare data.
         </p>
       </div>
+
+      {/* MFA Setup Modal */}
+      {showSetupModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-6 border-b border-gray-200">
+              <div className="flex items-center justify-between">
+                <h2 className="text-xl font-semibold text-gray-900">
+                  Setup Multi-Factor Authentication
+                </h2>
+                <button
+                  onClick={() => setShowSetupModal(false)}
+                  className="text-gray-400 hover:text-gray-600 p-1"
+                >
+                  <X className="w-6 h-6" />
+                </button>
+              </div>
+              <p className="text-sm text-gray-600 mt-2">
+                Secure your account with time-based one-time passwords (TOTP)
+              </p>
+            </div>
+
+            <div className="p-6">
+              <div className="mb-6">
+                <h3 className="font-medium text-gray-900 mb-3">What you'll need:</h3>
+                <ul className="space-y-2 text-sm text-gray-600">
+                  <li className="flex items-center">
+                    <CheckCircle className="w-4 h-4 text-green-500 mr-2 flex-shrink-0" />
+                    An authenticator app (Google Authenticator, Authy, etc.)
+                  </li>
+                  <li className="flex items-center">
+                    <CheckCircle className="w-4 h-4 text-green-500 mr-2 flex-shrink-0" />
+                    Your mobile device with camera for QR scanning
+                  </li>
+                  <li className="flex items-center">
+                    <CheckCircle className="w-4 h-4 text-green-500 mr-2 flex-shrink-0" />
+                    A secure place to store backup codes
+                  </li>
+                </ul>
+              </div>
+
+              <FreshMfaSetup
+                userId={userId}
+                userEmail={userEmail}
+                onSetupComplete={() => {
+                  setShowSetupModal(false)
+                  setIsMfaEnabled(true)
+                  window.dispatchEvent(new CustomEvent('freshMfaSetupComplete'))
+                  console.log('✅ Fresh MFA setup completed via modal')
+                }}
+                onCancel={() => {
+                  setShowSetupModal(false)
+                  console.log('❌ Fresh MFA setup cancelled via modal')
+                }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

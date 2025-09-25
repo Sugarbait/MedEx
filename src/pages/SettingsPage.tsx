@@ -20,7 +20,6 @@ import {
   KeyIcon,
   LinkIcon
 } from 'lucide-react'
-import { FreshMfaSetup } from '@/components/auth/FreshMfaSetup'
 import { FreshMfaService } from '@/services/freshMfaService'
 import { FreshMfaSettings } from '@/components/settings/FreshMfaSettings'
 import { auditLogger } from '@/services/auditLogger'
@@ -77,7 +76,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   })
   const [avatarFile, setAvatarFile] = useState<File | null>(null)
   const [avatarPreview, setAvatarPreview] = useState<string | null>(null)
-  const [showFreshMfaSetup, setShowFreshMfaSetup] = useState(false)
   const [auditLogs, setAuditLogs] = useState<any[]>([])
   const [isLoadingAudit, setIsLoadingAudit] = useState(false)
   const [fullName, setFullName] = useState(user?.name || '')
@@ -416,7 +414,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
         enabled: enabled ? 'enabling' : 'disabling',
         userId: user.id,
         userEmail: user.email || user.user_metadata?.email,
-        showMFASetup: showFreshMfaSetup
+        showMFASetup: 'handled_by_fresh_mfa_settings'
       })
 
       if (enabled) {
@@ -425,9 +423,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
         console.log('🔍 TOTP check result:', hasSetup)
 
         if (!hasSetup) {
-          console.log('🚀 No TOTP setup exists - showing setup dialog')
-          setShowFreshMfaSetup(true)
-          console.log('🚀 showFreshMfaSetup state updated to true')
+          console.log('🚀 No TOTP setup exists - handled by FreshMfaSettings component')
           return
         } else {
           console.log('✅ TOTP already enabled for user')
@@ -1309,7 +1305,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                 {/* Enhanced MFA Settings */}
                 <FreshMfaSettings
                   userId={user.id}
-                  onSetupMfa={() => setShowFreshMfaSetup(true)}
+                  userEmail={user.email || user.user_metadata?.email || 'user@carexps.com'}
+                  onSetupMfa={() => {
+                    // FreshMfaSettings handles MFA setup internally via modal
+                    console.log('🔒 MFA setup requested via FreshMfaSettings modal')
+                  }}
                 />
 
                 <div className="flex items-center justify-between">
@@ -1982,22 +1982,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
         </div>
       </div>
 
-      {/* Fresh MFA Setup Modal */}
-      {showFreshMfaSetup && (
-        <FreshMfaSetup
-          userId={user.id}
-          userEmail={user.email || user.user_metadata?.email || 'user@carexps.com'}
-          onSetupComplete={() => {
-            setShowFreshMfaSetup(false)
-            window.dispatchEvent(new CustomEvent('userSettingsUpdated'))
-            console.log('✅ Fresh MFA setup completed successfully')
-          }}
-          onCancel={() => {
-            setShowFreshMfaSetup(false)
-            console.log('❌ Fresh MFA setup cancelled')
-          }}
-        />
-      )}
 
 
       {/* Site Help Chatbot */}
