@@ -987,11 +987,28 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     setError('')
 
     try {
-      // Synchronize with retellService (localStorage + Supabase sync) - same as Calls page
+      // SAFE FIX: Ensure both services are properly loaded before sync
+      safeLog('🔄 [SMSPage] Starting safe API synchronization...')
+
+      // Step 1: Ensure retellService has credentials loaded
+      await retellService.ensureCredentialsLoaded()
+
+      // Step 2: Synchronize with retellService (localStorage + Supabase sync)
       await chatService.syncWithRetellService()
-      safeLog('Synchronized chat credentials:', {
-        hasApiKey: !!chatService.isConfigured(),
-        configured: chatService.isConfigured()
+
+      // Step 3: If sync failed, try direct reload as fallback
+      if (!chatService.isConfigured()) {
+        safeLog('🔧 [SMSPage] Sync failed, attempting direct credential reload...')
+        chatService.reloadCredentials()
+
+        // Brief delay to allow reload to complete
+        await new Promise(resolve => setTimeout(resolve, 100))
+      }
+
+      safeLog('✅ [SMSPage] Synchronization result:', {
+        retellConfigured: retellService.isConfigured(),
+        chatConfigured: chatService.isConfigured(),
+        hasApiKey: !!chatService.isConfigured()
       })
 
       if (!chatService.isConfigured()) {
