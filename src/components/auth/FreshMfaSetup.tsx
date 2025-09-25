@@ -280,7 +280,7 @@ export const FreshMfaSetup: React.FC<FreshMfaSetupProps> = ({
             <img
               src={setupData.qrCodeUrl}
               alt="MFA QR Code"
-              className="w-40 h-40"
+              className="w-48 h-48"
             />
           )}
         </div>
