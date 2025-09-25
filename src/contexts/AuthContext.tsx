@@ -59,6 +59,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [mfaChallenge, setMfaChallenge] = useState<MFAChallenge | null>(null)
   const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null)
   const [userSettings, setUserSettings] = useState<any>(null)
+  const [mfaInitiated, setMfaInitiated] = useState(false)
 
   useEffect(() => {
     const initializeAuth = async () => {
@@ -147,13 +148,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             logger.info('MANDATORY MFA required for user', userProfile.id)
             setMfaRequired(true)
 
-            try {
-              const challenge = await authService.initiateMFA(userProfile.id)
-              setMfaChallenge(challenge)
-              console.log('🔐 MFA challenge initiated for mandatory verification')
-            } catch (challengeError) {
-              console.error('❌ Failed to initiate MFA challenge:', challengeError)
-              setMfaRequired(true)
+            // Prevent duplicate MFA initiation
+            if (!mfaInitiated) {
+              setMfaInitiated(true)
+              try {
+                const challenge = await authService.initiateMFA(userProfile.id)
+                setMfaChallenge(challenge)
+                console.log('🔐 MFA challenge initiated for mandatory verification')
+              } catch (challengeError) {
+                console.error('❌ Failed to initiate MFA challenge:', challengeError)
+                setMfaRequired(true)
+              }
+            } else {
+              console.log('🔐 MFA already initiated - skipping duplicate request')
             }
           } else {
             // User either doesn't have MFA enabled OR has a valid session
@@ -292,6 +299,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setMfaRequired(false)
         setMfaChallenge(null)
         setUserSettings(null)
+        setMfaInitiated(false)
 
         userSettingsService.unsubscribeFromSettings()
         userSettingsService.clearCache()
@@ -365,6 +373,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setMfaRequired(false)
       setMfaChallenge(null)
       setUserSettings(null)
+      setMfaInitiated(false)
 
       logger.info('Logout completed')
     } catch (error) {
@@ -396,6 +405,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         setMfaRequired(false)
         setMfaChallenge(null)
+        setMfaInitiated(false)
 
         await secureStorage.setSessionData('current_user', userProfile)
 
