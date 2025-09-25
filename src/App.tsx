@@ -101,7 +101,27 @@ const AppContent: React.FC<{
   // Ensure theme persistence on navigation
   useEffect(() => {
     ThemeManager.initialize()
-  }, [location.pathname])
+
+    // FIX: Ensure API keys are loaded when navigating to dashboard
+    // This fixes the issue where API keys unload when going from settings to dashboard
+    if (location.pathname === '/dashboard' && user?.id) {
+      setTimeout(() => {
+        console.log('📍 Dashboard navigation detected - ensuring API keys are loaded')
+        const { retellService } = require('@/services/retellService')
+        retellService.loadCredentials()
+
+        // Dispatch API configuration ready event to notify dashboard
+        window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
+          detail: {
+            apiKey: true,
+            callAgentId: true,
+            smsAgentId: true,
+            source: 'navigation_refresh'
+          }
+        }))
+      }, 100) // Small delay to ensure page is ready
+    }
+  }, [location.pathname, user?.id])
 
   // Get session timeout from user settings (default 15 minutes) - make it reactive
   const [sessionTimeout, setSessionTimeout] = useState(() => {
@@ -888,6 +908,16 @@ const App: React.FC = () => {
         )
 
         console.log('🎉 MANDATORY MFA login flow completed successfully')
+
+        // In production, redirect to dashboard after successful MFA
+        const isProduction = window.location.hostname.includes('azurestaticapps.net') ||
+                            window.location.hostname.includes('nexasync.ca')
+
+        if (isProduction) {
+          setTimeout(() => {
+            window.location.href = '/dashboard'
+          }, 1000) // Brief delay to allow state updates
+        }
       }
 
     } catch (error) {
@@ -1006,8 +1036,17 @@ const App: React.FC = () => {
 
   if (!user) {
     return <LoginPage onLogin={() => {
-      console.log('🔄 Login completed - reloading to initialize authenticated state')
-      window.location.reload()
+      console.log('🔄 Login completed - redirecting to dashboard')
+      // In production, redirect to dashboard directly for better UX
+      const isProduction = window.location.hostname.includes('azurestaticapps.net') ||
+                          window.location.hostname.includes('nexasync.ca')
+
+      if (isProduction) {
+        window.location.href = '/dashboard'
+      } else {
+        // In development, still reload to ensure proper initialization
+        window.location.reload()
+      }
     }} />
   }
 

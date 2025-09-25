@@ -368,9 +368,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         { operation: 'mfa_verification_required', userId: user.id, reason: totpCheckError || 'TOTP enabled', attemptsRemaining: lockoutStatus.attemptsRemaining }
       )
 
-      setPendingUser({ ...user, totpCheckError, lockoutStatus })
-      setShowMFAVerification(true)
-      setIsLoading(false)
+      // FIXED: Don't show LoginPage MFA verification - App.tsx handles MFA via MandatoryMfaLogin
+      // This prevents the duplicate MFA popup underneath the login form
+      console.log('🔐 MFA required for user - App.tsx will handle MFA verification via MandatoryMfaLogin')
+
+      // Store user data and call onLogin() to let App.tsx handle MFA flow
+      localStorage.setItem('currentUser', JSON.stringify(user))
+      onLogin()
     } else {
       console.log('✅ SECURITY: No TOTP required - proceeding to dashboard')
       await auditLogger.logPHIAccess(
