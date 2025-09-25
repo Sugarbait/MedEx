@@ -96,53 +96,77 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
     setError(null)
 
     try {
+      console.log('Loading API keys for user:', user.id)
+
+      // Always use the service layer which handles decryption properly
       const response = await enhancedUserService.getUserApiKeys(user.id)
+
       if (response.status === 'success' && response.data) {
+        console.log('API keys loaded successfully from service:', {
+          hasApiKey: !!response.data.retell_api_key,
+          apiKeyLength: response.data.retell_api_key?.length || 0,
+          apiKeyPrefix: response.data.retell_api_key ? response.data.retell_api_key.substring(0, 15) + '...' : 'none',
+          callAgentId: response.data.call_agent_id || 'not set',
+          smsAgentId: response.data.sms_agent_id || 'not set'
+        })
+
+        // Set the decrypted values
         setApiKeys({
           retell_api_key: response.data.retell_api_key || '',
           call_agent_id: response.data.call_agent_id || '',
           sms_agent_id: response.data.sms_agent_id || ''
         })
+
+        // Update retell service with decrypted credentials
+        if (response.data.retell_api_key || response.data.call_agent_id || response.data.sms_agent_id) {
+          retellService.updateCredentials(
+            response.data.retell_api_key || '',
+            response.data.call_agent_id || '',
+            response.data.sms_agent_id || ''
+          )
+          console.log('Updated retell service with decrypted credentials')
+        }
+
       } else if (response.status === 'error') {
-        // Handle specific error cases
-        if (response.error?.includes('encrypted_agent_config') ||
-            response.error?.includes('column') ||
-            response.error?.includes('schema')) {
+        console.warn('Error loading API keys:', response.error)
 
-          // Try direct fallback service retrieval
-          console.log('Schema issue detected, trying fallback service directly')
-          const fallbackResponse = await apiKeyFallbackService.retrieveApiKeys(user.id)
+        // Try direct fallback service retrieval
+        console.log('Trying direct fallback service retrieval')
+        const fallbackResponse = await apiKeyFallbackService.retrieveApiKeys(user.id)
 
-          if (fallbackResponse.status === 'success' && fallbackResponse.data) {
-            setApiKeys({
-              retell_api_key: fallbackResponse.data.retell_api_key || '',
-              call_agent_id: fallbackResponse.data.call_agent_id || '',
-              sms_agent_id: fallbackResponse.data.sms_agent_id || ''
-            })
+        if (fallbackResponse.status === 'success' && fallbackResponse.data) {
+          console.log('Fallback API keys loaded:', {
+            hasApiKey: !!fallbackResponse.data.retell_api_key,
+            apiKeyLength: fallbackResponse.data.retell_api_key?.length || 0,
+            callAgentId: fallbackResponse.data.call_agent_id || 'not set',
+            smsAgentId: fallbackResponse.data.sms_agent_id || 'not set'
+          })
 
-            // Show informational message about fallback usage
-            setSuccessMessage('API keys loaded using fallback method. Database schema may need updating.')
-            setTimeout(() => setSuccessMessage(null), 5000)
-          } else {
-            setApiKeys({
-              retell_api_key: '',
-              call_agent_id: '',
-              sms_agent_id: ''
-            })
-          }
+          setApiKeys({
+            retell_api_key: fallbackResponse.data.retell_api_key || '',
+            call_agent_id: fallbackResponse.data.call_agent_id || '',
+            sms_agent_id: fallbackResponse.data.sms_agent_id || ''
+          })
+
+          // Update retell service
+          retellService.updateCredentials(
+            fallbackResponse.data.retell_api_key || '',
+            fallbackResponse.data.call_agent_id || '',
+            fallbackResponse.data.sms_agent_id || ''
+          )
+
+          setSuccessMessage('API keys loaded using fallback method. Database schema may need updating.')
+          setTimeout(() => setSuccessMessage(null), 5000)
         } else {
-          // Generic error - still provide empty state
-          console.warn('Error loading API keys:', response.error)
+          console.log('No API keys found, using empty state')
           setApiKeys({
             retell_api_key: '',
             call_agent_id: '',
-            sms_agent_id: '',
-            phone_number: ''
+            sms_agent_id: ''
           })
         }
       } else {
-        // No data found - normal empty state
-        console.warn('No API keys found, using empty state')
+        console.log('No API keys found, using empty state')
         setApiKeys({
           retell_api_key: '',
           call_agent_id: '',
@@ -151,35 +175,12 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
       }
     } catch (err: any) {
       console.error('Exception loading API keys:', err)
-
-      // Try emergency fallback
-      try {
-        const fallbackResponse = await apiKeyFallbackService.retrieveApiKeys(user.id)
-        if (fallbackResponse.status === 'success' && fallbackResponse.data) {
-          setApiKeys({
-            retell_api_key: fallbackResponse.data.retell_api_key || '',
-            call_agent_id: fallbackResponse.data.call_agent_id || '',
-            sms_agent_id: fallbackResponse.data.sms_agent_id || '',
-            phone_number: fallbackResponse.data.phone_number || ''
-          })
-          setError('Loaded API keys using emergency fallback. Please check system status.')
-        } else {
-          setError(err.message || 'Failed to load API keys from all sources')
-          setApiKeys({
-            retell_api_key: '',
-            call_agent_id: '',
-            sms_agent_id: '',
-            phone_number: ''
-          })
-        }
-      } catch (fallbackErr) {
-        setError(`Failed to load API keys: ${err.message}. Fallback also failed.`)
-        setApiKeys({
-          retell_api_key: '',
-          call_agent_id: '',
-          sms_agent_id: ''
-        })
-      }
+      setError(`Failed to load API keys: ${err.message}`)
+      setApiKeys({
+        retell_api_key: '',
+        call_agent_id: '',
+        sms_agent_id: ''
+      })
     } finally {
       setIsLoading(false)
     }

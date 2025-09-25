@@ -88,23 +88,28 @@ class RetellService {
   }
 
   /**
-   * Load API credentials from localStorage
+   * Load API credentials from localStorage (with automatic decryption)
    */
   public loadCredentials(): void {
     try {
       const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
       if (currentUser.id) {
         const settings = JSON.parse(localStorage.getItem(`settings_${currentUser.id}`) || '{}')
+
+        // Load raw values from localStorage
         this.apiKey = settings.retellApiKey || ''
         this.callAgentId = settings.callAgentId || ''
         this.smsAgentId = settings.smsAgentId || ''
 
-        console.log('Fresh RetellService - Loaded credentials:', {
+        console.log('Fresh RetellService - Loaded raw credentials from localStorage:', {
           hasApiKey: !!this.apiKey,
           apiKeyPrefix: this.apiKey ? this.apiKey.substring(0, 15) + '...' : 'none',
           callAgentId: this.callAgentId || 'not set',
-          smsAgentId: this.smsAgentId || 'not set'
+          smsAgentId: this.smsAgentId || 'not set',
+          apiKeyIsEncrypted: this.apiKey.includes('cbc:') || this.apiKey.includes('gcm:') || this.apiKey.includes('aes:')
         })
+
+        // Note: Decryption will happen automatically in getDecryptedApiKey() when needed
       }
     } catch (error) {
       console.error('Error loading credentials from localStorage:', error)
@@ -363,7 +368,7 @@ class RetellService {
   }
 
   /**
-   * Update credentials
+   * Update credentials and store them in localStorage (plain text for UI)
    */
   public updateCredentials(apiKey?: string, callAgentId?: string, smsAgentId?: string): void {
     if (apiKey !== undefined) this.apiKey = apiKey
@@ -371,6 +376,25 @@ class RetellService {
     if (smsAgentId !== undefined) this.smsAgentId = smsAgentId
 
     console.log('Fresh RetellService - Credentials updated')
+
+    // Also update localStorage with plain text values for UI display
+    try {
+      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
+      if (currentUser.id) {
+        const settings = JSON.parse(localStorage.getItem(`settings_${currentUser.id}`) || '{}')
+
+        // Store plain text values in localStorage for UI display
+        if (apiKey !== undefined) settings.retellApiKey = apiKey
+        if (callAgentId !== undefined) settings.callAgentId = callAgentId
+        if (smsAgentId !== undefined) settings.smsAgentId = smsAgentId
+
+        localStorage.setItem(`settings_${currentUser.id}`, JSON.stringify(settings))
+
+        console.log('Fresh RetellService - Updated localStorage with plain text credentials for UI')
+      }
+    } catch (error) {
+      console.error('Error updating localStorage credentials:', error)
+    }
   }
 
   /**
