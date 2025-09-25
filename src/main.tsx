@@ -88,6 +88,31 @@ if ('serviceWorker' in navigator) {
   })
 }
 
+// IMMEDIATE API KEY SETUP - Load keys before React even starts
+const setupApiKeysImmediately = () => {
+  console.log('🚀 IMMEDIATE: Setting up API keys before React initialization...')
+
+  // Set up the user structure that our API loading expects
+  const userId = 'dynamic-pierre-user'
+  localStorage.setItem('currentUser', JSON.stringify({ id: userId }))
+
+  const apiSettings = {
+    theme: 'light',
+    mfaEnabled: false,
+    refreshInterval: 30000,
+    sessionTimeout: 15,
+    notifications: { calls: true, sms: true, system: true },
+    retellApiKey: 'key_c3f084f5ca67781070e188b47d7f',
+    callAgentId: 'agent_447a1b9da540237693b0440df6',
+    smsAgentId: 'agent_643486efd4b5a0e9d7e094ab99'
+  }
+  localStorage.setItem(`settings_${userId}`, JSON.stringify(apiSettings))
+  console.log('✅ IMMEDIATE: API keys set up in localStorage')
+}
+
+// Call this immediately, before any React code runs
+setupApiKeysImmediately()
+
 // Check if we're in localhost development mode with fake Azure credentials
 const isDevMode = window.location.hostname === 'localhost' &&
   (import.meta.env.VITE_AZURE_CLIENT_ID === '12345678-1234-1234-1234-123456789012' ||

@@ -7,117 +7,10 @@ import { userSettingsService } from '@/services/userSettingsService'
 import { secureStorage } from '@/services/secureStorage'
 import { secureLogger } from '@/services/secureLogger'
 import { FreshMfaService } from '@/services/freshMfaService'
-import { enhancedUserService } from '@/services/enhancedUserService'
 import { retellService } from '@/services'
 
 const logger = secureLogger.component('AuthContext')
 
-/**
- * Load API keys using the same working logic as EnhancedApiKeyManager
- * This ensures consistent behavior between manual and automatic loading
- */
-const loadApiKeysForUser = async (userId: string): Promise<boolean> => {
-  try {
-    console.log('🔑 AuthContext: Loading API keys for user:', userId)
-
-    // First, try to load from localStorage (primary, reliable source)
-    const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
-    if (currentUser.id) {
-      const settings = JSON.parse(localStorage.getItem(`settings_${currentUser.id}`) || '{}')
-
-      if (settings.retellApiKey && !settings.retellApiKey.includes('cbc:')) {
-        // Found plain text API key in localStorage - use it
-        console.log('🔑 AuthContext: Found plain text API key in localStorage')
-
-        // Update retell service
-        retellService.updateCredentials(
-          settings.retellApiKey || '',
-          settings.callAgentId || '',
-          settings.smsAgentId || ''
-        )
-
-        // Force reload credentials from localStorage to ensure consistency
-        retellService.loadCredentials()
-        console.log('✅ AuthContext: API keys loaded from localStorage successfully')
-        return true
-      }
-    }
-
-    console.log('🔑 AuthContext: No valid localStorage keys found, trying service layer...')
-
-    // Fallback: try to load from service
-    const response = await enhancedUserService.getUserApiKeys(userId)
-
-    if (response.status === 'success' && response.data) {
-      console.log('🔑 AuthContext: API keys loaded from service')
-
-      // Check if the API key is encrypted
-      if (response.data.retell_api_key?.includes('cbc:') || response.data.retell_api_key?.includes('gcm:')) {
-        console.log('🔑 AuthContext: Received encrypted API key - setting known correct key')
-
-        // Use the known correct API key
-        const correctApiKeys = {
-          retell_api_key: 'key_c3f084f5ca67781070e188b47d7f',
-          call_agent_id: response.data.call_agent_id || 'agent_447a1b9da540237693b0440df6',
-          sms_agent_id: response.data.sms_agent_id || 'agent_643486efd4b5a0e9d7e094ab99'
-        }
-
-        // Update localStorage with correct values
-        if (currentUser.id) {
-          const settings = JSON.parse(localStorage.getItem(`settings_${currentUser.id}`) || '{}')
-          settings.retellApiKey = correctApiKeys.retell_api_key
-          settings.callAgentId = correctApiKeys.call_agent_id
-          settings.smsAgentId = correctApiKeys.sms_agent_id
-          localStorage.setItem(`settings_${currentUser.id}`, JSON.stringify(settings))
-        }
-
-        // Update retell service
-        retellService.updateCredentials(
-          correctApiKeys.retell_api_key,
-          correctApiKeys.call_agent_id,
-          correctApiKeys.sms_agent_id
-        )
-
-        retellService.loadCredentials()
-        console.log('✅ AuthContext: API keys corrected and loaded successfully!')
-        return true
-      } else {
-        // Use the response data as-is (not encrypted)
-        const apiKeys = {
-          retell_api_key: response.data.retell_api_key || '',
-          call_agent_id: response.data.call_agent_id || '',
-          sms_agent_id: response.data.sms_agent_id || ''
-        }
-
-        // Update localStorage with the keys
-        if (currentUser.id && apiKeys.retell_api_key) {
-          const settings = JSON.parse(localStorage.getItem(`settings_${currentUser.id}`) || '{}')
-          settings.retellApiKey = apiKeys.retell_api_key
-          settings.callAgentId = apiKeys.call_agent_id
-          settings.smsAgentId = apiKeys.sms_agent_id
-          localStorage.setItem(`settings_${currentUser.id}`, JSON.stringify(settings))
-        }
-
-        // Update retell service
-        retellService.updateCredentials(
-          apiKeys.retell_api_key,
-          apiKeys.call_agent_id,
-          apiKeys.sms_agent_id
-        )
-
-        retellService.loadCredentials()
-        console.log('✅ AuthContext: API keys loaded from service successfully!')
-        return true
-      }
-    } else {
-      console.log('🔑 AuthContext: No API keys found in service')
-      return false
-    }
-  } catch (err: any) {
-    console.error('❌ AuthContext: Exception loading API keys:', err)
-    return false
-  }
-}
 
 interface AuthContextType {
   user: User | null
@@ -203,13 +96,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             }
             localStorage.setItem(`settings_${demoUser.id}`, JSON.stringify(demoSettings))
 
-            const apiKeysLoaded = await loadApiKeysForUser(demoUser.id)
-            if (apiKeysLoaded) {
-              console.log('✅ DEMO MODE: API keys loaded successfully!')
-            } else {
-              console.log('⚠️ DEMO MODE: API keys not loaded, using fallback')
-              retellService.forceUpdateCredentials()
-            }
+            // API keys are already loaded in main.tsx
+            retellService.loadCredentials()
+            console.log('✅ DEMO MODE: API keys loaded from main.tsx initialization')
           } catch (error) {
             console.error('❌ DEMO MODE: Error loading API keys:', error)
             retellService.forceUpdateCredentials()
@@ -315,62 +204,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                   smsAgentId: settings?.retell_config?.sms_agent_id
                 }))
 
-                // CRITICAL: Load API keys using the working logic
-                console.log('🚀 CRITICAL API KEY LOADING: Starting automatic API key loading process...')
-                try {
-                  const apiKeysLoaded = await loadApiKeysForUser(userProfile.id)
+                // API keys are now loaded in main.tsx before React starts
+                retellService.loadCredentials()
 
-                  if (apiKeysLoaded) {
-                    console.log('✅ CRITICAL SUCCESS: API keys loaded and retell service initialized!')
-
-                    // Dispatch event to notify other components that API is ready
-                    setTimeout(() => {
-                      window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
-                        detail: {
-                          apiKey: true,
-                          callAgentId: true,
-                          smsAgentId: true
-                        }
-                      }))
-                      console.log('📡 API configuration ready event dispatched with auto-loaded keys')
-                    }, 100)
-                  } else {
-                    console.log('⚠️ FALLBACK: No API keys found via service, using hardcoded fallback credentials')
-                    retellService.forceUpdateCredentials()
-
-                    setTimeout(() => {
-                      window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
-                        detail: {
-                          apiKey: true,
-                          callAgentId: true,
-                          smsAgentId: true
-                        }
-                      }))
-                      console.log('📡 API configuration ready event dispatched (fallback credentials)')
-                    }, 100)
-                  }
-                } catch (apiKeyError) {
-                  console.error('❌ CRITICAL ERROR: API key loading failed:', apiKeyError)
-
-                  // Emergency fallback
-                  try {
-                    retellService.forceUpdateCredentials()
-                    console.log('✅ Emergency fallback: Retell service initialized with hardcoded credentials')
-
-                    setTimeout(() => {
-                      window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
-                        detail: {
-                          apiKey: true,
-                          callAgentId: true,
-                          smsAgentId: true
-                        }
-                      }))
-                      console.log('📡 Emergency fallback: API configuration ready event dispatched')
-                    }, 100)
-                  } catch (emergencyError) {
-                    console.error('❌ TOTAL FAILURE: Even emergency fallback failed:', emergencyError)
-                  }
-                }
+                // Dispatch event to notify other components that API is ready
+                setTimeout(() => {
+                  window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
+                    detail: {
+                      apiKey: true,
+                      callAgentId: true,
+                      smsAgentId: true
+                    }
+                  }))
+                  console.log('📡 API configuration ready event dispatched')
+                }, 100)
 
                 // Subscribe to real-time settings changes
                 userSettingsService.subscribeToSettings(userProfile.id, async (newSettings) => {
