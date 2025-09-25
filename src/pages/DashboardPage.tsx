@@ -444,11 +444,19 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
   useEffect(() => {
     const handleApiConfigurationReady = (event: CustomEvent) => {
       console.log('🚀 Dashboard: Received apiConfigurationReady event', event.detail)
-      // Retry fetching dashboard data if it was previously not configured
-      if (retellStatus === 'not-configured' || retellStatus === 'checking') {
-        console.log('🔄 Dashboard: API is now configured, retrying data fetch...')
-        fetchDashboardData()
+      // AGGRESSIVE FIX: Always retry when we get this event, regardless of current status
+      console.log('🔄 Dashboard: API configuration ready event received, forcing data refresh...')
+
+      // Force credential reload in retellService to ensure latest data
+      try {
+        retellService.loadCredentials()
+        console.log('🔄 Dashboard: Forced credential reload completed')
+      } catch (error) {
+        console.error('❌ Dashboard: Error forcing credential reload:', error)
       }
+
+      // Always refetch data when this event fires
+      fetchDashboardData()
     }
 
     window.addEventListener('apiConfigurationReady', handleApiConfigurationReady as EventListener)
@@ -456,7 +464,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
     return () => {
       window.removeEventListener('apiConfigurationReady', handleApiConfigurationReady as EventListener)
     }
-  }, [retellStatus])
+  }, []) // Remove retellStatus dependency to always listen
 
   // State to store filtered chats for cost recalculation
   const [filteredChatsForCosts, setFilteredChatsForCosts] = useState<any[]>([])
