@@ -1643,6 +1643,35 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
   }, [error]) // Include error in dependencies to restart monitoring when error state changes
 
+  // 🎯 NAVIGATION FIX: Simulate refresh behavior when navigating to SMS page
+  useEffect(() => {
+    const handleNavigationSync = async () => {
+      console.log('🧭 [SMSPage] Navigation detected - simulating refresh behavior...')
+
+      try {
+        // Same synchronization process that works on refresh
+        await retellService.ensureCredentialsLoaded()
+        await chatService.syncWithRetellService()
+
+        // Force reload if sync didn't work
+        if (!chatService.isConfigured()) {
+          console.log('🔄 [SMSPage] Navigation sync incomplete, forcing reload...')
+          chatService.reloadCredentials()
+        }
+
+        console.log('✅ [SMSPage] Navigation sync completed:', {
+          retellConfigured: retellService.isConfigured(),
+          chatConfigured: chatService.isConfigured()
+        })
+      } catch (error) {
+        console.error('❌ [SMSPage] Navigation sync error:', error)
+      }
+    }
+
+    // Trigger on component mount (includes navigation)
+    handleNavigationSync()
+  }, []) // Empty dependency array - runs once per navigation/mount
+
   // Memoized filtered chats for performance with fuzzy search
   const filteredChats = useMemo(() => {
     let searchFilteredChats = chats
