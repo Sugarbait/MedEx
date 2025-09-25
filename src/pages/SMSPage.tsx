@@ -1558,6 +1558,10 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
             if (recovered.success) {
               console.log('✅ [SMSPage] API credentials recovered successfully')
 
+              // CRITICAL: Reload chatService credentials to sync with retellService
+              chatService.reloadCredentials()
+              console.log('🔄 [SMSPage] Synchronized chatService with recovered API credentials')
+
               // Dispatch event to notify page components
               window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
                 detail: { source: 'SMSPage-recovery' }
@@ -1585,12 +1589,17 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       }
     }
 
+    // CRITICAL: Immediately synchronize chatService with bulletproof API system
+    console.log('🔄 [SMSPage] Synchronizing chatService with bulletproof API system on mount...')
+    chatService.reloadCredentials()
+
     // Start monitoring when component mounts
     startMonitoring()
 
     // Listen for focus events to restart monitoring after navigation
     const handleFocus = () => {
-      console.log('🛡️ [SMSPage] Window focused - restarting API monitoring')
+      console.log('🛡️ [SMSPage] Window focused - restarting API monitoring and syncing chatService')
+      chatService.reloadCredentials() // Synchronize chatService on focus
       startMonitoring()
     }
 
