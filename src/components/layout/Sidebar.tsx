@@ -89,7 +89,14 @@ const getNavigationItems = (user: any, totpStatus: any) => {
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, user }) => {
   const location = useLocation()
   const { logos } = useCompanyLogos()
-  // Fresh MFA status will be checked via service when needed
+
+  // Create a simple MFA status object (Fresh MFA system doesn't need complex status)
+  const totpStatus = {
+    hasSetup: true, // Always show routes - MFA will be handled by individual pages
+    isLoading: false,
+    isEnabled: true,
+    error: null
+  }
 
   return (
     <>
