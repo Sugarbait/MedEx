@@ -1,10 +1,8 @@
 /**
- * Retell AI API Service
+ * Fresh Retell AI API Service - Simplified for 2025
  *
- * Handles all API interactions with Retell AI for fetching call history,
- * SMS/chat history, and managing voice/messaging services.
- *
- * API Documentation: https://docs.retellai.com/
+ * This is a clean implementation focused on the current working Retell AI endpoints
+ * Based on official documentation: https://docs.retellai.com/api-references/
  */
 
 export interface RetellCall {
@@ -33,8 +31,6 @@ export interface RetellCall {
   }
   metadata?: any
   disconnection_reason?: string
-  retell_llm_dynamic_variables?: any
-  collected_dynamic_variables?: any
   from_number?: string
   to_number?: string
 }
@@ -67,29 +63,6 @@ export interface RetellChat {
     combined_cost: number
   }
   metadata?: any
-  retell_llm_dynamic_variables?: any
-  collected_dynamic_variables?: any
-}
-
-export interface CallListFilters {
-  agent_id?: string
-  call_status?: 'registered' | 'ongoing' | 'ended' | 'error'
-  call_type?: 'web_call' | 'phone_call'
-  direction?: 'inbound' | 'outbound'
-  user_sentiment?: 'positive' | 'negative' | 'neutral'
-  call_successful?: boolean
-  start_timestamp?: {
-    gte?: number
-    lte?: number
-  }
-}
-
-export interface CallListOptions {
-  filter_criteria?: CallListFilters
-  sort_order?: 'ascending' | 'descending'
-  limit?: number
-  pagination_key?: string
-  skipFilters?: boolean
 }
 
 export interface CallListResponse {
@@ -104,191 +77,20 @@ export interface ChatListResponse {
   has_more: boolean
 }
 
-export class RetellService {
+class RetellService {
   private baseUrl = 'https://api.retellai.com'
   private apiKey: string = ''
   private callAgentId: string = ''
   private smsAgentId: string = ''
-  // phoneNumber removed - no longer needed
 
   constructor() {
-    // Load credentials from localStorage first (primary/reliable method)
     this.loadCredentials()
-
-    // Then try to sync from Supabase in the background (for cross-device)
-    this.syncFromSupabase().catch(error => {
-      console.warn('Background Supabase sync failed (this is non-critical):', error)
-    })
   }
 
   /**
-   * Sync credentials from Supabase to localStorage (non-critical background operation)
-   */
-  private async syncFromSupabase(): Promise<void> {
-    try {
-      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
-      if (!currentUser.id) {
-        console.log('No user logged in, skipping Supabase sync')
-        return
-      }
-
-      const { userSettingsService } = await import('./userSettingsService')
-      const settings = await userSettingsService.getUserSettings(currentUser.id)
-      const response = { status: 'success', data: settings }
-
-      if (response.status === 'success' && response.data?.retell_config) {
-        const retellConfig = response.data.retell_config
-        const supabaseApiKey = retellConfig.api_key || ''
-        const supabaseCallAgentId = retellConfig.call_agent_id || ''
-        const supabaseSmsAgentId = retellConfig.sms_agent_id || ''
-
-        // Check if user has manually set API key recently (within last 5 minutes)
-        const settings = JSON.parse(localStorage.getItem(`settings_${currentUser.id}`) || '{}')
-        const manualKeyTimestamp = settings.retellApiKeyLastUpdated || 0
-        const fiveMinutesAgo = Date.now() - (5 * 60 * 1000)
-        const hasRecentManualKey = manualKeyTimestamp > fiveMinutesAgo
-
-        // Check if we should sync from Supabase
-        if (hasRecentManualKey) {
-          console.log('🔒 Skipping Supabase sync - API key was manually set recently. Manual key protected for', Math.round((manualKeyTimestamp - fiveMinutesAgo) / 1000 / 60), 'more minutes')
-        } else if (supabaseApiKey && (supabaseApiKey !== this.apiKey ||
-            supabaseCallAgentId !== this.callAgentId ||
-            supabaseSmsAgentId !== this.smsAgentId)) {
-
-          console.log('Syncing newer credentials from Supabase to localStorage (no recent manual override)')
-
-          // Update localStorage to match Supabase
-          if (supabaseApiKey) settings.retellApiKey = supabaseApiKey
-          if (supabaseCallAgentId) settings.callAgentId = supabaseCallAgentId
-          if (supabaseSmsAgentId) settings.smsAgentId = supabaseSmsAgentId
-          localStorage.setItem(`settings_${currentUser.id}`, JSON.stringify(settings))
-
-          // Update current instance
-          if (supabaseApiKey) this.apiKey = supabaseApiKey
-          if (supabaseCallAgentId) this.callAgentId = supabaseCallAgentId
-          if (supabaseSmsAgentId) this.smsAgentId = supabaseSmsAgentId
-
-          console.log('Successfully synced credentials from Supabase')
-        } else {
-          console.log('No newer credentials found in Supabase, keeping current settings')
-        }
-      }
-    } catch (error) {
-      console.warn('Supabase sync failed (non-critical):', error)
-    }
-  }
-
-  /**
-   * Save credentials to both localStorage and Supabase
-   */
-  public async saveCredentials(apiKey: string, callAgentId: string, smsAgentId: string): Promise<void> {
-    try {
-      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
-      if (!currentUser.id) {
-        throw new Error('No user logged in')
-      }
-
-      // Save to localStorage first (primary storage)
-      const settings = JSON.parse(localStorage.getItem(`settings_${currentUser.id}`) || '{}')
-      settings.retellApiKey = apiKey
-      settings.callAgentId = callAgentId
-      settings.smsAgentId = smsAgentId
-
-      // Mark when API key was manually updated to prevent automatic overwrites
-      if (apiKey && apiKey !== settings.retellApiKey) {
-        settings.retellApiKeyLastUpdated = Date.now()
-        console.log('🔒 API key manually updated - preventing auto-overwrites for 5 minutes')
-      }
-
-      localStorage.setItem(`settings_${currentUser.id}`, JSON.stringify(settings))
-
-      // Update current instance
-      this.apiKey = apiKey
-      this.callAgentId = callAgentId
-      this.smsAgentId = smsAgentId
-
-      console.log('Credentials saved to localStorage')
-
-      // Try to save to Supabase (for cross-device sync)
-      try {
-        const { userSettingsService } = await import('./userSettingsService')
-        await userSettingsService.updateUserSettings(currentUser.id, {
-          retell_config: {
-            api_key: apiKey,
-            call_agent_id: callAgentId,
-            sms_agent_id: smsAgentId
-          }
-        })
-        console.log('Credentials also saved to Supabase for cross-device sync')
-      } catch (supabaseError) {
-        console.warn('Failed to save to Supabase (credentials still saved locally):', supabaseError)
-      }
-    } catch (error) {
-      console.error('Failed to save credentials:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Load API credentials from Supabase (with localStorage fallback)
-   * Can be called manually to reload credentials after login
-   */
-  public async loadCredentialsAsync(): Promise<void> {
-    try {
-      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
-      if (currentUser.id) {
-        try {
-          // Import userSettingsService dynamically to avoid circular dependencies
-          const { userSettingsService } = await import('./userSettingsService')
-          const settings = await userSettingsService.getUserSettings(currentUser.id)
-
-          if (settings?.retell_config) {
-            const retellConfig = settings.retell_config
-            this.apiKey = retellConfig.api_key || ''
-            this.callAgentId = retellConfig.call_agent_id || ''
-            this.smsAgentId = retellConfig.sms_agent_id || ''
-
-            if (this.apiKey || this.callAgentId || this.smsAgentId) {
-              console.log('Loaded Retell credentials from Supabase:', {
-                hasApiKey: !!this.apiKey,
-                callAgentId: this.callAgentId,
-                smsAgentId: this.smsAgentId
-              })
-            }
-            return
-          }
-        } catch (supabaseError) {
-          console.warn('Failed to load Retell credentials from Supabase, falling back to localStorage:', supabaseError)
-        }
-
-        // Fallback to localStorage
-        this.loadCredentialsFromLocalStorage()
-      }
-    } catch (error) {
-      console.error('Error loading Retell credentials:', error)
-      // Final fallback to localStorage
-      this.loadCredentialsFromLocalStorage()
-    }
-  }
-
-  /**
-   * Load API credentials from localStorage (legacy/fallback method)
-   * Can be called manually to reload credentials after login
+   * Load API credentials from localStorage
    */
   public loadCredentials(): void {
-    this.loadCredentialsFromLocalStorage()
-    console.log('Credentials loaded:', {
-      hasApiKey: !!this.apiKey,
-      apiKeyPrefix: this.apiKey ? this.apiKey.substring(0, 15) + '...' : 'none',
-      callAgentId: this.callAgentId || 'not set',
-      smsAgentId: this.smsAgentId || 'not set'
-    })
-  }
-
-  /**
-   * Internal method to load credentials from localStorage
-   */
-  private loadCredentialsFromLocalStorage(): void {
     try {
       const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
       if (currentUser.id) {
@@ -297,13 +99,12 @@ export class RetellService {
         this.callAgentId = settings.callAgentId || ''
         this.smsAgentId = settings.smsAgentId || ''
 
-        if (this.apiKey || this.callAgentId || this.smsAgentId) {
-          console.log('Loaded Retell credentials from localStorage:', {
-            hasApiKey: !!this.apiKey,
-            callAgentId: this.callAgentId,
-            smsAgentId: this.smsAgentId
-          })
-        }
+        console.log('Fresh RetellService - Loaded credentials:', {
+          hasApiKey: !!this.apiKey,
+          apiKeyPrefix: this.apiKey ? this.apiKey.substring(0, 15) + '...' : 'none',
+          callAgentId: this.callAgentId || 'not set',
+          smsAgentId: this.smsAgentId || 'not set'
+        })
       }
     } catch (error) {
       console.error('Error loading credentials from localStorage:', error)
@@ -311,92 +112,47 @@ export class RetellService {
   }
 
   /**
-   * Decrypt and clean API key if it's encrypted
+   * Decrypt API key if it's encrypted
    */
-  private async decryptApiKey(apiKey: string): Promise<string> {
-    if (!apiKey) return ''
+  private async getDecryptedApiKey(): Promise<string> {
+    if (!this.apiKey) return ''
 
-    // Check if the API key is encrypted (has encryption prefix)
-    if (apiKey.includes('cbc:') || apiKey.includes('gcm:') || apiKey.includes('aes:')) {
+    // Check if encrypted (has encryption prefix)
+    if (this.apiKey.includes('cbc:') || this.apiKey.includes('gcm:') || this.apiKey.includes('aes:')) {
       try {
-        const { encryptionService } = await import('../services/encryption')
-        const decrypted = await encryptionService.decryptString(apiKey)
-        console.log('API key decrypted successfully:', {
-          originalPrefix: apiKey.substring(0, 15) + '...',
-          decryptedPrefix: decrypted.substring(0, 15) + '...',
-          wasEncrypted: true
-        })
+        const { encryptionService } = await import('./encryption')
+        const decrypted = await encryptionService.decryptString(this.apiKey)
+        console.log('Fresh RetellService - API key decrypted successfully')
         return decrypted
       } catch (error) {
-        console.error('Failed to decrypt API key:', error)
-        // Fallback to old cleaning method if decryption fails
-        return this.cleanApiKeyLegacy(apiKey)
+        console.error('Fresh RetellService - Decryption failed, using fallback:', error)
+        // Fallback: remove prefix
+        return this.apiKey.split(':').pop() || this.apiKey
       }
     }
 
-    // API key is not encrypted, return as-is
-    console.log('API key not encrypted, using as-is:', {
-      keyPrefix: apiKey.substring(0, 15) + '...',
-      wasEncrypted: false
-    })
-    return apiKey
+    // Not encrypted
+    return this.apiKey
   }
 
   /**
-   * Legacy method for cleaning API keys (fallback)
-   */
-  private cleanApiKeyLegacy(apiKey: string): string {
-    if (!apiKey) return ''
-
-    let cleaned = apiKey
-
-    // Remove common encryption prefixes
-    if (cleaned.includes('cbc:')) {
-      cleaned = cleaned.split('cbc:').pop() || cleaned
-    }
-    if (cleaned.includes('gcm:')) {
-      cleaned = cleaned.split('gcm:').pop() || cleaned
-    }
-    if (cleaned.includes('aes:')) {
-      cleaned = cleaned.split('aes:').pop() || cleaned
-    }
-
-    console.log('API key cleaned (legacy):', {
-      original: apiKey.substring(0, 15) + '...',
-      cleaned: cleaned.substring(0, 15) + '...',
-      hadPrefix: apiKey !== cleaned
-    })
-
-    return cleaned
-  }
-
-  /**
-   * Get authorization headers for API requests (async to support decryption)
+   * Get headers for API requests
    */
   private async getHeaders(): Promise<HeadersInit> {
-    if (!this.apiKey) {
-      this.loadCredentials()
+    const decryptedKey = await this.getDecryptedApiKey()
+
+    if (!decryptedKey || decryptedKey.trim() === '') {
+      throw new Error('No valid Retell AI API key configured')
     }
-
-    // Decrypt the API key before using it in the Authorization header
-    const cleanedApiKey = await this.decryptApiKey(this.apiKey)
-
-    if (!cleanedApiKey || cleanedApiKey.trim() === '') {
-      console.error('No valid API key available for Retell AI requests')
-      throw new Error('Retell AI API key not configured')
-    }
-
-    console.log('Using API key for request:', cleanedApiKey.substring(0, 15) + '...')
 
     return {
-      'Authorization': `Bearer ${cleanedApiKey.trim()}`,
-      'Content-Type': 'application/json',
-      'User-Agent': 'CareXPS-CRM/1.0.0'
+      'Authorization': `Bearer ${decryptedKey.trim()}`,
+      'Content-Type': 'application/json'
     }
   }
 
   /**
-   * Check if API credentials are configured
+   * Check if service is configured
    */
   public isConfigured(): boolean {
     return !!(this.apiKey && (this.callAgentId || this.smsAgentId))
@@ -407,323 +163,126 @@ export class RetellService {
    */
   public async testConnection(): Promise<{ success: boolean; message: string }> {
     try {
-      const cleanedApiKey = await this.decryptApiKey(this.apiKey)
-      console.log('Testing API connection with:', {
-        baseUrl: this.baseUrl,
-        hasApiKey: !!this.apiKey,
-        originalApiKeyPrefix: this.apiKey ? this.apiKey.substring(0, 15) + '...' : 'none',
-        cleanedApiKeyPrefix: cleanedApiKey ? cleanedApiKey.substring(0, 15) + '...' : 'none'
-      })
+      console.log('Fresh RetellService - Testing connection...')
 
-      if (!cleanedApiKey || cleanedApiKey.trim() === '') {
-        return { success: false, message: 'API key not configured or invalid' }
+      if (!this.apiKey) {
+        return { success: false, message: 'API key not configured' }
       }
 
-      // Try with proper request body format according to docs
-      const requestBody = {
-        limit: 1,
-        sort_order: "descending"
-      }
-
-      console.log('Test connection request body:', requestBody)
       const headers = await this.getHeaders()
-      console.log('Test connection headers:', headers)
-      console.log('Test connection URL:', `${this.baseUrl}/v2/list-calls`)
-
       const response = await fetch(`${this.baseUrl}/v2/list-calls`, {
         method: 'POST',
-        headers: headers,
-        body: JSON.stringify(requestBody)
+        headers,
+        body: JSON.stringify({
+          limit: 1,
+          sort_order: 'descending'
+        })
       })
 
-      console.log('Test connection response status:', response.status)
-      console.log('Test connection response headers:', Object.fromEntries(response.headers.entries()))
+      console.log('Fresh RetellService - Test response:', response.status)
 
       if (response.ok) {
-        const data = await response.json()
-        console.log('API test successful:', data)
-
-        // Validate that we can actually get meaningful data
-        if (Array.isArray(data) || (data && (data.calls || data.data))) {
-          return { success: true, message: 'Connection successful! Your Retell AI credentials are working correctly.' }
-        } else {
-          return { success: true, message: 'Connection successful, but received unexpected response format. API may have changed.' }
-        }
-      } else if (response.status === 401) {
-        const errorText = await response.text()
-        if (errorText.toLowerCase().includes('invalid') || errorText.toLowerCase().includes('unauthorized')) {
-          return {
-            success: false,
-            message: 'Invalid API key. Please check that you\'ve entered the correct Retell AI API key from your dashboard.'
-          }
-        } else {
-          return {
-            success: false,
-            message: 'Authentication failed. Your API key may be expired or have insufficient permissions.'
-          }
-        }
-      } else if (response.status === 403) {
-        return {
-          success: false,
-          message: 'Access forbidden. Your API key may not have permission to access call data.'
-        }
-      } else if (response.status === 404) {
-        return {
-          success: false,
-          message: 'API endpoint not found. This may indicate an issue with the Retell AI service or incorrect API URL.'
-        }
-      } else if (response.status === 429) {
-        return {
-          success: false,
-          message: 'Rate limit exceeded. Please wait a moment before testing again.'
-        }
-      } else if (response.status >= 500) {
-        return {
-          success: false,
-          message: 'Retell AI server error. The service may be temporarily unavailable. Please try again later.'
-        }
+        return { success: true, message: 'Connection successful!' }
       } else {
         const errorText = await response.text()
-        console.error('API error response:', errorText)
-        let errorMessage = `API error (${response.status})`
-
-        // Try to extract meaningful error message from response
-        try {
-          const errorData = JSON.parse(errorText)
-          if (errorData.error) {
-            errorMessage += `: ${errorData.error}`
-          } else if (errorData.message) {
-            errorMessage += `: ${errorData.message}`
-          }
-        } catch {
-          // Not JSON, use raw text if it's short enough
-          if (errorText && errorText.length < 100) {
-            errorMessage += `: ${errorText}`
-          }
+        return {
+          success: false,
+          message: `API error: ${response.status} - ${errorText}`
         }
-
-        return { success: false, message: errorMessage }
       }
     } catch (error) {
-      console.error('API test exception:', error)
-
-      // Provide more specific error messages for common network issues
-      if (error instanceof TypeError && error.message.includes('fetch')) {
-        return {
-          success: false,
-          message: 'Network error: Unable to reach Retell AI servers. Please check your internet connection and try again.'
-        }
-      } else if (error instanceof Error) {
-        const errorMsg = error.message.toLowerCase()
-        if (errorMsg.includes('network') || errorMsg.includes('connection')) {
-          return {
-            success: false,
-            message: 'Network connection error. Please check your internet connection and firewall settings.'
-          }
-        } else if (errorMsg.includes('timeout')) {
-          return {
-            success: false,
-            message: 'Request timed out. The Retell AI service may be temporarily slow. Please try again.'
-          }
-        } else if (errorMsg.includes('cors')) {
-          return {
-            success: false,
-            message: 'CORS error: This may indicate a browser security issue or incorrect API configuration.'
-          }
-        } else {
-          return {
-            success: false,
-            message: `Connection failed: ${error.message}`
-          }
-        }
-      } else {
-        return {
-          success: false,
-          message: 'Unknown connection error occurred. Please try again or contact support if the issue persists.'
-        }
+      console.error('Fresh RetellService - Connection test failed:', error)
+      return {
+        success: false,
+        message: `Connection failed: ${error instanceof Error ? error.message : 'Unknown error'}`
       }
     }
   }
 
   /**
-   * Fetch ALL calls for the configured agent using pagination
+   * Fetch call history
    */
-  public async getAllCalls(): Promise<RetellCall[]> {
-    const allCalls: RetellCall[] = []
-    let paginationKey: string | undefined = undefined
-    let hasMore = true
-    let pageCount = 0
-
-    console.log(`Fetching all calls for agent: ${this.callAgentId}`)
-
-    while (hasMore && pageCount < 10) { // Safety limit to prevent infinite loops
-      pageCount++
-      const response = await this.getCallHistory({
-        limit: 1000, // Use maximum limit
-        pagination_key: paginationKey,
-        filter_criteria: this.callAgentId ? {
-          agent_id: this.callAgentId
-        } : undefined
-      })
-
-      allCalls.push(...response.calls)
-      paginationKey = response.pagination_key
-      hasMore = response.has_more && !!paginationKey
-
-      console.log(`Page ${pageCount}: Fetched ${response.calls.length} calls for agent ${this.callAgentId} (total so far: ${allCalls.length}, has_more: ${response.has_more})`)
-
-      if (!response.has_more || !paginationKey) {
-        hasMore = false
-      }
-    }
-
-    console.log(`Final result: ${allCalls.length} total calls fetched for agent ${this.callAgentId} in ${pageCount} pages`)
-    return allCalls
-  }
-
-  /**
-   * Fetch call history from Retell API
-   */
-  public async getCallHistory(options: CallListOptions = {}): Promise<CallListResponse> {
+  public async getCallHistory(options: {
+    limit?: number
+    agent_id?: string
+    start_timestamp?: { gte?: number; lte?: number }
+  } = {}): Promise<CallListResponse> {
     try {
+      console.log('Fresh RetellService - Fetching calls...')
+
       if (!this.apiKey) {
-        throw new Error('Retell API key not configured')
-      }
-
-      // Prepare filter criteria with correct array format
-      const filterCriteria: any = {}
-
-      // Add other filters from options first, ensuring arrays where needed
-      if (options.filter_criteria) {
-        const { filter_criteria } = options
-
-        if (filter_criteria.agent_id) {
-          filterCriteria.agent_id = Array.isArray(filter_criteria.agent_id)
-            ? filter_criteria.agent_id
-            : [filter_criteria.agent_id]
-        }
-
-        if (filter_criteria.call_status) {
-          filterCriteria.call_status = Array.isArray(filter_criteria.call_status)
-            ? filter_criteria.call_status
-            : [filter_criteria.call_status]
-        }
-
-        if (filter_criteria.call_type) {
-          filterCriteria.call_type = Array.isArray(filter_criteria.call_type)
-            ? filter_criteria.call_type
-            : [filter_criteria.call_type]
-        }
-
-        if (filter_criteria.direction) {
-          filterCriteria.direction = Array.isArray(filter_criteria.direction)
-            ? filter_criteria.direction
-            : [filter_criteria.direction]
-        }
-
-        if (filter_criteria.user_sentiment) {
-          filterCriteria.user_sentiment = Array.isArray(filter_criteria.user_sentiment)
-            ? filter_criteria.user_sentiment
-            : [filter_criteria.user_sentiment]
-        }
-
-        if (filter_criteria.call_successful !== undefined) {
-          filterCriteria.call_successful = filter_criteria.call_successful
-        }
-
-        if (filter_criteria.start_timestamp) {
-          // Convert seconds to milliseconds and use correct Retell API format
-          const startTimestamp: any = {}
-          if (filter_criteria.start_timestamp.gte) {
-            startTimestamp.lower_threshold = filter_criteria.start_timestamp.gte * 1000
-          }
-          if (filter_criteria.start_timestamp.lte) {
-            startTimestamp.upper_threshold = filter_criteria.start_timestamp.lte * 1000
-          }
-          filterCriteria.start_timestamp = startTimestamp
-        }
-      }
-
-      // Add agent filter if callAgentId is configured and not already set
-      if (this.callAgentId && !filterCriteria.agent_id && !options.skipFilters) {
-        filterCriteria.agent_id = [this.callAgentId]
-        console.log(`Filtering calls by agent ID: ${this.callAgentId}`)
+        throw new Error('Retell AI API key not configured')
       }
 
       const requestBody: any = {
-        sort_order: options.sort_order || 'descending',
+        sort_order: 'descending',
         limit: Math.min(options.limit || 1000, 1000)
       }
 
-      // Only add filter_criteria if we have filters AND not explicitly skipping
-      if (Object.keys(filterCriteria).length > 0 && !options.skipFilters) {
+      // Add filters
+      const filterCriteria: any = {}
+
+      if (options.agent_id || this.callAgentId) {
+        filterCriteria.agent_id = [options.agent_id || this.callAgentId]
+      }
+
+      if (options.start_timestamp) {
+        const timestamp: any = {}
+        if (options.start_timestamp.gte) {
+          timestamp.lower_threshold = options.start_timestamp.gte * 1000
+        }
+        if (options.start_timestamp.lte) {
+          timestamp.upper_threshold = options.start_timestamp.lte * 1000
+        }
+        filterCriteria.start_timestamp = timestamp
+      }
+
+      if (Object.keys(filterCriteria).length > 0) {
         requestBody.filter_criteria = filterCriteria
       }
 
-      // Add pagination key if provided
-      if (options.pagination_key) {
-        requestBody.pagination_key = options.pagination_key
-      }
-
-      console.log('Retell API Request:', JSON.stringify(requestBody, null, 2))
-      console.log('Current system date:', new Date().toISOString())
-
-      // Make request to Retell AI API with enhanced error handling
-      const headers = await this.getHeaders()
-      console.log('Making call history request:', {
+      console.log('Fresh RetellService - Request:', {
         url: `${this.baseUrl}/v2/list-calls`,
-        method: 'POST',
-        hasHeaders: !!headers,
-        bodyPreview: JSON.stringify(requestBody).substring(0, 200)
+        body: requestBody
       })
 
+      const headers = await this.getHeaders()
       const response = await fetch(`${this.baseUrl}/v2/list-calls`, {
         method: 'POST',
-        headers: headers,
+        headers,
         body: JSON.stringify(requestBody)
       })
 
-      console.log('Call history response status:', response.status, response.statusText)
+      console.log('Fresh RetellService - Response status:', response.status)
 
       if (!response.ok) {
         const errorText = await response.text()
-        console.error('Retell API Error Response:', {
-          status: response.status,
-          statusText: response.statusText,
-          headers: Object.fromEntries(response.headers.entries()),
-          body: errorText
-        })
-        throw new Error(`Failed to fetch calls: ${response.status} ${response.statusText} - ${errorText}`)
+        console.error('Fresh RetellService - API error:', errorText)
+        throw new Error(`Failed to fetch calls: ${response.status} - ${errorText}`)
       }
 
       const data = await response.json()
+      console.log('Fresh RetellService - Received data:', {
+        type: typeof data,
+        isArray: Array.isArray(data),
+        keys: data ? Object.keys(data) : 'null'
+      })
 
-      // Handle different response structures (based on Phaeton AI Dashboard)
+      // Parse response
       let calls: RetellCall[] = []
       let pagination_key: string | undefined = undefined
       let has_more = false
 
       if (Array.isArray(data)) {
-        // Direct array response
         calls = data
         has_more = data.length >= (options.limit || 200)
       } else if (data && typeof data === 'object') {
-        // Object response with calls array
         calls = data.calls || data.data || []
-        pagination_key = data.pagination_key || data.next_page_token
+        pagination_key = data.pagination_key
         has_more = data.has_more || !!pagination_key
       }
 
-      console.log(`Retell API Response: ${calls.length} calls fetched, has_more=${has_more}`)
-
-      // Debug: Show actual call timestamps for comparison
-      if (calls.length > 0) {
-        console.log('Sample call timestamps:', calls.slice(0, 3).map((call: any) => ({
-          call_id: call.call_id,
-          start_timestamp: call.start_timestamp,
-          start_date: new Date(call.start_timestamp * 1000).toISOString()
-        })))
-      }
+      console.log('Fresh RetellService - Parsed calls:', calls.length)
 
       return {
         calls,
@@ -731,99 +290,49 @@ export class RetellService {
         has_more
       }
     } catch (error) {
-      console.error('Error fetching call history:', error)
+      console.error('Fresh RetellService - Error fetching calls:', error)
       throw error
     }
   }
 
   /**
-   * Fetch a specific call by ID
-   */
-  public async getCall(callId: string): Promise<RetellCall> {
-    try {
-      if (!this.apiKey) {
-        throw new Error('Retell API key not configured')
-      }
-
-      const response = await fetch(`${this.baseUrl}/v2/get-call/${callId}`, {
-        method: 'GET',
-        headers: await this.getHeaders()
-      })
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch call: ${response.status} ${response.statusText}`)
-      }
-
-      return await response.json()
-    } catch (error) {
-      console.error('Error fetching call:', error)
-      throw error
-    }
-  }
-
-  /**
-   * Fetch chat/SMS history from Retell API
+   * Fetch chat history
    */
   public async getChatHistory(): Promise<ChatListResponse> {
     try {
+      console.log('Fresh RetellService - Fetching chats...')
+
       if (!this.apiKey) {
-        throw new Error('Retell API key not configured')
+        throw new Error('Retell AI API key not configured')
       }
 
-      console.log(`Fetching chat history for SMS agent: ${this.smsAgentId}`)
-      console.log('Chat API Request URL:', `${this.baseUrl}/list-chat`)
-      const headers = await this.getHeaders()
-      console.log('Chat API Headers:', headers)
-      console.log('Making chat history request:', {
+      console.log('Fresh RetellService - Chat request:', {
         url: `${this.baseUrl}/list-chat`,
-        method: 'GET',
-        hasHeaders: !!headers
+        smsAgentId: this.smsAgentId
       })
 
+      const headers = await this.getHeaders()
       const response = await fetch(`${this.baseUrl}/list-chat`, {
         method: 'GET',
-        headers: headers
+        headers
       })
 
-      console.log('Chat API Response Status:', response.status, response.statusText)
-      console.log('Chat API Response Headers:', Object.fromEntries(response.headers.entries()))
+      console.log('Fresh RetellService - Chat response status:', response.status)
 
       if (!response.ok) {
         const errorText = await response.text()
-        console.error('Chat API Error Response:', {
-          status: response.status,
-          statusText: response.statusText,
-          headers: Object.fromEntries(response.headers.entries()),
-          body: errorText
-        })
-
-        // If 404, this indicates API configuration or authentication issues
-        if (response.status === 404) {
-          console.error('Chat API endpoint returned 404 - checking possible causes:')
-          console.error('- API key may be invalid or expired')
-          console.error('- Account may not have chat API access')
-          console.error('- Base URL may be incorrect:', this.baseUrl)
-          try {
-            const decryptedKey = await this.decryptApiKey(this.apiKey)
-            console.error('- Current API key prefix:', decryptedKey.substring(0, 15) + '...')
-          } catch (e) {
-            console.error('- Could not decrypt API key for debugging')
-          }
-        }
-
-        throw new Error(`Failed to fetch chats: ${response.status} ${response.statusText} - ${errorText}`)
+        console.error('Fresh RetellService - Chat API error:', errorText)
+        throw new Error(`Failed to fetch chats: ${response.status} - ${errorText}`)
       }
 
       const data = await response.json()
-      console.log('Raw chat API response data structure:', {
+      console.log('Fresh RetellService - Received chat data:', {
+        type: typeof data,
         isArray: Array.isArray(data),
-        hasChats: data && 'chats' in data,
-        hasData: data && 'data' in data,
-        keys: data ? Object.keys(data) : 'null',
-        sampleData: data
+        keys: data ? Object.keys(data) : 'null'
       })
 
-      // Handle different response structures
+      // Parse response
       let allChats: RetellChat[] = []
       if (Array.isArray(data)) {
         allChats = data
@@ -831,44 +340,16 @@ export class RetellService {
         allChats = data.chats
       } else if (data && data.data && Array.isArray(data.data)) {
         allChats = data.data
-      } else {
-        console.warn('Unexpected chat API response structure:', data)
       }
 
-      console.log(`Initial chats fetched: ${allChats.length}`)
-
-      // Don't filter by SMS agent if we want to see all chats
-      // Log all chats for debugging
-      if (allChats.length > 0) {
-        console.log('Sample chat data:', allChats.slice(0, 3).map(chat => ({
-          chat_id: chat.chat_id,
-          agent_id: chat.agent_id,
-          chat_status: chat.chat_status,
-          start_timestamp: chat.start_timestamp,
-          message_count: chat.message_with_tool_calls?.length || 0
-        })))
-      }
-
-      // Filter by SMS agent ID if configured AND it's not empty
+      // Filter by SMS agent if configured
       let filteredChats = allChats
       if (this.smsAgentId && this.smsAgentId.trim()) {
-        const originalCount = allChats.length
         filteredChats = allChats.filter(chat => chat.agent_id === this.smsAgentId)
-        console.log(`Filtered ${filteredChats.length} chats for SMS agent ${this.smsAgentId} (from ${originalCount} total)`)
-      } else {
-        console.log('No SMS agent filter applied - showing all chats')
+        console.log(`Fresh RetellService - Filtered ${filteredChats.length} chats for agent ${this.smsAgentId}`)
       }
 
-      // Also count today's chats
-      const today = new Date()
-      const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime() / 1000
-      const todayEnd = todayStart + 86400 // 24 hours later
-
-      const todayChats = filteredChats.filter(chat =>
-        chat.start_timestamp >= todayStart && chat.start_timestamp < todayEnd
-      )
-
-      console.log(`Chats today: ${todayChats.length} (from timestamp ${todayStart} to ${todayEnd})`)
+      console.log('Fresh RetellService - Final chats:', filteredChats.length)
 
       return {
         chats: filteredChats,
@@ -876,55 +357,56 @@ export class RetellService {
         has_more: false
       }
     } catch (error) {
-      console.error('Error fetching chat history:', error)
+      console.error('Fresh RetellService - Error fetching chats:', error)
       throw error
     }
   }
 
   /**
-   * Fetch a specific chat by ID
+   * Update credentials
    */
-  public async getChat(chatId: string): Promise<RetellChat> {
+  public updateCredentials(apiKey?: string, callAgentId?: string, smsAgentId?: string): void {
+    if (apiKey !== undefined) this.apiKey = apiKey
+    if (callAgentId !== undefined) this.callAgentId = callAgentId
+    if (smsAgentId !== undefined) this.smsAgentId = smsAgentId
+
+    console.log('Fresh RetellService - Credentials updated')
+  }
+
+  /**
+   * Load credentials async (for compatibility)
+   */
+  public async loadCredentialsAsync(): Promise<void> {
+    this.loadCredentials()
+  }
+
+  /**
+   * Get all calls (for compatibility with analytics)
+   */
+  public async getAllCalls(): Promise<RetellCall[]> {
     try {
-      if (!this.apiKey) {
-        throw new Error('Retell API key not configured')
-      }
-
-      const response = await fetch(`${this.baseUrl}/get-chat/${chatId}`, {
-        method: 'GET',
-        headers: await this.getHeaders()
-      })
-
-      if (!response.ok) {
-        throw new Error(`Failed to fetch chat: ${response.status} ${response.statusText}`)
-      }
-
-      return await response.json()
+      const response = await this.getCallHistory({ limit: 1000 })
+      return response.calls
     } catch (error) {
-      console.error('Error fetching chat:', error)
-      throw error
+      console.error('Fresh RetellService - Error getting all calls:', error)
+      return []
     }
   }
 
   /**
-   * Get call history filtered by date range
+   * Get call history by date range (for compatibility)
    */
-  public async getCallHistoryByDateRange(startDate: Date, endDate: Date, options: Omit<CallListOptions, 'filter_criteria'> = {}): Promise<CallListResponse> {
-    const filter_criteria: CallListFilters = {
+  public async getCallHistoryByDateRange(startDate: Date, endDate: Date): Promise<CallListResponse> {
+    return this.getCallHistory({
       start_timestamp: {
         gte: Math.floor(startDate.getTime() / 1000),
         lte: Math.floor(endDate.getTime() / 1000)
       }
-    }
-
-    return this.getCallHistory({
-      ...options,
-      filter_criteria
     })
   }
 
   /**
-   * Calculate call metrics from call data
+   * Calculate call metrics (for compatibility with analytics)
    */
   public calculateCallMetrics(calls: RetellCall[]) {
     const totalCalls = calls.length
@@ -932,58 +414,18 @@ export class RetellService {
     const failedCalls = calls.filter(call => call.call_status === 'error')
 
     const totalDuration = completedCalls.reduce((sum, call) => {
-      // Prioritize the actual duration_ms from API, then fall back to timestamp calculation
-      if (call.duration_ms !== undefined && call.duration_ms !== null) {
-        const durationSeconds = call.duration_ms / 1000
-        console.log(`Call ${call.call_id}: Using API duration_ms = ${call.duration_ms}ms = ${durationSeconds.toFixed(3)}s`)
-        return sum + durationSeconds
-      } else if (call.start_timestamp && call.end_timestamp) {
-        // Fallback to timestamp calculation if duration_ms not available
-        let startMs = call.start_timestamp
-        let endMs = call.end_timestamp
-
-        // Convert to milliseconds if needed
-        if (call.start_timestamp.toString().length <= 10) {
-          startMs = call.start_timestamp * 1000
-        }
-        if (call.end_timestamp.toString().length <= 10) {
-          endMs = call.end_timestamp * 1000
-        }
-
-        const durationSeconds = (endMs - startMs) / 1000
-        console.log(`Call ${call.call_id}: Calculated from timestamps = ${durationSeconds.toFixed(3)}s`)
-        return sum + durationSeconds
+      if (call.duration_ms) {
+        return sum + (call.duration_ms / 1000) // Convert to seconds
       }
-      console.log(`Call ${call.call_id}: No duration data available`)
       return sum
     }, 0)
-
-    // Debug logging for duration calculation
-    console.log(`Duration calculation: ${completedCalls.length} completed calls, total duration: ${totalDuration.toFixed(2)} seconds (${this.formatDuration(totalDuration)})`)
 
     const avgDuration = completedCalls.length > 0 ? totalDuration / completedCalls.length : 0
 
     const totalCost = calls.reduce((sum, call) => {
-      // Always use the actual API cost data from Retell AI
-      // Convert from cents to dollars (API returns costs in cents)
-      const apiCostCents = call.call_cost?.combined_cost || 0
-      const apiCostDollars = apiCostCents / 100
-
-      console.log(`Call ${call.call_id}: API cost = ${apiCostCents} cents = $${apiCostDollars.toFixed(4)}`)
-
-      return sum + apiCostDollars
+      const costCents = call.call_cost?.combined_cost || 0
+      return sum + (costCents / 100) // Convert cents to dollars
     }, 0)
-
-    // Debug logging for cost analysis
-    const apiCostsCents = calls.filter(call => call.call_cost?.combined_cost).map(call => call.call_cost?.combined_cost)
-    if (apiCostsCents.length > 0) {
-      const minApiCostCents = Math.min(...apiCostsCents)
-      const maxApiCostCents = Math.max(...apiCostsCents)
-      console.log(`Cost analysis: ${apiCostsCents.length} calls with API cost data`)
-      console.log(`Raw API costs range: ${minApiCostCents} cents ($${(minApiCostCents/100).toFixed(4)}) to ${maxApiCostCents} cents ($${(maxApiCostCents/100).toFixed(4)})`)
-      console.log(`Calculated total cost: $${totalCost.toFixed(2)}`)
-      console.log(`Sample API costs (cents):`, apiCostsCents.slice(0, 5))
-    }
 
     const avgCostPerCall = totalCalls > 0 ? totalCost / totalCalls : 0
 
@@ -993,8 +435,6 @@ export class RetellService {
     const positiveSentimentCalls = calls.filter(call => call.call_analysis?.user_sentiment === 'positive')
     const positiveSentiment = positiveSentimentCalls.length
 
-    // Use actual API costs directly from Retell AI data
-    // Convert from cents to dollars (API returns costs in cents)
     const callCosts = calls.map(call => {
       const costCents = call.call_cost?.combined_cost || 0
       return costCents / 100
@@ -1003,13 +443,6 @@ export class RetellService {
     const highestCostCall = callCosts.length > 0 ? Math.max(...callCosts) : 0
     const lowestCostCall = callCosts.length > 0 ? Math.min(...callCosts) : 0
 
-    // Debug logging for cost range analysis
-    if (callCosts.length > 0) {
-      console.log(`Calculated cost range: $${lowestCostCall.toFixed(4)} to $${highestCostCall.toFixed(4)}`)
-      console.log(`Cost distribution:`, callCosts.slice(0, 10).map(c => `$${c.toFixed(3)}`))
-    }
-
-    // Calculate total minutes from total duration (in seconds)
     const totalMinutes = Math.round(totalDuration / 60)
 
     return {
@@ -1028,47 +461,7 @@ export class RetellService {
   }
 
   /**
-   * Calculate chat/SMS metrics from chat data
-   */
-  public calculateChatMetrics(chats: RetellChat[]) {
-    console.log('calculateChatMetrics called with:', { chatCount: chats.length, chats: chats.slice(0, 2) })
-    const totalMessages = chats.length
-    const completedChats = chats.filter(chat => chat.chat_status === 'ended')
-    const failedChats = chats.filter(chat => chat.chat_status === 'error')
-
-    const totalCost = chats.reduce((sum, chat) => {
-      return sum + (chat.chat_cost?.combined_cost || 0)
-    }, 0)
-
-    const avgCostPerMessage = totalMessages > 0 ? totalCost / totalMessages : 0
-
-    const deliveredMessages = chats.filter(chat => chat.chat_status === 'ended')
-    const deliveryRate = totalMessages > 0 ? (deliveredMessages.length / totalMessages) * 100 : 0
-
-    const successfulChats = chats.filter(chat => chat.chat_analysis?.chat_successful === true)
-    const responseRate = totalMessages > 0 ? (successfulChats.length / totalMessages) * 100 : 0
-
-    const positiveSentimentChats = chats.filter(chat => chat.chat_analysis?.user_sentiment === 'positive')
-    const positiveSentiment = positiveSentimentChats.length
-
-    // Calculate highest engagement (using successful chats as proxy)
-    const highestEngagement = responseRate
-
-    return {
-      totalMessages,
-      avgResponseTime: '0m', // This would need to be calculated from message timestamps
-      avgCostPerMessage,
-      deliveryRate,
-      responseRate,
-      totalCost,
-      positiveSentiment,
-      highestEngagement,
-      failedMessages: failedChats.length
-    }
-  }
-
-  /**
-   * Format duration from seconds to HH:MM:SS or MM:SS format
+   * Format duration helper
    */
   private formatDuration(seconds: number): string {
     if (!seconds || seconds <= 0) return '0:00'
@@ -1078,70 +471,17 @@ export class RetellService {
     const remainingSeconds = Math.floor(seconds % 60)
 
     if (hours > 0) {
-      // Format as HH:MM:SS when duration is 1 hour or more
       return `${hours}:${minutes.toString().padStart(2, '0')}:${remainingSeconds.toString().padStart(2, '0')}`
     } else {
-      // Format as MM:SS when duration is less than 1 hour
       return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
     }
   }
 
   /**
-   * Calculate realistic cost based on call duration
-   * Based on Retell AI pricing: ~$0.167 per minute
-   */
-  private calculateCostFromDuration(call: RetellCall): number {
-    if (!call.start_timestamp || !call.end_timestamp) {
-      return 0
-    }
-
-    // Calculate duration in seconds (handling both seconds and milliseconds timestamps)
-    let startMs = call.start_timestamp
-    let endMs = call.end_timestamp
-
-    // Convert to milliseconds if needed
-    if (call.start_timestamp.toString().length <= 10) {
-      startMs = call.start_timestamp * 1000
-    }
-    if (call.end_timestamp.toString().length <= 10) {
-      endMs = call.end_timestamp * 1000
-    }
-
-    const durationSeconds = (endMs - startMs) / 1000
-    const durationMinutes = durationSeconds / 60
-
-    // Cap duration at 10 minutes to handle data anomalies
-    // Most voice AI calls should be under 10 minutes
-    const cappedDurationMinutes = Math.min(durationMinutes, 10)
-
-    // More realistic pricing based on actual usage: ~$0.08-0.12 per minute
-    // This accounts for shorter average call lengths and competitive pricing
-    const costPerMinute = 0.10
-    const calculatedCost = cappedDurationMinutes * costPerMinute
-
-    // Cap final cost at $0.50 for realistic voice AI costs
-    const cappedCost = Math.min(calculatedCost, 0.50)
-
-    return Math.max(0, cappedCost) // Ensure non-negative
-  }
-
-  /**
-   * Get API key (used by SMS service)
+   * Get API key (for compatibility)
    */
   public getApiKey(): string {
-    if (!this.apiKey) {
-      this.loadCredentials()
-    }
     return this.apiKey
-  }
-
-  /**
-   * Update credentials (call this when settings are changed)
-   */
-  public updateCredentials(apiKey?: string, callAgentId?: string, smsAgentId?: string): void {
-    if (apiKey !== undefined) this.apiKey = apiKey
-    if (callAgentId !== undefined) this.callAgentId = callAgentId
-    if (smsAgentId !== undefined) this.smsAgentId = smsAgentId
   }
 }
 
