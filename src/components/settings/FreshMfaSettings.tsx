@@ -238,10 +238,10 @@ export const FreshMfaSettings: React.FC<FreshMfaSettingsProps> = ({
       {/* MFA Setup Modal */}
       {showSetupModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-200">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+            <div className="p-4 border-b border-gray-200">
               <div className="flex items-center justify-between">
-                <h2 className="text-xl font-semibold text-gray-900">
+                <h2 className="text-lg font-semibold text-gray-900">
                   Setup Multi-Factor Authentication
                 </h2>
                 <button
@@ -251,33 +251,12 @@ export const FreshMfaSettings: React.FC<FreshMfaSettingsProps> = ({
                   }}
                   className="text-gray-400 hover:text-gray-600 p-1"
                 >
-                  <X className="w-6 h-6" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
-              <p className="text-sm text-gray-600 mt-2">
-                Secure your account with time-based one-time passwords (TOTP)
-              </p>
             </div>
 
-            <div className="p-6">
-              <div className="mb-6">
-                <h3 className="font-medium text-gray-900 mb-3">What you'll need:</h3>
-                <ul className="space-y-2 text-sm text-gray-600">
-                  <li className="flex items-center">
-                    <CheckCircle className="w-4 h-4 text-green-500 mr-2 flex-shrink-0" />
-                    An authenticator app (Google Authenticator, Authy, etc.)
-                  </li>
-                  <li className="flex items-center">
-                    <CheckCircle className="w-4 h-4 text-green-500 mr-2 flex-shrink-0" />
-                    Your mobile device with camera for QR scanning
-                  </li>
-                  <li className="flex items-center">
-                    <CheckCircle className="w-4 h-4 text-green-500 mr-2 flex-shrink-0" />
-                    A secure place to store backup codes
-                  </li>
-                </ul>
-              </div>
-
+            <div className="p-4">
               <FreshMfaSetup
                 userId={userId}
                 userEmail={userEmail}

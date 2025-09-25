@@ -184,98 +184,54 @@ export const FreshMfaSetup: React.FC<FreshMfaSetupProps> = ({
   }
 
   return (
-    <div className="max-w-2xl mx-auto bg-white rounded-lg shadow-lg p-6">
+    <div className="max-w-md mx-auto bg-white rounded-lg p-6">
       <div className="text-center mb-6">
-        <Shield className="w-12 h-12 text-green-600 mx-auto mb-4" />
-        <h2 className="text-2xl font-bold text-gray-900">Scan QR Code</h2>
-        <p className="text-gray-600 mt-2">
-          Add this account to your authenticator app
+        <Shield className="w-12 h-12 text-blue-600 mx-auto mb-4" />
+        <h2 className="text-xl font-bold text-gray-900">Scan QR Code</h2>
+        <p className="text-sm text-gray-600 mt-2">
+          Use your authenticator app to scan this QR code
         </p>
       </div>
 
       {error && (
-        <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center">
-          <AlertCircle className="w-5 h-5 text-red-500 mr-2" />
-          <span className="text-red-700">{error}</span>
+        <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center">
+          <AlertCircle className="w-4 h-4 text-red-500 mr-2" />
+          <span className="text-red-700 text-sm">{error}</span>
         </div>
       )}
 
-      <div className="grid md:grid-cols-2 gap-6 mb-6">
-        {/* QR Code Section */}
-        <div className="text-center">
-          <div className="bg-white p-4 rounded-lg border-2 border-gray-200 inline-block">
-            {setupData?.qrCodeUrl && (
-              <img
-                src={setupData.qrCodeUrl}
-                alt="MFA QR Code"
-                className="w-48 h-48"
-              />
-            )}
-          </div>
-          <p className="text-sm text-gray-600 mt-2">
-            Scan this QR code with your authenticator app
-          </p>
+      {/* QR Code Section */}
+      <div className="text-center mb-6">
+        <div className="bg-white p-4 rounded-lg border border-gray-200 inline-block">
+          {setupData?.qrCodeUrl && (
+            <img
+              src={setupData.qrCodeUrl}
+              alt="MFA QR Code"
+              className="w-40 h-40"
+            />
+          )}
         </div>
+      </div>
 
-        {/* Manual Entry Section */}
-        <div className="space-y-4">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Or enter this secret manually:
-            </label>
-            <div className="bg-gray-50 p-3 rounded-lg border">
-              <code className="text-sm font-mono break-all">
-                {setupData?.secret ? formatSecret(setupData.secret) : ''}
-              </code>
-              <button
-                onClick={() => copyToClipboard(setupData?.secret || '', 'secret')}
-                className="ml-2 text-blue-600 hover:text-blue-800"
-              >
-                {secretCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
-              </button>
-            </div>
-          </div>
-
-          {/* Backup Codes */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-2">
-              Backup Codes (save these securely):
-            </label>
-            <div className="bg-yellow-50 p-3 rounded-lg border border-yellow-200 text-xs">
-              <div className="grid grid-cols-2 gap-1">
-                {setupData?.backupCodes?.map((code: string, index: number) => (
-                  <code key={index} className="font-mono">{code}</code>
-                ))}
-              </div>
-              <button
-                onClick={() => copyToClipboard(setupData?.backupCodes?.join('\n') || '', 'backup')}
-                className="mt-2 text-yellow-700 hover:text-yellow-900 flex items-center text-sm"
-              >
-                {backupCodesCopied ? (
-                  <>
-                    <Check className="w-4 h-4 mr-1" />
-                    Copied!
-                  </>
-                ) : (
-                  <>
-                    <Copy className="w-4 h-4 mr-1" />
-                    Copy All Codes
-                  </>
-                )}
-              </button>
-            </div>
-          </div>
+      {/* Manual Entry Section */}
+      <div className="mb-6">
+        <p className="text-sm text-gray-600 mb-2">Can't scan? Enter this key manually:</p>
+        <div className="bg-gray-50 p-3 rounded-lg border flex items-center justify-between">
+          <code className="text-xs font-mono text-gray-800 flex-1 mr-2">
+            {setupData?.secret || ''}
+          </code>
+          <button
+            onClick={() => copyToClipboard(setupData?.secret || '', 'secret')}
+            className="text-blue-600 hover:text-blue-800 flex-shrink-0"
+          >
+            {secretCopied ? <Check className="w-4 h-4" /> : <Copy className="w-4 h-4" />}
+          </button>
         </div>
       </div>
 
       {/* Verification Section */}
-      <div className="border-t pt-6">
-        <h3 className="text-lg font-semibold text-gray-900 mb-4">Verify Setup</h3>
-        <p className="text-gray-600 mb-4">
-          Enter the 6-digit code from your authenticator app to complete setup:
-        </p>
-
-        <div className="flex space-x-4">
+      <div className="mb-6">
+        <div className="flex space-x-3 mb-4">
           <input
             type="text"
             value={verificationCode}
@@ -284,30 +240,30 @@ export const FreshMfaSetup: React.FC<FreshMfaSetupProps> = ({
             className="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-center text-lg font-mono focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
             maxLength={6}
           />
-
-          <button
-            onClick={handleVerifyCode}
-            disabled={isLoading || verificationCode.length !== 6}
-            className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
-          >
-            {isLoading ? (
-              <>
-                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
-                Verifying...
-              </>
-            ) : (
-              'Complete Setup'
-            )}
-          </button>
         </div>
+
+        <button
+          onClick={handleVerifyCode}
+          disabled={isLoading || verificationCode.length !== 6}
+          className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
+        >
+          {isLoading ? (
+            <>
+              <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin mr-2" />
+              Verifying...
+            </>
+          ) : (
+            'Next: Verify'
+          )}
+        </button>
       </div>
 
-      <div className="mt-6 text-center">
+      <div className="text-center">
         <button
           onClick={onCancel}
-          className="text-gray-600 hover:text-gray-800 underline"
+          className="text-gray-500 hover:text-gray-700 text-sm"
         >
-          Cancel Setup
+          Cancel
         </button>
       </div>
     </div>
