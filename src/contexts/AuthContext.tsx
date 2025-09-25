@@ -405,6 +405,53 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           console.warn('Failed to mark MFA challenge as used in database:', dbError)
         }
 
+        // Load user settings and API keys after successful MFA
+        if (userProfile.id) {
+          try {
+            console.log('🔄 Post-MFA: Loading settings for user:', userProfile.id)
+            let settings = await userSettingsService.forceSyncFromCloud(userProfile.id)
+
+            if (!settings) {
+              settings = await userSettingsService.getUserSettings(userProfile.id)
+            }
+
+            setUserSettings(settings)
+            await secureStorage.setUserPreference('user_settings', settings, false)
+
+            // API keys are now loaded in main.tsx before React starts
+            retellService.loadCredentials()
+
+            // Dispatch event to notify other components that API is ready
+            setTimeout(() => {
+              window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
+                detail: {
+                  apiKey: true,
+                  callAgentId: true,
+                  smsAgentId: true
+                }
+              }))
+              console.log('📡 Post-MFA: API configuration ready event dispatched')
+            }, 100)
+
+            // Subscribe to real-time settings changes
+            userSettingsService.subscribeToSettings(userProfile.id, async (newSettings) => {
+              setUserSettings(newSettings)
+              await secureStorage.setUserPreference('user_settings', newSettings, false)
+
+              // Update retell service when settings change
+              if (newSettings?.retell_config?.api_key) {
+                retellService.updateCredentials(
+                  newSettings.retell_config.api_key,
+                  newSettings.retell_config.call_agent_id,
+                  newSettings.retell_config.sms_agent_id
+                )
+              }
+            })
+          } catch (error) {
+            console.error('❌ Post-MFA: Error loading settings:', error)
+          }
+        }
+
         return true
       }
 
