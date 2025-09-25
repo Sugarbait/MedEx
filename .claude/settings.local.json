@@ -138,7 +138,8 @@
       "Bash(npx tsx:*)",
       "Bash(git revert:*)",
       "Bash(set:*)",
-      "Bash(psql:*)"
+      "Bash(psql:*)",
+      "Bash(start http://localhost:3004/settings)"
     ],
     "deny": [],
     "ask": []
