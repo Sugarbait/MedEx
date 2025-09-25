@@ -13,6 +13,7 @@ import { createPierreUser } from '@/utils/createPierreUser'
 import { cleanupDuplicateGuests } from '@/utils/cleanupDuplicateGuests'
 import { setupAllUserCredentials, testAllUserAuthentication } from '@/utils/setupAllUserCredentials'
 import { LoginAttemptTracker } from '@/utils/loginAttemptTracker'
+import { MfaLockoutService } from '@/services/mfaLockoutService'
 
 interface LoginPageProps {
   onLogin: () => void
@@ -333,18 +334,41 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       }
     }
 
-    // MANDATORY MFA ENFORCEMENT
+    // MANDATORY MFA ENFORCEMENT WITH LOCKOUT CHECK
     if (totpEnabled) {
-      console.log('🔐 SECURITY: TOTP REQUIRED - showing mandatory MFA verification')
+      console.log('🔐 SECURITY: TOTP REQUIRED - checking lockout status before showing MFA verification')
+
+      // Check if user is currently locked out from MFA attempts
+      const lockoutStatus = MfaLockoutService.getLockoutStatus(user.id, user.email)
+
+      if (lockoutStatus.isLocked) {
+        const timeRemaining = MfaLockoutService.formatTimeRemaining(lockoutStatus.remainingTime!)
+        setError(`MFA verification is temporarily locked due to too many failed attempts. Please try again in ${timeRemaining}.`)
+        setIsLoading(false)
+
+        // Log lockout attempt for audit
+        await auditLogger.logPHIAccess(
+          AuditAction.LOGIN_FAILURE,
+          ResourceType.SYSTEM,
+          `login-mfa-locked-${user.id}`,
+          AuditOutcome.FAILURE,
+          { operation: 'mfa_lockout_active', userId: user.id, timeRemaining, lockoutEnds: lockoutStatus.lockoutEnds }
+        )
+
+        // Clear the logged in user since they can't proceed
+        localStorage.removeItem('currentUser')
+        return
+      }
+
       await auditLogger.logPHIAccess(
         AuditAction.LOGIN,
         ResourceType.SYSTEM,
         `login-mfa-required-${user.id}`,
         AuditOutcome.SUCCESS,
-        { operation: 'mfa_verification_required', userId: user.id, reason: totpCheckError || 'TOTP enabled' }
+        { operation: 'mfa_verification_required', userId: user.id, reason: totpCheckError || 'TOTP enabled', attemptsRemaining: lockoutStatus.attemptsRemaining }
       )
 
-      setPendingUser({ ...user, totpCheckError })
+      setPendingUser({ ...user, totpCheckError, lockoutStatus })
       setShowMFAVerification(true)
       setIsLoading(false)
     } else {
@@ -363,8 +387,23 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   }
 
   // Handle MFA verification success
-  const handleMFASuccess = () => {
+  const handleMFASuccess = async () => {
     console.log('✅ Login: MFA verification successful - proceeding to dashboard')
+
+    if (pendingUser) {
+      // Clear MFA attempts on successful verification
+      await MfaLockoutService.clearMfaAttempts(pendingUser.id, pendingUser.email)
+
+      // Log successful MFA completion
+      await auditLogger.logPHIAccess(
+        AuditAction.LOGIN,
+        ResourceType.SYSTEM,
+        `login-mfa-success-${pendingUser.id}`,
+        AuditOutcome.SUCCESS,
+        { operation: 'mfa_verification_completed', userId: pendingUser.id, email: pendingUser.email }
+      )
+    }
+
     setShowMFAVerification(false)
     setPendingUser(null)
     // Set login timestamp to prevent double MFA check
@@ -373,8 +412,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   }
 
   // Handle MFA verification cancel
-  const handleMFACancel = () => {
+  const handleMFACancel = async () => {
     console.log('🚫 Login: MFA verification canceled - returning to login')
+
+    if (pendingUser) {
+      // Log MFA cancellation for audit trail
+      await auditLogger.logPHIAccess(
+        AuditAction.LOGIN_FAILURE,
+        ResourceType.SYSTEM,
+        `login-mfa-canceled-${pendingUser.id}`,
+        AuditOutcome.FAILURE,
+        { operation: 'mfa_verification_canceled', userId: pendingUser.id, email: pendingUser.email }
+      )
+    }
+
     setShowMFAVerification(false)
     setPendingUser(null)
     setIsLoading(false)
@@ -922,6 +973,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           userEmail={pendingUser.email}
           onVerificationSuccess={handleMFASuccess}
           onCancel={handleMFACancel}
+          lockoutStatus={pendingUser.lockoutStatus}
         />
       )}
     </div>

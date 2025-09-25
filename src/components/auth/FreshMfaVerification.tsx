@@ -8,9 +8,17 @@
  * - Simple, reliable verification flow
  */
 
-import React, { useState } from 'react'
-import { Shield, AlertCircle, Key, ArrowLeft } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { Shield, AlertCircle, Key, ArrowLeft, Lock } from 'lucide-react'
 import { FreshMfaService } from '../../services/freshMfaService'
+import { MfaLockoutService } from '../../services/mfaLockoutService'
+
+interface LockoutStatus {
+  isLocked: boolean
+  attemptsRemaining: number
+  lockoutEnds?: Date
+  remainingTime?: number
+}
 
 interface FreshMfaVerificationProps {
   userId: string
@@ -18,6 +26,7 @@ interface FreshMfaVerificationProps {
   onVerificationSuccess: () => void
   onCancel?: () => void
   showCancel?: boolean
+  lockoutStatus?: LockoutStatus
 }
 
 export const FreshMfaVerification: React.FC<FreshMfaVerificationProps> = ({
@@ -25,19 +34,53 @@ export const FreshMfaVerification: React.FC<FreshMfaVerificationProps> = ({
   userEmail,
   onVerificationSuccess,
   onCancel,
-  showCancel = true
+  showCancel = true,
+  lockoutStatus: initialLockoutStatus
 }) => {
   const [verificationCode, setVerificationCode] = useState('')
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [attempts, setAttempts] = useState(0)
+  const [lockoutStatus, setLockoutStatus] = useState<LockoutStatus | null>(initialLockoutStatus || null)
+  const [timeRemaining, setTimeRemaining] = useState<string>('')
 
   /**
-   * Handle TOTP code verification for login
+   * Update lockout status periodically
+   */
+  useEffect(() => {
+    const updateLockoutStatus = () => {
+      const currentStatus = MfaLockoutService.getLockoutStatus(userId, userEmail)
+      setLockoutStatus(currentStatus)
+
+      if (currentStatus.isLocked && currentStatus.remainingTime) {
+        setTimeRemaining(MfaLockoutService.formatTimeRemaining(currentStatus.remainingTime))
+      } else {
+        setTimeRemaining('')
+      }
+    }
+
+    // Update immediately
+    updateLockoutStatus()
+
+    // Update every 30 seconds
+    const interval = setInterval(updateLockoutStatus, 30000)
+
+    return () => clearInterval(interval)
+  }, [userId, userEmail])
+
+  /**
+   * Handle TOTP code verification for login with attempt limiting
    */
   const handleVerifyCode = async () => {
     if (!verificationCode || verificationCode.length !== 6) {
       setError('Please enter a 6-digit verification code')
+      return
+    }
+
+    // Check lockout status before attempting verification
+    const currentLockoutStatus = MfaLockoutService.getLockoutStatus(userId, userEmail)
+    if (currentLockoutStatus.isLocked) {
+      const timeLeft = MfaLockoutService.formatTimeRemaining(currentLockoutStatus.remainingTime!)
+      setError(`Account is locked out. Please try again in ${timeLeft}.`)
       return
     }
 
@@ -53,15 +96,19 @@ export const FreshMfaVerification: React.FC<FreshMfaVerificationProps> = ({
         console.log('✅ MFA verification successful - granting access')
         onVerificationSuccess()
       } else {
-        const newAttempts = attempts + 1
-        setAttempts(newAttempts)
+        console.log('❌ MFA verification failed - recording attempt')
 
-        console.log('❌ MFA verification failed, attempt:', newAttempts)
+        // Record failed attempt and check if lockout should be triggered
+        const updatedLockoutStatus = await MfaLockoutService.recordFailedMfaAttempt(userId, userEmail)
+        setLockoutStatus(updatedLockoutStatus)
 
-        if (newAttempts >= 5) {
-          setError('Too many failed attempts. Please try again later or contact support.')
+        if (updatedLockoutStatus.isLocked) {
+          const timeLeft = MfaLockoutService.formatTimeRemaining(updatedLockoutStatus.remainingTime!)
+          setError(`Too many failed attempts. Account locked for ${timeLeft}. Please try again later.`)
+          setTimeRemaining(timeLeft)
         } else {
-          setError(`Invalid verification code. ${5 - newAttempts} attempts remaining.`)
+          const remaining = updatedLockoutStatus.attemptsRemaining
+          setError(`Invalid verification code. ${remaining} attempt${remaining !== 1 ? 's' : ''} remaining before lockout.`)
         }
 
         // Clear the input for retry
@@ -142,7 +189,7 @@ export const FreshMfaVerification: React.FC<FreshMfaVerificationProps> = ({
 
         <button
           onClick={handleVerifyCode}
-          disabled={isLoading || verificationCode.length !== 6 || attempts >= 5}
+          disabled={isLoading || verificationCode.length !== 6 || (lockoutStatus?.isLocked || false)}
           className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
         >
           {isLoading ? (
@@ -159,13 +206,40 @@ export const FreshMfaVerification: React.FC<FreshMfaVerificationProps> = ({
         </button>
       </div>
 
+      {/* Lockout Status Display */}
+      {lockoutStatus && (
+        <div className="mt-4 p-4 bg-gray-50 rounded-lg border">
+          {lockoutStatus.isLocked ? (
+            <div className="flex items-center text-red-600">
+              <Lock className="w-5 h-5 mr-2" />
+              <div>
+                <p className="font-medium">Account Temporarily Locked</p>
+                <p className="text-sm text-gray-600">
+                  Too many failed attempts. Try again in {timeRemaining}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div className="flex items-center text-amber-600">
+              <AlertCircle className="w-5 h-5 mr-2" />
+              <div>
+                <p className="font-medium">Verification Attempts</p>
+                <p className="text-sm text-gray-600">
+                  {lockoutStatus.attemptsRemaining} attempt{lockoutStatus.attemptsRemaining !== 1 ? 's' : ''} remaining before 30-minute lockout
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Back/Cancel Button */}
       {showCancel && onCancel && (
         <div className="mt-6 text-center">
           <button
             onClick={onCancel}
-            className="inline-flex items-center text-gray-600 hover:text-gray-800 transition-colors"
+            disabled={isLoading}
+            className="inline-flex items-center text-gray-600 hover:text-gray-800 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <ArrowLeft className="w-4 h-4 mr-2" />
             Back to Login
