@@ -109,7 +109,7 @@ export class RetellService {
   private apiKey: string = ''
   private callAgentId: string = ''
   private smsAgentId: string = ''
-  private phoneNumber: string = ''
+  // phoneNumber removed - no longer needed
 
   constructor() {
     // Load credentials from localStorage first (primary/reliable method)
@@ -140,7 +140,6 @@ export class RetellService {
         const supabaseApiKey = retellConfig.api_key || ''
         const supabaseCallAgentId = retellConfig.call_agent_id || ''
         const supabaseSmsAgentId = retellConfig.sms_agent_id || ''
-        const supabasePhoneNumber = retellConfig.phone_number || ''
 
         // Check if user has manually set API key recently (within last 5 minutes)
         const settings = JSON.parse(localStorage.getItem(`settings_${currentUser.id}`) || '{}')
@@ -153,8 +152,7 @@ export class RetellService {
           console.log('🔒 Skipping Supabase sync - API key was manually set recently. Manual key protected for', Math.round((manualKeyTimestamp - fiveMinutesAgo) / 1000 / 60), 'more minutes')
         } else if (supabaseApiKey && (supabaseApiKey !== this.apiKey ||
             supabaseCallAgentId !== this.callAgentId ||
-            supabaseSmsAgentId !== this.smsAgentId ||
-            supabasePhoneNumber !== this.phoneNumber)) {
+            supabaseSmsAgentId !== this.smsAgentId)) {
 
           console.log('Syncing newer credentials from Supabase to localStorage (no recent manual override)')
 
@@ -162,14 +160,12 @@ export class RetellService {
           if (supabaseApiKey) settings.retellApiKey = supabaseApiKey
           if (supabaseCallAgentId) settings.callAgentId = supabaseCallAgentId
           if (supabaseSmsAgentId) settings.smsAgentId = supabaseSmsAgentId
-          if (supabasePhoneNumber) settings.phoneNumber = supabasePhoneNumber
           localStorage.setItem(`settings_${currentUser.id}`, JSON.stringify(settings))
 
           // Update current instance
           if (supabaseApiKey) this.apiKey = supabaseApiKey
           if (supabaseCallAgentId) this.callAgentId = supabaseCallAgentId
           if (supabaseSmsAgentId) this.smsAgentId = supabaseSmsAgentId
-          if (supabasePhoneNumber) this.phoneNumber = supabasePhoneNumber
 
           console.log('Successfully synced credentials from Supabase')
         } else {
@@ -184,7 +180,7 @@ export class RetellService {
   /**
    * Save credentials to both localStorage and Supabase
    */
-  public async saveCredentials(apiKey: string, callAgentId: string, smsAgentId: string, phoneNumber?: string): Promise<void> {
+  public async saveCredentials(apiKey: string, callAgentId: string, smsAgentId: string): Promise<void> {
     try {
       const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
       if (!currentUser.id) {
@@ -196,7 +192,6 @@ export class RetellService {
       settings.retellApiKey = apiKey
       settings.callAgentId = callAgentId
       settings.smsAgentId = smsAgentId
-      if (phoneNumber !== undefined) settings.phoneNumber = phoneNumber
 
       // Mark when API key was manually updated to prevent automatic overwrites
       if (apiKey && apiKey !== settings.retellApiKey) {
@@ -210,7 +205,6 @@ export class RetellService {
       this.apiKey = apiKey
       this.callAgentId = callAgentId
       this.smsAgentId = smsAgentId
-      if (phoneNumber !== undefined) this.phoneNumber = phoneNumber
 
       console.log('Credentials saved to localStorage')
 
@@ -221,8 +215,7 @@ export class RetellService {
           retell_config: {
             api_key: apiKey,
             call_agent_id: callAgentId,
-            sms_agent_id: smsAgentId,
-            phone_number: phoneNumber
+            sms_agent_id: smsAgentId
           }
         })
         console.log('Credentials also saved to Supabase for cross-device sync')
@@ -253,14 +246,12 @@ export class RetellService {
             this.apiKey = retellConfig.api_key || ''
             this.callAgentId = retellConfig.call_agent_id || ''
             this.smsAgentId = retellConfig.sms_agent_id || ''
-            this.phoneNumber = retellConfig.phone_number || ''
 
-            if (this.apiKey || this.callAgentId || this.smsAgentId || this.phoneNumber) {
+            if (this.apiKey || this.callAgentId || this.smsAgentId) {
               console.log('Loaded Retell credentials from Supabase:', {
                 hasApiKey: !!this.apiKey,
                 callAgentId: this.callAgentId,
-                smsAgentId: this.smsAgentId,
-                phoneNumber: this.phoneNumber
+                smsAgentId: this.smsAgentId
               })
             }
             return
@@ -285,6 +276,12 @@ export class RetellService {
    */
   public loadCredentials(): void {
     this.loadCredentialsFromLocalStorage()
+    console.log('Credentials loaded:', {
+      hasApiKey: !!this.apiKey,
+      apiKeyPrefix: this.apiKey ? this.apiKey.substring(0, 15) + '...' : 'none',
+      callAgentId: this.callAgentId || 'not set',
+      smsAgentId: this.smsAgentId || 'not set'
+    })
   }
 
   /**
@@ -298,14 +295,12 @@ export class RetellService {
         this.apiKey = settings.retellApiKey || ''
         this.callAgentId = settings.callAgentId || ''
         this.smsAgentId = settings.smsAgentId || ''
-        this.phoneNumber = settings.phoneNumber || ''
 
-        if (this.apiKey || this.callAgentId || this.smsAgentId || this.phoneNumber) {
+        if (this.apiKey || this.callAgentId || this.smsAgentId) {
           console.log('Loaded Retell credentials from localStorage:', {
             hasApiKey: !!this.apiKey,
             callAgentId: this.callAgentId,
-            smsAgentId: this.smsAgentId,
-            phoneNumber: this.phoneNumber
+            smsAgentId: this.smsAgentId
           })
         }
       }
@@ -353,8 +348,15 @@ export class RetellService {
     // Clean the API key before using it in the Authorization header
     const cleanedApiKey = this.cleanApiKey(this.apiKey)
 
+    if (!cleanedApiKey || cleanedApiKey.trim() === '') {
+      console.error('No valid API key available for Retell AI requests')
+      throw new Error('Retell AI API key not configured')
+    }
+
+    console.log('Using API key for request:', cleanedApiKey.substring(0, 15) + '...')
+
     return {
-      'Authorization': `Bearer ${cleanedApiKey}`,
+      'Authorization': `Bearer ${cleanedApiKey.trim()}`,
       'Content-Type': 'application/json',
       'User-Agent': 'CareXPS-CRM/1.0.0'
     }
@@ -376,12 +378,12 @@ export class RetellService {
       console.log('Testing API connection with:', {
         baseUrl: this.baseUrl,
         hasApiKey: !!this.apiKey,
-        originalApiKeyPrefix: this.apiKey ? this.apiKey.substring(0, 20) + '...' : 'none',
-        cleanedApiKeyPrefix: cleanedApiKey ? cleanedApiKey.substring(0, 20) + '...' : 'none'
+        originalApiKeyPrefix: this.apiKey ? this.apiKey.substring(0, 15) + '...' : 'none',
+        cleanedApiKeyPrefix: cleanedApiKey ? cleanedApiKey.substring(0, 15) + '...' : 'none'
       })
 
-      if (!this.apiKey) {
-        return { success: false, message: 'API key not configured' }
+      if (!cleanedApiKey || cleanedApiKey.trim() === '') {
+        return { success: false, message: 'API key not configured or invalid' }
       }
 
       // Try with proper request body format according to docs
@@ -390,8 +392,9 @@ export class RetellService {
         sort_order: "descending"
       }
 
-      console.log('Request body:', requestBody)
-      console.log('Headers:', this.getHeaders())
+      console.log('Test connection request body:', requestBody)
+      console.log('Test connection headers:', this.getHeaders())
+      console.log('Test connection URL:', `${this.baseUrl}/v2/list-calls`)
 
       const response = await fetch(`${this.baseUrl}/v2/list-calls`, {
         method: 'POST',
@@ -399,8 +402,8 @@ export class RetellService {
         body: JSON.stringify(requestBody)
       })
 
-      console.log('Response status:', response.status)
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()))
+      console.log('Test connection response status:', response.status)
+      console.log('Test connection response headers:', Object.fromEntries(response.headers.entries()))
 
       if (response.ok) {
         const data = await response.json()
@@ -631,17 +634,31 @@ export class RetellService {
       console.log('Retell API Request:', JSON.stringify(requestBody, null, 2))
       console.log('Current system date:', new Date().toISOString())
 
-      // Make request following Phaeton AI Dashboard implementation
+      // Make request to Retell AI API with enhanced error handling
+      console.log('Making call history request:', {
+        url: `${this.baseUrl}/v2/list-calls`,
+        method: 'POST',
+        hasHeaders: !!this.getHeaders(),
+        bodyPreview: JSON.stringify(requestBody).substring(0, 200)
+      })
+
       const response = await fetch(`${this.baseUrl}/v2/list-calls`, {
         method: 'POST',
         headers: this.getHeaders(),
         body: JSON.stringify(requestBody)
       })
 
+      console.log('Call history response status:', response.status, response.statusText)
+
       if (!response.ok) {
         const errorText = await response.text()
-        console.error('Retell API Error Response:', errorText)
-        throw new Error(`Failed to fetch calls: ${response.status} ${response.statusText}`)
+        console.error('Retell API Error Response:', {
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries()),
+          body: errorText
+        })
+        throw new Error(`Failed to fetch calls: ${response.status} ${response.statusText} - ${errorText}`)
       }
 
       const data = await response.json()
@@ -721,6 +738,11 @@ export class RetellService {
       console.log(`Fetching chat history for SMS agent: ${this.smsAgentId}`)
       console.log('Chat API Request URL:', `${this.baseUrl}/list-chat`)
       console.log('Chat API Headers:', this.getHeaders())
+      console.log('Making chat history request:', {
+        url: `${this.baseUrl}/list-chat`,
+        method: 'GET',
+        hasHeaders: !!this.getHeaders()
+      })
 
       const response = await fetch(`${this.baseUrl}/list-chat`, {
         method: 'GET',
@@ -732,15 +754,23 @@ export class RetellService {
 
       if (!response.ok) {
         const errorText = await response.text()
-        console.error('Chat API Error Response:', errorText)
+        console.error('Chat API Error Response:', {
+          status: response.status,
+          statusText: response.statusText,
+          headers: Object.fromEntries(response.headers.entries()),
+          body: errorText
+        })
 
-        // If 404, don't try alternative endpoints - /list-chat GET is the only correct one
+        // If 404, this indicates API configuration or authentication issues
         if (response.status === 404) {
-          console.log('Chat API endpoint returned 404 - this may indicate API configuration issues')
-          console.log('Only /list-chat GET endpoint is supported for chat API')
+          console.error('Chat API endpoint returned 404 - checking possible causes:')
+          console.error('- API key may be invalid or expired')
+          console.error('- Account may not have chat API access')
+          console.error('- Base URL may be incorrect:', this.baseUrl)
+          console.error('- Current API key prefix:', this.cleanApiKey(this.apiKey).substring(0, 15) + '...')
         }
 
-        throw new Error(`Failed to fetch chats: ${response.status} ${response.statusText}`)
+        throw new Error(`Failed to fetch chats: ${response.status} ${response.statusText} - ${errorText}`)
       }
 
       const data = await response.json()
@@ -1067,11 +1097,10 @@ export class RetellService {
   /**
    * Update credentials (call this when settings are changed)
    */
-  public updateCredentials(apiKey?: string, callAgentId?: string, smsAgentId?: string, phoneNumber?: string): void {
+  public updateCredentials(apiKey?: string, callAgentId?: string, smsAgentId?: string): void {
     if (apiKey !== undefined) this.apiKey = apiKey
     if (callAgentId !== undefined) this.callAgentId = callAgentId
     if (smsAgentId !== undefined) this.smsAgentId = smsAgentId
-    if (phoneNumber !== undefined) this.phoneNumber = phoneNumber
   }
 }
 

@@ -371,14 +371,32 @@ const App: React.FC = () => {
               }
             }
 
-            // Check for existing valid MFA session
+            // SECURITY ENHANCEMENT: Always require MFA verification on fresh app load
+            // Clear any existing MFA session to ensure user must verify MFA after each login
             const mfaTimestamp = localStorage.getItem('freshMfaVerified')
             let hasValidMfaSession = false
 
-            if (mfaTimestamp) {
+            // Check if this is a fresh app load vs in-session page refresh
+            const isAppInitializing = !sessionStorage.getItem('appInitialized')
+
+            if (isAppInitializing) {
+              // Fresh app load - always require MFA verification
+              console.log('🔐 FRESH APP LOAD: Clearing MFA session to enforce verification')
+              localStorage.removeItem('freshMfaVerified')
+              hasValidMfaSession = false
+              sessionStorage.setItem('appInitialized', 'true')
+            } else if (mfaTimestamp) {
+              // In-session navigation - check for valid MFA session
               const sessionAge = Date.now() - parseInt(mfaTimestamp)
-              const MAX_MFA_SESSION_AGE = 24 * 60 * 60 * 1000 // 24 hours
+              const MAX_MFA_SESSION_AGE = 30 * 60 * 1000 // 30 minutes for in-session
               hasValidMfaSession = sessionAge < MAX_MFA_SESSION_AGE
+
+              console.log('🔐 MFA session check (in-session):', {
+                mfaTimestamp,
+                sessionAgeMinutes: Math.round(sessionAge / 60000),
+                maxAgeMinutes: 30,
+                hasValidSession: hasValidMfaSession
+              })
             }
 
             console.log('🔐 App MFA Status Check:', {
