@@ -132,8 +132,9 @@ export class RetellService {
         return
       }
 
-      const { UserSettingsService } = await import('./userSettingsService')
-      const response = await UserSettingsService.getUserSettingsWithCache(currentUser.id)
+      const { userSettingsService } = await import('./userSettingsService')
+      const settings = await userSettingsService.getUserSettings(currentUser.id)
+      const response = { status: 'success', data: settings }
 
       if (response.status === 'success' && response.data?.retell_config) {
         const retellConfig = response.data.retell_config
@@ -210,8 +211,8 @@ export class RetellService {
 
       // Try to save to Supabase (for cross-device sync)
       try {
-        const { UserSettingsService } = await import('./userSettingsService')
-        await UserSettingsService.updateUserSettings(currentUser.id, {
+        const { userSettingsService } = await import('./userSettingsService')
+        await userSettingsService.updateUserSettings(currentUser.id, {
           retell_config: {
             api_key: apiKey,
             call_agent_id: callAgentId,
@@ -237,12 +238,12 @@ export class RetellService {
       const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
       if (currentUser.id) {
         try {
-          // Import UserSettingsService dynamically to avoid circular dependencies
-          const { UserSettingsService } = await import('./userSettingsService')
-          const response = await UserSettingsService.getUserSettingsWithCache(currentUser.id)
+          // Import userSettingsService dynamically to avoid circular dependencies
+          const { userSettingsService } = await import('./userSettingsService')
+          const settings = await userSettingsService.getUserSettings(currentUser.id)
 
-          if (response.status === 'success' && response.data?.retell_config) {
-            const retellConfig = response.data.retell_config
+          if (settings?.retell_config) {
+            const retellConfig = settings.retell_config
             this.apiKey = retellConfig.api_key || ''
             this.callAgentId = retellConfig.call_agent_id || ''
             this.smsAgentId = retellConfig.sms_agent_id || ''
@@ -310,9 +311,41 @@ export class RetellService {
   }
 
   /**
-   * Clean API key by removing encryption prefixes (cbc:, gcm:, etc.)
+   * Decrypt and clean API key if it's encrypted
    */
-  private cleanApiKey(apiKey: string): string {
+  private async decryptApiKey(apiKey: string): Promise<string> {
+    if (!apiKey) return ''
+
+    // Check if the API key is encrypted (has encryption prefix)
+    if (apiKey.includes('cbc:') || apiKey.includes('gcm:') || apiKey.includes('aes:')) {
+      try {
+        const { encryptionService } = await import('../services/encryption')
+        const decrypted = await encryptionService.decryptString(apiKey)
+        console.log('API key decrypted successfully:', {
+          originalPrefix: apiKey.substring(0, 15) + '...',
+          decryptedPrefix: decrypted.substring(0, 15) + '...',
+          wasEncrypted: true
+        })
+        return decrypted
+      } catch (error) {
+        console.error('Failed to decrypt API key:', error)
+        // Fallback to old cleaning method if decryption fails
+        return this.cleanApiKeyLegacy(apiKey)
+      }
+    }
+
+    // API key is not encrypted, return as-is
+    console.log('API key not encrypted, using as-is:', {
+      keyPrefix: apiKey.substring(0, 15) + '...',
+      wasEncrypted: false
+    })
+    return apiKey
+  }
+
+  /**
+   * Legacy method for cleaning API keys (fallback)
+   */
+  private cleanApiKeyLegacy(apiKey: string): string {
     if (!apiKey) return ''
 
     let cleaned = apiKey
@@ -328,9 +361,9 @@ export class RetellService {
       cleaned = cleaned.split('aes:').pop() || cleaned
     }
 
-    console.log('API key cleaned:', {
-      original: apiKey.substring(0, 20) + '...',
-      cleaned: cleaned.substring(0, 20) + '...',
+    console.log('API key cleaned (legacy):', {
+      original: apiKey.substring(0, 15) + '...',
+      cleaned: cleaned.substring(0, 15) + '...',
       hadPrefix: apiKey !== cleaned
     })
 
@@ -338,15 +371,15 @@ export class RetellService {
   }
 
   /**
-   * Get authorization headers for API requests
+   * Get authorization headers for API requests (async to support decryption)
    */
-  private getHeaders(): HeadersInit {
+  private async getHeaders(): Promise<HeadersInit> {
     if (!this.apiKey) {
       this.loadCredentials()
     }
 
-    // Clean the API key before using it in the Authorization header
-    const cleanedApiKey = this.cleanApiKey(this.apiKey)
+    // Decrypt the API key before using it in the Authorization header
+    const cleanedApiKey = await this.decryptApiKey(this.apiKey)
 
     if (!cleanedApiKey || cleanedApiKey.trim() === '') {
       console.error('No valid API key available for Retell AI requests')
@@ -374,7 +407,7 @@ export class RetellService {
    */
   public async testConnection(): Promise<{ success: boolean; message: string }> {
     try {
-      const cleanedApiKey = this.cleanApiKey(this.apiKey)
+      const cleanedApiKey = await this.decryptApiKey(this.apiKey)
       console.log('Testing API connection with:', {
         baseUrl: this.baseUrl,
         hasApiKey: !!this.apiKey,
@@ -393,12 +426,13 @@ export class RetellService {
       }
 
       console.log('Test connection request body:', requestBody)
-      console.log('Test connection headers:', this.getHeaders())
+      const headers = await this.getHeaders()
+      console.log('Test connection headers:', headers)
       console.log('Test connection URL:', `${this.baseUrl}/v2/list-calls`)
 
       const response = await fetch(`${this.baseUrl}/v2/list-calls`, {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers: headers,
         body: JSON.stringify(requestBody)
       })
 
@@ -635,16 +669,17 @@ export class RetellService {
       console.log('Current system date:', new Date().toISOString())
 
       // Make request to Retell AI API with enhanced error handling
+      const headers = await this.getHeaders()
       console.log('Making call history request:', {
         url: `${this.baseUrl}/v2/list-calls`,
         method: 'POST',
-        hasHeaders: !!this.getHeaders(),
+        hasHeaders: !!headers,
         bodyPreview: JSON.stringify(requestBody).substring(0, 200)
       })
 
       const response = await fetch(`${this.baseUrl}/v2/list-calls`, {
         method: 'POST',
-        headers: this.getHeaders(),
+        headers: headers,
         body: JSON.stringify(requestBody)
       })
 
@@ -712,7 +747,7 @@ export class RetellService {
 
       const response = await fetch(`${this.baseUrl}/v2/get-call/${callId}`, {
         method: 'GET',
-        headers: this.getHeaders()
+        headers: await this.getHeaders()
       })
 
       if (!response.ok) {
@@ -737,16 +772,17 @@ export class RetellService {
 
       console.log(`Fetching chat history for SMS agent: ${this.smsAgentId}`)
       console.log('Chat API Request URL:', `${this.baseUrl}/list-chat`)
-      console.log('Chat API Headers:', this.getHeaders())
+      const headers = await this.getHeaders()
+      console.log('Chat API Headers:', headers)
       console.log('Making chat history request:', {
         url: `${this.baseUrl}/list-chat`,
         method: 'GET',
-        hasHeaders: !!this.getHeaders()
+        hasHeaders: !!headers
       })
 
       const response = await fetch(`${this.baseUrl}/list-chat`, {
         method: 'GET',
-        headers: this.getHeaders()
+        headers: headers
       })
 
       console.log('Chat API Response Status:', response.status, response.statusText)
@@ -767,7 +803,12 @@ export class RetellService {
           console.error('- API key may be invalid or expired')
           console.error('- Account may not have chat API access')
           console.error('- Base URL may be incorrect:', this.baseUrl)
-          console.error('- Current API key prefix:', this.cleanApiKey(this.apiKey).substring(0, 15) + '...')
+          try {
+            const decryptedKey = await this.decryptApiKey(this.apiKey)
+            console.error('- Current API key prefix:', decryptedKey.substring(0, 15) + '...')
+          } catch (e) {
+            console.error('- Could not decrypt API key for debugging')
+          }
         }
 
         throw new Error(`Failed to fetch chats: ${response.status} ${response.statusText} - ${errorText}`)
@@ -851,7 +892,7 @@ export class RetellService {
 
       const response = await fetch(`${this.baseUrl}/get-chat/${chatId}`, {
         method: 'GET',
-        headers: this.getHeaders()
+        headers: await this.getHeaders()
       })
 
       if (!response.ok) {
