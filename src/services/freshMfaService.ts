@@ -261,6 +261,8 @@ export class FreshMfaService {
         fresh_mfa_setup_completed: data.setupCompleted,
         fresh_mfa_backup_codes: JSON.stringify(data.backupCodes),
         updated_at: new Date().toISOString()
+      }, {
+        onConflict: 'user_id' // Specify the column for conflict resolution
       })
 
     if (error) {
