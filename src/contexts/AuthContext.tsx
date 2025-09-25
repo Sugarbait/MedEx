@@ -7,6 +7,7 @@ import { userSettingsService } from '@/services/userSettingsService'
 // MFA functionality moved to TOTPProtectedRoute
 import { secureStorage } from '@/services/secureStorage'
 import { secureLogger } from '@/services/secureLogger'
+import { FreshMfaService } from '@/services/freshMfaService'
 
 const logger = secureLogger.component('AuthContext')
 
@@ -79,41 +80,56 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             console.warn('⚠️ MFA force sync failed:', error)
           }
 
-          // Check if MFA is required after sync - Enhanced cross-device check
-          // MFA check moved to TOTPProtectedRoute
-          const hasMFASetup = false
-          const mfaEnabled = hasMFASetup && userProfile.mfaEnabled
+          // Check if MFA is required after sync - Using Fresh MFA Service
+          console.log('🔐 MANDATORY MFA: Checking MFA requirement using Fresh MFA Service')
 
-          // CRITICAL: Check for existing valid MFA session for cross-device scenarios
-          // MFA session check moved to TOTPProtectedRoute
-          const existingMFASession = null
-          const hasValidMFASession = existingMFASession && existingMFASession.verified &&
-                                    new Date() <= existingMFASession.expiresAt
+          let mfaEnabled = false
+          let hasValidMFASession = false
 
-          console.log('🔐 MFA Status Check (Enhanced):', {
-            hasMFASetup,
-            userProfileMfaEnabled: userProfile.mfaEnabled,
-            userProfileMfaVerified: userProfile.mfaVerified,
-            finalMfaEnabled: mfaEnabled,
-            hasValidMFASession,
-            sessionExpiry: existingMFASession?.expiresAt,
-            isNewDevice: !hasValidMFASession
-          })
+          try {
+            // Use Fresh MFA Service to check if MFA is enabled
+            mfaEnabled = await FreshMfaService.isMfaEnabled(userProfile.id)
 
-          // MFA is required if:
-          // 1. User has MFA enabled AND
-          // 2. No valid MFA session exists (covers new device scenario)
+            // Check for existing valid MFA session (24 hour window)
+            const mfaTimestamp = localStorage.getItem('freshMfaVerified')
+            if (mfaTimestamp) {
+              const sessionAge = Date.now() - parseInt(mfaTimestamp)
+              const MAX_MFA_SESSION_AGE = 24 * 60 * 60 * 1000 // 24 hours
+              hasValidMFASession = sessionAge < MAX_MFA_SESSION_AGE
+            }
+
+            console.log('🔐 MFA Status Check (Mandatory):', {
+              userId: userProfile.id,
+              mfaEnabled,
+              hasValidMFASession,
+              sessionAge: mfaTimestamp ? (Date.now() - parseInt(mfaTimestamp)) / 1000 / 60 : null,
+              requiresVerification: mfaEnabled && !hasValidMFASession
+            })
+
+          } catch (mfaCheckError) {
+            console.error('❌ Error checking MFA status:', mfaCheckError)
+            // Default to requiring MFA if check fails for security
+            mfaEnabled = userProfile.mfaEnabled || false
+            hasValidMFASession = false
+          }
+
+          // CRITICAL: MFA is required if user has MFA enabled AND no valid session exists
           if (mfaEnabled && !hasValidMFASession) {
-            logger.info('MFA required for user', userProfile.id)
+            logger.info('MANDATORY MFA required for user', userProfile.id)
             setMfaRequired(true)
-            const challenge = await authService.initiateMFA(userProfile.id)
-            setMfaChallenge(challenge)
-            console.log('🔐 MFA challenge initiated for cross-device login')
+
+            try {
+              const challenge = await authService.initiateMFA(userProfile.id)
+              setMfaChallenge(challenge)
+              console.log('🔐 MFA challenge initiated for mandatory verification')
+            } catch (challengeError) {
+              console.error('❌ Failed to initiate MFA challenge:', challengeError)
+              setMfaRequired(true) // Still require MFA even if challenge fails
+            }
           } else {
             // User either doesn't have MFA enabled OR has a valid session
             if (mfaEnabled && hasValidMFASession) {
               console.log('✅ Valid MFA session found - user authenticated')
-              // Update userProfile.mfaVerified to reflect current session status
               userProfile.mfaVerified = true
             }
             setUser(userProfile)
@@ -505,14 +521,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         return false
       }
 
-      const isValid = await authService.verifyMFA(mfaChallenge.challenge, code)
+      // Use Fresh MFA Service for verification
+      const account = accounts[0]
+      const userProfile = await authService.getUserProfile(account.homeAccountId)
+
+      const isValid = await FreshMfaService.verifyLoginCode(userProfile.id, code)
 
       if (isValid) {
-        const account = accounts[0]
-        const userProfile = await authService.getUserProfile(account.homeAccountId)
-
-        // CRITICAL: Mark user as MFA verified for cross-device consistency
+        // CRITICAL: Mark user as MFA verified and store session timestamp
         userProfile.mfaVerified = true
+        const mfaTimestamp = Date.now().toString()
+        localStorage.setItem('freshMfaVerified', mfaTimestamp)
+
         setUser(userProfile)
 
         const session = await authService.getSessionInfo()
@@ -524,7 +544,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Update user profile storage with verified status
         await secureStorage.setSessionData('current_user', userProfile)
 
-        console.log('✅ MFA completed successfully - user now has verified access')
+        // Mark the MFA challenge as used in database
+        try {
+          await authService.verifyMFA(mfaChallenge.challenge, code)
+        } catch (dbError) {
+          console.warn('Failed to mark MFA challenge as used in database:', dbError)
+          // Continue - the important verification was done with Fresh MFA Service
+        }
+
+        console.log('✅ MANDATORY MFA completed successfully - user now has verified access')
         return true
       }
 

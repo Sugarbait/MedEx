@@ -29,6 +29,9 @@ import { RobustUserSettingsService } from '@/services/userSettingsServiceRobust'
 import { UserSettings } from '@/types/supabase'
 import { avatarStorageService } from '@/services/avatarStorageService'
 import { SimpleUserManager } from '@/components/settings/SimpleUserManager'
+import { EnhancedUserManager } from '@/components/settings/EnhancedUserManager'
+import { EnhancedProfileSettings } from '@/components/settings/EnhancedProfileSettings'
+import { EnhancedApiKeyManager } from '@/components/settings/EnhancedApiKeyManager'
 import { ThemeManager } from '@/utils/themeManager'
 import { SiteHelpChatbot } from '@/components/common/SiteHelpChatbot'
 import { toastNotificationService, ToastNotificationPreferences } from '@/services/toastNotificationService'
@@ -1130,168 +1133,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
         <div className="lg:col-span-3">
           {/* Profile Settings */}
           {activeTab === 'profile' && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-                Profile Information
-              </h2>
-
-              <div className="space-y-6">
-                {/* Profile Picture */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-900 dark:text-gray-100 mb-3">
-                    Profile Picture
-                  </label>
-                  <div className="flex items-start gap-4">
-                    <div className="relative">
-                      <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-100 dark:bg-gray-700 flex items-center justify-center">
-                        {avatarPreview || user?.avatar ? (
-                          <img
-                            src={avatarPreview || user?.avatar}
-                            alt="Profile"
-                            className="w-full h-full object-cover"
-                            style={{ backgroundColor: '#ffffff' }}
-                          />
-                        ) : (
-                          <UserIcon className="w-8 h-8 text-gray-400 dark:text-gray-500" />
-                        )}
-                      </div>
-                      {(avatarPreview || user?.avatar) && (
-                        <button
-                          onClick={removeAvatar}
-                          disabled={isLoading}
-                          className="absolute -top-1 -right-1 w-6 h-6 bg-red-500 text-white rounded-full flex items-center justify-center text-xs hover:bg-red-600 transition-colors disabled:opacity-50"
-                        >
-                          ×
-                        </button>
-                      )}
-                    </div>
-
-                    <div className="flex-1">
-                      <div className="flex gap-3">
-                        <label className="cursor-pointer">
-                          <input
-                            type="file"
-                            accept="image/*"
-                            onChange={handleAvatarChange}
-                            className="hidden"
-                            disabled={isLoading}
-                          />
-                          <div className="flex items-center gap-2 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors text-gray-700 dark:text-gray-200 text-sm font-medium">
-                            <CameraIcon className="w-4 h-4" />
-                            Choose Photo
-                          </div>
-                        </label>
-
-                        {avatarFile && (
-                          <button
-                            onClick={handleAvatarUpload}
-                            disabled={isLoading}
-                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium disabled:opacity-50"
-                          >
-                            <UploadIcon className="w-4 h-4" />
-                            {isLoading ? 'Uploading...' : 'Upload'}
-                          </button>
-                        )}
-                      </div>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 mt-2">
-                        JPG, PNG or GIF (max 5MB). Recommended size: 200x200px
-                      </p>
-                      {avatarFile && (
-                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
-                          Selected: {avatarFile.name}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
-                    Full Name
-                  </label>
-                  <div className="flex gap-2">
-                    <input
-                      type="text"
-                      value={isEditingName ? fullName : (user?.name || fullName || 'Guest User')}
-                      onChange={(e) => setFullName(e.target.value)}
-                      readOnly={!isEditingName}
-                      className={`flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-800 focus:outline-none ${
-                        isEditingName
-                          ? 'bg-white dark:bg-gray-800 focus:ring-2 focus:ring-blue-500 focus:border-blue-500'
-                          : 'bg-gray-50 dark:bg-gray-700'
-                      }`}
-                      placeholder="Enter your full name"
-                    />
-                    {!isEditingName ? (
-                      <button
-                        onClick={() => setIsEditingName(true)}
-                        className="px-3 py-2 text-sm font-medium text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300 border border-blue-600 dark:border-blue-400 hover:border-blue-700 dark:hover:border-blue-300 rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
-                      >
-                        Edit
-                      </button>
-                    ) : (
-                      <div className="flex gap-2">
-                        <button
-                          onClick={saveFullName}
-                          disabled={isSavingName || !fullName.trim()}
-                          className="px-3 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed rounded-lg transition-colors flex items-center gap-1"
-                        >
-                          {isSavingName ? (
-                            <>
-                              <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-white"></div>
-                              Saving...
-                            </>
-                          ) : (
-                            <>
-                              <SaveIcon className="w-3 h-3" />
-                              Save
-                            </>
-                          )}
-                        </button>
-                        <button
-                          onClick={cancelEditName}
-                          disabled={isSavingName}
-                          className="px-3 py-2 text-sm font-medium text-gray-600 dark:text-gray-300 hover:text-gray-700 dark:hover:text-gray-200 border border-gray-300 dark:border-gray-600 hover:border-gray-400 dark:hover:border-gray-500 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    value={user?.email || 'demo@carexps.com'}
-                    readOnly
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-gray-50 dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
-                    Role
-                  </label>
-                  <input
-                    type="text"
-                    value={user?.role?.replace('_', ' ') || 'Healthcare Provider'}
-                    readOnly
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg bg-gray-50 text-gray-900 focus:outline-none capitalize"
-                  />
-                </div>
-
-                <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <p className="text-sm text-gray-600 dark:text-gray-300">
-                    Profile information is managed by your organization's IT administrator.
-                    Contact them to make changes.
-                  </p>
-                </div>
-              </div>
-            </div>
+            <EnhancedProfileSettings user={user} />
           )}
 
           {/* Security Settings */}
@@ -1357,113 +1199,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
           {/* API Configuration */}
           {activeTab === 'api' && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
-                API Configuration
-              </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-300 mb-6">
-                Configure your API credentials for call and SMS services.
-              </p>
-
-              <div className="space-y-6">
-                {/* API Key */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
-                    API Key
-                  </label>
-                  <div className="flex gap-3">
-                    <input
-                      type="password"
-                      value={userSettings?.retellApiKey || ''}
-                      onChange={(e) => handleApiKeyUpdate(e.target.value)}
-                      placeholder="Enter your API key"
-                      className="flex-1 px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                    <button
-                      onClick={testApiConnection}
-                      className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
-                    >
-                      <LinkIcon className="w-4 h-4" />
-                      Test Connection
-                    </button>
-                  </div>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    Your API key is encrypted and stored securely
-                  </p>
-                </div>
-
-                {/* Call Agent ID */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
-                    Call Agent ID
-                  </label>
-                  <input
-                    type="text"
-                    value={userSettings?.callAgentId || ''}
-                    onChange={(e) => handleCallAgentIdUpdate(e.target.value)}
-                    placeholder="Enter your Call Agent ID"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    This agent will be used for all outbound calls
-                  </p>
-                </div>
-
-                {/* SMS/Chat Agent ID */}
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-200 mb-2">
-                    SMS / Chat Agent ID
-                  </label>
-                  <input
-                    type="text"
-                    value={userSettings?.smsAgentId || ''}
-                    onChange={(e) => handleSmsAgentIdUpdate(e.target.value)}
-                    placeholder="Enter your SMS/Chat Agent ID"
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    This agent will be used for all SMS and chat conversations
-                  </p>
-                </div>
-
-                {/* API Status */}
-                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <KeyIcon className="w-5 h-5 text-blue-600" />
-                    <h3 className="font-medium text-blue-900 dark:text-blue-100">API Status</h3>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-blue-700 dark:text-blue-300">API Key</span>
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${userSettings?.retellApiKey ? 'bg-green-500' : 'bg-gray-400'}`} />
-                        <span className="text-xs text-blue-600 dark:text-blue-400">
-                          {userSettings?.retellApiKey ? 'Configured' : 'Not configured'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-blue-700 dark:text-blue-300">Call Agent ID</span>
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${userSettings?.callAgentId ? 'bg-green-500' : 'bg-gray-400'}`} />
-                        <span className="text-xs text-blue-600 dark:text-blue-400">
-                          {userSettings?.callAgentId ? 'Configured' : 'Not configured'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm text-blue-700 dark:text-blue-300">SMS Agent ID</span>
-                      <div className="flex items-center gap-2">
-                        <div className={`w-2 h-2 rounded-full ${userSettings?.smsAgentId ? 'bg-green-500' : 'bg-gray-400'}`} />
-                        <span className="text-xs text-blue-600 dark:text-blue-400">
-                          {userSettings?.smsAgentId ? 'Configured' : 'Not configured'}
-                        </span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+            <EnhancedApiKeyManager user={user} />
           )}
 
           {/* Notifications */}
@@ -1974,9 +1710,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
           {/* User Management (Super Users Only) */}
           {activeTab === 'users' && user?.role === 'super_user' && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-              <SimpleUserManager />
-            </div>
+            <EnhancedUserManager currentUser={user} />
           )}
 
         </div>

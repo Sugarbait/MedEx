@@ -37,6 +37,7 @@ import { SMSPage } from './pages/SMSPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { UserManagementPage } from './pages/UserManagementPage'
 import { LoginPage } from './pages/LoginPage'
+import { MandatoryMfaLogin } from './components/auth/MandatoryMfaLogin'
 
 import {
   ShieldCheckIcon,
@@ -287,6 +288,7 @@ const App: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true)
   const [user, setUser] = useState<any>(null)
   const [mfaRequired, setMfaRequired] = useState(false)
+  const [pendingMfaUser, setPendingMfaUser] = useState<any>(null) // User awaiting MFA verification
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [hipaaMode, setHipaaMode] = useState(true)
 
@@ -332,6 +334,52 @@ const App: React.FC = () => {
 
         if (storedUser) {
           const userData = storedUser
+
+          // CRITICAL: Check if user requires mandatory MFA verification
+          console.log('🔐 MANDATORY MFA CHECK: Checking if user requires MFA verification')
+
+          try {
+            const { FreshMfaService } = await import('./services/freshMfaService')
+            const mfaEnabled = await FreshMfaService.isMfaEnabled(userData.id)
+
+            // Check for existing valid MFA session
+            const mfaTimestamp = localStorage.getItem('freshMfaVerified')
+            let hasValidMfaSession = false
+
+            if (mfaTimestamp) {
+              const sessionAge = Date.now() - parseInt(mfaTimestamp)
+              const MAX_MFA_SESSION_AGE = 24 * 60 * 60 * 1000 // 24 hours
+              hasValidMfaSession = sessionAge < MAX_MFA_SESSION_AGE
+            }
+
+            console.log('🔐 App MFA Status Check:', {
+              userId: userData.id,
+              mfaEnabled,
+              hasValidMfaSession,
+              requiresVerification: mfaEnabled && !hasValidMfaSession
+            })
+
+            // If MFA is required and user doesn't have valid session, show MFA verification
+            if (mfaEnabled && !hasValidMfaSession) {
+              console.log('🔐 MANDATORY MFA required - showing MFA verification screen')
+              setPendingMfaUser(userData)
+              setIsLoading(false)
+              return // Exit early - don't load full user data until MFA is verified
+            }
+
+            // If MFA is not required or user has valid session, proceed normally
+            console.log('✅ No MFA verification required - proceeding with normal login flow')
+
+          } catch (mfaCheckError) {
+            console.error('❌ Error checking MFA requirement:', mfaCheckError)
+            // For security, if MFA check fails, require verification if user has mfaEnabled flag
+            if (userData.mfaEnabled) {
+              console.log('🔐 MFA check failed but user has MFA enabled - requiring verification for security')
+              setPendingMfaUser(userData)
+              setIsLoading(false)
+              return
+            }
+          }
 
           // Force sync settings from Supabase for cross-device access
           console.log('🔄 Syncing cross-device data on app initialization...')
@@ -717,6 +765,103 @@ const App: React.FC = () => {
     localStorage.setItem('mfa_verified', 'true')
   }
 
+  /**
+   * Handle successful mandatory MFA verification at login
+   */
+  const handleMandatoryMfaSuccess = async () => {
+    try {
+      console.log('✅ MANDATORY MFA verification successful - completing login')
+
+      if (pendingMfaUser) {
+        // Store MFA verification timestamp
+        const mfaTimestamp = Date.now().toString()
+        localStorage.setItem('freshMfaVerified', mfaTimestamp)
+
+        // Load the full user profile and complete authentication
+        const userData = pendingMfaUser
+
+        // Try to load full profile from Supabase
+        try {
+          const profileResponse = await userProfileService.loadUserProfile(userData.id)
+
+          if (profileResponse.status === 'success' && profileResponse.data) {
+            const supabaseUser = profileResponse.data
+            // Mark as MFA verified (Note: Add to UserProfileData type if needed)
+
+            // Load avatar
+            try {
+              const avatarUrl = await userProfileService.getUserAvatar(supabaseUser.id)
+              if (avatarUrl) {
+                supabaseUser.avatar = avatarUrl
+              }
+            } catch (avatarError) {
+              console.warn('Failed to load user avatar after MFA:', avatarError)
+            }
+
+            setUser(supabaseUser)
+            localStorage.setItem('currentUser', JSON.stringify(supabaseUser))
+            console.log('✅ User loaded from Supabase after mandatory MFA verification')
+
+          } else {
+            // Fallback to pending user data
+            userData.mfaVerified = true
+            setUser(userData)
+            localStorage.setItem('currentUser', JSON.stringify(userData))
+            console.log('✅ User loaded from localStorage after mandatory MFA verification')
+          }
+
+          // Start session monitoring and load credentials
+          await authService.startSessionMonitoring()
+          await retellService.loadCredentialsAsync()
+
+        } catch (profileError) {
+          console.warn('Failed to load full profile after MFA, using pending user data:', profileError)
+          userData.mfaVerified = true
+          setUser(userData)
+          localStorage.setItem('currentUser', JSON.stringify(userData))
+        }
+
+        // Clear pending MFA user
+        setPendingMfaUser(null)
+
+        // Log successful authentication
+        const { auditLogger, AuditAction, AuditOutcome } = await import('./services/auditLogger')
+        await auditLogger.logAuthenticationEvent(
+          AuditAction.LOGIN,
+          userData.id,
+          AuditOutcome.SUCCESS,
+          JSON.stringify({ mfaVerified: true, loginMethod: 'mandatory_mfa' })
+        )
+
+        console.log('🎉 MANDATORY MFA login flow completed successfully')
+      }
+
+    } catch (error) {
+      console.error('❌ Error completing mandatory MFA verification:', error)
+      // Reset to login state on error
+      handleMandatoryMfaCancel()
+    }
+  }
+
+  /**
+   * Handle mandatory MFA verification cancellation
+   */
+  const handleMandatoryMfaCancel = () => {
+    console.log('❌ MANDATORY MFA verification cancelled - returning to login')
+
+    // Clear all authentication data
+    localStorage.removeItem('currentUser')
+    localStorage.removeItem('freshMfaVerified')
+    localStorage.removeItem('mfa_verified')
+
+    // Reset state
+    setPendingMfaUser(null)
+    setUser(null)
+    setMfaRequired(false)
+
+    console.log('✅ Authentication state cleared after MFA cancellation')
+  }
+
   const handleLogout = async () => {
     console.log('🚪 Logging out user and clearing all authentication data')
 
@@ -751,8 +896,8 @@ const App: React.FC = () => {
       localStorage.removeItem('currentUser')
       localStorage.removeItem('mfa_verified')
 
-      // Clear any session timeout warnings
-      setShowTimeoutWarning && setShowTimeoutWarning(false)
+      // Clear any session timeout warnings (if available)
+      // setShowTimeoutWarning && setShowTimeoutWarning(false)
 
       // Reset application state
       setUser(null)
@@ -791,6 +936,17 @@ const App: React.FC = () => {
           <p className="text-xs text-gray-400 mt-2">Press Ctrl+Shift+L for emergency logout</p>
         </div>
       </div>
+    )
+  }
+
+  // Show mandatory MFA verification screen if user is pending MFA
+  if (pendingMfaUser) {
+    return (
+      <MandatoryMfaLogin
+        user={pendingMfaUser}
+        onMfaVerified={handleMandatoryMfaSuccess}
+        onMfaCancel={handleMandatoryMfaCancel}
+      />
     )
   }
 

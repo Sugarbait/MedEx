@@ -1,88 +1,168 @@
 /**
  * Cross-Device Sync Usage Examples
  *
- * Demonstrates how to integrate and use the comprehensive cross-device
- * synchronization system in CareXPS Healthcare CRM.
+ * This file demonstrates how to use the cross-device sync functionality
+ * that was implemented across multiple services in the healthcare CRM.
  */
 
-import { syncManager } from '@/services/crossDeviceSyncManager'
+import React from 'react'
+import { syncManager } from '@/services/syncManager'
 import { userSettingsService } from '@/services/userSettingsService'
 import { userProfileService } from '@/services/userProfileService'
-import { conflictResolver } from '@/services/crossDeviceConflictResolver'
-import { secureCredentialSync } from '@/services/secureCredentialSyncService'
+import { secureCredentialSync } from '@/services/secureCredentialSync'
+import { conflictResolver } from '@/services/conflictResolver'
 
 /**
  * Example 1: Initialize Cross-Device Sync on Login
- *
- * This should be called when a user logs in to enable synchronization
- * across all their devices.
  */
 export async function initializeCrossDeviceSyncOnLogin(
   userId: string,
-  email: string,
-  mfaVerified: boolean = false
+  userEmail: string,
+  isMfaEnabled: boolean
 ): Promise<{ success: boolean; message?: string }> {
   try {
-    console.log(`🚀 Initializing cross-device sync for user: ${email}`)
+    console.log('🔄 Initializing cross-device sync on login...')
 
-    // 1. Initialize the main sync manager
-    const syncResult = await syncManager.initializeSync(userId, {
-      mfaVerified,
-      securityLevel: mfaVerified ? 'high' : 'standard',
-      enablePeriodicSync: true,
-      syncInterval: 30000 // 30 seconds
-    })
+    // 1. Initialize sync manager
+    await syncManager.initializeForUser(userId, userEmail)
 
-    if (!syncResult.success) {
-      throw new Error(syncResult.message || 'Sync manager initialization failed')
+    // 2. Force sync from cloud for fresh login
+    const settingsSynced = await userSettingsService.forceSyncFromCloud(userId)
+
+    if (settingsSynced) {
+      console.log('✅ Settings synced from cloud')
     }
 
-    // 2. Initialize secure credential sync if MFA is verified
-    if (mfaVerified) {
-      const secureResult = await secureCredentialSync.initializeSecureSync(
-        userId,
-        syncResult.session!.deviceId,
-        {
-          mfaVerified: true,
-          importExistingCredentials: true
-        }
+    // 3. If MFA is enabled, attempt secure credential sync
+    if (isMfaEnabled) {
+      const trustedDevices = await secureCredentialSync.getTrustedDevices(userId)
+      const currentDevice = await syncManager.getCurrentDevice()
+
+      const isTrusted = trustedDevices.some(device =>
+        device.deviceId === currentDevice.deviceId &&
+        device.trustLevel === 'trusted'
       )
 
-      if (!secureResult.success) {
-        console.warn('Secure credential sync failed:', secureResult.message)
-      } else {
-        console.log(`🔐 Secure sync initialized with trust level: ${secureResult.trustLevel}`)
+      if (isTrusted) {
+        await secureCredentialSync.syncMfaSecrets(userId, currentDevice.deviceId)
+        console.log('✅ MFA secrets synced from trusted device')
       }
     }
 
-    // 3. Set up event listeners for sync notifications
-    syncManager.subscribeToSyncEvents(userId, (event) => {
-      console.log(`📡 Sync Event: ${event.trigger}`, event)
+    // 4. Handle any pending conflicts
+    await handleSettingsConflicts(userId)
 
-      // Notify UI components of sync events
-      window.dispatchEvent(new CustomEvent('crossDeviceSyncEvent', {
-        detail: event
-      }))
-    })
-
-    // 4. Subscribe to profile sync events
-    userProfileService.subscribeToProfileSync(userId, (event) => {
-      console.log(`👤 Profile Sync Event: ${event.eventType}`, event)
-
-      // Update UI when profile changes
-      if (event.eventType === 'profile_updated') {
-        window.dispatchEvent(new CustomEvent('profileUpdated', {
-          detail: event.data
-        }))
-      }
-    })
-
-    console.log('✅ Cross-device sync fully initialized')
-    return { success: true, message: 'Cross-device sync enabled successfully' }
+    console.log('✅ Cross-device sync initialized successfully')
+    return { success: true, message: 'Cross-device sync ready' }
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error'
     console.error('❌ Cross-device sync initialization failed:', errorMessage)
     return { success: false, message: errorMessage }
   }
-}\n\n/**\n * Example 2: Sync User Settings Across Devices\n */\nexport async function updateSettingsWithSync(\n  userId: string,\n  settingsUpdate: {\n    theme?: 'light' | 'dark' | 'auto'\n    notifications?: {\n      email: boolean\n      sms: boolean\n      push: boolean\n      in_app: boolean\n      call_alerts: boolean\n      sms_alerts: boolean\n      security_alerts: boolean\n    }\n    retellApiKey?: string\n    callAgentId?: string\n    smsAgentId?: string\n  }\n): Promise<{ success: boolean; settings?: any; conflicts?: number }> {\n  try {\n    console.log('🔄 Updating settings with cross-device sync...')\n\n    // 1. Update settings through the sync-enabled service\n    const updatedSettings = await userSettingsService.updateUserSettings(\n      userId,\n      {\n        theme: settingsUpdate.theme,\n        notifications: settingsUpdate.notifications,\n        retell_config: {\n          api_key: settingsUpdate.retellApiKey,\n          call_agent_id: settingsUpdate.callAgentId,\n          sms_agent_id: settingsUpdate.smsAgentId\n        }\n      },\n      {\n        broadcastToOtherDevices: true,\n        skipConflictCheck: false\n      }\n    )\n\n    // 2. Sync secure credentials if API keys were updated\n    if (settingsUpdate.retellApiKey || settingsUpdate.callAgentId || settingsUpdate.smsAgentId) {\n      const session = syncManager.getActiveSession(userId)\n      if (session) {\n        await secureCredentialSync.syncApiKeys(userId, session.deviceId, {\n          retellApiKey: settingsUpdate.retellApiKey,\n          callAgentId: settingsUpdate.callAgentId,\n          smsAgentId: settingsUpdate.smsAgentId\n        })\n      }\n    }\n\n    // 3. Trigger a sync event to notify other devices\n    const syncResult = await syncManager.triggerSync(\n      'settings_change',\n      userId,\n      syncManager.getActiveSession(userId)?.deviceId || 'unknown',\n      { changedFields: Object.keys(settingsUpdate) }\n    )\n\n    console.log('✅ Settings updated and synced successfully')\n    return {\n      success: true,\n      settings: updatedSettings,\n      conflicts: syncResult.conflicts\n    }\n\n  } catch (error) {\n    console.error('❌ Settings update with sync failed:', error)\n    return { success: false }\n  }\n}\n\n/**\n * Example 3: Handle Cross-Device Conflicts\n */\nexport async function handleSettingsConflicts(\n  userId: string\n): Promise<{ resolved: number; pending: number }> {\n  try {\n    console.log('⚡ Checking for settings conflicts...')\n\n    // 1. Get pending conflicts\n    const pendingConflicts = conflictResolver.getPendingConflicts(userId)\n    \n    if (pendingConflicts.length === 0) {\n      console.log('✅ No conflicts detected')\n      return { resolved: 0, pending: 0 }\n    }\n\n    console.log(`⚠️ Found ${pendingConflicts.length} conflicts to resolve`)\n\n    let resolvedCount = 0\n\n    // 2. Auto-resolve conflicts where possible\n    for (const conflict of pendingConflicts) {\n      if (conflict.autoResolvable && conflict.severity !== 'critical') {\n        const resolution = await conflictResolver.resolveConflictAutomatically(conflict)\n        if (resolution.success) {\n          resolvedCount++\n          console.log(`✅ Auto-resolved conflict: ${conflict.conflictId}`)\n\n          // Apply resolved data if it's settings\n          if (conflict.table === 'user_settings' && resolution.resolvedData) {\n            await userSettingsService.updateUserSettings(\n              userId,\n              resolution.resolvedData,\n              { skipConflictCheck: true }\n            )\n          }\n        }\n      }\n    }\n\n    // 3. Get remaining conflicts that need manual resolution\n    const remainingConflicts = conflictResolver.getPendingConflicts(userId)\n\n    if (remainingConflicts.length > 0) {\n      console.log(`⚠️ ${remainingConflicts.length} conflicts require manual resolution`)\n      \n      // Notify UI about pending conflicts\n      window.dispatchEvent(new CustomEvent('pendingConflicts', {\n        detail: { conflicts: remainingConflicts, count: remainingConflicts.length }\n      }))\n    }\n\n    return {\n      resolved: resolvedCount,\n      pending: remainingConflicts.length\n    }\n\n  } catch (error) {\n    console.error('❌ Conflict resolution failed:', error)\n    return { resolved: 0, pending: -1 }\n  }\n}\n\n/**\n * Example 4: Manual Conflict Resolution UI Integration\n */\nexport async function resolveConflictManually(\n  userId: string,\n  conflictId: string,\n  userChoice: 'take_local' | 'take_remote' | 'merge' | 'custom',\n  customData?: any\n): Promise<{ success: boolean; message?: string }> {\n  try {\n    console.log(`🤝 Manually resolving conflict: ${conflictId}`)\n\n    const resolution = await conflictResolver.resolveConflictManually(\n      conflictId,\n      userId,\n      userChoice,\n      customData\n    )\n\n    if (resolution.success && resolution.resolvedData) {\n      // Apply the resolved data\n      const conflict = conflictResolver.getPendingConflicts(userId)\n        .find(c => c.conflictId === conflictId)\n\n      if (conflict?.table === 'user_settings') {\n        await userSettingsService.updateUserSettings(\n          userId,\n          resolution.resolvedData,\n          { skipConflictCheck: true }\n        )\n      } else if (conflict?.table === 'user_profiles') {\n        await userProfileService.saveUserProfile(\n          resolution.resolvedData,\n          { syncToCloud: true, broadcastToOtherDevices: true }\n        )\n      }\n\n      console.log(`✅ Conflict resolved: ${resolution.strategy}`)\n      return { success: true, message: resolution.message }\n    }\n\n    return { success: false, message: resolution.error }\n\n  } catch (error) {\n    const errorMessage = error instanceof Error ? error.message : 'Unknown error'\n    console.error('❌ Manual conflict resolution failed:', errorMessage)\n    return { success: false, message: errorMessage }\n  }\n}\n\n/**\n * Example 5: Sync Profile Data Including Avatar\n */\nexport async function updateProfileWithSync(\n  userId: string,\n  profileUpdate: {\n    name?: string\n    email?: string\n    avatar?: string // Base64 image data\n    mfaEnabled?: boolean\n  }\n): Promise<{ success: boolean; profile?: any }> {\n  try {\n    console.log('👤 Updating profile with cross-device sync...')\n\n    // 1. Get current profile\n    const currentProfile = await userProfileService.loadUserProfile(userId)\n    \n    if (currentProfile.status !== 'success' || !currentProfile.data) {\n      throw new Error('Failed to load current profile')\n    }\n\n    // 2. Update profile data\n    const updatedProfile = {\n      ...currentProfile.data,\n      ...profileUpdate\n    }\n\n    // 3. Save with sync enabled\n    const saveResult = await userProfileService.saveUserProfile(updatedProfile, {\n      syncToCloud: true,\n      broadcastToOtherDevices: true\n    })\n\n    if (saveResult.status !== 'success') {\n      throw new Error(saveResult.error)\n    }\n\n    // 4. If avatar was updated, sync across devices\n    if (profileUpdate.avatar) {\n      await userProfileService.syncAvatarAcrossDevices(userId)\n    }\n\n    // 5. If MFA status changed, trigger secure credential sync\n    if (profileUpdate.mfaEnabled !== undefined) {\n      const session = syncManager.getActiveSession(userId)\n      if (session) {\n        await syncManager.triggerSync('mfa_change', userId, session.deviceId)\n      }\n    }\n\n    console.log('✅ Profile updated and synced successfully')\n    return { success: true, profile: saveResult.data }\n\n  } catch (error) {\n    console.error('❌ Profile update with sync failed:', error)\n    return { success: false }\n  }\n}\n\n/**\n * Example 6: Verify Device for Enhanced Security\n */\nexport async function verifyDeviceForSecureSync(\n  userId: string,\n  mfaCode: string\n): Promise<{ success: boolean; trustLevel?: string; message?: string }> {\n  try {\n    console.log('🔐 Verifying device for secure credential sync...')\n\n    const session = syncManager.getActiveSession(userId)\n    if (!session) {\n      throw new Error('No active sync session found')\n    }\n\n    // 1. Verify device with MFA code\n    const verificationResult = await secureCredentialSync.verifyDeviceForSync(\n      userId,\n      session.deviceId,\n      mfaCode\n    )\n\n    if (!verificationResult.success) {\n      return {\n        success: false,\n        message: verificationResult.message || 'Device verification failed'\n      }\n    }\n\n    // 2. If verification successful, sync sensitive credentials\n    if (['trusted', 'verified'].includes(verificationResult.newTrustLevel)) {\n      // Sync MFA secrets\n      await secureCredentialSync.syncMfaSecrets(userId, session.deviceId)\n\n      // Get and sync API keys from settings\n      const settings = await userSettingsService.getUserSettings(userId)\n      if (settings.retell_config) {\n        await secureCredentialSync.syncApiKeys(userId, session.deviceId, {\n          retellApiKey: settings.retell_config.api_key,\n          callAgentId: settings.retell_config.call_agent_id,\n          smsAgentId: settings.retell_config.sms_agent_id\n        })\n      }\n    }\n\n    console.log(`✅ Device verified with trust level: ${verificationResult.newTrustLevel}`)\n    return {\n      success: true,\n      trustLevel: verificationResult.newTrustLevel,\n      message: verificationResult.message\n    }\n\n  } catch (error) {\n    const errorMessage = error instanceof Error ? error.message : 'Unknown error'\n    console.error('❌ Device verification failed:', errorMessage)\n    return { success: false, message: errorMessage }\n  }\n}\n\n/**\n * Example 7: Monitor Sync Health and Status\n */\nexport function monitorSyncHealth(userId: string): {\n  getStatus: () => Promise<any>\n  subscribe: (callback: (status: any) => void) => void\n  unsubscribe: () => void\n} {\n  const callbacks: ((status: any) => void)[] = []\n  let monitoringInterval: number | null = null\n\n  const getStatus = async () => {\n    try {\n      // Get status from all sync services\n      const [settingsStatus, profileStatus, syncStatus, trustedDevices] = await Promise.all([\n        userSettingsService.getSyncStatus(userId),\n        userProfileService.getProfileSyncStatus(userId),\n        Promise.resolve(syncManager.getSyncStatus(userId)),\n        secureCredentialSync.getTrustedDevices(userId)\n      ])\n\n      const pendingConflicts = conflictResolver.getPendingConflicts(userId)\n      const resolutionHistory = conflictResolver.getResolutionHistory(userId)\n\n      return {\n        settings: settingsStatus,\n        profile: profileStatus,\n        sync: syncStatus,\n        security: {\n          trustedDevices: trustedDevices.length,\n          deviceTrustLevels: trustedDevices.map(d => d.trustLevel)\n        },\n        conflicts: {\n          pending: pendingConflicts.length,\n          resolved: resolutionHistory.length\n        },\n        overall: {\n          healthy: pendingConflicts.length === 0 && \n                  (syncStatus?.syncHealth === 'healthy' || syncStatus?.syncHealth === 'warning'),\n          lastSync: syncStatus?.lastSync || profileStatus.lastSync || settingsStatus.lastSync,\n          connectedDevices: trustedDevices.length\n        }\n      }\n    } catch (error) {\n      console.error('Error getting sync status:', error)\n      return {\n        overall: { healthy: false, error: error instanceof Error ? error.message : 'Unknown error' }\n      }\n    }\n  }\n\n  const subscribe = (callback: (status: any) => void) => {\n    callbacks.push(callback)\n\n    // Start monitoring if this is the first subscription\n    if (callbacks.length === 1) {\n      monitoringInterval = window.setInterval(async () => {\n        const status = await getStatus()\n        callbacks.forEach(cb => {\n          try {\n            cb(status)\n          } catch (error) {\n            console.error('Error in sync status callback:', error)\n          }\n        })\n      }, 10000) // Check every 10 seconds\n\n      console.log('📊 Started sync health monitoring')\n    }\n  }\n\n  const unsubscribe = () => {\n    callbacks.length = 0\n\n    if (monitoringInterval) {\n      window.clearInterval(monitoringInterval)\n      monitoringInterval = null\n      console.log('📊 Stopped sync health monitoring')\n    }\n  }\n\n  return { getStatus, subscribe, unsubscribe }\n}\n\n/**\n * Example 8: Handle Logout and Cleanup\n */\nexport async function handleLogoutWithSync(\n  userId: string\n): Promise<{ success: boolean; message?: string }> {\n  try {\n    console.log('👋 Handling logout with cross-device sync cleanup...')\n\n    // 1. Trigger final sync\n    const session = syncManager.getActiveSession(userId)\n    if (session) {\n      await syncManager.triggerSync('logout', userId, session.deviceId, {\n        finalSync: true,\n        preserveData: false\n      })\n    }\n\n    // 2. Handle logout through sync manager\n    await syncManager.handleLogout(userId)\n\n    // 3. Unsubscribe from all sync events\n    userProfileService.unsubscribeFromProfileSync(userId)\n    syncManager.unsubscribeFromSyncEvents(userId)\n\n    console.log('✅ Logout and sync cleanup completed')\n    return { success: true, message: 'Logged out successfully with sync cleanup' }\n\n  } catch (error) {\n    const errorMessage = error instanceof Error ? error.message : 'Unknown error'\n    console.error('❌ Logout with sync failed:', errorMessage)\n    return { success: false, message: errorMessage }\n  }\n}\n\n/**\n * Example 9: Force Full Sync Across All Data\n */\nexport async function forceFullSyncAcrossAllDevices(\n  userId: string\n): Promise<{ success: boolean; results?: any; message?: string }> {\n  try {\n    console.log('🔄 Forcing full sync across all devices...')\n\n    // 1. Force sync through sync manager\n    const syncResult = await syncManager.forceFullSync(userId)\n    \n    if (!syncResult.success) {\n      throw new Error(syncResult.message)\n    }\n\n    // 2. Handle any conflicts that arose\n    const conflictResult = await handleSettingsConflicts(userId)\n\n    // 3. Sync secure credentials if device is trusted\n    const session = syncManager.getActiveSession(userId)\n    if (session) {\n      const trustedDevices = await secureCredentialSync.getTrustedDevices(userId)\n      const currentDevice = trustedDevices.find(d => d.deviceId === session.deviceId)\n      \n      if (currentDevice && ['trusted', 'verified'].includes(currentDevice.trustLevel)) {\n        await secureCredentialSync.syncMfaSecrets(userId, session.deviceId)\n      }\n    }\n\n    console.log('✅ Full sync completed successfully')\n    return {\n      success: true,\n      results: {\n        syncOperations: syncResult,\n        conflictsResolved: conflictResult.resolved,\n        conflictsPending: conflictResult.pending\n      },\n      message: 'Full sync across all devices completed'\n    }\n\n  } catch (error) {\n    const errorMessage = error instanceof Error ? error.message : 'Unknown error'\n    console.error('❌ Force full sync failed:', errorMessage)\n    return { success: false, message: errorMessage }\n  }\n}\n\n/**\n * Example 10: Integration with React Components\n */\nexport function useCrossDeviceSync(userId: string) {\n  // This would be a custom React hook that integrates with the sync system\n  \n  const [syncStatus, setSyncStatus] = React.useState(null)\n  const [conflicts, setConflicts] = React.useState([])\n  const [isOnline, setIsOnline] = React.useState(true)\n\n  React.useEffect(() => {\n    if (!userId) return\n\n    // Initialize sync\n    initializeCrossDeviceSyncOnLogin(userId, 'user@example.com', false)\n\n    // Monitor sync health\n    const monitor = monitorSyncHealth(userId)\n    monitor.subscribe((status) => {\n      setSyncStatus(status)\n      setConflicts(status.conflicts?.pending || 0)\n      setIsOnline(status.overall?.healthy || false)\n    })\n\n    // Listen for sync events\n    const handleSyncEvent = (event: CustomEvent) => {\n      console.log('Sync event in component:', event.detail)\n    }\n\n    const handleConflictEvent = (event: CustomEvent) => {\n      setConflicts(event.detail.count)\n    }\n\n    window.addEventListener('crossDeviceSyncEvent', handleSyncEvent)\n    window.addEventListener('pendingConflicts', handleConflictEvent)\n\n    return () => {\n      monitor.unsubscribe()\n      window.removeEventListener('crossDeviceSyncEvent', handleSyncEvent)\n      window.removeEventListener('pendingConflicts', handleConflictEvent)\n    }\n  }, [userId])\n\n  return {\n    syncStatus,\n    conflicts,\n    isOnline,\n    forceSync: () => forceFullSyncAcrossAllDevices(userId),\n    resolveConflict: (conflictId: string, choice: string) => \n      resolveConflictManually(userId, conflictId, choice as any)\n  }\n}\n\n// Export all examples for easy import\nexport const CrossDeviceSyncExamples = {\n  initializeCrossDeviceSyncOnLogin,\n  updateSettingsWithSync,\n  handleSettingsConflicts,\n  resolveConflictManually,\n  updateProfileWithSync,\n  verifyDeviceForSecureSync,\n  monitorSyncHealth,\n  handleLogoutWithSync,\n  forceFullSyncAcrossAllDevices,\n  useCrossDeviceSync\n}
+}
+
+/**
+ * Example 2: Sync User Settings Across Devices
+ */
+export async function updateSettingsWithSync(
+  userId: string,
+  settingsUpdate: {
+    theme?: 'light' | 'dark' | 'auto'
+    notifications?: {
+      email: boolean
+      sms: boolean
+      push: boolean
+      in_app: boolean
+      call_alerts: boolean
+      sms_alerts: boolean
+      security_alerts: boolean
+    }
+    retellApiKey?: string
+    callAgentId?: string
+    smsAgentId?: string
+  }
+): Promise<{ success: boolean; settings?: any; conflicts?: number }> {
+  try {
+    console.log('🔄 Updating settings with cross-device sync...')
+
+    // 1. Update settings through the sync-enabled service
+    const updatedSettings = await userSettingsService.updateUserSettings(
+      userId,
+      {
+        theme: settingsUpdate.theme,
+        notifications: settingsUpdate.notifications,
+        retell_config: {
+          api_key: settingsUpdate.retellApiKey,
+          call_agent_id: settingsUpdate.callAgentId,
+          sms_agent_id: settingsUpdate.smsAgentId
+        }
+      },
+      {
+        broadcastToOtherDevices: true,
+        skipConflictCheck: false
+      }
+    )
+
+    console.log('✅ Settings updated and synced successfully')
+    return {
+      success: true,
+      settings: updatedSettings,
+      conflicts: 0
+    }
+
+  } catch (error) {
+    console.error('❌ Settings update with sync failed:', error)
+    return { success: false }
+  }
+}
+
+/**
+ * Example 3: Handle Cross-Device Conflicts
+ */
+export async function handleSettingsConflicts(
+  userId: string
+): Promise<{ resolved: number; pending: number }> {
+  try {
+    console.log('⚡ Checking for settings conflicts...')
+
+    // For this example, we'll simulate basic conflict resolution
+    console.log('✅ No conflicts detected')
+    return { resolved: 0, pending: 0 }
+
+  } catch (error) {
+    console.error('❌ Conflict resolution failed:', error)
+    return { resolved: 0, pending: -1 }
+  }
+}
+
+/**
+ * Example 4: Manual Conflict Resolution UI Integration
+ */
+export async function resolveConflictManually(
+  userId: string,
+  conflictId: string,
+  userChoice: 'take_local' | 'take_remote' | 'merge' | 'custom',
+  customData?: any
+): Promise<{ success: boolean; message?: string }> {
+  try {
+    console.log(`🤝 Manually resolving conflict: ${conflictId}`)
+
+    // Basic implementation - in real app this would integrate with conflict resolver
+    console.log(`✅ Conflict resolved with choice: ${userChoice}`)
+    return { success: true, message: 'Conflict resolved successfully' }
+
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+    console.error('❌ Manual conflict resolution failed:', errorMessage)
+    return { success: false, message: errorMessage }
+  }
+}
+
+// Export examples for easy import
+export const CrossDeviceSyncExamples = {
+  initializeCrossDeviceSyncOnLogin,
+  updateSettingsWithSync,
+  handleSettingsConflicts,
+  resolveConflictManually
+}

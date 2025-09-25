@@ -1,7 +1,7 @@
-import React from 'react'
+import React, { useState, useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useCompanyLogos } from '@/hooks/useCompanyLogos'
-// Removed old TOTP hook - using fresh MFA service
+import { FreshMfaService } from '@/services/freshMfaService'
 import {
   HomeIcon,
   PhoneIcon,
@@ -12,9 +12,10 @@ import {
   ShieldCheckIcon,
   ChevronLeftIcon,
   ActivityIcon,
-  UserIcon
+  UserIcon,
+  Shield,
+  AlertTriangle
 } from 'lucide-react'
-// TOTP service not needed in sidebar - access controlled by TOTPProtectedRoute
 
 interface SidebarProps {
   isOpen: boolean
@@ -22,29 +23,15 @@ interface SidebarProps {
   user: any
 }
 
-const hasMFAAccess = (totpStatus: any): boolean => {
-  // Use TOTP setup status to determine if protected routes should be shown
-  const hasAccess = totpStatus.hasSetup && !totpStatus.isLoading
-
-  console.log('Sidebar TOTP Access Check:', {
-    hasSetup: totpStatus.hasSetup,
-    isEnabled: totpStatus.isEnabled,
-    isLoading: totpStatus.isLoading,
-    error: totpStatus.error,
-    finalAccess: hasAccess
-  })
-
-  if (hasAccess) {
-    console.log('✅ User has TOTP setup - showing protected routes in sidebar')
-  } else {
-    console.log('🔒 User lacks TOTP setup - hiding protected routes in sidebar')
-  }
-
-  return hasAccess
+interface MfaStatus {
+  isLoading: boolean
+  hasSetup: boolean
+  isEnabled: boolean
+  error: string | null
 }
 
-const getNavigationItems = (user: any, totpStatus: any) => {
-  const hasMFA = hasMFAAccess(totpStatus)
+const getNavigationItems = (user: any, mfaStatus: MfaStatus) => {
+  const hasMFA = mfaStatus.hasSetup && mfaStatus.isEnabled
 
   return [
     {
@@ -53,23 +40,23 @@ const getNavigationItems = (user: any, totpStatus: any) => {
       icon: HomeIcon,
       description: 'System overview'
     },
-    // Protected pages - only show if user has MFA access
-    ...(hasMFA ? [
-      {
-        name: 'Calls',
-        href: '/calls',
-        icon: PhoneIcon,
-        description: 'Call management and analytics',
-        requiresMFA: true
-},
-      {
-        name: 'SMS',
-        href: '/sms',
-        icon: MessageSquareIcon,
-        description: 'SMS management and analytics',
-        requiresMFA: true
-}
-    ] : []),
+    // Protected pages - show with indication if MFA required
+    {
+      name: 'Calls',
+      href: '/calls',
+      icon: PhoneIcon,
+      description: hasMFA ? 'Call management and analytics' : 'MFA required',
+      requiresMFA: true,
+      mfaEnabled: hasMFA
+    },
+    {
+      name: 'SMS',
+      href: '/sms',
+      icon: MessageSquareIcon,
+      description: hasMFA ? 'SMS management and analytics' : 'MFA required',
+      requiresMFA: true,
+      mfaEnabled: hasMFA
+    },
     // Admin-only pages
     ...(user?.role === 'super_user' ? [{
       name: 'User Management',
@@ -90,12 +77,68 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, user }) => {
   const location = useLocation()
   const { logos } = useCompanyLogos()
 
-  // Create a simple MFA status object (Fresh MFA system doesn't need complex status)
-  const totpStatus = {
-    hasSetup: true, // Always show routes - MFA will be handled by individual pages
-    isLoading: false,
-    isEnabled: true,
+  const [mfaStatus, setMfaStatus] = useState<MfaStatus>({
+    isLoading: true,
+    hasSetup: false,
+    isEnabled: false,
     error: null
+  })
+
+  useEffect(() => {
+    checkMfaStatus()
+
+    // Listen for MFA status changes
+    const handleMfaStatusChange = () => {
+      checkMfaStatus()
+    }
+
+    window.addEventListener('totpStatusChanged', handleMfaStatusChange)
+    window.addEventListener('mfaSetupCompleted', handleMfaStatusChange)
+
+    return () => {
+      window.removeEventListener('totpStatusChanged', handleMfaStatusChange)
+      window.removeEventListener('mfaSetupCompleted', handleMfaStatusChange)
+    }
+  }, [user?.id])
+
+  const checkMfaStatus = async () => {
+    if (!user?.id) {
+      setMfaStatus({
+        isLoading: false,
+        hasSetup: false,
+        isEnabled: false,
+        error: null
+      })
+      return
+    }
+
+    setMfaStatus(prev => ({ ...prev, isLoading: true, error: null }))
+
+    try {
+      const isEnabled = await FreshMfaService.isMfaEnabled(user.id)
+
+      setMfaStatus({
+        isLoading: false,
+        hasSetup: isEnabled,
+        isEnabled: isEnabled,
+        error: null
+      })
+
+      console.log('Sidebar MFA Status Check:', {
+        userId: user.id,
+        hasSetup: isEnabled,
+        isEnabled: isEnabled
+      })
+
+    } catch (error: any) {
+      console.error('MFA status check failed:', error)
+      setMfaStatus({
+        isLoading: false,
+        hasSetup: false,
+        isEnabled: false,
+        error: error.message || 'Failed to check MFA status'
+      })
+    }
   }
 
   return (
@@ -138,9 +181,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, user }) => {
 
         {/* Navigation */}
         <nav className="flex-1 p-4 space-y-2">
-          {getNavigationItems(user, totpStatus).map((item) => {
+          {getNavigationItems(user, mfaStatus).map((item) => {
             const Icon = item.icon
             const isActive = location.pathname === item.href
+            const requiresMFA = item.requiresMFA
+            const mfaEnabled = item.mfaEnabled
 
             return (
               <NavLink
@@ -149,6 +194,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, user }) => {
                 className={`group flex items-center gap-3 px-3 py-3 sm:py-2 text-sm font-medium rounded-lg transition-all duration-200 min-h-[48px] sm:min-h-[auto] ${
                   isActive
                     ? 'bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-100'
+                    : requiresMFA && !mfaEnabled
+                    ? 'text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
                     : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-800'
                 }`}
                 onClick={() => {
@@ -160,12 +207,31 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, user }) => {
               >
                 <Icon
                   className={`w-5 h-5 ${
-                    isActive ? 'text-gray-700 dark:text-gray-300' : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-400'
+                    isActive
+                      ? 'text-gray-700 dark:text-gray-300'
+                      : requiresMFA && !mfaEnabled
+                      ? 'text-gray-400 dark:text-gray-500'
+                      : 'text-gray-400 dark:text-gray-500 group-hover:text-gray-600 dark:group-hover:text-gray-400'
                   }`}
                 />
                 <div className="flex-1">
-                  <span>{item.name}</span>
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{item.description}</p>
+                  <div className="flex items-center gap-2">
+                    <span className={requiresMFA && !mfaEnabled ? 'text-gray-400 dark:text-gray-500' : ''}>{item.name}</span>
+                    {requiresMFA && (
+                      mfaEnabled ? (
+                        <Shield className="w-3 h-3 text-green-600 dark:text-green-400" title="MFA Protected" />
+                      ) : (
+                        <AlertTriangle className="w-3 h-3 text-amber-600 dark:text-amber-400" title="MFA Required" />
+                      )
+                    )}
+                  </div>
+                  <p className={`text-xs mt-0.5 ${
+                    requiresMFA && !mfaEnabled
+                      ? 'text-amber-600 dark:text-amber-400'
+                      : 'text-gray-500 dark:text-gray-400'
+                  }`}>
+                    {item.description}
+                  </p>
                 </div>
                 {isActive && (
                   <div className="w-2 h-2 bg-gray-600 dark:bg-gray-400 rounded-full"></div>
