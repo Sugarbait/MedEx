@@ -34,9 +34,9 @@ interface ApiKeyState {
 
 export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ user }) => {
   const [apiKeys, setApiKeys] = useState<ApiKeyState>({
-    retell_api_key: '',
-    call_agent_id: '',
-    sms_agent_id: ''
+    retell_api_key: 'key_c3f084f5ca67781070e188b47d7f',
+    call_agent_id: 'agent_447a1b9da540237693b0440df6',
+    sms_agent_id: 'agent_643486efd4b5a0e9d7e094ab99'
   })
 
   const [isLoading, setIsLoading] = useState(false)
@@ -114,9 +114,9 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
           })
 
           const localApiKeys = {
-            retell_api_key: settings.retellApiKey || '',
-            call_agent_id: settings.callAgentId || '',
-            sms_agent_id: settings.smsAgentId || ''
+            retell_api_key: settings.retellApiKey || 'key_c3f084f5ca67781070e188b47d7f',
+            call_agent_id: settings.callAgentId || 'agent_447a1b9da540237693b0440df6',
+            sms_agent_id: settings.smsAgentId || 'agent_643486efd4b5a0e9d7e094ab99'
           }
 
           setApiKeys(localApiKeys)
@@ -184,16 +184,16 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
         } else {
           // Use the response data as-is (not encrypted)
           setApiKeys({
-            retell_api_key: response.data.retell_api_key || '',
-            call_agent_id: response.data.call_agent_id || '',
-            sms_agent_id: response.data.sms_agent_id || ''
+            retell_api_key: response.data.retell_api_key || 'key_c3f084f5ca67781070e188b47d7f',
+            call_agent_id: response.data.call_agent_id || 'agent_447a1b9da540237693b0440df6',
+            sms_agent_id: response.data.sms_agent_id || 'agent_643486efd4b5a0e9d7e094ab99'
           })
 
           // Update retell service
           retellService.updateCredentials(
-            response.data.retell_api_key || '',
-            response.data.call_agent_id || '',
-            response.data.sms_agent_id || ''
+            response.data.retell_api_key || 'key_c3f084f5ca67781070e188b47d7f',
+            response.data.call_agent_id || 'agent_447a1b9da540237693b0440df6',
+            response.data.sms_agent_id || 'agent_643486efd4b5a0e9d7e094ab99'
           )
         }
       } else {
