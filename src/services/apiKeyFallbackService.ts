@@ -20,14 +20,12 @@ interface ApiKeys {
   retell_api_key?: string
   call_agent_id?: string
   sms_agent_id?: string
-  phone_number?: string
 }
 
 interface EncryptedKeys {
   retell_api_key?: string
   call_agent_id?: string
   sms_agent_id?: string
-  phone_number?: string
 }
 
 export class ApiKeyFallbackService {
@@ -121,14 +119,10 @@ export class ApiKeyFallbackService {
       if (apiKeys.sms_agent_id) {
         encryptedKeys.sms_agent_id = await encryptionService.encryptString(apiKeys.sms_agent_id)
       }
-      if (apiKeys.phone_number) {
-        encryptedKeys.phone_number = await encryptionService.encryptString(apiKeys.phone_number)
-      }
 
       const agentConfig = {
         call_agent_id: apiKeys.call_agent_id,
         sms_agent_id: apiKeys.sms_agent_id,
-        phone_number: apiKeys.phone_number
       }
 
       // Try primary storage method (user_profiles table)
@@ -256,7 +250,6 @@ export class ApiKeyFallbackService {
         api_key: apiKeys.retell_api_key,
         call_agent_id: apiKeys.call_agent_id,
         sms_agent_id: apiKeys.sms_agent_id,
-        phone_number: apiKeys.phone_number
       }
 
       const { error } = await supabase
@@ -394,7 +387,6 @@ export class ApiKeyFallbackService {
       const agentConfig = data.encrypted_agent_config || {}
       if (agentConfig.call_agent_id) apiKeys.call_agent_id = agentConfig.call_agent_id
       if (agentConfig.sms_agent_id) apiKeys.sms_agent_id = agentConfig.sms_agent_id
-      if (agentConfig.phone_number) apiKeys.phone_number = agentConfig.phone_number
 
       return { status: 'success', data: apiKeys }
     } catch (error: any) {
@@ -432,8 +424,7 @@ export class ApiKeyFallbackService {
         const agentConfig = settingsData.retell_agent_config
         if (agentConfig.call_agent_id) apiKeys.call_agent_id = agentConfig.call_agent_id
         if (agentConfig.sms_agent_id) apiKeys.sms_agent_id = agentConfig.sms_agent_id
-        if (agentConfig.phone_number) apiKeys.phone_number = agentConfig.phone_number
-      }
+        }
 
       return { status: 'success', data: apiKeys }
     } catch (error: any) {
@@ -460,7 +451,6 @@ export class ApiKeyFallbackService {
         retell_api_key: retellConfig.api_key,
         call_agent_id: retellConfig.call_agent_id,
         sms_agent_id: retellConfig.sms_agent_id,
-        phone_number: retellConfig.phone_number
       }
 
       return { status: 'success', data: apiKeys }
@@ -495,9 +485,6 @@ export class ApiKeyFallbackService {
       }
       if (encryptedKeys.sms_agent_id) {
         apiKeys.sms_agent_id = await encryptionService.decryptString(encryptedKeys.sms_agent_id)
-      }
-      if (encryptedKeys.phone_number) {
-        apiKeys.phone_number = await encryptionService.decryptString(encryptedKeys.phone_number)
       }
 
       return { status: 'success', data: apiKeys }

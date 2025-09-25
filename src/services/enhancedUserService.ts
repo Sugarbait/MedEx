@@ -323,7 +323,6 @@ export class EnhancedUserService {
     retell_api_key?: string
     call_agent_id?: string
     sms_agent_id?: string
-    phone_number?: string
   }>> {
     try {
       console.log(`EnhancedUserService: Getting API keys for user ${userId}`)

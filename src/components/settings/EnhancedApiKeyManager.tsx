@@ -12,8 +12,7 @@ import {
   RefreshCw,
   Copy,
   Settings,
-  TestTube,
-  Phone
+  TestTube
 } from 'lucide-react'
 import { enhancedUserService } from '@/services/enhancedUserService'
 import { apiKeyFallbackService } from '@/services/apiKeyFallbackService'
@@ -31,15 +30,13 @@ interface ApiKeyState {
   retell_api_key: string
   call_agent_id: string
   sms_agent_id: string
-  phone_number: string
 }
 
 export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ user }) => {
   const [apiKeys, setApiKeys] = useState<ApiKeyState>({
     retell_api_key: '',
     call_agent_id: '',
-    sms_agent_id: '',
-    phone_number: ''
+    sms_agent_id: ''
   })
 
   const [isLoading, setIsLoading] = useState(false)
@@ -80,12 +77,17 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
     }
   }
 
+  // Load API keys on component mount
+  useEffect(() => {
+    loadApiKeys()
+    checkSchemaStatus()
+  }, [user.id])
+
   // Track unsaved changes
   useEffect(() => {
     const hasChanges = apiKeys.retell_api_key !== '' ||
                       apiKeys.call_agent_id !== '' ||
-                      apiKeys.sms_agent_id !== '' ||
-                      apiKeys.phone_number !== ''
+                      apiKeys.sms_agent_id !== ''
     setHasUnsavedChanges(hasChanges)
   }, [apiKeys])
 
@@ -99,8 +101,7 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
         setApiKeys({
           retell_api_key: response.data.retell_api_key || '',
           call_agent_id: response.data.call_agent_id || '',
-          sms_agent_id: response.data.sms_agent_id || '',
-          phone_number: response.data.phone_number || ''
+          sms_agent_id: response.data.sms_agent_id || ''
         })
       } else if (response.status === 'error') {
         // Handle specific error cases
@@ -116,8 +117,7 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
             setApiKeys({
               retell_api_key: fallbackResponse.data.retell_api_key || '',
               call_agent_id: fallbackResponse.data.call_agent_id || '',
-              sms_agent_id: fallbackResponse.data.sms_agent_id || '',
-              phone_number: fallbackResponse.data.phone_number || ''
+              sms_agent_id: fallbackResponse.data.sms_agent_id || ''
             })
 
             // Show informational message about fallback usage
@@ -127,8 +127,7 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
             setApiKeys({
               retell_api_key: '',
               call_agent_id: '',
-              sms_agent_id: '',
-              phone_number: ''
+              sms_agent_id: ''
             })
           }
         } else {
@@ -219,14 +218,6 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
       }
     }
 
-    // Validate Phone Number - should be in E.164 format
-    if (apiKeys.phone_number && apiKeys.phone_number.trim()) {
-      const cleanPhone = apiKeys.phone_number.trim()
-      // E.164 format: + followed by 1-15 digits
-      if (!/^\+[1-9]\d{1,14}$/.test(cleanPhone)) {
-        errors.phone_number = 'Phone number must be in E.164 format (e.g., +12345678901 for US numbers)'
-      }
-    }
 
     setValidationErrors(errors)
     return Object.keys(errors).length === 0
@@ -242,8 +233,7 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
     const trimmedApiKeys = {
       retell_api_key: apiKeys.retell_api_key.trim(),
       call_agent_id: apiKeys.call_agent_id.trim(),
-      sms_agent_id: apiKeys.sms_agent_id.trim(),
-      phone_number: apiKeys.phone_number.trim()
+      sms_agent_id: apiKeys.sms_agent_id.trim()
     }
 
     setIsSaving(true)
@@ -285,8 +275,7 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
         retellService.updateCredentials(
           trimmedApiKeys.retell_api_key,
           trimmedApiKeys.call_agent_id,
-          trimmedApiKeys.sms_agent_id,
-          trimmedApiKeys.phone_number
+          trimmedApiKeys.sms_agent_id
         )
 
         // Dispatch event to notify other components
@@ -294,8 +283,7 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
           detail: {
             retellApiKey: trimmedApiKeys.retell_api_key,
             callAgentId: trimmedApiKeys.call_agent_id,
-            smsAgentId: trimmedApiKeys.sms_agent_id,
-            phoneNumber: trimmedApiKeys.phone_number
+            smsAgentId: trimmedApiKeys.sms_agent_id
           }
         }))
 
@@ -371,8 +359,7 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
       retellService.updateCredentials(
         apiKeys.retell_api_key,
         apiKeys.call_agent_id,
-        apiKeys.sms_agent_id,
-        apiKeys.phone_number
+        apiKeys.sms_agent_id
       )
 
       const result = await retellService.testConnection()
@@ -654,45 +641,6 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
             </div>
           </div>
 
-          {/* Phone Number Field */}
-          <div>
-            <label className="block text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
-              Phone Number (E.164 Format)
-            </label>
-            <div className="relative">
-              <input
-                type="tel"
-                value={apiKeys.phone_number}
-                onChange={(e) => setApiKeys({ ...apiKeys, phone_number: e.target.value })}
-                placeholder="Enter phone number (e.g., +12345678901)"
-                className={`w-full px-3 py-2 pr-12 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
-                  validationErrors.phone_number ? 'border-red-500 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
-                }`}
-              />
-              <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
-                <Phone className="w-4 h-4 text-gray-400" />
-              </div>
-              {apiKeys.phone_number && (
-                <button
-                  onClick={() => handleCopyToClipboard('phone_number', apiKeys.phone_number)}
-                  className="absolute inset-y-0 right-8 pr-1 flex items-center text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
-                  title="Copy Phone Number"
-                >
-                  {copiedField === 'phone_number' ? (
-                    <Check className="w-3 h-3 text-green-600" />
-                  ) : (
-                    <Copy className="w-3 h-3" />
-                  )}
-                </button>
-              )}
-            </div>
-            {validationErrors.phone_number && (
-              <p className="text-xs text-red-600 dark:text-red-400 mt-1">{validationErrors.phone_number}</p>
-            )}
-            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-              Phone number for outbound calls in E.164 format. Examples: +1234567890 (US), +442012345678 (UK), +61234567890 (AU)
-            </p>
-          </div>
 
           {/* Action Buttons */}
           <div className="flex items-center gap-3 pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -754,15 +702,6 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
                   <div className={`w-2 h-2 rounded-full ${apiKeys.sms_agent_id ? 'bg-green-500' : 'bg-gray-400'}`} />
                   <span className="text-xs text-blue-600 dark:text-blue-400">
                     {apiKeys.sms_agent_id ? 'Configured' : 'Not configured'}
-                  </span>
-                </div>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-blue-700 dark:text-blue-300">Phone Number</span>
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${apiKeys.phone_number ? 'bg-green-500' : 'bg-gray-400'}`} />
-                  <span className="text-xs text-blue-600 dark:text-blue-400">
-                    {apiKeys.phone_number ? 'Configured' : 'Not configured'}
                   </span>
                 </div>
               </div>
