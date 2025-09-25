@@ -109,6 +109,7 @@ export class RetellService {
   private apiKey: string = ''
   private callAgentId: string = ''
   private smsAgentId: string = ''
+  private phoneNumber: string = ''
 
   constructor() {
     // Load credentials from localStorage first (primary/reliable method)
@@ -139,6 +140,7 @@ export class RetellService {
         const supabaseApiKey = retellConfig.api_key || ''
         const supabaseCallAgentId = retellConfig.call_agent_id || ''
         const supabaseSmsAgentId = retellConfig.sms_agent_id || ''
+        const supabasePhoneNumber = retellConfig.phone_number || ''
 
         // Check if user has manually set API key recently (within last 5 minutes)
         const settings = JSON.parse(localStorage.getItem(`settings_${currentUser.id}`) || '{}')
@@ -151,7 +153,8 @@ export class RetellService {
           console.log('🔒 Skipping Supabase sync - API key was manually set recently. Manual key protected for', Math.round((manualKeyTimestamp - fiveMinutesAgo) / 1000 / 60), 'more minutes')
         } else if (supabaseApiKey && (supabaseApiKey !== this.apiKey ||
             supabaseCallAgentId !== this.callAgentId ||
-            supabaseSmsAgentId !== this.smsAgentId)) {
+            supabaseSmsAgentId !== this.smsAgentId ||
+            supabasePhoneNumber !== this.phoneNumber)) {
 
           console.log('Syncing newer credentials from Supabase to localStorage (no recent manual override)')
 
@@ -159,12 +162,14 @@ export class RetellService {
           if (supabaseApiKey) settings.retellApiKey = supabaseApiKey
           if (supabaseCallAgentId) settings.callAgentId = supabaseCallAgentId
           if (supabaseSmsAgentId) settings.smsAgentId = supabaseSmsAgentId
+          if (supabasePhoneNumber) settings.phoneNumber = supabasePhoneNumber
           localStorage.setItem(`settings_${currentUser.id}`, JSON.stringify(settings))
 
           // Update current instance
           if (supabaseApiKey) this.apiKey = supabaseApiKey
           if (supabaseCallAgentId) this.callAgentId = supabaseCallAgentId
           if (supabaseSmsAgentId) this.smsAgentId = supabaseSmsAgentId
+          if (supabasePhoneNumber) this.phoneNumber = supabasePhoneNumber
 
           console.log('Successfully synced credentials from Supabase')
         } else {
@@ -179,7 +184,7 @@ export class RetellService {
   /**
    * Save credentials to both localStorage and Supabase
    */
-  public async saveCredentials(apiKey: string, callAgentId: string, smsAgentId: string): Promise<void> {
+  public async saveCredentials(apiKey: string, callAgentId: string, smsAgentId: string, phoneNumber?: string): Promise<void> {
     try {
       const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
       if (!currentUser.id) {
@@ -191,6 +196,7 @@ export class RetellService {
       settings.retellApiKey = apiKey
       settings.callAgentId = callAgentId
       settings.smsAgentId = smsAgentId
+      if (phoneNumber !== undefined) settings.phoneNumber = phoneNumber
 
       // Mark when API key was manually updated to prevent automatic overwrites
       if (apiKey && apiKey !== settings.retellApiKey) {
@@ -204,6 +210,7 @@ export class RetellService {
       this.apiKey = apiKey
       this.callAgentId = callAgentId
       this.smsAgentId = smsAgentId
+      if (phoneNumber !== undefined) this.phoneNumber = phoneNumber
 
       console.log('Credentials saved to localStorage')
 
@@ -214,7 +221,8 @@ export class RetellService {
           retell_config: {
             api_key: apiKey,
             call_agent_id: callAgentId,
-            sms_agent_id: smsAgentId
+            sms_agent_id: smsAgentId,
+            phone_number: phoneNumber
           }
         })
         console.log('Credentials also saved to Supabase for cross-device sync')
@@ -245,12 +253,14 @@ export class RetellService {
             this.apiKey = retellConfig.api_key || ''
             this.callAgentId = retellConfig.call_agent_id || ''
             this.smsAgentId = retellConfig.sms_agent_id || ''
+            this.phoneNumber = retellConfig.phone_number || ''
 
-            if (this.apiKey || this.callAgentId || this.smsAgentId) {
+            if (this.apiKey || this.callAgentId || this.smsAgentId || this.phoneNumber) {
               console.log('Loaded Retell credentials from Supabase:', {
                 hasApiKey: !!this.apiKey,
                 callAgentId: this.callAgentId,
-                smsAgentId: this.smsAgentId
+                smsAgentId: this.smsAgentId,
+                phoneNumber: this.phoneNumber
               })
             }
             return
@@ -288,12 +298,14 @@ export class RetellService {
         this.apiKey = settings.retellApiKey || ''
         this.callAgentId = settings.callAgentId || ''
         this.smsAgentId = settings.smsAgentId || ''
+        this.phoneNumber = settings.phoneNumber || ''
 
-        if (this.apiKey || this.callAgentId || this.smsAgentId) {
+        if (this.apiKey || this.callAgentId || this.smsAgentId || this.phoneNumber) {
           console.log('Loaded Retell credentials from localStorage:', {
             hasApiKey: !!this.apiKey,
             callAgentId: this.callAgentId,
-            smsAgentId: this.smsAgentId
+            smsAgentId: this.smsAgentId,
+            phoneNumber: this.phoneNumber
           })
         }
       }
@@ -393,17 +405,106 @@ export class RetellService {
       if (response.ok) {
         const data = await response.json()
         console.log('API test successful:', data)
-        return { success: true, message: 'Connection successful' }
+
+        // Validate that we can actually get meaningful data
+        if (Array.isArray(data) || (data && (data.calls || data.data))) {
+          return { success: true, message: 'Connection successful! Your Retell AI credentials are working correctly.' }
+        } else {
+          return { success: true, message: 'Connection successful, but received unexpected response format. API may have changed.' }
+        }
       } else if (response.status === 401) {
-        return { success: false, message: 'Invalid API key - check your Retell AI credentials' }
+        const errorText = await response.text()
+        if (errorText.toLowerCase().includes('invalid') || errorText.toLowerCase().includes('unauthorized')) {
+          return {
+            success: false,
+            message: 'Invalid API key. Please check that you\'ve entered the correct Retell AI API key from your dashboard.'
+          }
+        } else {
+          return {
+            success: false,
+            message: 'Authentication failed. Your API key may be expired or have insufficient permissions.'
+          }
+        }
+      } else if (response.status === 403) {
+        return {
+          success: false,
+          message: 'Access forbidden. Your API key may not have permission to access call data.'
+        }
+      } else if (response.status === 404) {
+        return {
+          success: false,
+          message: 'API endpoint not found. This may indicate an issue with the Retell AI service or incorrect API URL.'
+        }
+      } else if (response.status === 429) {
+        return {
+          success: false,
+          message: 'Rate limit exceeded. Please wait a moment before testing again.'
+        }
+      } else if (response.status >= 500) {
+        return {
+          success: false,
+          message: 'Retell AI server error. The service may be temporarily unavailable. Please try again later.'
+        }
       } else {
         const errorText = await response.text()
         console.error('API error response:', errorText)
-        return { success: false, message: `API error: ${response.status} - ${errorText}` }
+        let errorMessage = `API error (${response.status})`
+
+        // Try to extract meaningful error message from response
+        try {
+          const errorData = JSON.parse(errorText)
+          if (errorData.error) {
+            errorMessage += `: ${errorData.error}`
+          } else if (errorData.message) {
+            errorMessage += `: ${errorData.message}`
+          }
+        } catch {
+          // Not JSON, use raw text if it's short enough
+          if (errorText && errorText.length < 100) {
+            errorMessage += `: ${errorText}`
+          }
+        }
+
+        return { success: false, message: errorMessage }
       }
     } catch (error) {
       console.error('API test exception:', error)
-      return { success: false, message: `Connection failed: ${error instanceof Error ? error.message : 'Unknown error'}` }
+
+      // Provide more specific error messages for common network issues
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        return {
+          success: false,
+          message: 'Network error: Unable to reach Retell AI servers. Please check your internet connection and try again.'
+        }
+      } else if (error instanceof Error) {
+        const errorMsg = error.message.toLowerCase()
+        if (errorMsg.includes('network') || errorMsg.includes('connection')) {
+          return {
+            success: false,
+            message: 'Network connection error. Please check your internet connection and firewall settings.'
+          }
+        } else if (errorMsg.includes('timeout')) {
+          return {
+            success: false,
+            message: 'Request timed out. The Retell AI service may be temporarily slow. Please try again.'
+          }
+        } else if (errorMsg.includes('cors')) {
+          return {
+            success: false,
+            message: 'CORS error: This may indicate a browser security issue or incorrect API configuration.'
+          }
+        } else {
+          return {
+            success: false,
+            message: `Connection failed: ${error.message}`
+          }
+        }
+      } else {
+        return {
+          success: false,
+          message: 'Unknown connection error occurred. Please try again or contact support if the issue persists.'
+        }
+      }
     }
   }
 
@@ -966,10 +1067,11 @@ export class RetellService {
   /**
    * Update credentials (call this when settings are changed)
    */
-  public updateCredentials(apiKey?: string, callAgentId?: string, smsAgentId?: string): void {
+  public updateCredentials(apiKey?: string, callAgentId?: string, smsAgentId?: string, phoneNumber?: string): void {
     if (apiKey !== undefined) this.apiKey = apiKey
     if (callAgentId !== undefined) this.callAgentId = callAgentId
     if (smsAgentId !== undefined) this.smsAgentId = smsAgentId
+    if (phoneNumber !== undefined) this.phoneNumber = phoneNumber
   }
 }
 

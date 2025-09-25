@@ -12,7 +12,8 @@ import {
   RefreshCw,
   Copy,
   Settings,
-  TestTube
+  TestTube,
+  Phone
 } from 'lucide-react'
 import { enhancedUserService } from '@/services/enhancedUserService'
 import { apiKeyFallbackService } from '@/services/apiKeyFallbackService'
@@ -30,13 +31,15 @@ interface ApiKeyState {
   retell_api_key: string
   call_agent_id: string
   sms_agent_id: string
+  phone_number: string
 }
 
 export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ user }) => {
   const [apiKeys, setApiKeys] = useState<ApiKeyState>({
     retell_api_key: '',
     call_agent_id: '',
-    sms_agent_id: ''
+    sms_agent_id: '',
+    phone_number: ''
   })
 
   const [isLoading, setIsLoading] = useState(false)
@@ -81,7 +84,8 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
   useEffect(() => {
     const hasChanges = apiKeys.retell_api_key !== '' ||
                       apiKeys.call_agent_id !== '' ||
-                      apiKeys.sms_agent_id !== ''
+                      apiKeys.sms_agent_id !== '' ||
+                      apiKeys.phone_number !== ''
     setHasUnsavedChanges(hasChanges)
   }, [apiKeys])
 
@@ -95,7 +99,8 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
         setApiKeys({
           retell_api_key: response.data.retell_api_key || '',
           call_agent_id: response.data.call_agent_id || '',
-          sms_agent_id: response.data.sms_agent_id || ''
+          sms_agent_id: response.data.sms_agent_id || '',
+          phone_number: response.data.phone_number || ''
         })
       } else if (response.status === 'error') {
         // Handle specific error cases
@@ -111,7 +116,8 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
             setApiKeys({
               retell_api_key: fallbackResponse.data.retell_api_key || '',
               call_agent_id: fallbackResponse.data.call_agent_id || '',
-              sms_agent_id: fallbackResponse.data.sms_agent_id || ''
+              sms_agent_id: fallbackResponse.data.sms_agent_id || '',
+              phone_number: fallbackResponse.data.phone_number || ''
             })
 
             // Show informational message about fallback usage
@@ -121,7 +127,8 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
             setApiKeys({
               retell_api_key: '',
               call_agent_id: '',
-              sms_agent_id: ''
+              sms_agent_id: '',
+              phone_number: ''
             })
           }
         } else {
@@ -130,7 +137,8 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
           setApiKeys({
             retell_api_key: '',
             call_agent_id: '',
-            sms_agent_id: ''
+            sms_agent_id: '',
+            phone_number: ''
           })
         }
       } else {
@@ -152,7 +160,8 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
           setApiKeys({
             retell_api_key: fallbackResponse.data.retell_api_key || '',
             call_agent_id: fallbackResponse.data.call_agent_id || '',
-            sms_agent_id: fallbackResponse.data.sms_agent_id || ''
+            sms_agent_id: fallbackResponse.data.sms_agent_id || '',
+            phone_number: fallbackResponse.data.phone_number || ''
           })
           setError('Loaded API keys using emergency fallback. Please check system status.')
         } else {
@@ -160,7 +169,8 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
           setApiKeys({
             retell_api_key: '',
             call_agent_id: '',
-            sms_agent_id: ''
+            sms_agent_id: '',
+            phone_number: ''
           })
         }
       } catch (fallbackErr) {
@@ -179,22 +189,209 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
   const validateApiKeys = () => {
     const errors: Record<string, string> = {}
 
-    if (apiKeys.retell_api_key && !apiKeys.retell_api_key.startsWith('agent_')) {
-      if (apiKeys.retell_api_key.length < 20) {
+    // Validate API Key - should be a non-empty string
+    if (apiKeys.retell_api_key && apiKeys.retell_api_key.trim()) {
+      if (apiKeys.retell_api_key.trim().length < 8) {
         errors.retell_api_key = 'API key appears too short. Please verify it\'s correct.'
+      }
+      // Check for common key patterns but don't enforce specific format
+      if (!/^[a-zA-Z0-9_\-\.]+$/.test(apiKeys.retell_api_key.trim())) {
+        errors.retell_api_key = 'API key contains invalid characters. Only letters, numbers, underscores, hyphens, and dots allowed.'
       }
     }
 
-    if (apiKeys.call_agent_id && !apiKeys.call_agent_id.startsWith('agent_')) {
-      errors.call_agent_id = 'Call Agent ID should start with "agent_"'
+    // Validate Agent IDs - alphanumeric strings (NO agent_ prefix requirement)
+    if (apiKeys.call_agent_id && apiKeys.call_agent_id.trim()) {
+      const cleanCallAgentId = apiKeys.call_agent_id.trim()
+      if (cleanCallAgentId.length < 8) {
+        errors.call_agent_id = 'Call Agent ID appears too short. Should be at least 8 characters.'
+      } else if (!/^[a-zA-Z0-9_-]+$/.test(cleanCallAgentId)) {
+        errors.call_agent_id = 'Call Agent ID should only contain letters, numbers, underscores, or hyphens.'
+      }
     }
 
-    if (apiKeys.sms_agent_id && !apiKeys.sms_agent_id.startsWith('agent_')) {
-      errors.sms_agent_id = 'SMS Agent ID should start with "agent_"'
+    if (apiKeys.sms_agent_id && apiKeys.sms_agent_id.trim()) {
+      const cleanSmsAgentId = apiKeys.sms_agent_id.trim()
+      if (cleanSmsAgentId.length < 8) {
+        errors.sms_agent_id = 'SMS Agent ID appears too short. Should be at least 8 characters.'
+      } else if (!/^[a-zA-Z0-9_-]+$/.test(cleanSmsAgentId)) {
+        errors.sms_agent_id = 'SMS Agent ID should only contain letters, numbers, underscores, or hyphens.'
+      }
+    }
+
+    // Validate Phone Number - should be in E.164 format
+    if (apiKeys.phone_number && apiKeys.phone_number.trim()) {
+      const cleanPhone = apiKeys.phone_number.trim()
+      // E.164 format: + followed by 1-15 digits
+      if (!/^\+[1-9]\d{1,14}$/.test(cleanPhone)) {
+        errors.phone_number = 'Phone number must be in E.164 format (e.g., +12345678901 for US numbers)'
+      }
     }
 
     setValidationErrors(errors)
     return Object.keys(errors).length === 0
+  }
+
+  const handleSave = async () => {
+    if (!validateApiKeys()) {
+      setError('Please fix validation errors before saving')
+      return
+    }
+
+    // Trim all values before saving
+    const trimmedApiKeys = {
+      retell_api_key: apiKeys.retell_api_key.trim(),
+      call_agent_id: apiKeys.call_agent_id.trim(),
+      sms_agent_id: apiKeys.sms_agent_id.trim(),
+      phone_number: apiKeys.phone_number.trim()
+    }
+
+    setIsSaving(true)
+    setError(null)
+    setSuccessMessage(null)
+    setTestResult(null)
+
+    try {
+      // Get the current storage method before saving
+      const testResult = await apiKeyFallbackService.testSchemaHandling(user.id)
+      const currentMethod = testResult.fallbackMethod
+
+      const response = await enhancedUserService.updateUserApiKeys(user.id, trimmedApiKeys)
+
+      if (response.status === 'success') {
+        // Update local state with trimmed values
+        setApiKeys(trimmedApiKeys)
+
+        // Update schema status after successful save
+        await checkSchemaStatus()
+
+        // Create detailed success message based on storage method
+        let successMsg = 'API keys saved successfully!'
+
+        if (currentMethod === 'user_profiles_full') {
+          successMsg += ' (Stored in primary database)'
+        } else if (currentMethod === 'user_profiles_partial_plus_user_settings') {
+          successMsg += ' (Stored using backup method due to database schema)'
+        } else if (currentMethod === 'user_settings_or_localStorage') {
+          successMsg += ' (Stored using fallback method - database schema needs updating)'
+        } else if (currentMethod === 'localStorage_fallback') {
+          successMsg += ' (Stored locally - database connection unavailable)'
+        }
+
+        setSuccessMessage(successMsg)
+        setHasUnsavedChanges(false)
+
+        // Update retell service with new credentials
+        retellService.updateCredentials(
+          trimmedApiKeys.retell_api_key,
+          trimmedApiKeys.call_agent_id,
+          trimmedApiKeys.sms_agent_id,
+          trimmedApiKeys.phone_number
+        )
+
+        // Dispatch event to notify other components
+        window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
+          detail: {
+            retellApiKey: trimmedApiKeys.retell_api_key,
+            callAgentId: trimmedApiKeys.call_agent_id,
+            smsAgentId: trimmedApiKeys.sms_agent_id,
+            phoneNumber: trimmedApiKeys.phone_number
+          }
+        }))
+
+        setTimeout(() => setSuccessMessage(null), 7000) // Extended timeout for longer messages
+      } else {
+        // Enhanced error handling with storage method context
+        let errorMsg = response.error || 'Failed to save API keys'
+
+        if (response.error?.includes('encrypted_agent_config')) {
+          errorMsg = 'Database schema issue detected. Using fallback storage method...'
+
+          // Retry with explicit fallback awareness
+          try {
+            const fallbackResult = await apiKeyFallbackService.storeApiKeys(user.id, trimmedApiKeys)
+            if (fallbackResult.status === 'success') {
+              setApiKeys(trimmedApiKeys)
+              setSuccessMessage('API keys saved using fallback method! Database schema needs updating.')
+              setHasUnsavedChanges(false)
+              await checkSchemaStatus()
+              setTimeout(() => setSuccessMessage(null), 7000)
+              return
+            }
+          } catch (fallbackError) {
+            errorMsg += ` Fallback also failed: ${fallbackError.message}`
+          }
+        }
+
+        setError(errorMsg)
+      }
+    } catch (err: any) {
+      let errorMsg = err.message || 'Failed to save API keys'
+
+      // Provide user-friendly error messages for common issues
+      if (err.message?.includes('encrypted_agent_config')) {
+        errorMsg = 'Database schema issue detected. Trying fallback storage...'
+
+        // Attempt emergency fallback
+        try {
+          const fallbackResult = await apiKeyFallbackService.storeApiKeys(user.id, trimmedApiKeys)
+          if (fallbackResult.status === 'success') {
+            setApiKeys(trimmedApiKeys)
+            setSuccessMessage('API keys saved using emergency fallback! Please contact administrator about database schema.')
+            setHasUnsavedChanges(false)
+            await checkSchemaStatus()
+            setTimeout(() => setSuccessMessage(null), 8000)
+            return
+          }
+        } catch (fallbackError) {
+          errorMsg += ` Emergency fallback failed: ${fallbackError.message}`
+        }
+      } else if (err.message?.includes('connection') || err.message?.includes('network')) {
+        errorMsg = 'Network connection issue. API keys will be stored locally until connection is restored.'
+      }
+
+      setError(errorMsg)
+    } finally {
+      setIsSaving(false)
+    }
+  }
+
+  const handleTestConnection = async () => {
+    if (!apiKeys.retell_api_key) {
+      setError('Please enter an API key before testing')
+      return
+    }
+
+    setIsTesting(true)
+    setTestResult(null)
+    setError(null)
+
+    try {
+      // Update retell service with current credentials for testing
+      retellService.updateCredentials(
+        apiKeys.retell_api_key,
+        apiKeys.call_agent_id,
+        apiKeys.sms_agent_id,
+        apiKeys.phone_number
+      )
+
+      const result = await retellService.testConnection()
+
+      setTestResult({
+        success: result.success,
+        message: result.success
+          ? 'API connection successful! Your credentials are working correctly.'
+          : result.message || 'Connection test failed'
+      })
+
+    } catch (err: any) {
+      setTestResult({
+        success: false,
+        message: err.message || 'Connection test failed'
+      })
+    } finally {
+      setIsTesting(false)
+    }
   }
 
   const handleSave = async () => {
@@ -239,7 +436,8 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
         retellService.updateCredentials(
           apiKeys.retell_api_key,
           apiKeys.call_agent_id,
-          apiKeys.sms_agent_id
+          apiKeys.sms_agent_id,
+          apiKeys.phone_number
         )
 
         // Dispatch event to notify other components
@@ -247,7 +445,8 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
           detail: {
             retellApiKey: apiKeys.retell_api_key,
             callAgentId: apiKeys.call_agent_id,
-            smsAgentId: apiKeys.sms_agent_id
+            smsAgentId: apiKeys.sms_agent_id,
+            phoneNumber: apiKeys.phone_number
           }
         }))
 
@@ -321,7 +520,8 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
       retellService.updateCredentials(
         apiKeys.retell_api_key,
         apiKeys.call_agent_id,
-        apiKeys.sms_agent_id
+        apiKeys.sms_agent_id,
+        apiKeys.phone_number
       )
 
       const result = await retellService.testConnection()
@@ -532,7 +732,7 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
                   type="text"
                   value={apiKeys.call_agent_id}
                   onChange={(e) => setApiKeys({ ...apiKeys, call_agent_id: e.target.value })}
-                  placeholder="agent_xxxxxxxxxx"
+                  placeholder="Enter Call Agent ID (e.g., oBeDLoLOeuAbiuaMFXRtDOLriTJ5tSxD)"
                   className={`w-full px-3 py-2 pr-12 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
                     validationErrors.call_agent_id ? 'border-red-500 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
                   }`}
@@ -558,7 +758,7 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
                 <p className="text-xs text-red-600 dark:text-red-400 mt-1">{validationErrors.call_agent_id}</p>
               )}
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Agent used for outbound calls
+                Agent used for outbound calls. No specific prefix required - just use your Agent ID from Retell dashboard.
               </p>
             </div>
 
@@ -571,7 +771,7 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
                   type="text"
                   value={apiKeys.sms_agent_id}
                   onChange={(e) => setApiKeys({ ...apiKeys, sms_agent_id: e.target.value })}
-                  placeholder="agent_xxxxxxxxxx"
+                  placeholder="Enter SMS Agent ID (e.g., pLmNoPqRsTuVwXyZ1234567890AbCdEf)"
                   className={`w-full px-3 py-2 pr-12 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
                     validationErrors.sms_agent_id ? 'border-red-500 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
                   }`}
@@ -597,9 +797,49 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
                 <p className="text-xs text-red-600 dark:text-red-400 mt-1">{validationErrors.sms_agent_id}</p>
               )}
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                Agent used for SMS and chat conversations
+                Agent used for SMS and chat conversations. No specific prefix required - just use your Agent ID from Retell dashboard.
               </p>
             </div>
+          </div>
+
+          {/* Phone Number Field */}
+          <div>
+            <label className="block text-sm font-medium text-gray-900 dark:text-gray-100 mb-2">
+              Phone Number (E.164 Format)
+            </label>
+            <div className="relative">
+              <input
+                type="tel"
+                value={apiKeys.phone_number}
+                onChange={(e) => setApiKeys({ ...apiKeys, phone_number: e.target.value })}
+                placeholder="Enter phone number (e.g., +12345678901)"
+                className={`w-full px-3 py-2 pr-12 border rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 ${
+                  validationErrors.phone_number ? 'border-red-500 dark:border-red-500' : 'border-gray-300 dark:border-gray-600'
+                }`}
+              />
+              <div className="absolute inset-y-0 right-0 pr-3 flex items-center">
+                <Phone className="w-4 h-4 text-gray-400" />
+              </div>
+              {apiKeys.phone_number && (
+                <button
+                  onClick={() => handleCopyToClipboard('phone_number', apiKeys.phone_number)}
+                  className="absolute inset-y-0 right-8 pr-1 flex items-center text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200"
+                  title="Copy Phone Number"
+                >
+                  {copiedField === 'phone_number' ? (
+                    <Check className="w-3 h-3 text-green-600" />
+                  ) : (
+                    <Copy className="w-3 h-3" />
+                  )}
+                </button>
+              )}
+            </div>
+            {validationErrors.phone_number && (
+              <p className="text-xs text-red-600 dark:text-red-400 mt-1">{validationErrors.phone_number}</p>
+            )}
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              Phone number for outbound calls in E.164 format. Examples: +1234567890 (US), +442012345678 (UK), +61234567890 (AU)
+            </p>
           </div>
 
           {/* Action Buttons */}
@@ -662,6 +902,15 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
                   <div className={`w-2 h-2 rounded-full ${apiKeys.sms_agent_id ? 'bg-green-500' : 'bg-gray-400'}`} />
                   <span className="text-xs text-blue-600 dark:text-blue-400">
                     {apiKeys.sms_agent_id ? 'Configured' : 'Not configured'}
+                  </span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-blue-700 dark:text-blue-300">Phone Number</span>
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${apiKeys.phone_number ? 'bg-green-500' : 'bg-gray-400'}`} />
+                  <span className="text-xs text-blue-600 dark:text-blue-400">
+                    {apiKeys.phone_number ? 'Configured' : 'Not configured'}
                   </span>
                 </div>
               </div>

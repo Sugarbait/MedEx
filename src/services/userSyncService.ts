@@ -426,6 +426,29 @@ class UserSyncService {
   }
 
   /**
+   * Force sync user data (alias for forceSyncNow for compatibility)
+   */
+  public async forceSyncUserData(userId: string): Promise<{ status: string; error?: string }> {
+    // Set user ID if not already set
+    if (this.userId !== userId) {
+      this.setUser(userId)
+    }
+
+    try {
+      const result = await this.forceSyncNow()
+      return {
+        status: result.success ? 'success' : 'error',
+        error: result.success ? undefined : result.message
+      }
+    } catch (error) {
+      return {
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Unknown error'
+      }
+    }
+  }
+
+  /**
    * Get sync status
    */
   public getSyncStatus(): { enabled: boolean; lastSync?: string; deviceId: string; backend: string } {
