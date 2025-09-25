@@ -9,7 +9,7 @@
  */
 
 import React, { useState, useEffect, useCallback } from 'react'
-import { QrCode, Shield, Copy, Check, AlertCircle, Key } from 'lucide-react'
+import { QrCode, Shield, Copy, Check, AlertCircle, Key, CheckCircle } from 'lucide-react'
 import { FreshMfaService } from '../../services/freshMfaService'
 
 interface FreshMfaSetupProps {
@@ -27,7 +27,7 @@ export const FreshMfaSetup: React.FC<FreshMfaSetupProps> = ({
   onSetupComplete,
   onCancel
 }) => {
-  const [step, setStep] = useState<'generate' | 'verify'>('generate')
+  const [step, setStep] = useState<'generate' | 'verify' | 'backup'>('generate')
   const [setupData, setSetupData] = useState<any>(null)
   const [verificationCode, setVerificationCode] = useState('')
   const [isLoading, setIsLoading] = useState(false)
@@ -87,8 +87,8 @@ export const FreshMfaSetup: React.FC<FreshMfaSetupProps> = ({
       const result = await FreshMfaService.verifyAndEnableMfa(userId, verificationCode)
 
       if (result.success) {
-        console.log('✅ MFA setup completed successfully')
-        onSetupComplete()
+        console.log('✅ MFA verification successful - showing backup codes')
+        setStep('backup')
       } else {
         setError(result.message)
       }
@@ -175,6 +175,79 @@ export const FreshMfaSetup: React.FC<FreshMfaSetupProps> = ({
           <button
             onClick={onCancel}
             className="w-full px-4 py-3 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 transition-colors"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (step === 'backup') {
+    return (
+      <div className="max-w-md mx-auto bg-white rounded-lg p-6">
+        <div className="text-center mb-6">
+          <CheckCircle className="w-12 h-12 text-green-600 mx-auto mb-4" />
+          <h2 className="text-xl font-bold text-gray-900">Save Your Backup Codes</h2>
+          <p className="text-sm text-gray-600 mt-2">
+            Store these codes securely. You can use them to access your account if you lose your authenticator device.
+          </p>
+        </div>
+
+        {error && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg flex items-center">
+            <AlertCircle className="w-4 h-4 text-red-500 mr-2" />
+            <span className="text-red-700 text-sm">{error}</span>
+          </div>
+        )}
+
+        {/* Backup Codes */}
+        <div className="mb-6">
+          <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200">
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              {setupData?.backupCodes?.map((code: string, index: number) => (
+                <code key={index} className="text-sm font-mono bg-white p-2 rounded border text-center">
+                  {code}
+                </code>
+              ))}
+            </div>
+            <button
+              onClick={() => copyToClipboard(setupData?.backupCodes?.join('\n') || '', 'backup')}
+              className="w-full text-yellow-700 hover:text-yellow-900 flex items-center justify-center text-sm font-medium"
+            >
+              {backupCodesCopied ? (
+                <>
+                  <Check className="w-4 h-4 mr-1" />
+                  Copied to Clipboard!
+                </>
+              ) : (
+                <>
+                  <Copy className="w-4 h-4 mr-1" />
+                  Copy All Backup Codes
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+
+        <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+          <p className="text-xs text-blue-800">
+            <strong>Important:</strong> Each backup code can only be used once. Store them in a secure location like a password manager or safe place.
+          </p>
+        </div>
+
+        <button
+          onClick={onSetupComplete}
+          className="w-full px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center justify-center font-medium"
+        >
+          <CheckCircle className="w-5 h-5 mr-2" />
+          Complete Setup
+        </button>
+
+        <div className="mt-4 text-center">
+          <button
+            onClick={onCancel}
+            className="text-gray-500 hover:text-gray-700 text-sm"
           >
             Cancel
           </button>
