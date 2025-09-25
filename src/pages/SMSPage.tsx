@@ -987,9 +987,9 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     setError('')
 
     try {
-      // Reload credentials (localStorage + Supabase sync) - same as Calls page
-      chatService.reloadCredentials()
-      safeLog('Reloaded chat credentials:', {
+      // Synchronize with retellService (localStorage + Supabase sync) - same as Calls page
+      await chatService.syncWithRetellService()
+      safeLog('Synchronized chat credentials:', {
         hasApiKey: !!chatService.isConfigured(),
         configured: chatService.isConfigured()
       })
@@ -1558,8 +1558,8 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
             if (recovered.success) {
               console.log('✅ [SMSPage] API credentials recovered successfully')
 
-              // CRITICAL: Reload chatService credentials to sync with retellService
-              chatService.reloadCredentials()
+              // CRITICAL: Sync chatService credentials with retellService
+              await chatService.syncWithRetellService()
               console.log('🔄 [SMSPage] Synchronized chatService with recovered API credentials')
 
               // Dispatch event to notify page components
@@ -1589,9 +1589,13 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       }
     }
 
-    // CRITICAL: Immediately synchronize chatService with bulletproof API system
+    // CRITICAL: Synchronize chatService with retellService (async to ensure proper timing)
     console.log('🔄 [SMSPage] Synchronizing chatService with bulletproof API system on mount...')
-    chatService.reloadCredentials()
+    chatService.syncWithRetellService().catch(error => {
+      console.error('❌ [SMSPage] Failed to sync chatService with retellService:', error)
+      // Fallback to regular reload
+      chatService.reloadCredentials()
+    })
 
     // Start monitoring when component mounts
     startMonitoring()
@@ -1599,7 +1603,10 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     // Listen for focus events to restart monitoring after navigation
     const handleFocus = () => {
       console.log('🛡️ [SMSPage] Window focused - restarting API monitoring and syncing chatService')
-      chatService.reloadCredentials() // Synchronize chatService on focus
+      chatService.syncWithRetellService().catch(() => {
+        // Fallback to regular reload if sync fails
+        chatService.reloadCredentials()
+      })
       startMonitoring()
     }
 

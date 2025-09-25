@@ -820,8 +820,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
         // Chats API Promise
         (async () => {
           try {
-            // Reload credentials for chatService too
-            chatService.reloadCredentials()
+            // Synchronize credentials with retellService for chatService too
+            await chatService.syncWithRetellService()
 
             const allChatsResponse = await chatService.getChatHistory({
               limit: 500

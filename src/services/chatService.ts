@@ -170,6 +170,93 @@ export class ChatService {
   }
 
   /**
+   * Ensure retellService is fully initialized before loading chatService credentials
+   */
+  public async syncWithRetellService(): Promise<void> {
+    try {
+      console.log('🔄 [ChatService] Synchronizing with retellService...')
+
+      // Import retellService dynamically to avoid circular dependencies
+      const { retellService } = await import('./retellService')
+
+      // Check if retellService is available
+      if (!retellService) {
+        throw new Error('RetellService not available')
+      }
+
+      // Ensure retellService credentials are fully loaded with timeout
+      const timeoutPromise = new Promise<boolean>((_, reject) => {
+        setTimeout(() => reject(new Error('RetellService initialization timeout')), 10000) // 10 second timeout
+      })
+
+      const credentialsLoadedPromise = retellService.ensureCredentialsLoaded()
+
+      const isRetellReady = await Promise.race([credentialsLoadedPromise, timeoutPromise])
+
+      if (isRetellReady) {
+        console.log('✅ [ChatService] RetellService is ready, loading chatService credentials...')
+        this.loadCredentials()
+
+        // Verify chatService loaded credentials successfully
+        if (this.isConfigured()) {
+          console.log('✅ [ChatService] Successfully synchronized with retellService:', {
+            hasApiKey: !!this.apiKey,
+            apiKeyLength: this.apiKey.length,
+            smsAgentId: this.smsAgentId,
+            isDemoMode: this.isDemoMode
+          })
+        } else {
+          console.warn('⚠️ [ChatService] Synchronization completed but no credentials found')
+
+          // Try to trigger retellService initialization if it's not configured
+          if (!retellService.isConfigured()) {
+            console.log('🔧 [ChatService] RetellService not configured, triggering initialization...')
+            retellService.loadCredentials()
+
+            // Wait and try again with exponential backoff
+            for (let attempt = 1; attempt <= 3; attempt++) {
+              const waitTime = attempt * 500 // 500ms, 1s, 1.5s
+              console.log(`🔧 [ChatService] Retry attempt ${attempt}/3, waiting ${waitTime}ms...`)
+              await new Promise(resolve => setTimeout(resolve, waitTime))
+
+              this.loadCredentials()
+              if (this.isConfigured()) {
+                console.log(`✅ [ChatService] Credentials loaded successfully on attempt ${attempt}`)
+                break
+              }
+            }
+
+            if (!this.isConfigured()) {
+              console.warn('⚠️ [ChatService] Failed to load credentials after multiple attempts')
+              this.isDemoMode = true
+            }
+          } else {
+            console.warn('⚠️ [ChatService] RetellService is configured but chatService still has no credentials')
+            this.isDemoMode = true
+          }
+        }
+      } else {
+        console.warn('⚠️ [ChatService] RetellService credentials not available after timeout')
+        this.isDemoMode = true
+        // Still try to load credentials as fallback
+        this.loadCredentials()
+      }
+    } catch (error) {
+      console.error('❌ [ChatService] Error during retellService synchronization:', error)
+      console.log('🔄 [ChatService] Falling back to regular credential loading...')
+
+      // Fallback to regular credential loading
+      this.loadCredentials()
+
+      // If still not configured after fallback, enable demo mode
+      if (!this.isConfigured()) {
+        console.warn('⚠️ [ChatService] Fallback credential loading failed, enabling demo mode')
+        this.isDemoMode = true
+      }
+    }
+  }
+
+  /**
    * Load API credentials from localStorage
    */
   private loadCredentials(): void {
@@ -857,6 +944,29 @@ export class ChatService {
       this.isDemoMode = !apiKey
     }
     if (smsAgentId !== undefined) this.smsAgentId = smsAgentId
+  }
+
+  /**
+   * Get current configuration status for debugging
+   */
+  public getConfigurationStatus(): {
+    isConfigured: boolean
+    hasApiKey: boolean
+    apiKeyLength: number
+    hasSmsAgentId: boolean
+    smsAgentId: string
+    isDemoMode: boolean
+    source: string
+  } {
+    return {
+      isConfigured: this.isConfigured(),
+      hasApiKey: !!this.apiKey,
+      apiKeyLength: this.apiKey?.length || 0,
+      hasSmsAgentId: !!this.smsAgentId,
+      smsAgentId: this.smsAgentId || '',
+      isDemoMode: this.isDemoMode,
+      source: 'chatService'
+    }
   }
 
   /**
