@@ -277,7 +277,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 }))
 
                 // CRITICAL: Initialize retell service with API credentials immediately upon login
-                if (settings?.retell_config) {
+                if (settings?.retell_config?.api_key) {
                   console.log('🚀 INITIALIZING RETELL SERVICE with API credentials from login...')
                   try {
                     const { retellService } = await import('@/services/retellService')
@@ -303,7 +303,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                     console.error('❌ Failed to initialize retell service on login:', retellError)
                   }
                 } else {
-                  console.log('ℹ️ No API credentials found during login - user will need to configure them in Settings')
+                  console.log('⚠️ No API credentials found in database - using hardcoded fallback credentials for production')
+                  try {
+                    const { retellService } = await import('@/services/retellService')
+                    // Use hardcoded credentials as fallback for production
+                    retellService.forceUpdateCredentials()
+                    console.log('✅ Retell service initialized with fallback credentials!')
+
+                    // Dispatch event to notify other components that API is ready
+                    window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
+                      detail: {
+                        apiKey: true,
+                        callAgentId: true,
+                        smsAgentId: true
+                      }
+                    }))
+                  } catch (retellError) {
+                    console.error('❌ Failed to initialize retell service with fallback credentials:', retellError)
+                  }
                 }
 
                 // Subscribe to real-time settings changes
@@ -312,7 +329,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                   await secureStorage.setUserPreference('user_settings', newSettings, false)
 
                   // CRITICAL: Update retell service when settings change
-                  if (newSettings?.retell_config) {
+                  if (newSettings?.retell_config?.api_key) {
                     try {
                       const { retellService } = await import('@/services/retellService')
                       retellService.updateCredentials(
@@ -335,6 +352,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                       }))
                     } catch (retellError) {
                       console.error('❌ Failed to update retell service from real-time sync:', retellError)
+                    }
+                  } else {
+                    // If no API key in settings, use fallback credentials
+                    try {
+                      const { retellService } = await import('@/services/retellService')
+                      retellService.forceUpdateCredentials()
+                      console.log('✅ Retell service updated with fallback credentials from real-time sync')
+
+                      // Notify components of API configuration update
+                      window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
+                        detail: {
+                          apiKey: true,
+                          callAgentId: true,
+                          smsAgentId: true
+                        }
+                      }))
+                    } catch (retellError) {
+                      console.error('❌ Failed to update retell service with fallback credentials:', retellError)
                     }
                   }
 
