@@ -137,7 +137,8 @@
       "Bash(start http://localhost:3001/dashboard)",
       "Bash(npx tsx:*)",
       "Bash(git revert:*)",
-      "Bash(set:*)"
+      "Bash(set:*)",
+      "Bash(psql:*)"
     ],
     "deny": [],
     "ask": []

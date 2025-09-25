@@ -15,6 +15,7 @@ import {
   TestTube
 } from 'lucide-react'
 import { enhancedUserService } from '@/services/enhancedUserService'
+import { apiKeyFallbackService } from '@/services/apiKeyFallbackService'
 import { retellService } from '@/services'
 
 interface EnhancedApiKeyManagerProps {
@@ -47,6 +48,11 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
     success: boolean
     message: string
   } | null>(null)
+  const [storageMethod, setStorageMethod] = useState<string | null>(null)
+  const [schemaStatus, setSchemaStatus] = useState<{
+    hasAgentConfig: boolean
+    hasRetellKey: boolean
+  } | null>(null)
 
   // Visibility states for sensitive fields
   const [showApiKey, setShowApiKey] = useState(false)
@@ -58,7 +64,18 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
 
   useEffect(() => {
     loadApiKeys()
+    checkSchemaStatus()
   }, [user.id])
+
+  const checkSchemaStatus = async () => {
+    try {
+      const testResult = await apiKeyFallbackService.testSchemaHandling(user.id)
+      setSchemaStatus(testResult.schemaSupported)
+      setStorageMethod(testResult.fallbackMethod)
+    } catch (error) {
+      console.warn('Could not check schema status:', error)
+    }
+  }
 
   // Track unsaved changes
   useEffect(() => {
@@ -80,7 +97,44 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
           call_agent_id: response.data.call_agent_id || '',
           sms_agent_id: response.data.sms_agent_id || ''
         })
+      } else if (response.status === 'error') {
+        // Handle specific error cases
+        if (response.error?.includes('encrypted_agent_config') ||
+            response.error?.includes('column') ||
+            response.error?.includes('schema')) {
+
+          // Try direct fallback service retrieval
+          console.log('Schema issue detected, trying fallback service directly')
+          const fallbackResponse = await apiKeyFallbackService.retrieveApiKeys(user.id)
+
+          if (fallbackResponse.status === 'success' && fallbackResponse.data) {
+            setApiKeys({
+              retell_api_key: fallbackResponse.data.retell_api_key || '',
+              call_agent_id: fallbackResponse.data.call_agent_id || '',
+              sms_agent_id: fallbackResponse.data.sms_agent_id || ''
+            })
+
+            // Show informational message about fallback usage
+            setSuccessMessage('API keys loaded using fallback method. Database schema may need updating.')
+            setTimeout(() => setSuccessMessage(null), 5000)
+          } else {
+            setApiKeys({
+              retell_api_key: '',
+              call_agent_id: '',
+              sms_agent_id: ''
+            })
+          }
+        } else {
+          // Generic error - still provide empty state
+          console.warn('Error loading API keys:', response.error)
+          setApiKeys({
+            retell_api_key: '',
+            call_agent_id: '',
+            sms_agent_id: ''
+          })
+        }
       } else {
+        // No data found - normal empty state
         console.warn('No API keys found, using empty state')
         setApiKeys({
           retell_api_key: '',
@@ -89,7 +143,34 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
         })
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to load API keys')
+      console.error('Exception loading API keys:', err)
+
+      // Try emergency fallback
+      try {
+        const fallbackResponse = await apiKeyFallbackService.retrieveApiKeys(user.id)
+        if (fallbackResponse.status === 'success' && fallbackResponse.data) {
+          setApiKeys({
+            retell_api_key: fallbackResponse.data.retell_api_key || '',
+            call_agent_id: fallbackResponse.data.call_agent_id || '',
+            sms_agent_id: fallbackResponse.data.sms_agent_id || ''
+          })
+          setError('Loaded API keys using emergency fallback. Please check system status.')
+        } else {
+          setError(err.message || 'Failed to load API keys from all sources')
+          setApiKeys({
+            retell_api_key: '',
+            call_agent_id: '',
+            sms_agent_id: ''
+          })
+        }
+      } catch (fallbackErr) {
+        setError(`Failed to load API keys: ${err.message}. Fallback also failed.`)
+        setApiKeys({
+          retell_api_key: '',
+          call_agent_id: '',
+          sms_agent_id: ''
+        })
+      }
     } finally {
       setIsLoading(false)
     }
@@ -128,10 +209,30 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
     setTestResult(null)
 
     try {
+      // Get the current storage method before saving
+      const testResult = await apiKeyFallbackService.testSchemaHandling(user.id)
+      const currentMethod = testResult.fallbackMethod
+
       const response = await enhancedUserService.updateUserApiKeys(user.id, apiKeys)
 
       if (response.status === 'success') {
-        setSuccessMessage('API keys saved successfully!')
+        // Update schema status after successful save
+        await checkSchemaStatus()
+
+        // Create detailed success message based on storage method
+        let successMsg = 'API keys saved successfully!'
+
+        if (currentMethod === 'user_profiles_full') {
+          successMsg += ' (Stored in primary database)'
+        } else if (currentMethod === 'user_profiles_partial_plus_user_settings') {
+          successMsg += ' (Stored using backup method due to database schema)'
+        } else if (currentMethod === 'user_settings_or_localStorage') {
+          successMsg += ' (Stored using fallback method - database schema needs updating)'
+        } else if (currentMethod === 'localStorage_fallback') {
+          successMsg += ' (Stored locally - database connection unavailable)'
+        }
+
+        setSuccessMessage(successMsg)
         setHasUnsavedChanges(false)
 
         // Update retell service with new credentials
@@ -150,12 +251,56 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
           }
         }))
 
-        setTimeout(() => setSuccessMessage(null), 5000)
+        setTimeout(() => setSuccessMessage(null), 7000) // Extended timeout for longer messages
       } else {
-        setError(response.error || 'Failed to save API keys')
+        // Enhanced error handling with storage method context
+        let errorMsg = response.error || 'Failed to save API keys'
+
+        if (response.error?.includes('encrypted_agent_config')) {
+          errorMsg = 'Database schema issue detected. Using fallback storage method...'
+
+          // Retry with explicit fallback awareness
+          try {
+            const fallbackResult = await apiKeyFallbackService.storeApiKeys(user.id, apiKeys)
+            if (fallbackResult.status === 'success') {
+              setSuccessMessage('API keys saved using fallback method! Database schema needs updating.')
+              setHasUnsavedChanges(false)
+              await checkSchemaStatus()
+              setTimeout(() => setSuccessMessage(null), 7000)
+              return
+            }
+          } catch (fallbackError) {
+            errorMsg += ` Fallback also failed: ${fallbackError.message}`
+          }
+        }
+
+        setError(errorMsg)
       }
     } catch (err: any) {
-      setError(err.message || 'Failed to save API keys')
+      let errorMsg = err.message || 'Failed to save API keys'
+
+      // Provide user-friendly error messages for common issues
+      if (err.message?.includes('encrypted_agent_config')) {
+        errorMsg = 'Database schema issue detected. Trying fallback storage...'
+
+        // Attempt emergency fallback
+        try {
+          const fallbackResult = await apiKeyFallbackService.storeApiKeys(user.id, apiKeys)
+          if (fallbackResult.status === 'success') {
+            setSuccessMessage('API keys saved using emergency fallback! Please contact administrator about database schema.')
+            setHasUnsavedChanges(false)
+            await checkSchemaStatus()
+            setTimeout(() => setSuccessMessage(null), 8000)
+            return
+          }
+        } catch (fallbackError) {
+          errorMsg += ` Emergency fallback failed: ${fallbackError.message}`
+        }
+      } else if (err.message?.includes('connection') || err.message?.includes('network')) {
+        errorMsg = 'Network connection issue. API keys will be stored locally until connection is restored.'
+      }
+
+      setError(errorMsg)
     } finally {
       setIsSaving(false)
     }
@@ -227,14 +372,24 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
             Configure your API credentials for call and SMS services
           </p>
         </div>
-        <button
-          onClick={loadApiKeys}
-          disabled={isLoading}
-          className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-          title="Refresh API keys"
-        >
-          <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={checkSchemaStatus}
+            disabled={isLoading}
+            className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            title="Check database schema status"
+          >
+            <Settings className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+          </button>
+          <button
+            onClick={loadApiKeys}
+            disabled={isLoading}
+            className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+            title="Refresh API keys"
+          >
+            <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
       </div>
 
       {/* Success/Error Messages */}
@@ -518,6 +673,134 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
               </div>
             )}
           </div>
+
+          {/* Storage Method Information Panel */}
+          {(storageMethod || schemaStatus) && (
+            <div className={`border rounded-lg p-4 ${
+              storageMethod === 'user_profiles_full'
+                ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700'
+                : storageMethod === 'user_profiles_partial_plus_user_settings'
+                ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700'
+                : 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-700'
+            }`}>
+              <div className="flex items-center gap-2 mb-3">
+                <div className={`w-5 h-5 ${
+                  storageMethod === 'user_profiles_full'
+                    ? 'text-green-600 dark:text-green-400'
+                    : storageMethod === 'user_profiles_partial_plus_user_settings'
+                    ? 'text-yellow-600 dark:text-yellow-400'
+                    : 'text-orange-600 dark:text-orange-400'
+                }`}>
+                  {storageMethod === 'user_profiles_full' ? (
+                    <Check />
+                  ) : (
+                    <AlertTriangle />
+                  )}
+                </div>
+                <h3 className={`font-medium ${
+                  storageMethod === 'user_profiles_full'
+                    ? 'text-green-900 dark:text-green-100'
+                    : storageMethod === 'user_profiles_partial_plus_user_settings'
+                    ? 'text-yellow-900 dark:text-yellow-100'
+                    : 'text-orange-900 dark:text-orange-100'
+                }`}>
+                  Storage Method Status
+                </h3>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className={`text-sm ${
+                    storageMethod === 'user_profiles_full'
+                      ? 'text-green-700 dark:text-green-300'
+                      : storageMethod === 'user_profiles_partial_plus_user_settings'
+                      ? 'text-yellow-700 dark:text-yellow-300'
+                      : 'text-orange-700 dark:text-orange-300'
+                  }`}>
+                    Database Schema
+                  </span>
+                  <span className={`text-xs ${
+                    storageMethod === 'user_profiles_full'
+                      ? 'text-green-600 dark:text-green-400'
+                      : storageMethod === 'user_profiles_partial_plus_user_settings'
+                      ? 'text-yellow-600 dark:text-yellow-400'
+                      : 'text-orange-600 dark:text-orange-400'
+                  }`}>
+                    {storageMethod === 'user_profiles_full'
+                      ? 'Complete (Optimal)'
+                      : storageMethod === 'user_profiles_partial_plus_user_settings'
+                      ? 'Partial (Backup method active)'
+                      : 'Incomplete (Fallback method active)'}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className={`text-sm ${
+                    storageMethod === 'user_profiles_full'
+                      ? 'text-green-700 dark:text-green-300'
+                      : storageMethod === 'user_profiles_partial_plus_user_settings'
+                      ? 'text-yellow-700 dark:text-yellow-300'
+                      : 'text-orange-700 dark:text-orange-300'
+                  }`}>
+                    Storage Location
+                  </span>
+                  <span className={`text-xs ${
+                    storageMethod === 'user_profiles_full'
+                      ? 'text-green-600 dark:text-green-400'
+                      : storageMethod === 'user_profiles_partial_plus_user_settings'
+                      ? 'text-yellow-600 dark:text-yellow-400'
+                      : 'text-orange-600 dark:text-orange-400'
+                  }`}>
+                    {storageMethod === 'user_profiles_full'
+                      ? 'Primary Database'
+                      : storageMethod === 'user_profiles_partial_plus_user_settings'
+                      ? 'Mixed (Profile + Settings)'
+                      : storageMethod === 'user_settings_or_localStorage'
+                      ? 'Settings Table'
+                      : 'Local Storage'}
+                  </span>
+                </div>
+
+                {schemaStatus && (
+                  <div className="mt-3 p-2 bg-white dark:bg-gray-800 rounded text-xs space-y-1">
+                    <div className="flex items-center justify-between">
+                      <span>Agent Config Column:</span>
+                      <span className={schemaStatus.hasAgentConfig ? 'text-green-600' : 'text-red-600'}>
+                        {schemaStatus.hasAgentConfig ? 'Available' : 'Missing'}
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span>Retell Key Column:</span>
+                      <span className={schemaStatus.hasRetellKey ? 'text-green-600' : 'text-red-600'}>
+                        {schemaStatus.hasRetellKey ? 'Available' : 'Missing'}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className={`mt-3 text-xs ${
+                storageMethod === 'user_profiles_full'
+                  ? 'text-green-700 dark:text-green-300'
+                  : storageMethod === 'user_profiles_partial_plus_user_settings'
+                  ? 'text-yellow-700 dark:text-yellow-300'
+                  : 'text-orange-700 dark:text-orange-300'
+              }`}>
+                {storageMethod === 'user_profiles_full' && (
+                  'Your API keys are being stored using the optimal method in the primary database.'
+                )}
+                {storageMethod === 'user_profiles_partial_plus_user_settings' && (
+                  'Your API keys are being stored using a backup method due to partial database schema. Performance may be slightly reduced.'
+                )}
+                {storageMethod === 'user_settings_or_localStorage' && (
+                  'Your API keys are being stored using a fallback method. Please contact your administrator to update the database schema for optimal performance.'
+                )}
+                {storageMethod === 'localStorage_fallback' && (
+                  'Your API keys are being stored locally due to database connection issues. They will sync when the connection is restored.'
+                )}
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

@@ -2,6 +2,7 @@ import { supabase } from '@/config/supabase'
 import { Database, ServiceResponse } from '@/types/supabase'
 import { encryptionService } from './encryption'
 import { auditLogger } from './auditLogger'
+import { apiKeyFallbackService } from './apiKeyFallbackService'
 
 type DatabaseUser = Database['public']['Tables']['users']['Row']
 type DatabaseUserProfile = Database['public']['Tables']['user_profiles']['Row']
@@ -287,51 +288,14 @@ export class EnhancedUserService {
     try {
       console.log(`EnhancedUserService: Updating API keys for user ${userId}`)
 
-      // Encrypt the API keys
-      const encryptedKeys: any = {}
-      if (apiKeys.retell_api_key) {
-        encryptedKeys.retell_api_key = await encryptionService.encryptString(apiKeys.retell_api_key)
+      // Use the fallback service to handle API key storage
+      // This automatically detects schema issues and uses the best available storage method
+      const fallbackResult = await apiKeyFallbackService.storeApiKeys(userId, apiKeys)
+      if (fallbackResult.status === 'error') {
+        throw new Error(fallbackResult.error || 'Failed to store API keys')
       }
 
-      const agentConfig: any = {}
-      if (apiKeys.call_agent_id) agentConfig.call_agent_id = apiKeys.call_agent_id
-      if (apiKeys.sms_agent_id) agentConfig.sms_agent_id = apiKeys.sms_agent_id
-
-      // Update user_profiles table with encrypted API key
-      if (encryptedKeys.retell_api_key) {
-        const { error: profileError } = await supabase
-          .from('user_profiles')
-          .upsert({
-            user_id: userId,
-            encrypted_retell_api_key: encryptedKeys.retell_api_key,
-            encrypted_agent_config: agentConfig,
-            updated_at: new Date().toISOString()
-          })
-
-        if (profileError) throw profileError
-      }
-
-      // Update user_settings table with retell config
-      const retellConfig: any = {}
-      if (apiKeys.retell_api_key) retellConfig.api_key = apiKeys.retell_api_key
-      if (apiKeys.call_agent_id) retellConfig.call_agent_id = apiKeys.call_agent_id
-      if (apiKeys.sms_agent_id) retellConfig.sms_agent_id = apiKeys.sms_agent_id
-
-      if (Object.keys(retellConfig).length > 0) {
-        const { error: settingsError } = await supabase
-          .from('user_settings')
-          .upsert({
-            user_id: userId,
-            retell_config: retellConfig,
-            encrypted_api_keys: encryptedKeys,
-            api_key_updated_at: new Date().toISOString(),
-            settings_version: await this.getNextSettingsVersion(userId),
-            sync_status: 'synced',
-            updated_at: new Date().toISOString()
-          })
-
-        if (settingsError) throw settingsError
-      }
+      console.log('EnhancedUserService: API keys stored successfully via fallback service')
 
       await auditLogger.logSecurityEvent('USER_API_KEYS_UPDATED', 'user_settings', true, {
         userId,
@@ -352,7 +316,7 @@ export class EnhancedUserService {
   }
 
   /**
-   * Get decrypted API keys for a user
+   * Get decrypted API keys for a user using the fallback service
    */
   static async getUserApiKeys(userId: string): Promise<ServiceResponse<{
     retell_api_key?: string
@@ -362,41 +326,19 @@ export class EnhancedUserService {
     try {
       console.log(`EnhancedUserService: Getting API keys for user ${userId}`)
 
-      // Try to get from user_settings first (most recent)
-      const { data: settingsData } = await supabase
-        .from('user_settings')
-        .select('retell_config, encrypted_api_keys')
-        .eq('user_id', userId)
-        .single()
+      // Use the fallback service to handle API key retrieval
+      // This automatically detects schema issues and uses the best available retrieval method
+      const fallbackResult = await apiKeyFallbackService.retrieveApiKeys(userId)
 
-      if (settingsData?.retell_config) {
-        return {
-          status: 'success',
-          data: settingsData.retell_config
-        }
+      if (fallbackResult.status === 'error') {
+        throw new Error(fallbackResult.error || 'Failed to retrieve API keys')
       }
 
-      // Fallback to user_profiles table
-      const { data: profileData } = await supabase
-        .from('user_profiles')
-        .select('encrypted_retell_api_key, encrypted_agent_config')
-        .eq('user_id', userId)
-        .single()
-
-      if (profileData?.encrypted_retell_api_key) {
-        const decryptedApiKey = await encryptionService.decryptString(profileData.encrypted_retell_api_key)
-        const agentConfig = profileData.encrypted_agent_config || {}
-
-        return {
-          status: 'success',
-          data: {
-            retell_api_key: decryptedApiKey,
-            ...agentConfig
-          }
-        }
+      console.log('EnhancedUserService: API keys retrieved successfully via fallback service')
+      return {
+        status: 'success',
+        data: fallbackResult.data || {}
       }
-
-      return { status: 'success', data: {} }
 
     } catch (error: any) {
       console.error('EnhancedUserService: Error getting API keys:', error)

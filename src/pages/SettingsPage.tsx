@@ -32,6 +32,7 @@ import { SimpleUserManager } from '@/components/settings/SimpleUserManager'
 import { EnhancedUserManager } from '@/components/settings/EnhancedUserManager'
 import { EnhancedProfileSettings } from '@/components/settings/EnhancedProfileSettings'
 import { EnhancedApiKeyManager } from '@/components/settings/EnhancedApiKeyManager'
+import { ApiKeyErrorBoundary } from '@/components/common/ApiKeyErrorBoundary'
 import { ThemeManager } from '@/utils/themeManager'
 import { SiteHelpChatbot } from '@/components/common/SiteHelpChatbot'
 import { toastNotificationService, ToastNotificationPreferences } from '@/services/toastNotificationService'
@@ -1199,7 +1200,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
           {/* API Configuration */}
           {activeTab === 'api' && (
-            <EnhancedApiKeyManager user={user} />
+            <ApiKeyErrorBoundary>
+              <EnhancedApiKeyManager user={user} />
+            </ApiKeyErrorBoundary>
           )}
 
           {/* Notifications */}
