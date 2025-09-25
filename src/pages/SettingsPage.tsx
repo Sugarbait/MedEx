@@ -1307,12 +1307,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
               <div className="space-y-6">
                 {/* Enhanced MFA Settings */}
-                <EnhancedMFASettings
+                <FreshMfaSettings
                   userId={user.id}
-                  onSetupMFA={() => setShowMFASetup(true)}
-                  onToggleMFA={handleMFAToggle}
-                  mfaToggleEnabled={mfaToggleEnabled}
-                  isLoading={isLoading}
+                  onSetupMfa={() => setShowFreshMfaSetup(true)}
                 />
 
                 <div className="flex items-center justify-between">
