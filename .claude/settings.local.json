@@ -136,7 +136,8 @@
       "Bash(SUPABASE_DB_URL=\"postgresql://postgres:eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwa3Nsdm15ZGZkZXZkZnRpZWNrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjkwMDI5NSwiZXhwIjoyMDYyNDc2Mjk1fQ.5Nwr-DrgL63DwPMH2egxgdjoHGhAxCvIrz2SMTMKqD0@db.cpkslvmydfdevdftieck.supabase.co:5432/postgres\" npx supabase db push)",
       "Bash(start http://localhost:3001/dashboard)",
       "Bash(npx tsx:*)",
-      "Bash(git revert:*)"
+      "Bash(git revert:*)",
+      "Bash(set:*)"
     ],
     "deny": [],
     "ask": []

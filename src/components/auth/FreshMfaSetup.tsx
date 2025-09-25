@@ -63,11 +63,11 @@ export const FreshMfaSetup: React.FC<FreshMfaSetupProps> = ({
    * Auto-generate setup if autoGenerate prop is true
    */
   useEffect(() => {
-    if (autoGenerate && !setupData && !isLoading) {
+    if (autoGenerate && !setupData && !isLoading && !error) {
       console.log('🚀 Auto-generating MFA setup on modal open')
       handleGenerateSetup()
     }
-  }, [autoGenerate, setupData, isLoading, handleGenerateSetup])
+  }, [autoGenerate, setupData, isLoading, error, handleGenerateSetup])
 
   /**
    * Verify TOTP code and complete setup
