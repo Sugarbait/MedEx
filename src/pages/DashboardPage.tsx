@@ -440,6 +440,24 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
     fetchDashboardData()
   }, [selectedDateRange, customStartDate, customEndDate, hasInitiallyLoaded])
 
+  // Listen for API configuration events from AuthContext
+  useEffect(() => {
+    const handleApiConfigurationReady = (event: CustomEvent) => {
+      console.log('🚀 Dashboard: Received apiConfigurationReady event', event.detail)
+      // Retry fetching dashboard data if it was previously not configured
+      if (retellStatus === 'not-configured' || retellStatus === 'checking') {
+        console.log('🔄 Dashboard: API is now configured, retrying data fetch...')
+        fetchDashboardData()
+      }
+    }
+
+    window.addEventListener('apiConfigurationReady', handleApiConfigurationReady as EventListener)
+
+    return () => {
+      window.removeEventListener('apiConfigurationReady', handleApiConfigurationReady as EventListener)
+    }
+  }, [retellStatus])
+
   // State to store filtered chats for cost recalculation
   const [filteredChatsForCosts, setFilteredChatsForCosts] = useState<any[]>([])
 

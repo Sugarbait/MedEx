@@ -610,6 +610,24 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
   }, [currentPage])
 
+  // Listen for API configuration events from AuthContext
+  useEffect(() => {
+    const handleApiConfigurationReady = (event: CustomEvent) => {
+      console.log('🚀 [SMSPage]: Received apiConfigurationReady event', event.detail)
+      // Retry fetching data if there was a configuration error
+      if (error?.includes('API not configured') || !retellService.getApiKey()) {
+        console.log('🔄 [SMSPage]: API is now configured, retrying data fetch...')
+        fetchChatsOptimized()
+      }
+    }
+
+    window.addEventListener('apiConfigurationReady', handleApiConfigurationReady as EventListener)
+
+    return () => {
+      window.removeEventListener('apiConfigurationReady', handleApiConfigurationReady as EventListener)
+    }
+  }, [error])
+
   // Fetch when debounced filters change
   useEffect(() => {
     if (debouncedSearchTerm !== searchTerm ||

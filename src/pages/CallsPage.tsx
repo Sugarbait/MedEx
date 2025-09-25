@@ -195,6 +195,24 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
     fetchCalls()
   }, [currentPage])
 
+  // Listen for API configuration events from AuthContext
+  useEffect(() => {
+    const handleApiConfigurationReady = (event: CustomEvent) => {
+      console.log('🚀 [CallsPage]: Received apiConfigurationReady event', event.detail)
+      // Retry fetching data if there was a configuration error
+      if (error?.includes('API not configured') || !retellService.getApiKey()) {
+        console.log('🔄 [CallsPage]: API is now configured, retrying data fetch...')
+        fetchCalls()
+      }
+    }
+
+    window.addEventListener('apiConfigurationReady', handleApiConfigurationReady as EventListener)
+
+    return () => {
+      window.removeEventListener('apiConfigurationReady', handleApiConfigurationReady as EventListener)
+    }
+  }, [error])
+
   // Initialize fuzzy search engine when calls are loaded
   useEffect(() => {
     if (calls.length > 0 && isFuzzySearchEnabled) {
