@@ -987,37 +987,11 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     setError('')
 
     try {
-      // AGGRESSIVE SYNCHRONIZATION: Force both services to reload credentials
-      safeLog('🔄 [SMSPage] Starting aggressive API synchronization...')
-
-      // Step 1: Force retellService to reload from bulletproof system
-      const retellResult = await retellService.initializeWithCredentials()
-      if (!retellResult.success) {
-        safeLog('⚠️ [SMSPage] RetellService initialization failed:', retellResult.error)
-      }
-
-      // Step 2: Synchronize with retellService (localStorage + Supabase sync)
+      // Synchronize with retellService (localStorage + Supabase sync) - same as Calls page
       await chatService.syncWithRetellService()
-
-      // Step 3: Double-check and force reload if needed
-      if (!chatService.isConfigured()) {
-        safeLog('🔧 [SMSPage] First sync failed, attempting force reload...')
-        chatService.reloadCredentials() // Fallback to direct reload
-
-        // Give it a moment and try once more
-        await new Promise(resolve => setTimeout(resolve, 500))
-        if (!chatService.isConfigured()) {
-          safeLog('🔧 [SMSPage] Second attempt failed, trying retellService force reload...')
-          await retellService.initializeWithCredentials()
-          chatService.reloadCredentials()
-        }
-      }
-
-      safeLog('✅ [SMSPage] Final synchronization status:', {
-        retellConfigured: retellService.isConfigured(),
-        retellApiKey: !!retellService.getApiKey(),
-        chatConfigured: chatService.isConfigured(),
-        chatApiKey: chatService.getConfigurationStatus()
+      safeLog('Synchronized chat credentials:', {
+        hasApiKey: !!chatService.isConfigured(),
+        configured: chatService.isConfigured()
       })
 
       if (!chatService.isConfigured()) {
