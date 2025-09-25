@@ -286,6 +286,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                       settings.retell_config.call_agent_id,
                       settings.retell_config.sms_agent_id
                     )
+
+                    // CRITICAL FIX: Force reload credentials from localStorage to ensure consistency
+                    retellService.loadCredentials()
                     console.log('✅ Retell service initialized with API credentials on login!')
 
                     // Dispatch event to notify other components that API is ready
@@ -317,6 +320,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                         newSettings.retell_config.call_agent_id,
                         newSettings.retell_config.sms_agent_id
                       )
+
+                      // CRITICAL FIX: Force reload credentials from localStorage to ensure consistency
+                      retellService.loadCredentials()
                       console.log('✅ Retell service updated with new credentials from real-time sync')
 
                       // Notify components of API configuration update
