@@ -1535,6 +1535,81 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
   }, [])
 
+  // 🛡️ BULLETPROOF API KEY MONITORING - Monitors navigation-based API key persistence
+  useEffect(() => {
+    let monitoringInterval: NodeJS.Timeout | null = null
+
+    const startMonitoring = () => {
+      if (monitoringInterval) return // Avoid duplicate intervals
+
+      console.log('🛡️ [SMSPage] Starting bulletproof API monitoring...')
+
+      monitoringInterval = setInterval(async () => {
+        try {
+          // Check if API key is still available
+          const apiKey = retellService.getApiKey()
+
+          if (!apiKey || apiKey === 'your-retell-api-key-here') {
+            console.warn('🚨 [SMSPage] API key lost during navigation - triggering recovery')
+
+            // Force reload API credentials using the bulletproof system
+            const recovered = await retellService.initializeWithCredentials()
+
+            if (recovered.success) {
+              console.log('✅ [SMSPage] API credentials recovered successfully')
+
+              // Dispatch event to notify page components
+              window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
+                detail: { source: 'SMSPage-recovery' }
+              }))
+
+              // Retry data fetch if needed
+              if (error?.includes('API not configured')) {
+                fetchChatsOptimized()
+              }
+            } else {
+              console.error('❌ [SMSPage] Failed to recover API credentials:', recovered.error)
+            }
+          }
+        } catch (error) {
+          console.error('🚨 [SMSPage] Error during API monitoring:', error)
+        }
+      }, 2000) // Check every 2 seconds during navigation
+    }
+
+    const stopMonitoring = () => {
+      if (monitoringInterval) {
+        clearInterval(monitoringInterval)
+        monitoringInterval = null
+        console.log('🛡️ [SMSPage] Stopped bulletproof API monitoring')
+      }
+    }
+
+    // Start monitoring when component mounts
+    startMonitoring()
+
+    // Listen for focus events to restart monitoring after navigation
+    const handleFocus = () => {
+      console.log('🛡️ [SMSPage] Window focused - restarting API monitoring')
+      startMonitoring()
+    }
+
+    const handleBlur = () => {
+      console.log('🛡️ [SMSPage] Window blurred - maintaining API monitoring')
+      // Keep monitoring during blur for navigation scenarios
+    }
+
+    window.addEventListener('focus', handleFocus)
+    window.addEventListener('blur', handleBlur)
+
+    // Cleanup on unmount
+    return () => {
+      stopMonitoring()
+      window.removeEventListener('focus', handleFocus)
+      window.removeEventListener('blur', handleBlur)
+    }
+  }, [error]) // Include error in dependencies to restart monitoring when error state changes
+
   // Memoized filtered chats for performance with fuzzy search
   const filteredChats = useMemo(() => {
     let searchFilteredChats = chats

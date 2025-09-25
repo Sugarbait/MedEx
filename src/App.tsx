@@ -984,15 +984,9 @@ const App: React.FC = () => {
 
         console.log('🎉 MANDATORY MFA login flow completed successfully')
 
-        // In production, redirect to dashboard after successful MFA
-        const isProduction = window.location.hostname.includes('azurestaticapps.net') ||
-                            window.location.hostname.includes('nexasync.ca')
-
-        if (isProduction) {
-          setTimeout(() => {
-            window.location.href = '/dashboard'
-          }, 1000) // Brief delay to allow state updates
-        }
+        // FIX: Remove the window.location.href redirect to prevent double loading
+        // React will naturally navigate to dashboard once setUser() clears pendingMfaUser
+        // The routing in App.tsx automatically shows AppContent when user is set
       }
 
     } catch (error) {
