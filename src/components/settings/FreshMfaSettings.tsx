@@ -31,6 +31,7 @@ export const FreshMfaSettings: React.FC<FreshMfaSettingsProps> = ({
   const [isUpdating, setIsUpdating] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showSetupModal, setShowSetupModal] = useState(false)
+  const [autoGenerateSetup, setAutoGenerateSetup] = useState(false)
 
   /**
    * Load MFA status on component mount
@@ -63,7 +64,8 @@ export const FreshMfaSettings: React.FC<FreshMfaSettingsProps> = ({
    */
   const handleMfaToggle = async (enabled: boolean) => {
     if (enabled && !isMfaEnabled) {
-      // User wants to enable MFA - show setup modal
+      // User wants to enable MFA - show setup modal with auto-generate
+      setAutoGenerateSetup(true)
       setShowSetupModal(true)
       if (onSetupMfa) onSetupMfa()
     } else if (!enabled && isMfaEnabled) {
@@ -194,7 +196,10 @@ export const FreshMfaSettings: React.FC<FreshMfaSettingsProps> = ({
         {/* Setup Button */}
         {!isMfaEnabled && (
           <button
-            onClick={() => setShowSetupModal(true)}
+            onClick={() => {
+              setAutoGenerateSetup(true)
+              setShowSetupModal(true)
+            }}
             disabled={isUpdating}
             className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
           >
@@ -240,7 +245,10 @@ export const FreshMfaSettings: React.FC<FreshMfaSettingsProps> = ({
                   Setup Multi-Factor Authentication
                 </h2>
                 <button
-                  onClick={() => setShowSetupModal(false)}
+                  onClick={() => {
+                    setShowSetupModal(false)
+                    setAutoGenerateSetup(false)
+                  }}
                   className="text-gray-400 hover:text-gray-600 p-1"
                 >
                   <X className="w-6 h-6" />
@@ -273,14 +281,17 @@ export const FreshMfaSettings: React.FC<FreshMfaSettingsProps> = ({
               <FreshMfaSetup
                 userId={userId}
                 userEmail={userEmail}
+                autoGenerate={autoGenerateSetup}
                 onSetupComplete={() => {
                   setShowSetupModal(false)
+                  setAutoGenerateSetup(false)
                   setIsMfaEnabled(true)
                   window.dispatchEvent(new CustomEvent('freshMfaSetupComplete'))
                   console.log('✅ Fresh MFA setup completed via modal')
                 }}
                 onCancel={() => {
                   setShowSetupModal(false)
+                  setAutoGenerateSetup(false)
                   console.log('❌ Fresh MFA setup cancelled via modal')
                 }}
               />

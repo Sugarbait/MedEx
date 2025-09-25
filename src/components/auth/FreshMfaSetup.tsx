@@ -8,13 +8,14 @@
  * - Simple, reliable flow
  */
 
-import React, { useState } from 'react'
+import React, { useState, useEffect, useCallback } from 'react'
 import { QrCode, Shield, Copy, Check, AlertCircle, Key } from 'lucide-react'
 import { FreshMfaService } from '../../services/freshMfaService'
 
 interface FreshMfaSetupProps {
   userId: string
   userEmail: string
+  autoGenerate?: boolean
   onSetupComplete: () => void
   onCancel: () => void
 }
@@ -22,6 +23,7 @@ interface FreshMfaSetupProps {
 export const FreshMfaSetup: React.FC<FreshMfaSetupProps> = ({
   userId,
   userEmail,
+  autoGenerate = false,
   onSetupComplete,
   onCancel
 }) => {
@@ -36,7 +38,7 @@ export const FreshMfaSetup: React.FC<FreshMfaSetupProps> = ({
   /**
    * Generate fresh MFA setup
    */
-  const handleGenerateSetup = async () => {
+  const handleGenerateSetup = useCallback(async () => {
     setIsLoading(true)
     setError(null)
 
@@ -55,7 +57,17 @@ export const FreshMfaSetup: React.FC<FreshMfaSetupProps> = ({
     } finally {
       setIsLoading(false)
     }
-  }
+  }, [userId, userEmail])
+
+  /**
+   * Auto-generate setup if autoGenerate prop is true
+   */
+  useEffect(() => {
+    if (autoGenerate && !setupData && !isLoading) {
+      console.log('🚀 Auto-generating MFA setup on modal open')
+      handleGenerateSetup()
+    }
+  }, [autoGenerate, setupData, isLoading, handleGenerateSetup])
 
   /**
    * Verify TOTP code and complete setup
