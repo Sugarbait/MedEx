@@ -268,7 +268,7 @@ export class ChatService {
     }
 
     try {
-      // Try to get current user's settings
+      // BULLETPROOF: First try current user's settings
       const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
       console.log('Chat Service: Loading credentials for user:', currentUser.id)
 
@@ -276,20 +276,38 @@ export class ChatService {
         const settings = JSON.parse(localStorage.getItem(`settings_${currentUser.id}`) || '{}')
         this.apiKey = settings.retellApiKey || ''
         this.smsAgentId = settings.smsAgentId || ''
-
-        console.log('Chat Service: Credentials loaded:', {
-          hasApiKey: !!this.apiKey,
-          apiKeyLength: this.apiKey.length,
-          smsAgentId: this.smsAgentId,
-          isDemoMode: !this.apiKey
-        })
-
-        // Disable demo mode - always try real API
-        this.isDemoMode = false
-      } else {
-        console.error('Chat Service: No current user found in localStorage')
-        this.isDemoMode = false // Still try real API
       }
+
+      // BULLETPROOF: If no credentials found, scan ALL user settings (like retellService does)
+      if (!this.apiKey) {
+        console.log('🔍 Chat Service: No credentials for current user, scanning all user settings...')
+        const allKeys = Object.keys(localStorage)
+        const settingsKeys = allKeys.filter(key => key.startsWith('settings_') && key !== 'settings_undefined')
+
+        for (const key of settingsKeys) {
+          try {
+            const settings = JSON.parse(localStorage.getItem(key) || '{}')
+            if (settings.retellApiKey) {
+              console.log('🎯 Chat Service: Found credentials in', key)
+              this.apiKey = settings.retellApiKey
+              this.smsAgentId = settings.smsAgentId || ''
+              break
+            }
+          } catch (parseError) {
+            console.warn(`Chat Service: Error parsing settings from ${key}:`, parseError)
+          }
+        }
+      }
+
+      console.log('Chat Service: Credentials loaded:', {
+        hasApiKey: !!this.apiKey,
+        apiKeyLength: this.apiKey.length,
+        smsAgentId: this.smsAgentId,
+        isDemoMode: !this.apiKey
+      })
+
+      // Disable demo mode - always try real API
+      this.isDemoMode = false
     } catch (error) {
       console.error('Chat Service: Failed to load credentials from localStorage:', error)
       this.isDemoMode = false // Still try real API
