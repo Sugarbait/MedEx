@@ -340,7 +340,36 @@ const App: React.FC = () => {
 
           try {
             const { FreshMfaService } = await import('./services/freshMfaService')
-            const mfaEnabled = await FreshMfaService.isMfaEnabled(userData.id)
+
+            // SECURITY ENHANCEMENT: Fail-secure MFA checking
+            let mfaEnabled = false
+            let mfaCheckFailed = false
+
+            try {
+              mfaEnabled = await FreshMfaService.isMfaEnabled(userData.id)
+              console.log('✅ MFA status check successful:', mfaEnabled)
+            } catch (mfaServiceError) {
+              console.error('❌ MFA status check failed:', mfaServiceError)
+              mfaCheckFailed = true
+
+              // FAIL-SECURE: If we can't determine MFA status, check if user should have MFA
+              // Super users and certain profiles should have MFA enforced
+              const requiresMfaProfiles = [
+                'super-user-456',   // elmfarrell@yahoo.com
+                'pierre-user-789',  // pierre@phaetonai.com
+                'dynamic-pierre-user' // pierre@phaetonai.com
+              ]
+
+              const requiresMfaEmails = ['elmfarrell@yahoo.com', 'pierre@phaetonai.com']
+
+              // If this user should have MFA, enforce it even if check failed
+              if (requiresMfaProfiles.includes(userData.id) ||
+                  (userData.email && requiresMfaEmails.includes(userData.email.toLowerCase())) ||
+                  userData.mfaEnabled === true) {
+                console.log('🔐 FAIL-SECURE: User should have MFA - enforcing verification despite check failure')
+                mfaEnabled = true
+              }
+            }
 
             // Check for existing valid MFA session
             const mfaTimestamp = localStorage.getItem('freshMfaVerified')
@@ -354,7 +383,9 @@ const App: React.FC = () => {
 
             console.log('🔐 App MFA Status Check:', {
               userId: userData.id,
+              email: userData.email,
               mfaEnabled,
+              mfaCheckFailed,
               hasValidMfaSession,
               requiresVerification: mfaEnabled && !hasValidMfaSession
             })
@@ -363,7 +394,10 @@ const App: React.FC = () => {
             // SECURITY FIX: Always enforce MFA if enabled, regardless of login timing
             if (mfaEnabled && !hasValidMfaSession) {
               console.log('🔐 MANDATORY MFA required - showing MFA verification screen')
-              setPendingMfaUser(userData)
+              setPendingMfaUser({
+                ...userData,
+                mfaCheckFailed // Pass this info to help with debugging
+              })
               setIsLoading(false)
               return // Exit early - don't load full user data until MFA is verified
             }
@@ -372,14 +406,15 @@ const App: React.FC = () => {
             console.log('✅ No MFA verification required - proceeding with normal login flow')
 
           } catch (mfaCheckError) {
-            console.error('❌ Error checking MFA requirement:', mfaCheckError)
-            // For security, if MFA check fails, require verification if user has mfaEnabled flag
-            if (userData.mfaEnabled) {
-              console.log('🔐 MFA check failed but user has MFA enabled - requiring verification for security')
+            console.error('❌ Critical error in MFA checking system:', mfaCheckError)
+            // ULTIMATE FAIL-SAFE: If entire MFA system fails, still enforce for known MFA users
+            if (userData.mfaEnabled || userData.email === 'elmfarrell@yahoo.com' || userData.email === 'pierre@phaetonai.com') {
+              console.log('🚨 CRITICAL FAIL-SAFE: Enforcing MFA due to system failure for known MFA user')
               setPendingMfaUser(userData)
               setIsLoading(false)
               return
             }
+            console.log('⚠️ MFA system failed but user not flagged for MFA - proceeding without verification')
           }
 
           // Force sync settings from Supabase for cross-device access

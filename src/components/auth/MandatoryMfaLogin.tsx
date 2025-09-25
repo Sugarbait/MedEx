@@ -7,9 +7,10 @@
  */
 
 import React, { useState, useEffect } from 'react'
-import { Shield, AlertTriangle, Loader2 } from 'lucide-react'
+import { Shield, AlertTriangle, Loader2, Settings } from 'lucide-react'
 import { FreshMfaService } from '@/services/freshMfaService'
 import { FreshMfaVerification } from './FreshMfaVerification'
+import { FreshMfaSetup } from './FreshMfaSetup'
 import { auditLogger, AuditAction, AuditOutcome } from '@/services/auditLogger'
 
 interface MandatoryMfaLoginProps {
@@ -38,6 +39,8 @@ export const MandatoryMfaLogin: React.FC<MandatoryMfaLoginProps> = ({
     mfaRequired: false,
     error: null
   })
+  const [needsSetup, setNeedsSetup] = useState(false)
+  const [showSetup, setShowSetup] = useState(false)
 
   useEffect(() => {
     checkMfaRequirement()
@@ -51,18 +54,47 @@ export const MandatoryMfaLogin: React.FC<MandatoryMfaLoginProps> = ({
       console.log('🔐 MandatoryMfaLogin: Checking MFA requirement for user:', user.id)
 
       // Check if user has MFA enabled using Fresh MFA Service
-      const mfaEnabled = await FreshMfaService.isMfaEnabled(user.id)
+      let mfaEnabled = false
+      let mfaCheckFailed = false
+
+      try {
+        mfaEnabled = await FreshMfaService.isMfaEnabled(user.id)
+        console.log('✅ MFA status check successful:', mfaEnabled)
+      } catch (mfaServiceError) {
+        console.error('❌ MFA service error:', mfaServiceError)
+        mfaCheckFailed = true
+
+        // Check if this user was passed with mfaCheckFailed flag from App.tsx
+        if (user.mfaCheckFailed) {
+          console.log('🔐 MFA check failed but user marked for MFA enforcement')
+          mfaEnabled = true
+          setNeedsSetup(true) // User may need to set up MFA first
+        } else {
+          // FAIL-SECURE: Known MFA users should still be protected
+          const requiresMfaProfiles = ['super-user-456', 'pierre-user-789', 'dynamic-pierre-user']
+          const requiresMfaEmails = ['elmfarrell@yahoo.com', 'pierre@phaetonai.com']
+
+          if (requiresMfaProfiles.includes(user.id) ||
+              (user.email && requiresMfaEmails.includes(user.email.toLowerCase()))) {
+            console.log('🔐 FAIL-SECURE: Known MFA user, enforcing despite check failure')
+            mfaEnabled = true
+            setNeedsSetup(true)
+          }
+        }
+      }
 
       console.log('🔐 MFA Status Check:', {
         userId: user.id,
         email: user.email,
-        mfaEnabled
+        mfaEnabled,
+        mfaCheckFailed,
+        needsSetup
       })
 
       setMfaCheckState({
         isLoading: false,
         mfaRequired: mfaEnabled,
-        error: null
+        error: mfaCheckFailed ? 'MFA system temporarily unavailable - security verification required' : null
       })
 
       // Log the authentication event
@@ -72,7 +104,9 @@ export const MandatoryMfaLogin: React.FC<MandatoryMfaLoginProps> = ({
         AuditOutcome.SUCCESS,
         JSON.stringify({
           mfaRequired: mfaEnabled,
-          authenticationMethod: 'azure_ad_with_mfa_check'
+          mfaCheckFailed,
+          needsSetup,
+          authenticationMethod: 'mandatory_mfa_check'
         })
       )
 
@@ -159,6 +193,18 @@ export const MandatoryMfaLogin: React.FC<MandatoryMfaLoginProps> = ({
     }
   }
 
+  /**
+   * Handle MFA setup completion
+   */
+  const handleSetupComplete = async () => {
+    console.log('✅ MandatoryMfaLogin: MFA setup completed for user:', user.id)
+    setShowSetup(false)
+    setNeedsSetup(false)
+
+    // Recheck MFA requirement after setup
+    await checkMfaRequirement()
+  }
+
   // Loading state - checking MFA requirement
   if (mfaCheckState.isLoading) {
     return (
@@ -218,6 +264,35 @@ export const MandatoryMfaLogin: React.FC<MandatoryMfaLoginProps> = ({
     )
   }
 
+  // Show MFA Setup if needed
+  if (showSetup) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center py-12 px-4">
+        <div className="w-full max-w-md">
+          <div className="text-center mb-6">
+            <div className="mx-auto h-16 w-16 bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-4">
+              <Settings className="h-8 w-8 text-green-600 dark:text-green-400" />
+            </div>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
+              Setup Multi-Factor Authentication
+            </h1>
+            <p className="text-gray-600 dark:text-gray-400">
+              Your account requires MFA setup for enhanced security
+            </p>
+          </div>
+
+          <FreshMfaSetup
+            userId={user.id}
+            userEmail={user.email}
+            autoGenerate={true}
+            onSetupComplete={handleSetupComplete}
+            onCancel={handleMfaCancel}
+          />
+        </div>
+      </div>
+    )
+  }
+
   // MFA Required - Show verification interface
   if (mfaCheckState.mfaRequired) {
     return (
@@ -233,8 +308,17 @@ export const MandatoryMfaLogin: React.FC<MandatoryMfaLoginProps> = ({
             <p className="text-gray-600 dark:text-gray-400">
               Additional security verification is required to access your account
             </p>
+            {needsSetup && (
+              <div className="mt-4">
+                <button
+                  onClick={() => setShowSetup(true)}
+                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors text-sm"
+                >
+                  Setup MFA First
+                </button>
+              </div>
+            )}
           </div>
-
 
           <FreshMfaVerification
             userId={user.id}
