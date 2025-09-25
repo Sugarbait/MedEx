@@ -16,6 +16,8 @@ import './utils/makePierreSuperUser'
 // Import utility to make multiple super users (available in console)
 import './utils/makeSuperUsers'
 import { initializeSecureStorage } from './services/storageSecurityMigration'
+// Import bulletproof API key test utility
+import './utils/bulletproofApiKeyTest'
 import { secureUserDataService } from './services/secureUserDataService'
 import { authService } from './services/authService'
 // Removed old TOTP service - using fresh MFA service
@@ -96,30 +98,74 @@ const AppContent: React.FC<{
   const pageTitle = getPageTitle(location.pathname)
   const [showTimeoutWarning, setShowTimeoutWarning] = useState(false)
 
-  // Fresh MFA status will be checked via service
+  // Setup bulletproof API key monitoring for navigation
+  useEffect(() => {
+    if (!user?.id) return
 
-  // Ensure theme persistence on navigation
+    // Monitor for API configuration changes
+    const handleApiSettingsUpdate = () => {
+      console.log('🔄 App - API settings updated, refreshing service')
+      setTimeout(async () => {
+        try {
+          await retellService.ensureCredentialsLoaded()
+        } catch (error) {
+          console.error('Error refreshing API credentials:', error)
+        }
+      }, 100)
+    }
+
+    // Listen for various API update events
+    window.addEventListener('apiSettingsUpdated', handleApiSettingsUpdate)
+    window.addEventListener('userSettingsUpdated', handleApiSettingsUpdate)
+
+    return () => {
+      window.removeEventListener('apiSettingsUpdated', handleApiSettingsUpdate)
+      window.removeEventListener('userSettingsUpdated', handleApiSettingsUpdate)
+    }
+  }, [user?.id])
+
+  // Ensure theme persistence and bulletproof API key loading on navigation
   useEffect(() => {
     ThemeManager.initialize()
 
-    // FIX: Ensure API keys are loaded when navigating to dashboard
-    // This fixes the issue where API keys unload when going from settings to dashboard
-    if (location.pathname === '/dashboard' && user?.id) {
-      setTimeout(() => {
-        console.log('📍 Dashboard navigation detected - ensuring API keys are loaded')
-        const { retellService } = require('@/services/retellService')
-        retellService.loadCredentials()
+    // BULLETPROOF FIX: Ensure API keys persist across ALL navigation
+    if (user?.id) {
+      console.log('🔄 Navigation detected - ensuring bulletproof API key persistence')
 
-        // Dispatch API configuration ready event to notify dashboard
-        window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
-          detail: {
-            apiKey: true,
-            callAgentId: true,
-            smsAgentId: true,
-            source: 'navigation_refresh'
+      // Use the new bulletproof loading system
+      const ensureApiKeys = async () => {
+        try {
+          // Ensure credentials are loaded with fallback mechanisms
+          await retellService.ensureCredentialsLoaded()
+
+          // Verify configuration is successful
+          if (retellService.isConfigured()) {
+            console.log('✅ API keys confirmed loaded for navigation to:', location.pathname)
+
+            // Dispatch comprehensive API ready event
+            window.dispatchEvent(new CustomEvent('apiConfigurationReady', {
+              detail: {
+                apiKey: true,
+                callAgentId: true,
+                smsAgentId: true,
+                source: 'bulletproof_navigation',
+                pathname: location.pathname,
+                timestamp: Date.now()
+              }
+            }))
+          } else {
+            console.warn('⚠️ API keys could not be loaded during navigation')
           }
-        }))
-      }, 100) // Small delay to ensure page is ready
+        } catch (error) {
+          console.error('❌ Error ensuring API keys during navigation:', error)
+        }
+      }
+
+      // Execute with small delay to ensure page stability
+      const timeoutId = setTimeout(ensureApiKeys, 50)
+
+      // Cleanup on unmount or dependency change
+      return () => clearTimeout(timeoutId)
     }
   }, [location.pathname, user?.id])
 
@@ -312,6 +358,30 @@ const App: React.FC = () => {
   const [sidebarOpen, setSidebarOpen] = useState(true)
   const [hipaaMode, setHipaaMode] = useState(true)
 
+  // Initialize bulletproof API key system on app start
+  useEffect(() => {
+    const initializeBulletproofApi = async () => {
+      try {
+        console.log('🔧 App - Initializing bulletproof API system...')
+        await retellService.ensureCredentialsLoaded()
+        console.log('✅ App - Bulletproof API system initialized')
+      } catch (error) {
+        console.error('❌ App - Error initializing bulletproof API system:', error)
+      }
+    }
+
+    initializeBulletproofApi()
+
+    // Cleanup on unmount
+    return () => {
+      try {
+        retellService.destroy()
+      } catch (error) {
+        console.warn('Error cleaning up retell service:', error)
+      }
+    }
+  }, [])
+
   useEffect(() => {
     // Initialize security and storage systems
     const initializeSecurity = async () => {
@@ -473,7 +543,9 @@ const App: React.FC = () => {
                 settingsSynced.retell_config.call_agent_id,
                 settingsSynced.retell_config.sms_agent_id
               )
-              console.log('✅ Retell credentials updated from synced settings')
+              // Ensure the bulletproof system has the latest credentials
+              await retellService.ensureCredentialsLoaded()
+              console.log('✅ Retell credentials updated and ensured loaded')
             }
           } catch (syncError) {
             console.warn('⚠️ Cross-device sync on init failed, using local data:', syncError)
@@ -534,8 +606,8 @@ const App: React.FC = () => {
               // Start session monitoring for security
               await authService.startSessionMonitoring()
 
-              // Load Retell credentials for this user from Supabase
-              await retellService.loadCredentialsAsync()
+              // Load Retell credentials using bulletproof system
+              await retellService.ensureCredentialsLoaded()
             } else {
               // Fallback to localStorage data, but still try to load avatar with enhanced persistence
               try {
@@ -575,8 +647,8 @@ const App: React.FC = () => {
               setUser(userData)
               console.log('User loaded from localStorage (Supabase fallback)')
 
-              // Load Retell credentials for this user from Supabase
-              await retellService.loadCredentialsAsync()
+              // Load Retell credentials using bulletproof system
+              await retellService.ensureCredentialsLoaded()
             }
           } catch (supabaseError) {
             console.warn('Failed to load from Supabase, using localStorage:', supabaseError)
@@ -617,8 +689,11 @@ const App: React.FC = () => {
 
             setUser(userData)
 
-            // Load Retell credentials for this user
-            retellService.loadCredentials()
+            // Load Retell credentials using bulletproof system
+            await retellService.ensureCredentialsLoaded().catch(err => {
+              console.warn('Retell credentials loading failed:', err)
+              retellService.loadCredentials() // Fallback to sync method
+            })
           }
 
           // 🔒 FRESH MFA PROTECTION 🔒

@@ -82,76 +82,220 @@ class RetellService {
   private apiKey: string = ''
   private callAgentId: string = ''
   private smsAgentId: string = ''
+  private isInitialized = false
+  private loadingPromise: Promise<void> | null = null
+  private persistenceTimer: NodeJS.Timeout | null = null
 
   constructor() {
     this.loadCredentials()
+    this.setupPersistenceMonitoring()
   }
 
   /**
-   * Load API credentials from localStorage (with automatic decryption)
+   * Setup monitoring to ensure API keys persist across navigation
+   */
+  private setupPersistenceMonitoring(): void {
+    // Monitor for navigation events and re-validate credentials
+    if (typeof window !== 'undefined') {
+      const validateCredentials = () => {
+        if (!this.isConfigured()) {
+          console.log('🔧 RetellService - Credentials lost during navigation, reloading...')
+          this.loadCredentials()
+        }
+      }
+
+      // Listen for navigation events
+      window.addEventListener('popstate', validateCredentials)
+      window.addEventListener('pushstate', validateCredentials)
+      window.addEventListener('replacestate', validateCredentials)
+
+      // Listen for focus events (when returning to tab)
+      window.addEventListener('focus', validateCredentials)
+
+      // Periodic validation every 30 seconds
+      this.persistenceTimer = setInterval(validateCredentials, 30000)
+    }
+  }
+
+  /**
+   * Load API credentials from localStorage with bulletproof persistence
    */
   public loadCredentials(): void {
+    // Prevent concurrent loading
+    if (this.loadingPromise) {
+      return
+    }
+
+    this.loadingPromise = this.loadCredentialsInternal()
+    this.loadingPromise.finally(() => {
+      this.loadingPromise = null
+    })
+  }
+
+  /**
+   * Internal credentials loading with comprehensive fallback logic
+   */
+  private async loadCredentialsInternal(): Promise<void> {
+    try {
+      console.log('🔄 RetellService - Loading credentials with bulletproof persistence...')
+
+      let credentials = this.loadFromCurrentUser()
+
+      if (!credentials.apiKey) {
+        credentials = this.scanAllUserSettings()
+      }
+
+      if (!credentials.apiKey) {
+        credentials = this.loadFromSessionStorage()
+      }
+
+      if (!credentials.apiKey) {
+        credentials = this.loadFromMemoryBackup()
+      }
+
+      // Apply loaded credentials
+      this.apiKey = credentials.apiKey || this.apiKey
+      this.callAgentId = credentials.callAgentId || this.callAgentId
+      this.smsAgentId = credentials.smsAgentId || this.smsAgentId
+
+      // Create memory backup for future fallback
+      this.createMemoryBackup()
+
+      // Store in sessionStorage for reliability
+      this.saveToSessionStorage()
+
+      this.isInitialized = true
+
+      console.log('✅ RetellService - Credentials loaded successfully:', {
+        hasApiKey: !!this.apiKey,
+        apiKeyPrefix: this.apiKey ? this.apiKey.substring(0, 15) + '...' : 'none',
+        callAgentId: this.callAgentId || 'not set',
+        smsAgentId: this.smsAgentId || 'not set',
+        source: 'bulletproof_loading'
+      })
+
+    } catch (error) {
+      console.error('❌ RetellService - Error loading credentials:', error)
+    }
+  }
+
+  /**
+   * Load credentials from current user localStorage
+   */
+  private loadFromCurrentUser(): {apiKey: string, callAgentId: string, smsAgentId: string} {
     try {
       const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
       if (currentUser.id) {
         const settings = JSON.parse(localStorage.getItem(`settings_${currentUser.id}`) || '{}')
-
-        // Load raw values from localStorage
-        this.apiKey = settings.retellApiKey || ''
-        this.callAgentId = settings.callAgentId || ''
-        this.smsAgentId = settings.smsAgentId || ''
-
-        console.log('Fresh RetellService - Loaded raw credentials from localStorage:', {
-          hasApiKey: !!this.apiKey,
-          apiKeyPrefix: this.apiKey ? this.apiKey.substring(0, 15) + '...' : 'none',
-          callAgentId: this.callAgentId || 'not set',
-          smsAgentId: this.smsAgentId || 'not set',
-          apiKeyIsEncrypted: this.apiKey.includes('cbc:') || this.apiKey.includes('gcm:') || this.apiKey.includes('aes:')
-        })
-
-        // Note: Decryption will happen automatically in getDecryptedApiKey() when needed
-      } else {
-        // CRITICAL FIX: If currentUser is not available yet, try to find settings files
-        // This handles the timing issue where AuthContext hasn't set currentUser yet
-        console.log('Fresh RetellService - currentUser not found, scanning for user settings files...')
-
-        try {
-          // Look for any settings files in localStorage that contain API keys
-          const allKeys = Object.keys(localStorage)
-          const settingsKeys = allKeys.filter(key => key.startsWith('settings_') && key !== 'settings_undefined')
-
-          console.log('Fresh RetellService - Found settings keys:', settingsKeys)
-
-          for (const key of settingsKeys) {
-            const settings = JSON.parse(localStorage.getItem(key) || '{}')
-            if (settings.retellApiKey) {
-              this.apiKey = settings.retellApiKey
-              this.callAgentId = settings.callAgentId || ''
-              this.smsAgentId = settings.smsAgentId || ''
-
-              console.log('Fresh RetellService - Found credentials in', key, ':', {
-                hasApiKey: !!this.apiKey,
-                apiKeyPrefix: this.apiKey ? this.apiKey.substring(0, 15) + '...' : 'none',
-                callAgentId: this.callAgentId || 'not set',
-                smsAgentId: this.smsAgentId || 'not set'
-              })
-
-              // Found credentials, break out of loop
-              break
-            }
+        if (settings.retellApiKey) {
+          console.log('🎯 RetellService - Found credentials via currentUser')
+          return {
+            apiKey: settings.retellApiKey,
+            callAgentId: settings.callAgentId || '',
+            smsAgentId: settings.smsAgentId || ''
           }
-
-          // If still no credentials found, try to use fallback credentials
-          if (!this.apiKey) {
-            console.log('Fresh RetellService - No user credentials found, checking if fallback credentials should be used...')
-            // Don't automatically use fallback here - let forceUpdateCredentials handle this
-          }
-        } catch (scanError) {
-          console.warn('Fresh RetellService - Error scanning for settings files:', scanError)
         }
       }
     } catch (error) {
-      console.error('Error loading credentials from localStorage:', error)
+      console.warn('RetellService - Error loading from currentUser:', error)
+    }
+    return {apiKey: '', callAgentId: '', smsAgentId: ''}
+  }
+
+  /**
+   * Scan all user settings files for API keys
+   */
+  private scanAllUserSettings(): {apiKey: string, callAgentId: string, smsAgentId: string} {
+    try {
+      console.log('🔍 RetellService - Scanning all user settings for credentials...')
+      const allKeys = Object.keys(localStorage)
+      const settingsKeys = allKeys.filter(key => key.startsWith('settings_') && key !== 'settings_undefined')
+
+      for (const key of settingsKeys) {
+        try {
+          const settings = JSON.parse(localStorage.getItem(key) || '{}')
+          if (settings.retellApiKey) {
+            console.log('🎯 RetellService - Found credentials in', key)
+            return {
+              apiKey: settings.retellApiKey,
+              callAgentId: settings.callAgentId || '',
+              smsAgentId: settings.smsAgentId || ''
+            }
+          }
+        } catch (parseError) {
+          console.warn(`RetellService - Error parsing settings from ${key}:`, parseError)
+        }
+      }
+    } catch (error) {
+      console.warn('RetellService - Error scanning user settings:', error)
+    }
+    return {apiKey: '', callAgentId: '', smsAgentId: ''}
+  }
+
+  /**
+   * Load credentials from sessionStorage backup
+   */
+  private loadFromSessionStorage(): {apiKey: string, callAgentId: string, smsAgentId: string} {
+    try {
+      const sessionData = sessionStorage.getItem('retell_credentials_backup')
+      if (sessionData) {
+        const credentials = JSON.parse(sessionData)
+        if (credentials.apiKey) {
+          console.log('🎯 RetellService - Found credentials in sessionStorage backup')
+          return credentials
+        }
+      }
+    } catch (error) {
+      console.warn('RetellService - Error loading from sessionStorage:', error)
+    }
+    return {apiKey: '', callAgentId: '', smsAgentId: ''}
+  }
+
+  /**
+   * Load credentials from in-memory backup
+   */
+  private loadFromMemoryBackup(): {apiKey: string, callAgentId: string, smsAgentId: string} {
+    try {
+      const backup = (window as any).__retellCredentialsBackup
+      if (backup && backup.apiKey) {
+        console.log('🎯 RetellService - Found credentials in memory backup')
+        return backup
+      }
+    } catch (error) {
+      console.warn('RetellService - Error loading from memory backup:', error)
+    }
+    return {apiKey: '', callAgentId: '', smsAgentId: ''}
+  }
+
+  /**
+   * Create in-memory backup of credentials
+   */
+  private createMemoryBackup(): void {
+    if (this.apiKey) {
+      (window as any).__retellCredentialsBackup = {
+        apiKey: this.apiKey,
+        callAgentId: this.callAgentId,
+        smsAgentId: this.smsAgentId,
+        timestamp: Date.now()
+      }
+    }
+  }
+
+  /**
+   * Save credentials to sessionStorage for reliability
+   */
+  private saveToSessionStorage(): void {
+    if (this.apiKey) {
+      try {
+        sessionStorage.setItem('retell_credentials_backup', JSON.stringify({
+          apiKey: this.apiKey,
+          callAgentId: this.callAgentId,
+          smsAgentId: this.smsAgentId,
+          timestamp: Date.now()
+        }))
+      } catch (error) {
+        console.warn('RetellService - Error saving to sessionStorage:', error)
+      }
     }
   }
 
@@ -202,10 +346,19 @@ class RetellService {
   }
 
   /**
-   * Check if service is configured
+   * Check if service is configured with auto-recovery
    */
   public isConfigured(): boolean {
-    return !!(this.apiKey && (this.callAgentId || this.smsAgentId))
+    const configured = !!(this.apiKey && (this.callAgentId || this.smsAgentId))
+
+    // If not configured but should be, try to reload
+    if (!configured && this.isInitialized) {
+      console.log('⚠️ RetellService - Configuration lost, attempting recovery...')
+      this.loadCredentials()
+      return !!(this.apiKey && (this.callAgentId || this.smsAgentId))
+    }
+
+    return configured
   }
 
   /**
@@ -424,17 +577,25 @@ class RetellService {
   }
 
   /**
-   * Update credentials and store them in localStorage (plain text for UI)
+   * Update credentials with bulletproof persistence
    */
   public updateCredentials(apiKey?: string, callAgentId?: string, smsAgentId?: string): void {
+    console.log('🔧 RetellService - Updating credentials with bulletproof persistence...')
+
+    // Update instance variables
     if (apiKey !== undefined) this.apiKey = apiKey
     if (callAgentId !== undefined) this.callAgentId = callAgentId
     if (smsAgentId !== undefined) this.smsAgentId = smsAgentId
 
-    console.log('Fresh RetellService - Credentials updated')
+    // Mark as initialized
+    this.isInitialized = true
 
-    // Also update localStorage with plain text values for UI display
+    // Update all storage locations for maximum reliability
     this.updateLocalStorageCredentials(apiKey, callAgentId, smsAgentId)
+    this.createMemoryBackup()
+    this.saveToSessionStorage()
+
+    console.log('✅ RetellService - Credentials updated across all storage locations')
   }
 
   /**
@@ -486,10 +647,45 @@ class RetellService {
   }
 
   /**
-   * Load credentials async (for compatibility)
+   * Load credentials async with promise support
    */
   public async loadCredentialsAsync(): Promise<void> {
+    if (this.loadingPromise) {
+      await this.loadingPromise
+      return
+    }
+
     this.loadCredentials()
+    if (this.loadingPromise) {
+      await this.loadingPromise
+    }
+  }
+
+  /**
+   * Ensure credentials are loaded and available
+   */
+  public async ensureCredentialsLoaded(): Promise<boolean> {
+    if (!this.isConfigured()) {
+      await this.loadCredentialsAsync()
+    }
+    return this.isConfigured()
+  }
+
+  /**
+   * Cleanup method for proper resource management
+   */
+  public destroy(): void {
+    if (this.persistenceTimer) {
+      clearInterval(this.persistenceTimer)
+      this.persistenceTimer = null
+    }
+
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('popstate', () => {})
+      window.removeEventListener('pushstate', () => {})
+      window.removeEventListener('replacestate', () => {})
+      window.removeEventListener('focus', () => {})
+    }
   }
 
   /**

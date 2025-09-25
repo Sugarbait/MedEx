@@ -187,7 +187,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
           // Also save to localStorage for immediate access
           localStorage.setItem(`settings_${user.id}`, JSON.stringify(loadedSettings))
 
-          // Update retell service with loaded credentials
+          // Update retell service with loaded credentials using bulletproof system
           if (loadedSettings.retellApiKey || loadedSettings.callAgentId || loadedSettings.smsAgentId) {
             console.log('Initializing retell service with saved credentials')
             retellService.updateCredentials(
@@ -195,6 +195,10 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
               loadedSettings.callAgentId,
               loadedSettings.smsAgentId
             )
+            // Ensure credentials are fully loaded
+            retellService.ensureCredentialsLoaded().catch(error => {
+              console.warn('Failed to ensure credentials during initialization:', error)
+            })
           }
 
           console.log('Settings loaded and applied successfully')
@@ -275,13 +279,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
         setUserSettings(localSettings)
         // setSyncStatus('loaded')
 
-        // Update retell service with loaded credentials
+        // Update retell service with loaded credentials using bulletproof system
         if (localSettings.retellApiKey || localSettings.callAgentId || localSettings.smsAgentId) {
           retellService.updateCredentials(
             localSettings.retellApiKey,
             localSettings.callAgentId,
             localSettings.smsAgentId
           )
+          // Ensure credentials are fully loaded
+          retellService.ensureCredentialsLoaded().catch(error => {
+            console.warn('Failed to ensure credentials during real-time update:', error)
+          })
         }
       }).catch(error => {
         console.warn('Failed to get MFA status during real-time update:', error)
@@ -371,13 +379,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
         setTimeout(() => setSaveStatus('idle'), 2000)
 
-        // Update retell service if API settings changed
+        // Update retell service if API settings changed using bulletproof system
         if (newSettings.retellApiKey || newSettings.callAgentId || newSettings.smsAgentId) {
           retellService.updateCredentials(
             updatedSettings.retellApiKey,
             updatedSettings.callAgentId,
             updatedSettings.smsAgentId
           )
+
+          // Ensure credentials are fully loaded and persisted
+          await retellService.ensureCredentialsLoaded().catch(error => {
+            console.warn('Failed to ensure credentials after update:', error)
+          })
         }
       } else {
         console.error('❌ Failed to update settings:', response.error)
@@ -531,17 +544,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
     console.log('Updating API key configuration')
 
-    // Save settings
+    // Save settings using bulletproof system
     try {
-      await retellService.saveCredentials(
-        apiKey,
-        currentSettings.callAgentId || '',
-        currentSettings.smsAgentId || ''
-      )
-      console.log('API credentials saved successfully')
+      // First update with new credentials
+      retellService.updateCredentials(apiKey, currentSettings.callAgentId, currentSettings.smsAgentId)
+
+      // Then ensure they're loaded and persisted
+      await retellService.ensureCredentialsLoaded()
+      console.log('API credentials saved and ensured loaded successfully')
     } catch (error) {
       console.error('Error saving API credentials:', error)
-      // Fallback to old method if saveCredentials fails
+      // Fallback to basic update if advanced method fails
       retellService.updateCredentials(apiKey, currentSettings.callAgentId, currentSettings.smsAgentId)
     }
 
@@ -558,17 +571,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
     console.log('Updating Call Agent ID configuration')
 
-    // Save settings
+    // Save settings using bulletproof system
     try {
-      await retellService.saveCredentials(
-        currentSettings.retellApiKey || '',
-        agentId,
-        currentSettings.smsAgentId || ''
-      )
-      console.log('Call agent ID saved successfully')
+      // First update with new credentials
+      retellService.updateCredentials(currentSettings.retellApiKey, agentId, currentSettings.smsAgentId)
+
+      // Then ensure they're loaded and persisted
+      await retellService.ensureCredentialsLoaded()
+      console.log('Call agent ID saved and ensured loaded successfully')
     } catch (error) {
       console.error('Error saving call agent ID:', error)
-      // Fallback to old method if saveCredentials fails
+      // Fallback to basic update if advanced method fails
       retellService.updateCredentials(currentSettings.retellApiKey, agentId, currentSettings.smsAgentId)
     }
 
@@ -585,17 +598,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
     console.log('Updating SMS Agent ID configuration')
 
-    // Save settings
+    // Save settings using bulletproof system
     try {
-      await retellService.saveCredentials(
-        currentSettings.retellApiKey || '',
-        currentSettings.callAgentId || '',
-        agentId
-      )
-      console.log('SMS agent ID saved successfully')
+      // First update with new credentials
+      retellService.updateCredentials(currentSettings.retellApiKey, currentSettings.callAgentId, agentId)
+
+      // Then ensure they're loaded and persisted
+      await retellService.ensureCredentialsLoaded()
+      console.log('SMS agent ID saved and ensured loaded successfully')
     } catch (error) {
       console.error('Error saving SMS agent ID:', error)
-      // Fallback to old method if saveCredentials fails
+      // Fallback to basic update if advanced method fails
       retellService.updateCredentials(currentSettings.retellApiKey, currentSettings.callAgentId, agentId)
     }
 
