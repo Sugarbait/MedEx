@@ -96,7 +96,24 @@ const setupApiKeysImmediately = () => {
   const userId = 'dynamic-pierre-user'
   localStorage.setItem('currentUser', JSON.stringify({ id: userId }))
 
-  const apiSettings = {
+  // Check if user already has API settings saved
+  const existingSettings = localStorage.getItem(`settings_${userId}`)
+
+  if (existingSettings) {
+    const settings = JSON.parse(existingSettings)
+    // If user has custom API keys (not default), preserve them
+    if (settings.retellApiKey && settings.retellApiKey !== 'key_c3f084f5ca67781070e188b47d7f') {
+      console.log('✅ IMMEDIATE: Preserving existing user-configured API keys:', {
+        apiKeyPrefix: settings.retellApiKey.substring(0, 15) + '...',
+        callAgentId: settings.callAgentId,
+        smsAgentId: settings.smsAgentId
+      })
+      return
+    }
+  }
+
+  // Only set defaults if no custom settings exist
+  const defaultApiSettings = {
     theme: 'light',
     mfaEnabled: false,
     refreshInterval: 30000,
@@ -106,8 +123,8 @@ const setupApiKeysImmediately = () => {
     callAgentId: 'agent_447a1b9da540237693b0440df6',
     smsAgentId: 'agent_643486efd4b5a0e9d7e094ab99'
   }
-  localStorage.setItem(`settings_${userId}`, JSON.stringify(apiSettings))
-  console.log('✅ IMMEDIATE: API keys set up in localStorage')
+  localStorage.setItem(`settings_${userId}`, JSON.stringify(defaultApiSettings))
+  console.log('✅ IMMEDIATE: Default API keys set up in localStorage')
 }
 
 // Call this immediately, before any React code runs
