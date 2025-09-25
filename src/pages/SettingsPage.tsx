@@ -416,18 +416,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
         enabled: enabled ? 'enabling' : 'disabling',
         userId: user.id,
         userEmail: user.email || user.user_metadata?.email,
-        showMFASetup: showMFASetup
+        showMFASetup: showFreshMfaSetup
       })
 
       if (enabled) {
         console.log('🔍 Checking if TOTP is already enabled...')
-        const hasSetup = await cleanTotpService.isTOTPEnabled(user.id)
+        const hasSetup = await FreshMfaService.isMfaEnabled(user.id)
         console.log('🔍 TOTP check result:', hasSetup)
 
         if (!hasSetup) {
           console.log('🚀 No TOTP setup exists - showing setup dialog')
-          setShowMFASetup(true)
-          console.log('🚀 showMFASetup state updated to true')
+          setShowFreshMfaSetup(true)
+          console.log('🚀 showFreshMfaSetup state updated to true')
           return
         } else {
           console.log('✅ TOTP already enabled for user')
@@ -435,7 +435,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
       } else {
         console.log('🔒 Attempting to disable TOTP...')
         // Allow TOTP to be disabled
-        const disabled = await cleanTotpService.disableTOTP(user.id)
+        const disabled = await FreshMfaService.disableMfa(user.id)
         console.log('🔒 TOTP disable result:', disabled)
         if (!disabled) {
           console.error('❌ Failed to disable TOTP')
@@ -515,7 +515,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
     }
   }
 
-  // TOTP setup completion is handled by TOTPSetup component itself
+  // Fresh MFA setup completion is handled by FreshMfaSetup component itself
 
   // API Configuration Functions
   const handleApiKeyUpdate = async (apiKey: string) => {
@@ -1985,31 +1985,21 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
         </div>
       </div>
 
-      {/* TOTP Setup Modal */}
-      {showMFASetup && (
-        <>
-          {useEnhancedMFA ? (
-            <EnhancedTOTPSetup
-              userId={user.id}
-              userEmail={user.email || user.user_metadata?.email || 'user@carexps.com'}
-              onSetupComplete={() => {
-                setShowMFASetup(false)
-                window.dispatchEvent(new CustomEvent('userSettingsUpdated'))
-              }}
-              onCancel={() => setShowMFASetup(false)}
-            />
-          ) : (
-            <TOTPSetup
-              userId={user.id}
-              userEmail={user.email || user.user_metadata?.email || 'user@carexps.com'}
-              onSetupComplete={() => {
-                setShowMFASetup(false)
-                window.dispatchEvent(new CustomEvent('userSettingsUpdated'))
-              }}
-              onCancel={() => setShowMFASetup(false)}
-            />
-          )}
-        </>
+      {/* Fresh MFA Setup Modal */}
+      {showFreshMfaSetup && (
+        <FreshMfaSetup
+          userId={user.id}
+          userEmail={user.email || user.user_metadata?.email || 'user@carexps.com'}
+          onSetupComplete={() => {
+            setShowFreshMfaSetup(false)
+            window.dispatchEvent(new CustomEvent('userSettingsUpdated'))
+            console.log('✅ Fresh MFA setup completed successfully')
+          }}
+          onCancel={() => {
+            setShowFreshMfaSetup(false)
+            console.log('❌ Fresh MFA setup cancelled')
+          }}
+        />
       )}
 
 
