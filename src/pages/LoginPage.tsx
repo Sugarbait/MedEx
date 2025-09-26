@@ -945,16 +945,22 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         <div className="text-center mt-6">
           {/* Light mode footer logo */}
           <img
-            src="https://nexasync.ca/images/NexaSync-logo.png"
+            src="/images/nexasync-logo-light.png"
             alt="NexaSync Logo"
             className="h-6 w-auto mx-auto mb-2 opacity-70 dark:hidden"
+            onError={(e) => {
+              e.currentTarget.src = 'https://nexasync.ca/images/NexaSync-logo.png'
+            }}
             referrerPolicy="no-referrer"
           />
           {/* Dark mode footer logo */}
           <img
-            src="https://nexasync.ca/images/nexasync-white.png"
+            src="/images/nexasync-logo-dark.png"
             alt="NexaSync Logo"
             className="h-6 w-auto mx-auto mb-2 opacity-70 hidden dark:block"
+            onError={(e) => {
+              e.currentTarget.src = 'https://nexasync.ca/images/nexasync-white.png'
+            }}
             referrerPolicy="no-referrer"
           />
           <div className="text-xs text-gray-500 dark:text-gray-400">

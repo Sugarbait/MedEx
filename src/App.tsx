@@ -35,6 +35,7 @@ import { AuditLogger } from './components/security/AuditLogger'
 import { useSessionTimeout } from './hooks/useSessionTimeout'
 import { SessionTimeoutWarning } from './components/common/SessionTimeoutWarning'
 import { ToastManager } from './components/common/ToastManager'
+import { SecurityAlerts } from './components/security/SecurityAlerts'
 
 // Pages
 import { DashboardPage } from './pages/DashboardPage'
@@ -268,6 +269,9 @@ const AppContent: React.FC<{
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+      {/* Security Alerts Component */}
+      <SecurityAlerts />
+
       {/* HIPAA Compliance Banner */}
       {hipaaMode && (
         <div className="fixed top-0 left-0 right-0 bg-blue-600 text-white px-4 py-2 text-sm z-50">

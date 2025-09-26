@@ -683,6 +683,22 @@ export class IncidentResponseService {
       })
       this.storeData('admin_notifications', adminNotifications)
 
+      // Trigger browser security alert
+      this.triggerBrowserAlert(incident)
+
+      // Store recent incidents for SecurityAlerts component
+      const recentIncidents = this.getStoredData('recent_security_incidents', [])
+      recentIncidents.push({
+        type: incident.type,
+        severity: incident.severity,
+        message: incident.title,
+        details: incident.details,
+        timestamp: timestamp.toISOString(),
+        ip: incident.ipAddress
+      })
+      // Keep only last 10 incidents
+      this.storeData('recent_security_incidents', recentIncidents.slice(-10))
+
       return {
         action: ResponseAction.NOTIFY_ADMINISTRATORS,
         timestamp,
@@ -693,6 +709,26 @@ export class IncidentResponseService {
 
     } catch (error) {
       throw new Error(`Failed to notify administrators: ${error instanceof Error ? error.message : 'Unknown error'}`)
+    }
+  }
+
+  /**
+   * Trigger browser security alert
+   */
+  private triggerBrowserAlert(incident: SecurityIncident): void {
+    try {
+      // Dispatch custom event for SecurityAlerts component
+      const event = new CustomEvent('securityAlert', {
+        detail: {
+          severity: incident.severity === Severity.HIGH ? 'danger' :
+                   incident.severity === Severity.MEDIUM ? 'warning' : 'info',
+          message: incident.title,
+          timestamp: new Date()
+        }
+      })
+      window.dispatchEvent(event)
+    } catch (error) {
+      console.error('Failed to trigger browser alert:', error)
     }
   }
 
