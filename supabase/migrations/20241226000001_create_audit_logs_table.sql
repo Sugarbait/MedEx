@@ -46,7 +46,7 @@ BEGIN
       FOR SELECT USING (
         EXISTS (
           SELECT 1 FROM public.users
-          WHERE users.id = auth.uid()::text
+          WHERE users.id::text = auth.uid()::text
           AND users.role IN ('super_user', 'admin')
         )
       );
