@@ -1,6 +1,6 @@
 // Service instances for easy importing
 import { userSettingsService as userSettingsServiceInstance } from './userSettingsService'
-import { FreshMfaService } from './freshMfaService'
+import FreshMfaService from './freshMfaService'
 import { AuditService } from './auditService'
 import { RealtimeService } from './realtimeService'
 import { retellService } from './retellService'
@@ -35,7 +35,6 @@ export {
 // Export classes and types for direct usage
 export { AuditService, RealtimeService }
 export * from './userSettingsService'
-export * from './freshMfaService'
 export * from './supabaseService'
 export * from './retellService'
 export * from './chatService'
