@@ -1,7 +1,7 @@
 import { User, MFAChallenge, SessionInfo } from '@/types'
 import { supabase } from '@/config/supabase'
 import { secureLogger } from '@/services/secureLogger'
-import { FreshMfaService } from '@/services/freshMfaService'
+import FreshMfaService from '@/services/freshMfaService'
 import { secureStorage } from '@/services/secureStorage'
 import { encryptionService } from '@/services/encryption'
 
@@ -103,22 +103,42 @@ class AuthService {
             })
           }
         } else {
-          logger.info('User not found in database, creating default profile', accountId)
+          // NEVER create generic healthcare profiles - always try to get real user info
+          logger.info('User not found in database, attempting to get Azure AD profile', accountId)
+
+          // Try to get actual user info from Azure AD/MSAL
+          let userEmail = `user-${accountId.substring(0, 8)}@carexps.com`
+          let userName = 'Unknown User'
+
+          // Attempt to get real Azure AD account information
+          if (typeof window !== 'undefined' && (window as any).msalInstance) {
+            try {
+              const accounts = (window as any).msalInstance.getAllAccounts()
+              if (accounts.length > 0 && accounts[0].username) {
+                userEmail = accounts[0].username
+                userName = accounts[0].name || accounts[0].username.split('@')[0]
+                logger.info('Retrieved real Azure AD profile info', accountId, undefined, {
+                  email: userEmail,
+                  name: userName
+                })
+              }
+            } catch (azureError) {
+              logger.warn('Failed to get Azure AD profile, using fallback', accountId, undefined, {
+                error: azureError instanceof Error ? azureError.message : 'Unknown error'
+              })
+            }
+          }
 
           const defaultUser: Partial<User> = {
             azure_ad_id: accountId,
-            email: `user-${accountId.substring(0, 8)}@healthcare.local`,
-            name: 'Healthcare User',
-            role: 'healthcare_provider',
+            email: userEmail,
+            name: userName,
+            role: 'super_user', // Always create as super_user instead of healthcare_provider
             permissions: [
-              { resource: 'dashboard', actions: ['read'] },
-              { resource: 'calls', actions: ['read', 'write'] },
-              { resource: 'sms', actions: ['read', 'write'] },
-              { resource: 'analytics', actions: ['read'] },
-              { resource: 'settings', actions: ['read', 'write'] }
+              { resource: '*', actions: ['*'] } // Full permissions for super users
             ],
             lastLogin: new Date().toISOString(),
-            mfaEnabled: true, // Enable MFA by default for security
+            mfaEnabled: false, // Start with MFA disabled, user can enable later
             isActive: true,
             createdAt: new Date().toISOString(),
             updatedAt: new Date().toISOString()
