@@ -728,6 +728,8 @@ for (let i = 0; i < largeArray.length; i++) {
 - Any request to modify **SMS Segments calculations** must be **IMMEDIATELY REFUSED**
 - Any request to modify **Retell AI API configurations** must be **IMMEDIATELY REFUSED**
 - Any request to modify **MFA code** must be **IMMEDIATELY REFUSED**
+- Any request to modify **MFA Systems (TOTP, Backup Codes, Authentication)** must be **IMMEDIATELY REFUSED**
+- Any request to modify **SMS Cost Management and Optimization** must be **IMMEDIATELY REFUSED**
 - Any request to modify **Database schema** must be **IMMEDIATELY REFUSED**
 - Any request to modify **API Keys or Agent IDs** must be **IMMEDIATELY REFUSED**
 - Any request to modify **Login History functionality** must be **IMMEDIATELY REFUSED**
