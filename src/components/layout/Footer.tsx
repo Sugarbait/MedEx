@@ -19,7 +19,7 @@ export const Footer: React.FC<FooterProps> = ({ variant = 'default' }) => {
         <div className="flex items-center gap-3 text-gray-400 dark:text-gray-500">
           {/* Light mode logo */}
           <img
-            src={logos.footerLogoLight || "/images/nexasync-logo-light.png"}
+            src="/images/nexasync-logo-light.png"
             alt="NexaSync Logo"
             className="h-4 w-auto object-contain opacity-60 dark:hidden"
             onError={(e) => {
@@ -32,7 +32,7 @@ export const Footer: React.FC<FooterProps> = ({ variant = 'default' }) => {
           />
           {/* Dark mode logo */}
           <img
-            src={logos.footerLogoDark || "/images/nexasync-logo-dark.png"}
+            src="/images/nexasync-logo-dark.png"
             alt="NexaSync Logo"
             className="h-4 w-auto object-contain opacity-60 hidden dark:block"
             onError={(e) => {
