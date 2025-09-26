@@ -32,8 +32,21 @@ interface ApiKeyState {
   sms_agent_id: string
 }
 
+interface OriginalApiKeyState {
+  retell_api_key: string
+  call_agent_id: string
+  sms_agent_id: string
+}
+
 export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ user }) => {
   const [apiKeys, setApiKeys] = useState<ApiKeyState>({
+    retell_api_key: 'key_c3f084f5ca67781070e188b47d7f',
+    call_agent_id: 'agent_447a1b9da540237693b0440df6',
+    sms_agent_id: 'agent_643486efd4b5a0e9d7e094ab99'
+  })
+
+  // Track original/saved state to properly detect unsaved changes
+  const [originalApiKeys, setOriginalApiKeys] = useState<OriginalApiKeyState>({
     retell_api_key: 'key_c3f084f5ca67781070e188b47d7f',
     call_agent_id: 'agent_447a1b9da540237693b0440df6',
     sms_agent_id: 'agent_643486efd4b5a0e9d7e094ab99'
@@ -47,11 +60,6 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
   const [testResult, setTestResult] = useState<{
     success: boolean
     message: string
-  } | null>(null)
-  const [storageMethod, setStorageMethod] = useState<string | null>(null)
-  const [schemaStatus, setSchemaStatus] = useState<{
-    hasAgentConfig: boolean
-    hasRetellKey: boolean
   } | null>(null)
 
   // Visibility states for sensitive fields
@@ -73,9 +81,8 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
         // Force hardwired credentials as backup
         forceHardwiredCredentials()
 
-        // Load API keys and check schema
+        // Load API keys
         loadApiKeys()
-        checkSchemaStatus()
 
         console.log('✅ API Key Manager: Services and credentials initialized')
       } catch (error) {
@@ -83,7 +90,6 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
         // Fallback to old method
         forceHardwiredCredentials()
         loadApiKeys()
-        checkSchemaStatus()
       }
     }
 
@@ -102,6 +108,8 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
 
     // Set in component state immediately
     setApiKeys(hardwiredApiKeys)
+    // Update original state to match loaded values
+    setOriginalApiKeys({ ...hardwiredApiKeys })
 
     // Update retell service immediately
     retellService.updateCredentials(
@@ -128,23 +136,14 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
     console.log('✅ API KEY MANAGEMENT: Hardwired credentials loaded successfully')
   }
 
-  const checkSchemaStatus = async () => {
-    try {
-      const testResult = await apiKeyFallbackService.testSchemaHandling(user.id)
-      setSchemaStatus(testResult.schemaSupported)
-      setStorageMethod(testResult.fallbackMethod)
-    } catch (error) {
-      console.warn('Could not check schema status:', error)
-    }
-  }
 
-  // Track unsaved changes
+  // Track unsaved changes by comparing current state with original saved state
   useEffect(() => {
-    const hasChanges = apiKeys.retell_api_key !== '' ||
-                      apiKeys.call_agent_id !== '' ||
-                      apiKeys.sms_agent_id !== ''
+    const hasChanges = apiKeys.retell_api_key !== originalApiKeys.retell_api_key ||
+                      apiKeys.call_agent_id !== originalApiKeys.call_agent_id ||
+                      apiKeys.sms_agent_id !== originalApiKeys.sms_agent_id
     setHasUnsavedChanges(hasChanges)
-  }, [apiKeys])
+  }, [apiKeys, originalApiKeys])
 
   const loadApiKeys = async () => {
     setIsLoading(true)
@@ -175,6 +174,8 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
           }
 
           setApiKeys(localApiKeys)
+          // Update original state to match loaded values
+          setOriginalApiKeys({ ...localApiKeys })
 
           // Update retell service
           retellService.updateCredentials(
@@ -216,6 +217,8 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
           }
 
           setApiKeys(correctApiKeys)
+          // Update original state to match loaded values
+          setOriginalApiKeys({ ...correctApiKeys })
 
           // Update localStorage with correct values
           if (currentUser.id) {
@@ -238,17 +241,21 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
           setTimeout(() => setSuccessMessage(null), 3000)
         } else {
           // Use the response data as-is (not encrypted)
-          setApiKeys({
+          const loadedApiKeys = {
             retell_api_key: response.data.retell_api_key || 'key_c3f084f5ca67781070e188b47d7f',
             call_agent_id: response.data.call_agent_id || 'agent_447a1b9da540237693b0440df6',
             sms_agent_id: response.data.sms_agent_id || 'agent_643486efd4b5a0e9d7e094ab99'
-          })
+          }
+
+          setApiKeys(loadedApiKeys)
+          // Update original state to match loaded values
+          setOriginalApiKeys({ ...loadedApiKeys })
 
           // Update retell service
           retellService.updateCredentials(
-            response.data.retell_api_key || 'key_c3f084f5ca67781070e188b47d7f',
-            response.data.call_agent_id || 'agent_447a1b9da540237693b0440df6',
-            response.data.sms_agent_id || 'agent_643486efd4b5a0e9d7e094ab99'
+            loadedApiKeys.retell_api_key,
+            loadedApiKeys.call_agent_id,
+            loadedApiKeys.sms_agent_id
           )
         }
       } else {
@@ -260,6 +267,8 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
         }
 
         setApiKeys(defaultApiKeys)
+        // Update original state to match loaded values
+        setOriginalApiKeys({ ...defaultApiKeys })
 
         // Save defaults to localStorage immediately
         if (currentUser.id) {
@@ -296,6 +305,8 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
       }
 
       setApiKeys(defaultApiKeys)
+      // Update original state to match loaded values
+      setOriginalApiKeys({ ...defaultApiKeys })
       console.log('Using default API keys due to loading error')
     } finally {
       setIsLoading(false)
@@ -398,8 +409,9 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
         console.warn('Database save failed, but localStorage save succeeded:', dbError)
       }
 
-      // Update local state
+      // Update local state and reset unsaved changes tracking
       setApiKeys(trimmedApiKeys)
+      setOriginalApiKeys({ ...trimmedApiKeys })
       setHasUnsavedChanges(false)
 
       // Success message
@@ -797,133 +809,6 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
             )}
           </div>
 
-          {/* Storage Method Information Panel */}
-          {(storageMethod || schemaStatus) && (
-            <div className={`border rounded-lg p-4 ${
-              storageMethod === 'user_profiles_full'
-                ? 'bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-700'
-                : storageMethod === 'user_profiles_partial_plus_user_settings'
-                ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-700'
-                : 'bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-700'
-            }`}>
-              <div className="flex items-center gap-2 mb-3">
-                <div className={`w-5 h-5 ${
-                  storageMethod === 'user_profiles_full'
-                    ? 'text-green-600 dark:text-green-400'
-                    : storageMethod === 'user_profiles_partial_plus_user_settings'
-                    ? 'text-yellow-600 dark:text-yellow-400'
-                    : 'text-orange-600 dark:text-orange-400'
-                }`}>
-                  {storageMethod === 'user_profiles_full' ? (
-                    <Check />
-                  ) : (
-                    <AlertTriangle />
-                  )}
-                </div>
-                <h3 className={`font-medium ${
-                  storageMethod === 'user_profiles_full'
-                    ? 'text-green-900 dark:text-green-100'
-                    : storageMethod === 'user_profiles_partial_plus_user_settings'
-                    ? 'text-yellow-900 dark:text-yellow-100'
-                    : 'text-orange-900 dark:text-orange-100'
-                }`}>
-                  Storage Method Status
-                </h3>
-              </div>
-
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className={`text-sm ${
-                    storageMethod === 'user_profiles_full'
-                      ? 'text-green-700 dark:text-green-300'
-                      : storageMethod === 'user_profiles_partial_plus_user_settings'
-                      ? 'text-yellow-700 dark:text-yellow-300'
-                      : 'text-orange-700 dark:text-orange-300'
-                  }`}>
-                    Database Schema
-                  </span>
-                  <span className={`text-xs ${
-                    storageMethod === 'user_profiles_full'
-                      ? 'text-green-600 dark:text-green-400'
-                      : storageMethod === 'user_profiles_partial_plus_user_settings'
-                      ? 'text-yellow-600 dark:text-yellow-400'
-                      : 'text-orange-600 dark:text-orange-400'
-                  }`}>
-                    {storageMethod === 'user_profiles_full'
-                      ? 'Complete (Optimal)'
-                      : storageMethod === 'user_profiles_partial_plus_user_settings'
-                      ? 'Partial (Backup method active)'
-                      : 'Incomplete (Fallback method active)'}
-                  </span>
-                </div>
-
-                <div className="flex items-center justify-between">
-                  <span className={`text-sm ${
-                    storageMethod === 'user_profiles_full'
-                      ? 'text-green-700 dark:text-green-300'
-                      : storageMethod === 'user_profiles_partial_plus_user_settings'
-                      ? 'text-yellow-700 dark:text-yellow-300'
-                      : 'text-orange-700 dark:text-orange-300'
-                  }`}>
-                    Storage Location
-                  </span>
-                  <span className={`text-xs ${
-                    storageMethod === 'user_profiles_full'
-                      ? 'text-green-600 dark:text-green-400'
-                      : storageMethod === 'user_profiles_partial_plus_user_settings'
-                      ? 'text-yellow-600 dark:text-yellow-400'
-                      : 'text-orange-600 dark:text-orange-400'
-                  }`}>
-                    {storageMethod === 'user_profiles_full'
-                      ? 'Primary Database'
-                      : storageMethod === 'user_profiles_partial_plus_user_settings'
-                      ? 'Mixed (Profile + Settings)'
-                      : storageMethod === 'user_settings_or_localStorage'
-                      ? 'Settings Table'
-                      : 'Local Storage'}
-                  </span>
-                </div>
-
-                {schemaStatus && (
-                  <div className="mt-3 p-2 bg-white dark:bg-gray-800 rounded text-xs space-y-1">
-                    <div className="flex items-center justify-between">
-                      <span>Agent Config Column:</span>
-                      <span className={schemaStatus.hasAgentConfig ? 'text-green-600' : 'text-red-600'}>
-                        {schemaStatus.hasAgentConfig ? 'Available' : 'Missing'}
-                      </span>
-                    </div>
-                    <div className="flex items-center justify-between">
-                      <span>Retell Key Column:</span>
-                      <span className={schemaStatus.hasRetellKey ? 'text-green-600' : 'text-red-600'}>
-                        {schemaStatus.hasRetellKey ? 'Available' : 'Missing'}
-                      </span>
-                    </div>
-                  </div>
-                )}
-              </div>
-
-              <div className={`mt-3 text-xs ${
-                storageMethod === 'user_profiles_full'
-                  ? 'text-green-700 dark:text-green-300'
-                  : storageMethod === 'user_profiles_partial_plus_user_settings'
-                  ? 'text-yellow-700 dark:text-yellow-300'
-                  : 'text-orange-700 dark:text-orange-300'
-              }`}>
-                {storageMethod === 'user_profiles_full' && (
-                  'Your API keys are being stored using the optimal method in the primary database.'
-                )}
-                {storageMethod === 'user_profiles_partial_plus_user_settings' && (
-                  'Your API keys are being stored using a backup method due to partial database schema. Performance may be slightly reduced.'
-                )}
-                {storageMethod === 'user_settings_or_localStorage' && (
-                  'Your API keys are being stored using a fallback method. Please contact your administrator to update the database schema for optimal performance.'
-                )}
-                {storageMethod === 'localStorage_fallback' && (
-                  'Your API keys are being stored locally due to database connection issues. They will sync when the connection is restored.'
-                )}
-              </div>
-            </div>
-          )}
         </div>
       )}
     </div>

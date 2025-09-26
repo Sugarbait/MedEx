@@ -292,23 +292,25 @@ export const SyncStatusPanel: React.FC<SyncStatusPanelProps> = ({ user }) => {
           </div>
         </div>
 
-        {/* Storage Method */}
-        <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
-          <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-3">
-              <StorageIcon className={`w-5 h-5 ${storageDisplay.color}`} />
-              <div>
-                <span className="font-medium text-gray-900 dark:text-gray-100">Storage Method</span>
-                <p className="text-sm text-gray-600 dark:text-gray-400">Current data storage approach</p>
+        {/* Storage Method - Only show if there are actual issues */}
+        {syncStatus.storageMethod !== 'user_profiles_full' && syncStatus.storageMethod !== 'unknown' && (
+          <div className="p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+            <div className="flex items-center justify-between mb-3">
+              <div className="flex items-center gap-3">
+                <StorageIcon className={`w-5 h-5 ${storageDisplay.color}`} />
+                <div>
+                  <span className="font-medium text-gray-900 dark:text-gray-100">Storage Method</span>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">Current data storage approach</p>
+                </div>
               </div>
             </div>
+            <div className="flex items-center gap-2">
+              <span className={`text-sm font-medium ${storageDisplay.color}`}>
+                {storageDisplay.label}
+              </span>
+            </div>
           </div>
-          <div className="flex items-center gap-2">
-            <span className={`text-sm font-medium ${storageDisplay.color}`}>
-              {storageDisplay.label}
-            </span>
-          </div>
-        </div>
+        )}
 
         {/* Schema Status */}
         {syncStatus.schemaStatus && (

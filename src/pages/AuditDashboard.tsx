@@ -24,6 +24,8 @@ import {
   AuditSearchCriteria,
   AuditReport
 } from '@/services/auditLogger'
+import { enhanceAuditEntriesForDisplay, DecryptedAuditEntry } from '@/utils/auditDisplayHelper'
+import { cleanUserDisplayName } from '@/utils/userDisplayFilter'
 
 interface AuditDashboardProps {
   user: any
@@ -31,6 +33,7 @@ interface AuditDashboardProps {
 
 export const AuditDashboard: React.FC<AuditDashboardProps> = ({ user }) => {
   const [auditReport, setAuditReport] = useState<AuditReport | null>(null)
+  const [enhancedEntries, setEnhancedEntries] = useState<DecryptedAuditEntry[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [searchCriteria, setSearchCriteria] = useState<AuditSearchCriteria>({
@@ -63,6 +66,19 @@ export const AuditDashboard: React.FC<AuditDashboardProps> = ({ user }) => {
     try {
       const report = await auditLogger.getAuditLogs(searchCriteria)
       setAuditReport(report)
+
+      // Enhance entries for display with readable user names
+      if (report.entries && report.entries.length > 0) {
+        console.log('Enhancing audit entries for display...', report.entries.length, 'entries')
+        console.log('Sample raw entry:', report.entries[0])
+        const enhanced = await enhanceAuditEntriesForDisplay(report.entries)
+        setEnhancedEntries(enhanced)
+        console.log('Enhanced entries:', enhanced.length)
+        console.log('Sample enhanced entry:', enhanced[0])
+      } else {
+        console.log('No entries to enhance')
+        setEnhancedEntries([])
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Failed to fetch audit logs'
       setError(errorMessage)
@@ -355,7 +371,7 @@ export const AuditDashboard: React.FC<AuditDashboardProps> = ({ user }) => {
         <div className="p-6 border-b border-gray-200">
           <h3 className="text-lg font-semibold text-gray-900">Audit Log Entries</h3>
           <p className="text-sm text-gray-500 mt-1">
-            {auditReport ? `${auditReport.entries.length} entries found` : 'Loading audit entries...'}
+            {auditReport ? `${enhancedEntries.length} entries found (${enhancedEntries.filter(e => e.displayName).length} decrypted)` : 'Loading audit entries...'}
           </p>
         </div>
 
@@ -365,7 +381,7 @@ export const AuditDashboard: React.FC<AuditDashboardProps> = ({ user }) => {
               <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto"></div>
               <p className="text-gray-600 mt-4">Loading audit logs...</p>
             </div>
-          ) : auditReport && auditReport.entries.length > 0 ? (
+          ) : auditReport && enhancedEntries.length > 0 ? (
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
@@ -393,14 +409,34 @@ export const AuditDashboard: React.FC<AuditDashboardProps> = ({ user }) => {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
-                {auditReport.entries.map((entry, index) => (
+                {enhancedEntries.map((entry, index) => (
                   <tr key={entry.id || index} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {formatTimestamp(entry.timestamp)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
-                        <div className="text-sm font-medium text-gray-900">{entry.user_name}</div>
+                        <div className="text-sm font-medium text-gray-900">
+                          {cleanUserDisplayName(
+                            entry.displayName || cleanUserDisplayName(entry.user_name, entry.user_id),
+                            entry.user_id
+                          )}
+                          {entry.displayName && !entry.displayName.startsWith('User ') && entry.displayName !== 'Admin User' && (
+                            <span className="ml-2 px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                              Resolved
+                            </span>
+                          )}
+                          {(entry.displayName && entry.displayName.startsWith('User ')) && entry.user_id && (
+                            <span className="ml-2 px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">
+                              ID-Based
+                            </span>
+                          )}
+                          {entry.displayName === 'Admin User' && (
+                            <span className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
+                              Admin
+                            </span>
+                          )}
+                        </div>
                         <div className="text-sm text-gray-500">{entry.user_role}</div>
                       </div>
                     </td>

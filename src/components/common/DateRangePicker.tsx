@@ -241,8 +241,18 @@ export const getDateRangeFromSelection = (range: DateRange, customStart?: Date, 
         const start = new Date(customStart)
         const end = new Date(customEnd)
         end.setHours(23, 59, 59, 999)
+        console.log('🔍 DateRangePicker: Custom date range generated:', {
+          customStart: customStart.toISOString(),
+          customEnd: customEnd.toISOString(),
+          calculatedStart: start.toISOString(),
+          calculatedEnd: end.toISOString(),
+          startMs: start.getTime(),
+          endMs: end.getTime(),
+          spanDays: Math.ceil((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000))
+        })
         return { start, end }
       }
+      console.log('⚠️ DateRangePicker: Custom range selected but missing dates, falling back to today')
       return { start: today, end: today }
 
     default:

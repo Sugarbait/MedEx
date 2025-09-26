@@ -23,6 +23,7 @@ import {
 import { userManagementService, SystemUserWithCredentials } from '@/services/userManagementService'
 import { userProfileService } from '@/services/userProfileService'
 import { fixUserIssues } from '@/utils/fixUserIssues'
+import TestUserCleanup from '@/utils/testUserCleanup'
 
 // Use the SystemUserWithCredentials type from the service
 type User = SystemUserWithCredentials
@@ -525,247 +526,17 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
     (window as any).viewDeletedUsers = viewDeletedUsers
   }
 
-  // Clean up duplicate users function
-  const handleCleanupDuplicates = async () => {
-    if (!confirm('This will remove duplicate users based on email addresses. The earliest created user for each email will be kept. Continue?')) {
-      return
-    }
 
-    setIsLoading(true)
-    try {
-      const response = await userManagementService.cleanupDuplicateUsers()
-      if (response.status === 'success') {
-        const { removed, remaining } = response.data || { removed: 0, remaining: 0 }
-        alert(`Cleanup completed!\n\nRemoved: ${removed} duplicate users\nRemaining: ${remaining} unique users`)
-        // Reload the users list to reflect changes
-        await loadUsers()
-      } else {
-        alert(`Cleanup failed: ${response.error}`)
-      }
-    } catch (error: any) {
-      console.error('Error during cleanup:', error)
-      alert(`Cleanup failed: ${error.message}`)
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
-  // Test duplicate prevention function
-  const handleTestDuplicatePrevention = async () => {
-    setIsLoading(true)
-    try {
-      console.log('🧪 Starting duplicate prevention tests...')
-      const result = await runDuplicatePreventionTests()
-      displayTestResults(result)
 
-      // Reload users after tests to show any changes
-      await loadUsers()
-    } catch (error: any) {
-      console.error('Error running tests:', error)
-      alert(`Test failed: ${error.message}`)
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
-  // Fix all user issues function
-  const handleFixAllUserIssues = async () => {
-    if (!confirm('This will attempt to fix user recreation and profile image persistence issues. Continue?')) {
-      return
-    }
 
-    setIsLoading(true)
-    try {
-      console.log('🔧 Starting comprehensive user issues fix...')
-      const result = await fixUserIssues.fixAllUserIssues()
 
-      const message = `User Issues Fix Complete!
 
-Fixed Issues:
-${result.fixes.length > 0 ? result.fixes.map(fix => `✅ ${fix}`).join('\n') : '• No fixes were needed'}
 
-${result.issues.length > 0 ? `\nRemaining Issues:\n${result.issues.map(issue => `⚠️ ${issue}`).join('\n')}` : ''}
 
-User Recreation Fixed: ${result.userRecreationFixed ? 'Yes' : 'No'}
-Profile Images Fixed: ${result.profileImageFixed ? 'Yes' : 'No'}`
 
-      alert(message)
 
-      // Reload users to show changes
-      await loadUsers()
-    } catch (error: any) {
-      console.error('Error fixing user issues:', error)
-      alert(`Fix failed: ${error.message}`)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Test user fixes function
-  const handleTestUserFixes = async () => {
-    setIsLoading(true)
-    try {
-      console.log('🧪 Starting user fixes test suite...')
-      const results = await testUserFixes.runAllTests()
-      testUserFixes.displayResults(results)
-
-      // Reload users after tests
-      await loadUsers()
-    } catch (error: any) {
-      console.error('Error running user fixes tests:', error)
-      alert(`Tests failed: ${error.message}`)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Fix all authentication issues
-  const handleFixAuthentication = async () => {
-    if (!confirm('This will fix all authentication issues including double-encrypted passwords, lockouts, and missing credentials. Continue?')) {
-      return
-    }
-
-    setIsLoading(true)
-    try {
-      console.log('🔧 Starting comprehensive authentication fix...')
-      const result = await AuthenticationFixer.fixAllAuthenticationIssues()
-
-      const message = `Authentication Fix Complete!
-
-${result.message}
-
-Details:
-${result.details.map(detail => `• ${detail}`).join('\n')}
-
-${result.errors.length > 0 ? `\nErrors:\n${result.errors.map(error => `❌ ${error}`).join('\n')}` : ''}
-
-Users Fixed: ${result.usersFixed}`
-
-      alert(message)
-
-      // Reload users to show changes
-      await loadUsers()
-    } catch (error: any) {
-      console.error('Error fixing authentication:', error)
-      alert(`Authentication fix failed: ${error.message}`)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Test all user authentication
-  const handleTestAuthentication = async () => {
-    setIsLoading(true)
-    try {
-      console.log('🧪 Testing authentication for all users...')
-      const result = await AuthenticationFixer.testAllUserAuthentication()
-
-      const message = `Authentication Test Results:
-
-Total Users: ${result.totalUsers}
-✅ Working Authentication: ${result.workingAuth}
-❌ Failed Authentication: ${result.failedAuth}
-
-Details:
-${result.details.map(detail => `${detail.status === 'SUCCESS' ? '✅' : detail.status === 'FAILED' ? '❌' : '⚠️'} ${detail.email}: ${detail.details}`).join('\n')}`
-
-      alert(message)
-      console.log('Authentication test results:', result)
-    } catch (error: any) {
-      console.error('Error testing authentication:', error)
-      alert(`Authentication test failed: ${error.message}`)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Fix Pierre specifically
-  const handleFixPierre = async () => {
-    if (!confirm('This will specifically fix authentication for pierre@phaetonai.com. Continue?')) {
-      return
-    }
-
-    setIsLoading(true)
-    try {
-      console.log('🔧 Fixing Pierre authentication...')
-      const result = await AuthenticationFixer.fixPierreAuthentication()
-
-      const message = `Pierre Authentication Fix:
-
-${result.message}
-
-Details:
-${result.details.map(detail => `• ${detail}`).join('\n')}
-
-${result.errors.length > 0 ? `\nErrors:\n${result.errors.map(error => `❌ ${error}`).join('\n')}` : ''}
-
-You can now test login with:
-Email: pierre@phaetonai.com
-Password: Pierre123!`
-
-      alert(message)
-
-      // Reload users to show changes
-      await loadUsers()
-    } catch (error: any) {
-      console.error('Error fixing Pierre authentication:', error)
-      alert(`Pierre fix failed: ${error.message}`)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Run authentication diagnostic
-  const handleAuthDiagnostic = async () => {
-    setIsLoading(true)
-    try {
-      console.log('🔍 Running comprehensive authentication diagnostic...')
-      const report = await AuthenticationDebugger.runFullSystemDiagnostic()
-
-      const message = `Authentication System Diagnostic:
-
-Overall Health: ${report.overallHealth.toUpperCase()}
-Users Checked: ${report.usersChecked}
-Issues Found: ${report.issuesFound}
-
-${report.systemIssues.length > 0 ? `System Issues:\n${report.systemIssues.map(issue => `❌ ${issue}`).join('\n')}\n` : ''}
-
-User Status:
-${report.userReports.map(user =>
-  `${user.status === 'healthy' ? '✅' : user.status === 'issues_found' ? '⚠️' : '❌'} ${user.email}: ${user.issues.length} issues`
-).join('\n')}
-
-Recommendations:
-${report.recommendations.map(rec => `• ${rec}`).join('\n')}`
-
-      alert(message)
-      console.log('Full diagnostic report:', report)
-    } catch (error: any) {
-      console.error('Error running diagnostic:', error)
-      alert(`Diagnostic failed: ${error.message}`)
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  // Test new user creation and authentication flow
-  const handleTestNewUserAuth = async () => {
-    setIsLoading(true)
-    try {
-      console.log('🧪 Testing new user creation and authentication flow...')
-      const results = await NewUserAuthTester.runFullTestSuite()
-
-      NewUserAuthTester.displayTestResults(results)
-
-      // Reload users to show any test users that might still exist
-      await loadUsers()
-    } catch (error: any) {
-      console.error('Error testing new user auth:', error)
-      alert(`New user auth test failed: ${error.message}`)
-    } finally {
-      setIsLoading(false)
-    }
-  }
 
   // Quick create user function - mirrors the easy createGuestUser approach
   const handleQuickCreateUser = async (template: typeof quickCreateTemplates[0]) => {
@@ -1039,7 +810,7 @@ ${report.recommendations.map(rec => `• ${rec}`).join('\n')}`
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <button
             onClick={() => setIsAddingUser(true)}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
@@ -1048,9 +819,9 @@ ${report.recommendations.map(rec => `• ${rec}`).join('\n')}`
             <UserIcon className="w-4 h-4" />
             Add User
           </button>
+
         </div>
       </div>
-
 
 
       {/* Users List */}

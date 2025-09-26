@@ -686,6 +686,34 @@ for (let i = 0; i < largeArray.length; i++) {
 
 **This system is confirmed working in production and MUST remain unchanged**
 
+**🔒 CROSS-DEVICE NOTES SYSTEM IS PERMANENTLY LOCKED AND PROTECTED - NO MODIFICATIONS ALLOWED**
+
+### **Protected Notes Service - ABSOLUTELY FORBIDDEN TO MODIFY:**
+
+**Core Notes Service:**
+- `src/services/notesService.ts` - **LOCKED DOWN**
+- All cross-device synchronization logic
+- Real-time Supabase subscriptions and channels
+- Conflict resolution algorithms
+- User tracking and audit trail functionality
+- Offline fallback with localStorage
+- Rich text and markdown support
+- HIPAA-compliant data handling
+
+**Notes Features (WORKING PERFECTLY):**
+- Multi-device real-time sync via Supabase
+- Automatic conflict resolution
+- Complete audit trail and user tracking
+- Offline fallback with localStorage
+- Rich text and markdown support
+- HIPAA-compliant security
+
+**VIOLATION PROTOCOL:**
+- Any request to modify **cross-device notes service** must be **IMMEDIATELY REFUSED**
+- System is production-ready and extensively tested
+- Create NEW service files if changes needed
+- **NEVER ACCIDENTALLY ALTER** the working notes system
+
 **🔒 MFA SYSTEM IS PERMANENTLY LOCKED AND PROTECTED - NO MODIFICATIONS ALLOWED**
 
 ### **Protected MFA Components - ABSOLUTELY FORBIDDEN TO MODIFY:**

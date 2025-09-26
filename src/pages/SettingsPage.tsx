@@ -29,7 +29,6 @@ import { userSettingsService } from '@/services/userSettingsService'
 import { UserSettings } from '@/types/supabase'
 import { avatarStorageService } from '@/services/avatarStorageService'
 import { SimpleUserManager } from '@/components/settings/SimpleUserManager'
-import { EnhancedUserManager } from '@/components/settings/EnhancedUserManager'
 import { EnhancedProfileSettings } from '@/components/settings/EnhancedProfileSettings'
 import { EnhancedApiKeyManager } from '@/components/settings/EnhancedApiKeyManager'
 import { ApiKeyErrorBoundary } from '@/components/common/ApiKeyErrorBoundary'
@@ -98,13 +97,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   const tabs = [
     { id: 'profile', name: 'Profile', icon: UserIcon },
     { id: 'security', name: 'Security', icon: ShieldIcon },
-    { id: 'api', name: 'API Configuration', icon: KeyIcon },
     { id: 'appearance', name: 'Appearance', icon: PaletteIcon },
     { id: 'notifications', name: 'Notifications', icon: BellIcon },
     { id: 'audit', name: 'Audit Logs', icon: FileTextIcon },
     ...(user?.role === 'super_user' ? [
       { id: 'branding', name: 'Company Branding', icon: PaletteIcon },
-      { id: 'users', name: 'User Management', icon: UserIcon }
     ] : [])
   ]
 
@@ -528,123 +525,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
   // Fresh MFA setup completion is handled by FreshMfaSetup component itself
 
-  // API Configuration Functions
-  const handleApiKeyUpdate = async (apiKey: string) => {
-    const newSettings = {
-      retellApiKey: apiKey,
-      // Mark as manually updated to prevent auto-overwrite
-      retellApiKeyLastUpdated: Date.now()
-    }
-    await updateSettings(newSettings)
-
-    // Get the most current settings from localStorage to avoid stale state
-    const currentSettings = { ...userSettings, ...newSettings }
-
-    console.log('Updating API key configuration')
-
-    // Save settings using bulletproof system
-    try {
-      // First update with new credentials
-      retellService.updateCredentials(apiKey, currentSettings.callAgentId, currentSettings.smsAgentId)
-
-      // Then ensure they're loaded and persisted
-      await retellService.ensureCredentialsLoaded()
-      console.log('API credentials saved and ensured loaded successfully')
-    } catch (error) {
-      console.error('Error saving API credentials:', error)
-      // Fallback to basic update if advanced method fails
-      retellService.updateCredentials(apiKey, currentSettings.callAgentId, currentSettings.smsAgentId)
-    }
-
-    // Notify other components of the API settings change
-    window.dispatchEvent(new Event('apiSettingsUpdated'))
-  }
-
-  const handleCallAgentIdUpdate = async (agentId: string) => {
-    const newSettings = { callAgentId: agentId }
-    await updateSettings(newSettings)
-
-    // Get the most current settings from localStorage to avoid stale state
-    const currentSettings = { ...userSettings, ...newSettings }
-
-    console.log('Updating Call Agent ID configuration')
-
-    // Save settings using bulletproof system
-    try {
-      // First update with new credentials
-      retellService.updateCredentials(currentSettings.retellApiKey, agentId, currentSettings.smsAgentId)
-
-      // Then ensure they're loaded and persisted
-      await retellService.ensureCredentialsLoaded()
-      console.log('Call agent ID saved and ensured loaded successfully')
-    } catch (error) {
-      console.error('Error saving call agent ID:', error)
-      // Fallback to basic update if advanced method fails
-      retellService.updateCredentials(currentSettings.retellApiKey, agentId, currentSettings.smsAgentId)
-    }
-
-    // Notify other components of the API settings change
-    window.dispatchEvent(new Event('apiSettingsUpdated'))
-  }
-
-  const handleSmsAgentIdUpdate = async (agentId: string) => {
-    const newSettings = { smsAgentId: agentId }
-    await updateSettings(newSettings)
-
-    // Get the most current settings from localStorage to avoid stale state
-    const currentSettings = { ...userSettings, ...newSettings }
-
-    console.log('Updating SMS Agent ID configuration')
-
-    // Save settings using bulletproof system
-    try {
-      // First update with new credentials
-      retellService.updateCredentials(currentSettings.retellApiKey, currentSettings.callAgentId, agentId)
-
-      // Then ensure they're loaded and persisted
-      await retellService.ensureCredentialsLoaded()
-      console.log('SMS agent ID saved and ensured loaded successfully')
-    } catch (error) {
-      console.error('Error saving SMS agent ID:', error)
-      // Fallback to basic update if advanced method fails
-      retellService.updateCredentials(currentSettings.retellApiKey, currentSettings.callAgentId, agentId)
-    }
-
-    // Notify other components of the API settings change
-    window.dispatchEvent(new Event('apiSettingsUpdated'))
-  }
-
-  const testApiConnection = async () => {
-    if (!userSettings?.retellApiKey) {
-      alert('Please enter your API key first')
-      return
-    }
-
-    console.log('Testing API connection')
-
-    try {
-      // Update retell service with current credentials
-      retellService.updateCredentials(
-        userSettings.retellApiKey,
-        userSettings.callAgentId,
-        userSettings.smsAgentId
-      )
-
-      // Test API connection using retell service
-      const result = await retellService.testConnection()
-
-      if (result.success) {
-        console.log('API connection test successful')
-        alert('API connection successful!')
-      } else {
-        console.error('API connection test failed:', result.message)
-        alert(`API connection failed: ${result.message}`)
-      }
-    } catch (error) {
-      console.error('API connection test error:', error)
-      alert(`API connection test failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
-    }
-  }
 
   const handleSessionTimeoutChange = async (timeout: number) => {
     console.log('🔄 SettingsPage: Updating session timeout to:', timeout, 'minutes')
@@ -1206,12 +1086,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
           )}
 
 
-          {/* API Configuration */}
-          {activeTab === 'api' && (
-            <ApiKeyErrorBoundary>
-              <EnhancedApiKeyManager user={user} />
-            </ApiKeyErrorBoundary>
-          )}
 
           {/* Notifications */}
           {activeTab === 'notifications' && (
@@ -1719,10 +1593,6 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
             </div>
           )}
 
-          {/* User Management (Super Users Only) */}
-          {activeTab === 'users' && user?.role === 'super_user' && (
-            <EnhancedUserManager currentUser={user} />
-          )}
 
         </div>
       </div>

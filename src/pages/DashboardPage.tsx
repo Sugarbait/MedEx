@@ -422,21 +422,46 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
       return
     }
 
-    // Only update tracking if date range actually changed
+    // Only update tracking if date range actually changed or custom dates changed
     // Note: We do NOT clear fullDataSegmentCache as it contains persistent data that should survive date range changes
-    if (lastDateRange !== selectedDateRange) {
-      console.log(`📅 Dashboard date range changed from ${lastDateRange} to ${selectedDateRange}, keeping persistent segment cache`)
+    const dateRangeChanged = lastDateRange !== selectedDateRange
+    const customDatesChanged = selectedDateRange === 'custom' && (customStartDate || customEndDate)
+
+    if (dateRangeChanged || customDatesChanged) {
+      console.log(`📅 Dashboard date range changed from ${lastDateRange} to ${selectedDateRange}`, {
+        dateRangeChanged,
+        customDatesChanged,
+        customStartDate: customStartDate?.toISOString(),
+        customEndDate: customEndDate?.toISOString()
+      })
       console.log(`💾 Persistent cache contains ${fullDataSegmentCache.size} entries that will be preserved`)
       setLastDateRange(selectedDateRange)
 
-      // Only clear other caches if not initial load (preserve persistent segment cache)
-      smsCostManager.clearCosts() // Clear costs when date range changes (from SMS page)
+      // CRITICAL FIX: Only clear costs cache, don't clear it too aggressively for custom dates
+      if (dateRangeChanged) {
+        // Clear costs only when switching between different preset ranges
+        smsCostManager.clearCosts()
+        console.log('📅 Dashboard cleared SMS costs cache for preset date range change')
+      } else if (customDatesChanged) {
+        // For custom date changes, clear costs more carefully
+        setTimeout(() => {
+          smsCostManager.clearCosts()
+          console.log('📅 Dashboard cleared SMS costs cache for custom date change (delayed)')
+        }, 100)
+      }
+
       setSegmentCache(new Map()) // Clear segment cache for new date range
       setLoadingFullChats(new Set()) // Clear loading state for new date range
       setSegmentUpdateTrigger(0) // Reset segment update trigger
       console.log('📅 Dashboard date range changed, cleared non-persistent caches and reset state')
     }
 
+    // Always fetch data when dependencies change
+    console.log('📅 Dashboard fetching data due to date range change', {
+      selectedDateRange,
+      customStartDate: customStartDate?.toISOString(),
+      customEndDate: customEndDate?.toISOString()
+    })
     fetchDashboardData()
   }, [selectedDateRange, customStartDate, customEndDate, hasInitiallyLoaded])
 
@@ -730,11 +755,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
 
       // Get date range
       const { start, end } = getDateRangeFromSelection(selectedDateRange, customStartDate, customEndDate)
-      console.log('Date range for API:', {
+      console.log('🔍 Dashboard Date range for API:', {
+        selectedRange: selectedDateRange,
         start: start.toISOString(),
         end: end.toISOString(),
         startTimestamp: Math.floor(start.getTime() / 1000),
-        endTimestamp: Math.floor(end.getTime() / 1000)
+        endTimestamp: Math.floor(end.getTime() / 1000),
+        customStartDate: customStartDate?.toISOString(),
+        customEndDate: customEndDate?.toISOString(),
+        dateRangeSpanDays: Math.ceil((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000))
       })
 
       // PERFORMANCE OPTIMIZATION: Fetch call and chat data in parallel
@@ -839,10 +868,12 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
       callsResponse = callsResult.status === 'fulfilled' ? callsResult.value : { calls: [], pagination_key: undefined, has_more: false }
       const allChatsResponse = chatsResult.status === 'fulfilled' ? chatsResult.value : { chats: [] }
 
+      // Define date range variables in outer scope for debugging
+      const startMs = start.getTime()
+      const endMs = end.getTime()
+
       try {
-        // Define date range for chat filtering and get SMS agent ID from settings
-        const startMs = start.getTime()
-        const endMs = end.getTime()
+        // Get SMS agent ID from settings
 
         // Get SMS agent ID from settings with fallback handling
         const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
@@ -886,15 +917,28 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
 
           const isInRange = chatTimeMs >= startMs && chatTimeMs <= endMs
 
-          // Debug logging for chat filtering
-          if (isInRange) {
-            console.log(`SMS Chat ${chat.chat_id}: date=${new Date(chatTimeMs).toLocaleDateString()}, agent=${chat.agent_id}`)
-          }
+          // Debug logging for chat filtering - show both included and excluded chats
+          console.log(`🔍 Chat ${chat.chat_id}: ${isInRange ? 'INCLUDED' : 'EXCLUDED'}`, {
+            date: new Date(chatTimeMs).toLocaleDateString(),
+            time: new Date(chatTimeMs).toLocaleTimeString(),
+            timestamp: chat.start_timestamp,
+            timestampMs: chatTimeMs,
+            agent: chat.agent_id,
+            isInRange,
+            rangeStart: new Date(startMs).toLocaleString(),
+            rangeEnd: new Date(endMs).toLocaleString()
+          })
 
           return isInRange
         })
 
-        console.log(`Filtered SMS chats for ${selectedDateRange}: ${filteredChats.length} out of ${allChatsResponse.chats.length}`)
+        console.log(`🔍 Dashboard Filtered SMS chats for ${selectedDateRange}: ${filteredChats.length} out of ${allChatsResponse.chats.length}`, {
+          dateRange: selectedDateRange,
+          startMs,
+          endMs,
+          customStartDate: customStartDate?.toISOString(),
+          customEndDate: customEndDate?.toISOString()
+        })
 
         chatsResponse = {
           chats: filteredChats,
@@ -907,22 +951,34 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
       }
 
       // Calculate metrics
-      console.log('Dashboard calculating metrics:')
+      console.log('🔍 Dashboard calculating metrics:')
       console.log('- Call data for metrics:', { count: callsResponse.calls.length })
       console.log('- Chat data for metrics:', { count: chatsResponse.chats.length, sample: chatsResponse.chats.slice(0, 2) })
 
-      // Debug chat costs specifically
-      console.log('Chat cost analysis for dashboard:')
-      chatsResponse.chats.forEach((chat, index) => {
-        console.log(`Chat ${index + 1}:`, {
-          chat_id: chat.chat_id,
-          chat_cost: chat.chat_cost,
-          combined_cost: chat.chat_cost?.combined_cost,
-          total_cost: chat.chat_cost?.total_cost,
-          start_timestamp: chat.start_timestamp,
-          date: new Date(chat.start_timestamp * 1000).toLocaleDateString()
+      // Debug chat costs specifically for filtered chats
+      if (chatsResponse.chats.length > 0) {
+        console.log('🔍 Dashboard Chat cost analysis for filtered chats:')
+        chatsResponse.chats.slice(0, 5).forEach((chat, index) => {
+          // Use consistent timestamp handling
+          const timestampStr = chat.start_timestamp.toString()
+          const chatTimeMs = timestampStr.length <= 10 ? chat.start_timestamp * 1000 : chat.start_timestamp
+
+          console.log(`💰 Chat ${index + 1}:`, {
+            chat_id: chat.chat_id,
+            chat_cost: chat.chat_cost,
+            combined_cost: chat.chat_cost?.combined_cost,
+            total_cost: chat.chat_cost?.total_cost,
+            start_timestamp: chat.start_timestamp,
+            date: new Date(chatTimeMs).toLocaleDateString(),
+            time: new Date(chatTimeMs).toLocaleTimeString()
+          })
         })
-      })
+        if (chatsResponse.chats.length > 5) {
+          console.log(`💰 ... and ${chatsResponse.chats.length - 5} more chats`)
+        }
+      } else {
+        console.log('⚠️ Dashboard: No chats found in filtered results - this will result in $0 SMS costs')
+      }
 
       const baseCallMetrics = retellService.calculateCallMetrics(callsResponse.calls)
       const enhancedCallMetrics = addTwilioCostsToCallMetrics(baseCallMetrics, callsResponse.calls)
@@ -940,7 +996,20 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
 
       // Load SMS costs for visible chats using smsCostManager (exact copy from SMS page)
       if (filteredChats.length > 0) {
+        console.log(`🔍 Dashboard: Loading SMS costs for ${filteredChats.length} filtered chats`, {
+          dateRange: selectedDateRange,
+          chatIds: filteredChats.slice(0, 5).map(c => c.chat_id),
+          totalChats: filteredChats.length
+        })
         smsCostManager.loadCostsForChats(filteredChats)
+      } else {
+        console.log('⚠️ Dashboard: No filtered chats to load costs for - SMS costs will be $0', {
+          dateRange: selectedDateRange,
+          allChatsCount: allChatsResponse.chats.length,
+          selectedRange: selectedDateRange,
+          startMs,
+          endMs
+        })
       }
 
       // Calculate basic chat metrics

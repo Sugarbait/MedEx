@@ -486,14 +486,18 @@ const App: React.FC = () => {
             const mfaTimestamp = localStorage.getItem('freshMfaVerified')
             let hasValidMfaSession = false
 
-            // Check if this is a fresh app load vs in-session page refresh
-            const isAppInitializing = !sessionStorage.getItem('appInitialized')
+            // Check if this is a fresh browser session vs page refresh
+            // Use a persistent flag in localStorage to track if user already logged in this browser session
+            const browserSessionKey = `browserSession_${userProfile.id}`
+            const existingBrowserSession = localStorage.getItem(browserSessionKey)
+            const isNewBrowserSession = !existingBrowserSession
 
-            if (isAppInitializing) {
-              // Fresh app load - always require MFA verification
-              console.log('🔐 FRESH APP LOAD: Clearing MFA session to enforce verification')
+            if (isNewBrowserSession) {
+              // True fresh browser session - require MFA verification
+              console.log('🔐 NEW BROWSER SESSION: Clearing MFA session to enforce verification')
               localStorage.removeItem('freshMfaVerified')
               hasValidMfaSession = false
+              localStorage.setItem(browserSessionKey, Date.now().toString())
               sessionStorage.setItem('appInitialized', 'true')
             } else if (mfaTimestamp) {
               // In-session navigation - check for valid MFA session
@@ -1065,7 +1069,9 @@ const App: React.FC = () => {
         try {
           // Clear any fresh MFA sessions if needed
           localStorage.removeItem('freshMfaVerified')
-          console.log('✅ Fresh MFA sessions cleared')
+          // Clear browser session marker to ensure MFA required on next login
+          localStorage.removeItem(`browserSession_${user.id}`)
+          console.log('✅ Fresh MFA sessions and browser session markers cleared')
         } catch (mfaError) {
           console.error('Error clearing MFA sessions:', mfaError)
         }
