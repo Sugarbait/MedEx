@@ -706,6 +706,7 @@ for (let i = 0; i < largeArray.length; i++) {
 **MFA Components:**
 - `src/components/auth/FreshMfaSetup.tsx` - **LOCKED DOWN**
 - `src/components/auth/FreshMfaVerification.tsx` - **LOCKED DOWN**
+- `src/components/auth/MandatoryMfaLogin.tsx` - **LOCKED DOWN** (authorized text modification completed - re-locked)
 - `src/components/settings/FreshMfaSettings.tsx` - **LOCKED DOWN**
 - All 3-step setup flow (generate → verify → backup codes)
 - QR code generation and display logic

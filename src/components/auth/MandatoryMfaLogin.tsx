@@ -296,18 +296,9 @@ export const MandatoryMfaLogin: React.FC<MandatoryMfaLoginProps> = ({
   // MFA Required - Show verification interface
   if (mfaCheckState.mfaRequired) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center py-12 px-4">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-start justify-center pt-20 px-4">
         <div className="w-full max-w-md">
           <div className="text-center mb-6">
-            <div className="mx-auto h-16 w-16 bg-blue-100 dark:bg-blue-900/30 rounded-full flex items-center justify-center mb-4">
-              <Shield className="h-8 w-8 text-blue-600 dark:text-blue-400" />
-            </div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 mb-2">
-              Multi-Factor Authentication Required
-            </h1>
-            <p className="text-gray-600 dark:text-gray-400">
-              Additional security verification is required to access your account
-            </p>
             {needsSetup && (
               <div className="mt-4">
                 <button

@@ -124,6 +124,11 @@ class HIPAAAuditLogger {
     this.currentUser = user
     this.sessionId = this.generateSessionId()
 
+    // Trigger async IP detection on initialization
+    this.detectIPAsync().catch(error => {
+      console.debug('Background IP detection failed during initialization:', error)
+    })
+
     // Log system access
     await this.logAuditEvent({
       action: AuditAction.SYSTEM_ACCESS,
@@ -133,7 +138,8 @@ class HIPAAAuditLogger {
       outcome: AuditOutcome.SUCCESS,
       additionalInfo: {
         systemComponent: 'audit-logger',
-        initializationTime: new Date().toISOString()
+        initializationTime: new Date().toISOString(),
+        ipDetectionStatus: this.getIPDetectionStatus()
       }
     })
   }
@@ -810,11 +816,334 @@ CREATE POLICY "Admins can view all audit logs" ON public.audit_logs
    * Get source information for audit logging
    */
   private getSourceInformation(): { ip: string; userAgent: string } {
-    // In production, implement proper IP detection
-    // For now, using placeholder values
     return {
-      ip: '127.0.0.1', // In production: get from request headers
+      ip: this.detectClientIP(),
       userAgent: navigator.userAgent || 'Unknown'
+    }
+  }
+
+  /**
+   * Detect real client IP address from various sources
+   * Supports Azure Static Web Apps, Cloudflare, and other hosting environments
+   */
+  private detectClientIP(): string {
+    try {
+      // Try to get IP from various header sources that might be available
+      // Note: In browser environments, these headers are not directly accessible
+      // This method attempts to detect IP through various techniques
+
+      // Check if we're in a server-side context or have access to request headers
+      if (typeof window !== 'undefined' && window.location) {
+        // Browser environment - limited IP detection options
+
+        // Method 1: Check for IP in URL parameters (if passed by server)
+        const urlParams = new URLSearchParams(window.location.search)
+        const urlIP = urlParams.get('client_ip')
+        if (urlIP && this.isValidIP(urlIP)) {
+          this.cacheDetectedIP(urlIP)
+          return urlIP
+        }
+
+        // Method 2: Check for IP in custom meta tags (if set by server)
+        const metaIP = document.querySelector('meta[name="client-ip"]')?.getAttribute('content')
+        if (metaIP && this.isValidIP(metaIP)) {
+          this.cacheDetectedIP(metaIP)
+          return metaIP
+        }
+
+        // Method 3: Check localStorage for cached IP (from previous server detection)
+        const cachedIP = this.getCachedIP()
+        if (cachedIP && this.isValidIP(cachedIP)) {
+          return cachedIP
+        }
+
+        // Method 4: Attempt to use modern browser API if available
+        if ('connection' in navigator && (navigator as any).connection) {
+          const connection = (navigator as any).connection
+          if (connection.effectiveType && connection.downlink) {
+            // This is a proxy for network detection, not actual IP
+            // but indicates we have network connectivity
+            // Trigger async IP detection for future use
+            this.detectIPAsync()
+          }
+        }
+      }
+
+      // Method 5: Check if we're in a Node.js/server context with access to headers
+      if (typeof process !== 'undefined' && process.env) {
+        // Check common environment variables for IP forwarding
+        const serverIP = process.env.HTTP_X_FORWARDED_FOR ||
+                        process.env.HTTP_X_REAL_IP ||
+                        process.env.HTTP_CLIENT_IP ||
+                        process.env.REMOTE_ADDR
+
+        if (serverIP && this.isValidIP(serverIP)) {
+          const parsedIP = this.parseForwardedIP(serverIP)
+          this.cacheDetectedIP(parsedIP)
+          return parsedIP
+        }
+      }
+
+      // Method 6: Azure Static Web Apps specific detection
+      // Azure SWA may provide IP information through specific mechanisms
+      if (this.isAzureStaticWebApp()) {
+        const azureIP = this.detectAzureStaticWebAppIP()
+        if (azureIP && this.isValidIP(azureIP)) {
+          this.cacheDetectedIP(azureIP)
+          return azureIP
+        }
+      }
+
+      // Method 7: Check if we have a previously detected IP from async detection
+      const asyncDetectedIP = localStorage.getItem('async_detected_ip')
+      if (asyncDetectedIP && this.isValidIP(asyncDetectedIP)) {
+        return asyncDetectedIP
+      }
+
+      // Fallback: Return localhost for development or when IP cannot be detected
+      return '127.0.0.1'
+
+    } catch (error) {
+      console.warn('IP detection failed, using fallback:', error)
+      return '127.0.0.1'
+    }
+  }
+
+  /**
+   * Get cached IP with expiration check
+   */
+  private getCachedIP(): string | null {
+    try {
+      const cachedIP = localStorage.getItem('detected_client_ip')
+      const expiresStr = localStorage.getItem('detected_client_ip_expires')
+
+      if (!cachedIP || !expiresStr) {
+        return null
+      }
+
+      const expires = parseInt(expiresStr, 10)
+      if (Date.now() > expires) {
+        // Cache expired, remove it
+        localStorage.removeItem('detected_client_ip')
+        localStorage.removeItem('detected_client_ip_expires')
+        return null
+      }
+
+      return cachedIP
+    } catch (error) {
+      console.warn('Failed to get cached IP:', error)
+      return null
+    }
+  }
+
+  /**
+   * Asynchronously detect IP using external services (non-blocking)
+   * This runs in the background and caches the result for future use
+   */
+  private async detectIPAsync(): Promise<void> {
+    try {
+      // Don't run if we already have a recent async detection
+      const lastAsyncDetection = localStorage.getItem('last_async_ip_detection')
+      if (lastAsyncDetection) {
+        const lastTime = parseInt(lastAsyncDetection, 10)
+        const oneHour = 60 * 60 * 1000
+        if (Date.now() - lastTime < oneHour) {
+          return // Skip if we detected within the last hour
+        }
+      }
+
+      // Update detection timestamp
+      localStorage.setItem('last_async_ip_detection', Date.now().toString())
+
+      // Try multiple IP detection services with timeout
+      const ipServices = [
+        'https://api.ipify.org?format=json',
+        'https://httpbin.org/ip',
+        'https://ipinfo.io/json',
+        'https://api.my-ip.io/ip.json'
+      ]
+
+      for (const serviceUrl of ipServices) {
+        try {
+          const controller = new AbortController()
+          const timeoutId = setTimeout(() => controller.abort(), 5000) // 5 second timeout
+
+          const response = await fetch(serviceUrl, {
+            signal: controller.signal,
+            headers: {
+              'Accept': 'application/json'
+            }
+          })
+
+          clearTimeout(timeoutId)
+
+          if (response.ok) {
+            const data = await response.json()
+            let detectedIP = null
+
+            // Parse different response formats
+            if (data.ip) {
+              detectedIP = data.ip
+            } else if (data.origin) {
+              detectedIP = data.origin
+            } else if (typeof data === 'string') {
+              detectedIP = data
+            }
+
+            if (detectedIP && this.isValidIP(detectedIP) && !this.isPrivateIP(detectedIP)) {
+              localStorage.setItem('async_detected_ip', detectedIP)
+              localStorage.setItem('async_detected_ip_expires', (Date.now() + 24 * 60 * 60 * 1000).toString())
+              console.log('✅ IP detected asynchronously:', detectedIP)
+              return // Success, exit loop
+            }
+          }
+        } catch (error) {
+          // Continue to next service
+          console.debug('IP service failed:', serviceUrl, error)
+        }
+      }
+
+      console.warn('All IP detection services failed')
+    } catch (error) {
+      console.warn('Async IP detection failed:', error)
+    }
+  }
+
+  /**
+   * Parse IP from X-Forwarded-For header (handles comma-separated list)
+   */
+  private parseForwardedIP(forwardedHeader: string): string {
+    // X-Forwarded-For can contain multiple IPs: "client, proxy1, proxy2"
+    // We want the first (leftmost) IP which is the original client
+    const ips = forwardedHeader.split(',').map(ip => ip.trim())
+
+    for (const ip of ips) {
+      if (this.isValidIP(ip) && !this.isPrivateIP(ip)) {
+        return ip
+      }
+    }
+
+    // If no public IP found, return the first valid IP
+    for (const ip of ips) {
+      if (this.isValidIP(ip)) {
+        return ip
+      }
+    }
+
+    return '127.0.0.1'
+  }
+
+  /**
+   * Validate IP address format (IPv4 and IPv6)
+   */
+  private isValidIP(ip: string): boolean {
+    if (!ip || typeof ip !== 'string') return false
+
+    // IPv4 validation
+    const ipv4Regex = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)$/
+    if (ipv4Regex.test(ip)) return true
+
+    // IPv6 validation (basic)
+    const ipv6Regex = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}$|^::1$|^::$/
+    if (ipv6Regex.test(ip)) return true
+
+    // IPv6 compressed format
+    const ipv6CompressedRegex = /^([0-9a-fA-F]{1,4}:)*::([0-9a-fA-F]{1,4}:)*[0-9a-fA-F]{1,4}$|^([0-9a-fA-F]{1,4}:)*::[0-9a-fA-F]{1,4}$|^([0-9a-fA-F]{1,4}:)*::$/
+    if (ipv6CompressedRegex.test(ip)) return true
+
+    return false
+  }
+
+  /**
+   * Check if IP is a private/internal IP address
+   */
+  private isPrivateIP(ip: string): boolean {
+    // Private IPv4 ranges:
+    // 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 127.0.0.0/8
+    const privateRanges = [
+      /^10\./,
+      /^172\.(1[6-9]|2[0-9]|3[01])\./,
+      /^192\.168\./,
+      /^127\./,
+      /^169\.254\./, // Link-local
+      /^localhost$/i
+    ]
+
+    return privateRanges.some(range => range.test(ip))
+  }
+
+  /**
+   * Detect if running on Azure Static Web Apps
+   */
+  private isAzureStaticWebApp(): boolean {
+    // Check for Azure Static Web Apps specific indicators
+    if (typeof window !== 'undefined') {
+      const hostname = window.location.hostname
+
+      // Azure Static Web Apps hostnames
+      if (hostname.includes('.azurestaticapps.net') ||
+          hostname.includes('.1.azurestaticapps.net') ||
+          hostname.includes('.2.azurestaticapps.net') ||
+          hostname.includes('.3.azurestaticapps.net') ||
+          hostname.includes('.centralus.azurestaticapps.net')) {
+        return true
+      }
+    }
+
+    // Check for Azure environment variables
+    if (typeof process !== 'undefined' && process.env) {
+      return !!(process.env.AZURE_STATIC_WEB_APPS_API_TOKEN ||
+               process.env.APPSETTING_WEBSITE_SITE_NAME ||
+               process.env.WEBSITE_SITE_NAME)
+    }
+
+    return false
+  }
+
+  /**
+   * Attempt to detect IP in Azure Static Web Apps environment
+   */
+  private detectAzureStaticWebAppIP(): string | null {
+    try {
+      // Azure Static Web Apps may provide client IP through:
+      // 1. Custom headers in Azure Functions API
+      // 2. Environment variables
+      // 3. Request context (if available)
+
+      if (typeof process !== 'undefined' && process.env) {
+        // Check Azure-specific environment variables for IP forwarding
+        const azureIP = process.env.HTTP_X_AZURE_CLIENTIP ||
+                       process.env.HTTP_X_AZURE_FDID ||
+                       process.env.HTTP_X_FORWARDED_FOR ||
+                       process.env.HTTP_X_REAL_IP
+
+        if (azureIP) {
+          return this.parseForwardedIP(azureIP)
+        }
+      }
+
+      // If we have access to custom Azure headers through a service worker
+      // or API endpoint, we could check those here
+
+      return null
+    } catch (error) {
+      console.warn('Azure SWA IP detection failed:', error)
+      return null
+    }
+  }
+
+  /**
+   * Cache detected IP for subsequent requests
+   */
+  private cacheDetectedIP(ip: string): void {
+    try {
+      if (ip && ip !== '127.0.0.1' && this.isValidIP(ip)) {
+        localStorage.setItem('detected_client_ip', ip)
+        // Set expiration (24 hours)
+        localStorage.setItem('detected_client_ip_expires', (Date.now() + 24 * 60 * 60 * 1000).toString())
+      }
+    } catch (error) {
+      console.warn('Failed to cache detected IP:', error)
     }
   }
 
@@ -840,6 +1169,60 @@ CREATE POLICY "Admins can view all audit logs" ON public.audit_logs
   }
 
   /**
+   * Get IP detection status for debugging and monitoring
+   */
+  private getIPDetectionStatus(): Record<string, any> {
+    return {
+      hasUrlParam: new URLSearchParams(window.location?.search || '').has('client_ip'),
+      hasMetaTag: !!document.querySelector('meta[name="client-ip"]'),
+      hasCachedIP: !!this.getCachedIP(),
+      hasAsyncIP: !!localStorage.getItem('async_detected_ip'),
+      isAzureEnvironment: this.isAzureStaticWebApp(),
+      detectedIP: this.detectClientIP(),
+      lastAsyncDetection: localStorage.getItem('last_async_ip_detection')
+    }
+  }
+
+  /**
+   * Manually trigger IP detection (for testing or force refresh)
+   */
+  async refreshIPDetection(): Promise<string> {
+    try {
+      // Clear cached IPs
+      localStorage.removeItem('detected_client_ip')
+      localStorage.removeItem('detected_client_ip_expires')
+      localStorage.removeItem('async_detected_ip')
+      localStorage.removeItem('async_detected_ip_expires')
+      localStorage.removeItem('last_async_ip_detection')
+
+      // Force async detection
+      await this.detectIPAsync()
+
+      // Return newly detected IP
+      const newIP = this.detectClientIP()
+
+      // Log the refresh event
+      await this.logAuditEvent({
+        action: AuditAction.SYSTEM_ACCESS,
+        resourceType: ResourceType.SYSTEM,
+        resourceId: 'ip-detection-refresh',
+        phiAccessed: false,
+        outcome: AuditOutcome.SUCCESS,
+        additionalInfo: {
+          refreshedIP: newIP,
+          refreshTime: new Date().toISOString(),
+          detectionStatus: this.getIPDetectionStatus()
+        }
+      })
+
+      return newIP
+    } catch (error) {
+      console.error('Failed to refresh IP detection:', error)
+      return '127.0.0.1'
+    }
+  }
+
+  /**
    * Clean up audit logger
    */
   async cleanup(): Promise<void> {
@@ -851,7 +1234,8 @@ CREATE POLICY "Admins can view all audit logs" ON public.audit_logs
       outcome: AuditOutcome.SUCCESS,
       additionalInfo: {
         sessionDuration: Date.now() - parseInt(this.sessionId.split('_')[1]),
-        cleanupTime: new Date().toISOString()
+        cleanupTime: new Date().toISOString(),
+        finalIPStatus: this.getIPDetectionStatus()
       }
     })
   }
@@ -859,6 +1243,30 @@ CREATE POLICY "Admins can view all audit logs" ON public.audit_logs
 
 // Export singleton instance
 export const auditLogger = new HIPAAAuditLogger()
+
+// Export utility functions for IP detection
+export const auditIPUtils = {
+  /**
+   * Get current IP detection status
+   */
+  getIPStatus: () => {
+    return (auditLogger as any).getIPDetectionStatus()
+  },
+
+  /**
+   * Manually refresh IP detection
+   */
+  refreshIP: async () => {
+    return await (auditLogger as any).refreshIPDetection()
+  },
+
+  /**
+   * Get current detected IP
+   */
+  getCurrentIP: () => {
+    return (auditLogger as any).detectClientIP()
+  }
+}
 
 // Auto-initialize with current user
 const initializeAuditLogger = () => {
