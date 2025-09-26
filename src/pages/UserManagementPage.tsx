@@ -12,7 +12,13 @@ import {
   EyeIcon,
   EyeOffIcon,
   UnlockIcon,
-  CheckIcon
+  CheckIcon,
+  HistoryIcon,
+  ClockIcon,
+  XIcon,
+  CalendarIcon,
+  MonitorIcon,
+  AlertTriangleIcon
 } from 'lucide-react'
 import { userManagementService, SystemUserWithCredentials } from '@/services/userManagementService'
 import { userProfileService } from '@/services/userProfileService'
@@ -59,6 +65,22 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
   const [isChangingPassword, setIsChangingPassword] = useState(false)
   const [quickCreateExpanded, setQuickCreateExpanded] = useState(false)
   const [customQuickCreate, setCustomQuickCreate] = useState({ name: '', email: '', password: '', role: 'user' as const })
+
+  // Login History Modal State
+  const [showLoginHistory, setShowLoginHistory] = useState(false)
+  const [selectedUserForHistory, setSelectedUserForHistory] = useState<User | null>(null)
+  const [loginHistory, setLoginHistory] = useState<{
+    loginHistory: Array<{
+      timestamp: string
+      action: string
+      outcome: 'SUCCESS' | 'FAILURE'
+      sourceIp?: string
+      userAgent?: string
+      failureReason?: string
+    }>
+    totalLogins: number
+  } | null>(null)
+  const [loadingHistory, setLoadingHistory] = useState(false)
 
   const [newUser, setNewUser] = useState({
     name: '',
@@ -397,6 +419,65 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleViewLoginHistory = async (userItem: User) => {
+    setSelectedUserForHistory(userItem)
+    setShowLoginHistory(true)
+    setLoadingHistory(true)
+    setLoginHistory(null)
+
+    try {
+      const response = await userManagementService.getUserLoginHistory(userItem.id)
+      if (response.status === 'success') {
+        setLoginHistory(response.data)
+      } else {
+        console.error('Failed to load login history:', response.error)
+        alert(`Failed to load login history: ${response.error}`)
+      }
+    } catch (error: any) {
+      console.error('Error loading login history:', error)
+      alert(`Error loading login history: ${error.message}`)
+    } finally {
+      setLoadingHistory(false)
+    }
+  }
+
+  const closeLoginHistoryModal = () => {
+    setShowLoginHistory(false)
+    setSelectedUserForHistory(null)
+    setLoginHistory(null)
+    setLoadingHistory(false)
+  }
+
+  const formatLoginDate = (timestamp: string) => {
+    try {
+      const date = new Date(timestamp)
+      return date.toLocaleString('en-US', {
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: true
+      })
+    } catch {
+      return timestamp
+    }
+  }
+
+  const getDeviceInfo = (userAgent?: string) => {
+    if (!userAgent) return 'Unknown Device'
+
+    if (userAgent.includes('Windows')) return 'Windows PC'
+    if (userAgent.includes('Mac')) return 'Mac'
+    if (userAgent.includes('Linux')) return 'Linux'
+    if (userAgent.includes('iPhone')) return 'iPhone'
+    if (userAgent.includes('Android')) return 'Android'
+    if (userAgent.includes('iPad')) return 'iPad'
+
+    return 'Unknown Device'
   }
 
   const handleClearLockout = async (userId: string, userName: string) => {
@@ -1068,6 +1149,15 @@ ${report.recommendations.map(rec => `• ${rec}`).join('\n')}`
                     >
                       <KeyIcon className="w-4 h-4" />
                     </button>
+
+                    <button
+                      onClick={() => handleViewLoginHistory(userItem)}
+                      className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                      title="View login history"
+                      disabled={isLoading}
+                    >
+                      <HistoryIcon className="w-4 h-4" />
+                    </button>
                   </div>
 
                 </div>
@@ -1294,6 +1384,162 @@ ${report.recommendations.map(rec => `• ${rec}`).join('\n')}`
                   </button>
                 </>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Login History Modal */}
+      {showLoginHistory && selectedUserForHistory && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-auto">
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-3">
+                <HistoryIcon className="w-6 h-6 text-indigo-600" />
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Login History</h3>
+                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                    {selectedUserForHistory.name} ({selectedUserForHistory.email})
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={closeLoginHistoryModal}
+                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+              >
+                <XIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            {loadingHistory ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="flex items-center gap-3">
+                  <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+                  <span className="text-gray-600 dark:text-gray-400">Loading login history...</span>
+                </div>
+              </div>
+            ) : loginHistory ? (
+              <div>
+                {/* Summary */}
+                <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-4 mb-6">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                        {loginHistory.totalLogins}
+                      </div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Total Successful Logins</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                        {loginHistory.loginHistory.length}
+                      </div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Recent Login Attempts</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                        {loginHistory.loginHistory.filter(h => h.outcome === 'FAILURE').length}
+                      </div>
+                      <div className="text-sm text-gray-600 dark:text-gray-400">Failed Attempts</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Login History List */}
+                {loginHistory.loginHistory.length > 0 ? (
+                  <div className="space-y-3">
+                    <h4 className="text-lg font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                      <ClockIcon className="w-5 h-5" />
+                      Last 10 Login Attempts
+                    </h4>
+                    <div className="space-y-2">
+                      {loginHistory.loginHistory.map((entry, index) => (
+                        <div
+                          key={index}
+                          className={`p-4 rounded-lg border ${
+                            entry.outcome === 'SUCCESS'
+                              ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700'
+                              : 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-700'
+                          }`}
+                        >
+                          <div className="flex items-start justify-between">
+                            <div className="flex items-start gap-3">
+                              {entry.outcome === 'SUCCESS' ? (
+                                <CheckIcon className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5" />
+                              ) : (
+                                <AlertTriangleIcon className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5" />
+                              )}
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className={`text-sm font-medium ${
+                                    entry.outcome === 'SUCCESS'
+                                      ? 'text-green-800 dark:text-green-200'
+                                      : 'text-red-800 dark:text-red-200'
+                                  }`}>
+                                    {entry.action}
+                                  </span>
+                                  <span className={`px-2 py-1 text-xs rounded-full ${
+                                    entry.outcome === 'SUCCESS'
+                                      ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100'
+                                      : 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100'
+                                  }`}>
+                                    {entry.outcome}
+                                  </span>
+                                </div>
+                                <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                                  <div className="flex items-center gap-1">
+                                    <CalendarIcon className="w-4 h-4" />
+                                    {formatLoginDate(entry.timestamp)}
+                                  </div>
+                                  {entry.sourceIp && (
+                                    <div>IP: {entry.sourceIp}</div>
+                                  )}
+                                  {entry.userAgent && (
+                                    <div className="flex items-center gap-1">
+                                      <MonitorIcon className="w-4 h-4" />
+                                      {getDeviceInfo(entry.userAgent)}
+                                    </div>
+                                  )}
+                                  {entry.failureReason && (
+                                    <div className="text-red-600 dark:text-red-400 font-medium">
+                                      Reason: {entry.failureReason}
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="text-center py-12">
+                    <HistoryIcon className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+                    <p className="text-gray-600 dark:text-gray-400">No login history found</p>
+                    <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                      This user hasn't logged in recently or audit logs are not available
+                    </p>
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="text-center py-12">
+                <AlertTriangleIcon className="w-12 h-12 text-red-400 mx-auto mb-4" />
+                <p className="text-red-600 dark:text-red-400">Failed to load login history</p>
+                <p className="text-sm text-gray-500 dark:text-gray-500 mt-1">
+                  Please try again or contact your administrator
+                </p>
+              </div>
+            )}
+
+            {/* Modal Footer */}
+            <div className="flex justify-end mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+              <button
+                onClick={closeLoginHistoryModal}
+                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                Close
+              </button>
             </div>
           </div>
         </div>

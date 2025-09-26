@@ -1606,6 +1606,155 @@ export class UserManagementService {
       return { status: 'error', error: error.message }
     }
   }
+
+  /**
+   * Get login history for a specific user from audit logs
+   * Returns the last 10 login attempts (both successful and failed)
+   */
+  static async getUserLoginHistory(userId: string): Promise<ServiceResponse<{
+    loginHistory: Array<{
+      timestamp: string
+      action: string
+      outcome: 'SUCCESS' | 'FAILURE'
+      sourceIp?: string
+      userAgent?: string
+      failureReason?: string
+    }>
+    totalLogins: number
+  }>> {
+    try {
+      // Log the audit access attempt
+      await auditLogger.logSecurityEvent('USER_LOGIN_HISTORY_ACCESS', 'users', false, {
+        targetUserId: userId,
+        accessedBy: auditLogger.currentUser?.id || 'system'
+      })
+
+      // Get user email for audit log filtering - try multiple approaches
+      let userEmail = await this.getUserEmail(userId)
+
+      if (!userEmail) {
+        // Handle demo users with hardcoded mapping (case-insensitive)
+        const demoUserMap: { [key: string]: string } = {
+          'demo-user-123': 'demo@carexps.com',
+          'super-user-456': 'elmfarrell@yahoo.com',
+          'pierre-user-789': 'pierre@phaetonai.com',
+          // Add more variations for Pierre's account
+          'dynamic-pierre-user': 'pierre@phaetonai.com',
+          'c550502f-c39d-4bb3-bb8c-d193657fdb24': 'pierre@phaetonai.com'
+        }
+        userEmail = demoUserMap[userId]
+      }
+
+      if (!userEmail) {
+        // Try to get email from localStorage users
+        try {
+          const systemUsers = localStorage.getItem('systemUsers')
+          if (systemUsers) {
+            const users = JSON.parse(systemUsers)
+            const user = users.find((u: any) => u.id === userId)
+            if (user?.email) {
+              userEmail = user.email
+            }
+          }
+        } catch (error) {
+          console.warn('Failed to get user email from localStorage:', error)
+        }
+      }
+
+      if (!userEmail) {
+        // Try to get email from current user if this is the current user's history
+        try {
+          const currentUser = localStorage.getItem('currentUser')
+          if (currentUser) {
+            const userData = JSON.parse(currentUser)
+            if (userData.id === userId && userData.email) {
+              userEmail = userData.email
+            }
+          }
+        } catch (error) {
+          console.warn('Failed to get current user email:', error)
+        }
+      }
+
+      if (!userEmail) {
+        console.error('Login history: Unable to find email for user ID:', userId)
+        return { status: 'error', error: `User not found (ID: ${userId}). Please contact your administrator.` }
+      }
+
+      console.log(`Login history: Found user email: ${userEmail} for user ID: ${userId}`)
+
+      // Query audit logs for login events - try multiple approaches
+      const auditReport = await auditLogger.getAuditLogs({
+        userId: userId,
+        action: undefined, // We'll filter for LOGIN and LOGIN_FAILURE manually
+        limit: 100, // Get more records to filter for login events
+        startDate: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000) // Last 90 days
+      })
+
+      console.log(`Login history: Found ${auditReport.entries?.length || 0} audit entries`)
+
+      if (!auditReport.entries) {
+        // If no audit entries found, return empty but successful result
+        console.log('Login history: No audit entries found, returning empty result')
+        return {
+          status: 'success',
+          data: {
+            loginHistory: [],
+            totalLogins: 0
+          }
+        }
+      }
+
+      // Filter for login-related events and format them
+      // Look for both user ID and email matches to be more inclusive
+      const loginEvents = auditReport.entries
+        .filter(entry => {
+          const isLoginAction = entry.action === 'LOGIN' || entry.action === 'LOGIN_FAILURE'
+          const matchesUser = entry.user_id === userId ||
+                            entry.user_name?.toLowerCase() === userEmail.toLowerCase() ||
+                            entry.user_id?.includes(userEmail.split('@')[0])
+
+          return isLoginAction || matchesUser
+        })
+        .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
+        .slice(0, 10) // Last 10 login attempts
+        .map(entry => ({
+          timestamp: entry.timestamp,
+          action: entry.action === 'LOGIN' ? 'Login' : entry.action === 'LOGIN_FAILURE' ? 'Failed Login' : entry.action,
+          outcome: entry.outcome as 'SUCCESS' | 'FAILURE',
+          sourceIp: entry.source_ip,
+          userAgent: entry.user_agent,
+          failureReason: entry.failure_reason
+        }))
+
+      console.log(`Login history: Found ${loginEvents.length} login events after filtering`)
+
+      // Count total successful logins
+      const totalSuccessfulLogins = auditReport.entries.filter(
+        entry => entry.action === 'LOGIN' && entry.outcome === 'SUCCESS' && (
+          entry.user_id === userId ||
+          entry.user_name?.toLowerCase() === userEmail.toLowerCase()
+        )
+      ).length
+
+      console.log(`Login history: Total successful logins: ${totalSuccessfulLogins}`)
+
+      return {
+        status: 'success',
+        data: {
+          loginHistory: loginEvents,
+          totalLogins: totalSuccessfulLogins
+        }
+      }
+
+    } catch (error: any) {
+      await auditLogger.logSecurityEvent('USER_LOGIN_HISTORY_ACCESS_FAILED', 'users', false, {
+        targetUserId: userId,
+        error: error.message
+      })
+      return { status: 'error', error: error.message }
+    }
+  }
 }
 
 export const userManagementService = UserManagementService
