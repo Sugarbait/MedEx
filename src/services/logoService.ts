@@ -208,20 +208,20 @@ class LogoService {
 
       // Return default logos
       return {
-        headerLogo: 'https://nexasync.ca/images/Logo.png',
-        footerLogoLight: 'https://nexasync.ca/images/NexaSync-logo.png',
-        footerLogoDark: 'https://nexasync.ca/images/nexasync-white.png',
-        favicon: 'https://nexasync.ca/images/favixps.png'
+        headerLogo: '/images/Logo.png',
+        footerLogoLight: '/images/nexasync-logo-light.png',
+        footerLogoDark: '/images/nexasync-logo-dark.png',
+        favicon: '/images/favixps.png'
       }
     } catch (error) {
       console.error('Failed to get logos:', error)
 
       // Return default logos
       return {
-        headerLogo: 'https://nexasync.ca/images/Logo.png',
-        footerLogoLight: 'https://nexasync.ca/images/NexaSync-logo.png',
-        footerLogoDark: 'https://nexasync.ca/images/nexasync-white.png',
-        favicon: 'https://nexasync.ca/images/favixps.png'
+        headerLogo: '/images/Logo.png',
+        footerLogoLight: '/images/nexasync-logo-light.png',
+        footerLogoDark: '/images/nexasync-logo-dark.png',
+        favicon: '/images/favixps.png'
       }
     }
   }
