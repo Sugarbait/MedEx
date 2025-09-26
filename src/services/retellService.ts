@@ -3,7 +3,13 @@
  *
  * This is a clean implementation focused on the current working Retell AI endpoints
  * Based on official documentation: https://docs.retellai.com/api-references/
+ *
+ * BULLETPROOF CREDENTIALS: This service now includes hardcoded fallback credentials
+ * that ensure the API is ALWAYS available regardless of storage issues.
  */
+
+import { getBulletproofCredentials, validateCredentials, storeCredentialsEverywhere, type RetellCredentials } from '../config/retellCredentials'
+import { cloudCredentialService } from './cloudCredentialService'
 
 export interface RetellCall {
   call_id: string
@@ -153,6 +159,31 @@ class RetellService {
         credentials = this.loadFromMemoryBackup()
       }
 
+      // CLOUD FALLBACK: Try cloud storage before hardcoded credentials
+      if (!credentials.apiKey) {
+        try {
+          const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
+          const cloudCreds = await cloudCredentialService.getCredentialsWithFallback(currentUser.id)
+          if (validateCredentials(cloudCreds)) {
+            console.log('☁️ RetellService - Found credentials in cloud storage')
+            credentials = {
+              apiKey: cloudCreds.apiKey,
+              callAgentId: cloudCreds.callAgentId,
+              smsAgentId: cloudCreds.smsAgentId
+            }
+            storeCredentialsEverywhere(cloudCreds)
+          }
+        } catch (cloudError) {
+          console.warn('⚠️ RetellService - Cloud credential loading failed:', cloudError)
+        }
+      }
+
+      // ULTIMATE FALLBACK: Use hardcoded credentials if nothing else worked
+      if (!credentials.apiKey) {
+        console.log('🔐 RetellService - All storage methods failed, using hardcoded credentials...')
+        credentials = this.loadHardcodedCredentials()
+      }
+
       // Apply loaded credentials
       this.apiKey = credentials.apiKey || this.apiKey
       this.callAgentId = credentials.callAgentId || this.callAgentId
@@ -171,8 +202,18 @@ class RetellService {
         apiKeyPrefix: this.apiKey ? this.apiKey.substring(0, 15) + '...' : 'none',
         callAgentId: this.callAgentId || 'not set',
         smsAgentId: this.smsAgentId || 'not set',
-        source: 'bulletproof_loading'
+        source: 'bulletproof_loading_with_hardcoded_fallback',
+        isHardcoded: credentials.apiKey === getBulletproofCredentials().apiKey
       })
+
+      // If we successfully loaded credentials, ensure they're stored everywhere
+      if (this.apiKey && this.callAgentId && this.smsAgentId) {
+        storeCredentialsEverywhere({
+          apiKey: this.apiKey,
+          callAgentId: this.callAgentId,
+          smsAgentId: this.smsAgentId
+        })
+      }
 
     } catch (error) {
       console.error('❌ RetellService - Error loading credentials:', error)
@@ -268,6 +309,34 @@ class RetellService {
   }
 
   /**
+   * Load hardcoded credentials as ultimate fallback
+   */
+  private loadHardcodedCredentials(): {apiKey: string, callAgentId: string, smsAgentId: string} {
+    try {
+      console.log('🔐 RetellService - Loading hardcoded credentials as ultimate fallback...')
+      const bulletproofCreds = getBulletproofCredentials()
+
+      if (validateCredentials(bulletproofCreds)) {
+        console.log('✅ RetellService - Hardcoded credentials validated successfully')
+
+        // Store hardcoded credentials in all locations for future use
+        storeCredentialsEverywhere(bulletproofCreds)
+
+        return {
+          apiKey: bulletproofCreds.apiKey,
+          callAgentId: bulletproofCreds.callAgentId,
+          smsAgentId: bulletproofCreds.smsAgentId
+        }
+      } else {
+        console.error('❌ RetellService - Hardcoded credentials failed validation')
+      }
+    } catch (error) {
+      console.error('❌ RetellService - Error loading hardcoded credentials:', error)
+    }
+    return {apiKey: '', callAgentId: '', smsAgentId: ''}
+  }
+
+  /**
    * Create in-memory backup of credentials
    */
   private createMemoryBackup(): void {
@@ -346,15 +415,22 @@ class RetellService {
   }
 
   /**
-   * Check if service is configured with auto-recovery
+   * Check if service is configured with auto-recovery and hardcoded fallback
    */
   public isConfigured(): boolean {
     const configured = !!(this.apiKey && (this.callAgentId || this.smsAgentId))
 
-    // If not configured but should be, try to reload
+    // If not configured but should be, try to reload with hardcoded fallback
     if (!configured && this.isInitialized) {
-      console.log('⚠️ RetellService - Configuration lost, attempting recovery...')
+      console.log('⚠️ RetellService - Configuration lost, attempting recovery with hardcoded fallback...')
       this.loadCredentials()
+
+      // If still not configured after reload, force use hardcoded credentials
+      if (!this.apiKey) {
+        console.log('🔐 RetellService - Recovery failed, forcing hardcoded credentials...')
+        this.forceUpdateCredentials()
+      }
+
       return !!(this.apiKey && (this.callAgentId || this.smsAgentId))
     }
 
@@ -499,7 +575,7 @@ class RetellService {
   }
 
   /**
-   * Fetch chat history using v2 API
+   * Fetch chat history using correct GET endpoint
    */
   public async getChatHistory(): Promise<ChatListResponse> {
     try {
@@ -509,29 +585,31 @@ class RetellService {
         throw new Error('Retell AI API key not configured')
       }
 
-      // Use the v2 API endpoint for consistency
-      const requestBody: any = {
-        sort_order: 'descending',
-        limit: Math.min(1000, 1000)
+      // Use the correct GET /list-chat endpoint
+      let url = `${this.baseUrl}/list-chat`
+
+      // Add SMS agent filter as query parameter if configured
+      const params = new URLSearchParams()
+      if (this.smsAgentId && this.smsAgentId.trim()) {
+        params.append('agent_id', this.smsAgentId)
       }
 
-      // Add SMS agent filter if configured
-      if (this.smsAgentId && this.smsAgentId.trim()) {
-        requestBody.filter_criteria = {
-          agent_id: [this.smsAgentId]
-        }
+      // Add other optional filters
+      params.append('limit', '1000')
+
+      if (params.toString()) {
+        url += `?${params.toString()}`
       }
 
       console.log('Fresh RetellService - Chat request:', {
-        url: `${this.baseUrl}/v2/list-chats`,
-        body: requestBody
+        url: url,
+        method: 'GET'
       })
 
       const headers = await this.getHeaders()
-      const response = await fetch(`${this.baseUrl}/v2/list-chats`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify(requestBody)
+      const response = await fetch(url, {
+        method: 'GET',
+        headers
       })
 
       console.log('Fresh RetellService - Chat response status:', response.status)
@@ -546,10 +624,11 @@ class RetellService {
       console.log('Fresh RetellService - Received chat data:', {
         type: typeof data,
         isArray: Array.isArray(data),
-        keys: data ? Object.keys(data) : 'null'
+        keys: data ? Object.keys(data) : 'null',
+        length: Array.isArray(data) ? data.length : 'not an array'
       })
 
-      // Parse response similar to calls
+      // Parse response - the API returns an array of chat objects directly
       let chats: RetellChat[] = []
       let pagination_key: string | undefined = undefined
       let has_more = false
@@ -595,6 +674,9 @@ class RetellService {
     this.createMemoryBackup()
     this.saveToSessionStorage()
 
+    // Sync to cloud storage for cross-device persistence
+    this.syncCredentialsToCloud(apiKey, callAgentId, smsAgentId)
+
     console.log('✅ RetellService - Credentials updated across all storage locations')
   }
 
@@ -631,19 +713,33 @@ class RetellService {
   }
 
   /**
-   * Force update credentials with the correct API key
+   * Force update credentials with the correct API key - Now uses hardcoded values
    */
   public forceUpdateCredentials(): void {
-    console.log('Fresh RetellService - Force updating with correct credentials')
+    console.log('Fresh RetellService - Force updating with bulletproof hardcoded credentials')
 
-    // Set the known correct values
-    this.updateCredentials(
-      'key_c3f084f5ca67781070e188b47d7f',
-      'agent_447a1b9da540237693b0440df6',
-      'agent_643486efd4b5a0e9d7e094ab99'
-    )
+    try {
+      // Get the bulletproof credentials
+      const bulletproofCreds = getBulletproofCredentials()
 
-    console.log('Fresh RetellService - Force update completed')
+      // Set the hardcoded values
+      this.updateCredentials(
+        bulletproofCreds.apiKey,
+        bulletproofCreds.callAgentId,
+        bulletproofCreds.smsAgentId
+      )
+
+      console.log('✅ Fresh RetellService - Force update completed with hardcoded credentials')
+    } catch (error) {
+      console.error('❌ Fresh RetellService - Force update failed:', error)
+
+      // Fallback to the original hardcoded values if getBulletproofCredentials fails
+      this.updateCredentials(
+        'key_c3f084f5ca67781070e188b47d7f',
+        'agent_447a1b9da540237693b0440df6',
+        'agent_643486efd4b5a0e9d7e094ab99'
+      )
+    }
   }
 
   /**
@@ -669,6 +765,59 @@ class RetellService {
       await this.loadCredentialsAsync()
     }
     return this.isConfigured()
+  }
+
+  /**
+   * Sync credentials to cloud storage
+   */
+  private async syncCredentialsToCloud(apiKey?: string, callAgentId?: string, smsAgentId?: string): Promise<void> {
+    try {
+      // Only sync if we have valid credentials
+      if (!apiKey || !callAgentId || !smsAgentId) {
+        return
+      }
+
+      // Get current user ID
+      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
+      if (!currentUser.id) {
+        console.log('RetellService - No user ID available for cloud sync')
+        return
+      }
+
+      const credentials: RetellCredentials = {
+        apiKey,
+        callAgentId,
+        smsAgentId
+      }
+
+      if (validateCredentials(credentials)) {
+        await cloudCredentialService.syncUserCredentialsToCloud(currentUser.id, credentials)
+        console.log('✅ RetellService - Credentials synced to cloud successfully')
+      }
+    } catch (error) {
+      console.warn('⚠️ RetellService - Failed to sync credentials to cloud:', error)
+    }
+  }
+
+  /**
+   * Load credentials from cloud with user-specific fallback
+   */
+  public async loadCredentialsFromCloud(userId?: string): Promise<boolean> {
+    try {
+      const cloudCreds = await cloudCredentialService.getCredentialsWithFallback(userId)
+
+      if (validateCredentials(cloudCreds)) {
+        this.updateCredentials(
+          cloudCreds.apiKey,
+          cloudCreds.callAgentId,
+          cloudCreds.smsAgentId
+        )
+        return true
+      }
+    } catch (error) {
+      console.error('RetellService - Error loading from cloud:', error)
+    }
+    return false
   }
 
   /**
@@ -790,6 +939,20 @@ class RetellService {
    */
   public getApiKey(): string {
     return this.apiKey
+  }
+
+  /**
+   * Get call agent ID (for compatibility)
+   */
+  public getCallAgentId(): string {
+    return this.callAgentId
+  }
+
+  /**
+   * Get SMS agent ID (for compatibility)
+   */
+  public getSmsAgentId(): string {
+    return this.smsAgentId
   }
 }
 

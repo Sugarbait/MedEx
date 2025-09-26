@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Aggressive User Cleanup</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+        .output { background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #007bff; }
+        .success { border-left-color: #28a745; background: #d4edda; }
+        .warning { border-left-color: #ffc107; background: #fff3cd; }
+        .error { border-left-color: #dc3545; background: #f8d7da; }
+        button { padding: 12px 24px; margin: 8px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-warning { background: #ffc107; color: black; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚨 Aggressive User Profile Cleanup</h1>
+        <p><strong>This tool will completely wipe and rebuild user data to eliminate "User User" profiles permanently.</strong></p>
+
+        <div class="output warning">
+            <h3>⚠️ Warning</h3>
+            <p>This will completely reset all user data and keep only the 3 authorized users:</p>
+            <ul>
+                <li><strong>pierre@phaetonai.com</strong> (Super User)</li>
+                <li><strong>elmfarrell@yahoo.com</strong> (Super User)</li>
+                <li><strong>guest@email.com</strong> (Regular User)</li>
+            </ul>
+        </div>
+
+        <div style="text-align: center; margin: 20px 0;">
+            <button class="btn-primary" onclick="showCurrentState()">1. Show Current State</button>
+            <button class="btn-danger" onclick="aggressiveCleanup()">2. AGGRESSIVE CLEANUP</button>
+            <button class="btn-success" onclick="rebuildUsers()">3. Rebuild Clean Users</button>
+            <button class="btn-warning" onclick="window.location.reload()">4. Refresh Tool</button>
+        </div>
+
+        <div id="output"></div>
+    </div>
+
+    <script>
+        const ALLOWED_USERS = [
+            {
+                email: 'pierre@phaetonai.com',
+                role: 'super_user',
+                name: 'Pierre PhaetonAI',
+                id: 'pierre-user-789',
+                created_at: new Date().toISOString(),
+                last_login: new Date().toISOString(),
+                mfa_enabled: true
+            },
+            {
+                email: 'elmfarrell@yahoo.com',
+                role: 'super_user',
+                name: 'Elmer Farrell',
+                id: 'super-user-456',
+                created_at: new Date().toISOString(),
+                last_login: new Date().toISOString(),
+                mfa_enabled: true
+            },
+            {
+                email: 'guest@email.com',
+                role: 'user',
+                name: 'Guest User',
+                id: 'demo-user-123',
+                created_at: new Date().toISOString(),
+                last_login: new Date().toISOString(),
+                mfa_enabled: false
+            }
+        ]
+
+        function log(message, type = 'info') {
+            const output = document.getElementById('output')
+            const div = document.createElement('div')
+            div.className = `output ${type}`
+            div.innerHTML = message
+            output.appendChild(div)
+            console.log(message.replace(/<[^>]*>/g, '')) // Clean HTML for console
+        }
+
+        function clearOutput() {
+            document.getElementById('output').innerHTML = ''
+        }
+
+        function showCurrentState() {
+            clearOutput()
+            log('<h3>📊 Current User Data State</h3>')
+
+            // Show all localStorage keys that might contain user data
+            const userKeys = []
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i)
+                if (key && (key.includes('user') || key.includes('User') || key.includes('current') || key.includes('settings'))) {
+                    userKeys.push(key)
+                }
+            }
+
+            log(`<strong>Found ${userKeys.length} user-related keys in localStorage:</strong>`)
+            userKeys.forEach(key => {
+                try {
+                    const value = localStorage.getItem(key)
+                    const parsed = JSON.parse(value)
+
+                    if (Array.isArray(parsed)) {
+                        log(`<strong>${key}</strong>: Array with ${parsed.length} items`)
+                        parsed.forEach((item, index) => {
+                            if (item.email || item.name) {
+                                const status = item.name === 'User' || item.name === 'User User' ? '❌ PROBLEMATIC' : '✅'
+                                log(`  ${index}: ${item.name || 'No Name'} (${item.email || 'No Email'}) - ${item.role || 'No Role'} ${status}`)
+                            }
+                        })
+                    } else if (parsed.email || parsed.name) {
+                        const status = parsed.name === 'User' || parsed.name === 'User User' ? '❌ PROBLEMATIC' : '✅'
+                        log(`<strong>${key}</strong>: ${parsed.name || 'No Name'} (${parsed.email || 'No Email'}) - ${parsed.role || 'No Role'} ${status}`)
+                    }
+                } catch (e) {
+                    log(`<strong>${key}</strong>: Non-JSON data`)
+                }
+            })
+        }
+
+        function aggressiveCleanup() {
+            clearOutput()
+            log('<h3>🚨 Starting Aggressive Cleanup</h3>', 'warning')
+
+            let removedCount = 0
+
+            // Step 1: Remove ALL user-related keys
+            const keysToRemove = []
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i)
+                if (key && (
+                    key.includes('user') ||
+                    key.includes('User') ||
+                    key.includes('current') ||
+                    key.includes('settings') ||
+                    key.includes('profile') ||
+                    key.includes('auth') ||
+                    key.includes('session')
+                )) {
+                    keysToRemove.push(key)
+                }
+            }
+
+            log(`Found ${keysToRemove.length} keys to remove:`)
+            keysToRemove.forEach(key => {
+                try {
+                    localStorage.removeItem(key)
+                    removedCount++
+                    log(`🗑️ Removed: ${key}`)
+                } catch (e) {
+                    log(`❌ Failed to remove: ${key}`, 'error')
+                }
+            })
+
+            log(`<strong>✅ Aggressive cleanup complete! Removed ${removedCount} keys.</strong>`, 'success')
+            log('All user data has been wiped clean.', 'success')
+        }
+
+        function rebuildUsers() {
+            clearOutput()
+            log('<h3>🔧 Rebuilding Clean User Data</h3>')
+
+            try {
+                // Create clean users array
+                localStorage.setItem('users', JSON.stringify(ALLOWED_USERS))
+                log('✅ Created clean users array with 3 authorized users', 'success')
+
+                // Set pierre as current user (since they're likely the one running this)
+                const pierreUser = ALLOWED_USERS.find(u => u.email === 'pierre@phaetonai.com')
+                localStorage.setItem('currentUser', JSON.stringify(pierreUser))
+                log('✅ Set pierre@phaetonai.com as current user with Super User role', 'success')
+
+                // Create clean settings for each user
+                ALLOWED_USERS.forEach(user => {
+                    const settings = {
+                        theme: 'light',
+                        mfaEnabled: user.mfa_enabled,
+                        refreshInterval: 30000,
+                        sessionTimeout: 15,
+                        notifications: {
+                            calls: true,
+                            sms: true,
+                            system: true
+                        },
+                        email: user.email,
+                        userEmail: user.email,
+                        userId: user.id
+                    }
+                    localStorage.setItem(`settings_${user.id}`, JSON.stringify(settings))
+                    log(`✅ Created settings for ${user.name}`)
+                })
+
+                log('<h3>🎉 User Data Rebuild Complete!</h3>', 'success')
+                log('<strong>Next steps:</strong>', 'success')
+                log('1. Close this tool', 'success')
+                log('2. Refresh your main application', 'success')
+                log('3. You should now see only authorized users with correct roles', 'success')
+
+                // Auto-redirect after 3 seconds
+                setTimeout(() => {
+                    if (confirm('Rebuild complete! Close this tool and refresh your main app?')) {
+                        window.close()
+                    }
+                }, 3000)
+
+            } catch (error) {
+                log(`❌ Error rebuilding users: ${error}`, 'error')
+            }
+        }
+
+        // Auto-show current state when page loads
+        window.onload = () => {
+            showCurrentState()
+        }
+    </script>
+</body>
+</html>

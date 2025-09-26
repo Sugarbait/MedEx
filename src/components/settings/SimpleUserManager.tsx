@@ -303,7 +303,7 @@ export const SimpleUserManager: React.FC = () => {
                       user.role === 'healthcare_provider' ? 'bg-green-100 text-green-700' :
                       'bg-gray-100 text-gray-700 dark:text-gray-300'
                     }`}>
-                      {user.role.replace('_', ' ')}
+                      {user.role === 'super_user' ? 'Super User' : user.role.replace('_', ' ')}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">

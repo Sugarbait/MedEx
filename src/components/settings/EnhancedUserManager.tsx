@@ -25,7 +25,7 @@ import {
 } from 'lucide-react'
 import { enhancedUserService, EnhancedUserProfile } from '@/services/enhancedUserService'
 import { userManagementService } from '@/services/userManagementService'
-import { FreshMfaService } from '@/services/freshMfaService'
+import FreshMfaService from '@/services/freshMfaService'
 
 interface EnhancedUserManagerProps {
   currentUser: {
@@ -546,7 +546,7 @@ export const EnhancedUserManager: React.FC<EnhancedUserManagerProps> = ({ curren
                       <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{user.email}</p>
                       <div className="flex items-center gap-2 mt-1">
                         <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${getRoleColor(user.role)}`}>
-                          {user.role.replace('_', ' ')}
+                          {user.role === 'super_user' ? 'Super User' : user.role.replace('_', ' ')}
                         </span>
                         <span className={`text-xs font-medium ${getStatusColor(user.is_enabled, user.is_super_user)}`}>
                           {user.is_super_user ? 'Super User' : user.is_enabled ? 'Active' : 'Disabled'}

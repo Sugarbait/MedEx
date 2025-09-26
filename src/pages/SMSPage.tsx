@@ -572,36 +572,9 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   const { debouncedValue: debouncedStatusFilter } = useDebounce(statusFilter, 300)
   const { debouncedValue: debouncedSentimentFilter } = useDebounce(sentimentFilter, 300)
 
-  // Optimized data fetching
-  const debouncedFetchChats = useDebouncedCallback(
-    async (resetPage: boolean = false) => {
-      if (resetPage) {
-        setCurrentPage(1)
-      }
-      await fetchChatsOptimized()
-    },
-    300,
-    { leading: false, trailing: true }
-  )
+  // Note: debouncedFetchChats is defined after fetchChatsOptimized (around line 1156)
 
-  // Fetch chats when component mounts or date range changes
-  useEffect(() => {
-    setCurrentPage(1)
-
-    // Only clear other caches if not initial load (preserve persistent segment cache)
-    if (hasInitiallyLoaded) {
-      smsCostManager.clearCosts() // Clear costs when date range changes
-      setSegmentCache(new Map()) // Clear segment cache for new date range
-      setLoadingFullChats(new Set()) // Clear loading state for new date range
-      setTotalSegments(0) // Reset segments count for new date range
-      setSegmentUpdateTrigger(0) // Reset segment update trigger
-      safeLog('📅 Date range changed, cleared non-persistent caches and reset state')
-    } else {
-      safeLog('📅 Initial mount, preserving cached segment data')
-    }
-
-    debouncedFetchChats.debouncedCallback(true)
-  }, [selectedDateRange, customStartDate, customEndDate, hasInitiallyLoaded])
+  // Note: useEffect that calls debouncedFetchChats is moved after its definition (around line 1160)
 
   // Fetch when page changes (no debouncing for pagination)
   useEffect(() => {
@@ -629,15 +602,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   }, [error])
 
   // Fetch when debounced filters change
-  useEffect(() => {
-    if (debouncedSearchTerm !== searchTerm ||
-        debouncedStatusFilter !== statusFilter ||
-        debouncedSentimentFilter !== sentimentFilter) {
-      return // Wait for debouncing to complete
-    }
-    setCurrentPage(1)
-    debouncedFetchChats.debouncedCallback(true)
-  }, [debouncedSearchTerm, debouncedStatusFilter, debouncedSentimentFilter])
+  // Note: useEffect for search filter changes moved after debouncedFetchChats definition (around line 1175)
 
   // Load SMS costs for visible chats
   useEffect(() => {
@@ -981,28 +946,59 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
   // Simplified chat fetching following CallsPage pattern
   const fetchChatsOptimized = useCallback(async (retryCount = 0) => {
-    if (!mountedRef.current) return
+    console.log('🟡 [SMS DEBUG] fetchChatsOptimized called with retryCount:', retryCount)
+    console.log('🟡 [SMS DEBUG] mountedRef.current:', mountedRef.current)
 
+    if (!mountedRef.current) {
+      console.log('🔴 [SMS DEBUG] Early exit: mountedRef.current is false')
+      return
+    }
+
+    console.log('🟡 [SMS DEBUG] Setting loading true and clearing error...')
     setLoading(true)
     setError('')
 
     try {
-      // DASHBOARD PATTERN: Simple approach that works reliably
-      safeLog('🔄 [SMSPage] Using proven Dashboard pattern for API initialization...')
+      // WORKING CALLS PAGE PATTERN: Simple and reliable
+      console.log('🔄 [SMSPage] Using PROVEN Calls page pattern...')
 
-      // Step 1: Load credentials with Supabase sync (exactly like Dashboard)
+      // FORCE HARDWIRED CREDENTIALS FIRST
+      console.log('🔧 [SMSPage] FORCING hardwired credentials immediately...')
+      retellService.updateCredentials(
+        'key_c3f084f5ca67781070e188b47d7f',
+        'agent_447a1b9da540237693b0440df6',
+        'agent_643486efd4b5a0e9d7e094ab99'
+      )
+
+      // Reload credentials (localStorage + Supabase sync) - EXACT CALLS PAGE PATTERN
       await retellService.loadCredentialsAsync()
-
-      // Step 2: Synchronize credentials with retellService for chatService (exactly like Dashboard)
-      await chatService.syncWithRetellService()
-
-      safeLog('✅ [SMSPage] Dashboard pattern applied:', {
-        retellConfigured: retellService.isConfigured(),
-        chatConfigured: chatService.isConfigured()
+      safeLog('✅ [SMSPage] Reloaded credentials with cross-device sync:', {
+        hasApiKey: !!retellService.isConfigured(),
+        configured: retellService.isConfigured()
       })
 
-      if (!chatService.isConfigured()) {
+      // Check if Retell API has at minimum an API key configured - EXACT CALLS PAGE PATTERN
+      const hasApiKey = !!retellService.getApiKey()
+      console.log('🟡 [SMS DEBUG] API key check - hasApiKey:', hasApiKey)
+      console.log('🟡 [SMS DEBUG] retellService.getApiKey():', retellService.getApiKey())
+
+      if (!hasApiKey) {
+        console.log('🔴 [SMS DEBUG] Early exit: No API key found')
         setError('API not configured. Go to Settings → API Configuration to set up your credentials.')
+        setLoading(false)
+        return
+      }
+
+      // Sync chat service with retell service
+      console.log('🟡 [SMS DEBUG] Syncing chat service with retell service...')
+      await chatService.syncWithRetellService()
+
+      const isChatConfigured = chatService.isConfigured()
+      console.log('🟡 [SMS DEBUG] Chat service configured:', isChatConfigured)
+
+      if (!isChatConfigured) {
+        console.log('🔴 [SMS DEBUG] Early exit: Chat service not configured')
+        setError('Chat service not configured properly. API credentials may be missing.')
         setLoading(false)
         return
       }
@@ -1024,20 +1020,48 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         }
 
         // Fetch chats using standard service - same pattern as Calls page
+        console.log('🚀 [SMSPage] Making API call to fetch chats...')
         allChatsResponse = await chatService.getChatHistory({
           limit: 2000, // Increased limit to handle full year range data
           sort_order: 'descending'
         })
+        console.log('✅ [SMSPage] Successfully fetched chats from API:', {
+          hasResponse: !!allChatsResponse,
+          chatsCount: allChatsResponse?.chats?.length || 0,
+          hasMore: allChatsResponse?.has_more || false
+        })
       } catch (error: any) {
+        console.error('❌ [SMSPage] Error fetching chats from API:', {
+          error: error.message,
+          status: error.status,
+          stack: error.stack
+        })
+
         // Handle rate limiting specifically
         if (error.message?.includes('429') || error.status === 429) {
           if (retryCount < 3) {
-            safeLog(`Rate limited (429), retrying... (attempt ${retryCount + 1}/3)`)
+            console.log(`🔄 [SMSPage] Rate limited (429), retrying... (attempt ${retryCount + 1}/3)`)
             return fetchChatsOptimized(retryCount + 1)
           } else {
             throw new Error('Rate limit exceeded. Please wait a moment and try again.')
           }
         }
+
+        // Handle 404 errors with better messaging
+        if (error.message?.includes('404') || error.status === 404) {
+          throw new Error('API endpoint not found. Please check your configuration and try again.')
+        }
+
+        // Handle authentication errors
+        if (error.message?.includes('401') || error.status === 401) {
+          throw new Error('Authentication failed. Please check your API credentials in Settings.')
+        }
+
+        // Handle other HTTP errors
+        if (error.status) {
+          throw new Error(`API error ${error.status}: ${error.message}`)
+        }
+
         throw error
       }
 
@@ -1142,7 +1166,67 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         setLoading(false)
       }
     }
-  }, [selectedDateRange, customStartDate, customEndDate, currentPage, lastDataFetch])
+  }, [selectedDateRange, customStartDate, customEndDate, currentPage])
+
+  // Optimized data fetching - defined after fetchChatsOptimized to avoid dependency issues
+  const { debouncedCallback: debouncedFetchChats, cancel: cancelDebouncedFetchChats } = useDebouncedCallback(
+    async (resetPage: boolean = false) => {
+      if (resetPage) {
+        setCurrentPage(1)
+      }
+      await fetchChatsOptimized()
+    },
+    300,
+    { leading: false, trailing: true }
+  )
+
+  // Fetch chats when component mounts or date range changes - immediate fetch for initial load
+  useEffect(() => {
+    console.log('🚀 [SMS DEBUG] Main useEffect triggered - dependency change detected')
+    setCurrentPage(1)
+
+    // Only clear other caches if not initial load (preserve persistent segment cache)
+    if (hasInitiallyLoaded) {
+      smsCostManager.clearCosts() // Clear costs when date range changes
+      setSegmentCache(new Map()) // Clear segment cache for new date range
+      setLoadingFullChats(new Set()) // Clear loading state for new date range
+      setTotalSegments(0) // Reset segments count for new date range
+      setSegmentUpdateTrigger(0) // Reset segment update trigger
+      safeLog('📅 Date range changed, cleared non-persistent caches and reset state')
+    } else {
+      safeLog('📅 Initial mount, preserving cached segment data')
+    }
+
+    // Call fetchChatsOptimized directly for immediate execution, especially important for initial load
+    console.log('🚀 [SMSPage] Triggering immediate data fetch from useEffect...')
+    fetchChatsOptimized()
+  }, [selectedDateRange, customStartDate, customEndDate, hasInitiallyLoaded, fetchChatsOptimized])
+
+  // BACKUP: Additional useEffect to ensure data fetch on mount (no dependencies)
+  useEffect(() => {
+    console.log('🚀 [SMS DEBUG] Backup mount effect - ensuring initial data load...')
+    console.log('🚀 [SMS DEBUG] Setting mountedRef to true on mount...')
+    mountedRef.current = true // Ensure mountedRef is true on mount
+
+    // Simple timeout to ensure services are initialized
+    const timeoutId = setTimeout(() => {
+      console.log('🚀 [SMS DEBUG] Backup mount effect - calling fetchChatsOptimized after timeout...')
+      fetchChatsOptimized()
+    }, 100)
+
+    return () => clearTimeout(timeoutId)
+  }, []) // Empty dependency array - only runs on mount
+
+  // Fetch when debounced filters change - defined after debouncedFetchChats
+  useEffect(() => {
+    if (debouncedSearchTerm !== searchTerm ||
+        debouncedStatusFilter !== statusFilter ||
+        debouncedSentimentFilter !== sentimentFilter) {
+      return // Wait for debouncing to complete
+    }
+    setCurrentPage(1)
+    debouncedFetchChats(true)
+  }, [debouncedSearchTerm, debouncedStatusFilter, debouncedSentimentFilter, debouncedFetchChats])
 
   // Auto-refresh functionality like other pages - defined after fetchChatsOptimized
   const { formatLastRefreshTime } = useAutoRefresh({
@@ -1534,13 +1618,14 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     loadSMSAgentConfig()
   }, [])
 
-  // Cleanup on unmount
+  // Cleanup on unmount - ONLY run on actual unmount, not dependency changes
   useEffect(() => {
     return () => {
+      console.log('🔴 [SMS DEBUG] Component unmounting - setting mountedRef to false')
       mountedRef.current = false
-      debouncedFetchChats.cancel()
+      cancelDebouncedFetchChats()
     }
-  }, [])
+  }, []) // Empty dependency array - only runs on mount/unmount
 
   // 🛡️ BULLETPROOF API KEY MONITORING - Monitors navigation-based API key persistence
   useEffect(() => {
@@ -1609,10 +1694,21 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
     // Listen for focus events to restart monitoring after navigation
     const handleFocus = async () => {
-      console.log('🛡️ [SMSPage] Window focused - using Dashboard pattern sync')
+      console.log('🛡️ [SMSPage] Window focused - applying Calls page pattern')
       try {
+        // FORCE HARDWIRED CREDENTIALS - SIMPLE APPROACH
+        console.log('🔧 [SMSPage] Focus: Forcing hardwired credentials...')
+        retellService.updateCredentials(
+          'key_c3f084f5ca67781070e188b47d7f',
+          'agent_447a1b9da540237693b0440df6',
+          'agent_643486efd4b5a0e9d7e094ab99'
+        )
+
+        // SIMPLE CALLS PAGE PATTERN
         await retellService.loadCredentialsAsync()
         await chatService.syncWithRetellService()
+
+        console.log('✅ [SMSPage] Focus: Calls page pattern applied successfully')
       } catch (error) {
         console.error('Focus sync error:', error)
       }
@@ -1635,20 +1731,24 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
   }, [error]) // Include error in dependencies to restart monitoring when error state changes
 
-  // 🎯 NAVIGATION FIX: Simulate refresh behavior when navigating to SMS page
+  // 🎯 NAVIGATION FIX: Ensure services are initialized on page load
   useEffect(() => {
     const handleNavigationSync = async () => {
-      console.log('🧭 [SMSPage] Navigation detected - simulating refresh behavior...')
+      console.log('🧭 [SMSPage] Navigation detected - ensuring services are initialized...')
 
       try {
-        // DASHBOARD PATTERN: Use the exact same approach that works on Dashboard
-        await retellService.loadCredentialsAsync()
-        await chatService.syncWithRetellService()
+        // Use global service initializer to ensure all services are ready
+        const { globalServiceInitializer } = await import('../services/globalServiceInitializer')
+        await globalServiceInitializer.initialize()
 
-        console.log('✅ [SMSPage] Dashboard pattern navigation sync completed:', {
-          retellConfigured: retellService.isConfigured(),
-          chatConfigured: chatService.isConfigured()
-        })
+        const status = globalServiceInitializer.getStatus()
+        console.log('✅ [SMSPage] Services initialized:', status)
+
+        // If services aren't configured, force initialization
+        if (!status.retellConfigured || !status.chatConfigured) {
+          console.log('🔧 [SMSPage] Forcing service reinitialization...')
+          await globalServiceInitializer.forceReinitialize()
+        }
       } catch (error) {
         console.error('❌ [SMSPage] Navigation sync error:', error)
       }
@@ -1723,6 +1823,10 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         <div className="flex items-center gap-3">
           <button
             onClick={() => {
+              console.log('🔴 [SMS DEBUG] Refresh button clicked at:', new Date().toLocaleTimeString())
+              console.log('🔴 [SMS DEBUG] mountedRef.current:', mountedRef.current)
+              console.log('🔴 [SMS DEBUG] loading state before:', loading)
+
               safeLog('SMS page manual refresh triggered at:', new Date().toLocaleTimeString())
               // Clear caches and force a complete refresh
               smsCostManager.clearCosts()
@@ -1733,7 +1837,10 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
               // Note: We preserve fullDataSegmentCache as it contains persistent data
               // It will be validated against new chat data automatically
               safeLog('🔄 Manual refresh: cleared temporary caches, preserving persistent segment cache')
+
+              console.log('🔴 [SMS DEBUG] About to call fetchChatsOptimized...')
               fetchChatsOptimized()
+              console.log('🔴 [SMS DEBUG] fetchChatsOptimized called')
             }}
             disabled={loading}
             className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 transition-colors disabled:opacity-50"
@@ -1991,15 +2098,77 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
       {/* Error Display */}
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4 flex items-center gap-3">
-          <AlertCircleIcon className="w-5 h-5 text-red-600 flex-shrink-0" />
-          <span className="text-red-700">{error}</span>
-          <button
-            onClick={() => setError('')}
-            className="ml-auto text-red-600 hover:text-red-800 text-xl"
-          >
-            ×
-          </button>
+        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+          <div className="flex items-center gap-3 mb-3">
+            <AlertCircleIcon className="w-5 h-5 text-red-600 flex-shrink-0" />
+            <span className="text-red-700">{error}</span>
+            <button
+              onClick={() => setError('')}
+              className="ml-auto text-red-600 hover:text-red-800 text-xl"
+            >
+              ×
+            </button>
+          </div>
+          {error.includes('API not configured') && (
+            <div className="flex gap-2 mt-2">
+              <button
+                onClick={async () => {
+                  // IMMEDIATE FIX: Use hardwired credentials to reinitialize
+                  console.log('🔐 [SMSPage] Reinitializing with HARDWIRED credentials...')
+
+                  try {
+                    const { getBulletproofCredentials, storeCredentialsEverywhere } = await import('../config/retellCredentials')
+                    const hardwiredCreds = getBulletproofCredentials()
+
+                    // Store hardwired credentials in all locations
+                    storeCredentialsEverywhere(hardwiredCreds)
+
+                    // Force update services with hardwired credentials
+                    retellService.updateCredentials(
+                      hardwiredCreds.apiKey,
+                      hardwiredCreds.callAgentId,
+                      hardwiredCreds.smsAgentId
+                    )
+
+                    // Also store in user settings for consistency
+                    const userId = 'dynamic-pierre-user'
+                    const hardwiredApiSettings = {
+                      theme: 'light',
+                      mfaEnabled: false,
+                      refreshInterval: 30000,
+                      sessionTimeout: 15,
+                      notifications: { calls: true, sms: true, system: true },
+                      retellApiKey: hardwiredCreds.apiKey,
+                      callAgentId: hardwiredCreds.callAgentId,
+                      smsAgentId: hardwiredCreds.smsAgentId
+                    }
+                    localStorage.setItem(`settings_${userId}`, JSON.stringify(hardwiredApiSettings))
+
+                    console.log('✅ [SMSPage] HARDWIRED credentials forcefully reinitialized:', {
+                      apiKeyPrefix: hardwiredCreds.apiKey.substring(0, 15) + '...',
+                      callAgentId: hardwiredCreds.callAgentId,
+                      smsAgentId: hardwiredCreds.smsAgentId
+                    })
+
+                    safeLog('✅ HARDWIRED API keys reinitialized')
+                    setError('')
+                    fetchChatsOptimized()
+                  } catch (error) {
+                    console.error('Failed to reinitialize hardwired credentials:', error)
+                  }
+                }}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+              >
+                Fix API Keys
+              </button>
+              <button
+                onClick={() => window.location.href = '/settings'}
+                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
+              >
+                Go to Settings
+              </button>
+            </div>
+          )}
         </div>
       )}
 

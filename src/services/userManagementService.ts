@@ -1383,6 +1383,166 @@ export class UserManagementService {
   }
 
   /**
+   * Clean up duplicate user profiles causing role switching
+   * Removes "User" role profiles while preserving "Super User" profiles
+   */
+  static async cleanupDuplicateProfiles(): Promise<ServiceResponse<{ removed: number; updated: boolean }>> {
+    try {
+      console.log('🧹 CLEANUP: Removing duplicate user profiles causing role switching')
+      await auditLogger.logSecurityEvent('DUPLICATE_PROFILE_CLEANUP_START', 'users', true)
+
+      // 1. Check current systemUsers
+      const systemUsers = localStorage.getItem('systemUsers')
+      if (!systemUsers) {
+        console.log('❌ No systemUsers found in localStorage')
+        return { status: 'error', error: 'No systemUsers found in localStorage' }
+      }
+
+      const users = JSON.parse(systemUsers)
+      console.log(`📊 Found ${users.length} users in systemUsers`)
+
+      // 2. Group users by email to find duplicates
+      const usersByEmail: { [email: string]: any[] } = {}
+      users.forEach((user: any, index: number) => {
+        const email = user.email
+        if (!usersByEmail[email]) {
+          usersByEmail[email] = []
+        }
+        usersByEmail[email].push({ ...user, originalIndex: index })
+      })
+
+      // 3. Identify duplicates and remove "User" role profiles
+      let cleanedUsers: any[] = []
+      let removedCount = 0
+
+      for (const [email, userList] of Object.entries(usersByEmail)) {
+        if (userList.length > 1) {
+          console.log(`\n⚠️ DUPLICATE FOUND for ${email}:`)
+          userList.forEach((user: any, i: number) => {
+            console.log(`  ${i + 1}. ID: ${user.id}, Role: ${user.role}, Name: ${user.name}`)
+          })
+
+          // Keep Super User, remove others
+          const superUser = userList.find((u: any) => u.role === 'super_user')
+          const userRole = userList.find((u: any) => u.role === 'user')
+
+          if (superUser && userRole) {
+            console.log(`✅ Keeping Super User profile: ${superUser.id}`)
+            console.log(`🗑️ Removing User profile: ${userRole.id}`)
+            cleanedUsers.push(superUser)
+            removedCount++
+
+            // Log the specific removal
+            await auditLogger.logSecurityEvent('DUPLICATE_USER_PROFILE_REMOVED', 'users', true, {
+              removedUserId: userRole.id,
+              keptUserId: superUser.id,
+              email: email,
+              removedRole: userRole.role,
+              keptRole: superUser.role
+            })
+          } else {
+            // If no super_user, keep the first one
+            console.log(`⚠️ No super_user found, keeping first profile`)
+            cleanedUsers.push(userList[0])
+          }
+        } else {
+          // No duplicates, keep the user
+          cleanedUsers.push(userList[0])
+        }
+      }
+
+      // 4. Update systemUsers if changes were made
+      let systemUsersUpdated = false
+      if (removedCount > 0) {
+        console.log(`\n💾 Updating systemUsers - removed ${removedCount} duplicate profiles`)
+        localStorage.setItem('systemUsers', JSON.stringify(cleanedUsers))
+        console.log(`✅ Updated systemUsers: ${cleanedUsers.length} users remain`)
+        systemUsersUpdated = true
+      } else {
+        console.log('\n✅ No duplicate profiles found to remove')
+      }
+
+      // 5. Check and fix currentUser if it's a duplicate
+      const currentUser = localStorage.getItem('currentUser')
+      if (currentUser) {
+        try {
+          const userData = JSON.parse(currentUser)
+          console.log(`\n👤 Current user: ${userData.email} (Role: ${userData.role})`)
+
+          // Find the corresponding cleaned user
+          const cleanedUser = cleanedUsers.find((u: any) => u.email === userData.email)
+          if (cleanedUser && cleanedUser.role !== userData.role) {
+            console.log(`🔄 Updating currentUser role from ${userData.role} to ${cleanedUser.role}`)
+            const updatedUser = { ...userData, ...cleanedUser }
+            localStorage.setItem('currentUser', JSON.stringify(updatedUser))
+            console.log('✅ CurrentUser updated to match cleaned profile')
+
+            await auditLogger.logSecurityEvent('CURRENT_USER_ROLE_CORRECTED', 'users', true, {
+              userId: userData.id,
+              email: userData.email,
+              oldRole: userData.role,
+              newRole: cleanedUser.role
+            })
+          }
+        } catch (error) {
+          console.error('❌ Error checking currentUser:', error)
+        }
+      }
+
+      // 6. Clean up user-specific settings for removed profiles
+      console.log('\n🧹 Cleaning up user-specific localStorage keys...')
+      const removedUserIds = users
+        .filter((u: any) => !cleanedUsers.find((c: any) => c.id === u.id))
+        .map((u: any) => u.id)
+
+      removedUserIds.forEach((userId: string) => {
+        const keysToRemove = [
+          `settings_${userId}`,
+          `userProfile_${userId}`,
+          `user_settings_${userId}`,
+          `avatar_${userId}`,
+          `avatar_data_${userId}`
+        ]
+
+        keysToRemove.forEach((key: string) => {
+          if (localStorage.getItem(key)) {
+            localStorage.removeItem(key)
+            console.log(`🗑️ Removed localStorage key: ${key}`)
+          }
+        })
+      })
+
+      await auditLogger.logSecurityEvent('DUPLICATE_PROFILE_CLEANUP_COMPLETED', 'users', true, {
+        removedCount,
+        remainingCount: cleanedUsers.length,
+        systemUsersUpdated
+      })
+
+      console.log('\n🎉 CLEANUP COMPLETE!')
+      console.log('📝 Summary:')
+      console.log(`   - Removed ${removedCount} duplicate profiles`)
+      console.log(`   - ${cleanedUsers.length} users remain in systemUsers`)
+      console.log(`   - Role switching should now be resolved`)
+      console.log('\n💡 Refresh the page to see the changes take effect')
+
+      return {
+        status: 'success',
+        data: {
+          removed: removedCount,
+          updated: systemUsersUpdated
+        }
+      }
+
+    } catch (error: any) {
+      console.error('❌ CLEANUP ERROR:', error)
+      await auditLogger.logSecurityEvent('DUPLICATE_PROFILE_CLEANUP_FAILED', 'users', false, {
+        error: error.message
+      })
+      return { status: 'error', error: error.message }
+    }
+  }
+
+  /**
    * Initialize default system users (for first-time setup)
    */
   static async initializeDefaultUsers(): Promise<ServiceResponse<void>> {

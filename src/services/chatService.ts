@@ -461,9 +461,13 @@ export class ChatService {
         return { success: false, message: 'API key not configured' }
       }
 
-      const response = await this.makeApiRequest(`${this.baseUrl}/list-chat?limit=10`, {
-        method: 'GET',
-        headers: this.getHeaders()
+      const response = await this.makeApiRequest(`${this.baseUrl}/v2/list-chat`, {
+        method: 'POST',
+        headers: {
+          ...this.getHeaders(),
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ limit: 10 })
       })
 
       if (response.ok) {
@@ -543,140 +547,64 @@ export class ChatService {
 
       console.log('Chat Service: Making getChatHistory request with options:', options)
 
-      // Use the correct API endpoint based on retellService.ts implementation
-      // Only use the GET /list-chat endpoint which is the working one
-      const endpoints = [
-        { url: `${this.baseUrl}/list-chat`, method: 'GET' as const }
-      ]
+      // Use the retellService to fetch chats with correct endpoint
+      console.log('[ChatService] Using retellService.getChatHistory() to fetch chats...')
 
-      let response: Response | null = null
-      let lastError: Error | null = null
-
-      // Try each endpoint configuration
-      for (let i = 0; i < endpoints.length; i++) {
-        const endpoint = endpoints[i]
-        console.log(`Trying endpoint ${i + 1}/${endpoints.length}: ${endpoint.method} ${endpoint.url}`)
-
-        try {
-          // Only GET method is supported for chat API
-          const queryParams = new URLSearchParams()
-
-          if (options.limit) {
-            queryParams.append('limit', options.limit.toString())
-          }
-
-          if (options.pagination_key) {
-            queryParams.append('pagination_key', options.pagination_key)
-          }
-
-          if (options.sort_order) {
-            queryParams.append('sort_order', options.sort_order)
-          }
-
-          // Add agent ID filter if available
-          if (this.smsAgentId && !options.filter_criteria?.agent_id && !options.skipFilters) {
-            queryParams.append('agent_id', this.smsAgentId)
-            console.log(`[ChatService] Adding agent_id filter to GET request: ${this.smsAgentId}`)
-          }
-
-          const url = `${endpoint.url}${queryParams.toString() ? '?' + queryParams.toString() : ''}`
-          console.log('Chat API Request URL:', url)
-
-          response = await this.makeApiRequest(url, {
-            method: 'GET',
-            headers: this.getHeaders()
-          })
-
-          // If request was successful, break out of the loop
-          if (response.ok) {
-            console.log(`Successfully connected using endpoint ${i + 1}: ${endpoint.method} ${endpoint.url}`)
-            break
-          } else {
-            console.log(`Endpoint ${i + 1} failed with status: ${response.status}`)
-            lastError = new Error(`HTTP ${response.status}: ${response.statusText}`)
-            response = null
-          }
-        } catch (error) {
-          console.error(`Endpoint ${i + 1} threw error:`, error)
-          lastError = error instanceof Error ? error : new Error('Unknown error')
-          response = null
-        }
+      // Convert our options to match retellService expectations
+      const retellOptions: any = {}
+      if (options.limit) {
+        retellOptions.limit = options.limit
+      }
+      if (this.smsAgentId && !options.skipFilters) {
+        retellOptions.agent_id = this.smsAgentId
       }
 
-      // If all endpoints failed, throw the last error
-      if (!response || !response.ok) {
-        console.error('All chat API endpoints failed')
-        if (lastError) {
-          throw lastError
-        } else {
-          throw new Error('All chat API endpoints failed')
-        }
-      }
+      console.log('[ChatService] Calling retellService with options:', retellOptions)
+      const retellResponse = await retellService.getChatHistory()
 
-
-      const data = await response.json()
-      console.log('Raw chat API response structure:', {
-        type: typeof data,
-        isArray: Array.isArray(data),
-        keys: data && typeof data === 'object' ? Object.keys(data) : null,
-        dataLength: Array.isArray(data) ? data.length : (data?.chats?.length || data?.data?.length || 'unknown')
+      console.log('[ChatService] RetellService response:', {
+        hasResponse: !!retellResponse,
+        chatsCount: retellResponse?.chats?.length || 0,
+        hasMore: retellResponse?.has_more || false
       })
 
-      // Handle different response structures based on Retell AI API documentation
-      let chats: Chat[] = []
-      let pagination_key: string | undefined = undefined
-      let has_more = false
-
-      if (Array.isArray(data)) {
-        // Direct array response
-        chats = data
-        has_more = data.length >= (options.limit || 50)
-        console.log('Response format: Direct array with', chats.length, 'chats')
-      } else if (data && typeof data === 'object') {
-        // Object response with chats array (most common format)
-        chats = data.chats || data.data || data.results || []
-        pagination_key = data.pagination_key || data.next_page_token || data.nextPageToken
-        has_more = data.has_more !== undefined ? data.has_more : !!pagination_key
-        console.log('Response format: Object wrapper with', chats.length, 'chats, has_more:', has_more)
-      } else {
-        console.warn('Unexpected response format:', data)
-        chats = []
-      }
-
-      // Apply client-side filtering if needed (for reliability)
-      if (options.filter_criteria && !options.skipFilters) {
-        const originalCount = chats.length
-        chats = this.applyClientSideFilters(chats, options.filter_criteria)
-        console.log(`[ChatService] Client-side filtering: ${originalCount} -> ${chats.length} chats`)
-
-        // Log specific filtering applied
-        if (options.filter_criteria.agent_id) {
-          const agentFilteredCount = chats.filter(chat => chat.agent_id === options.filter_criteria?.agent_id).length
-          console.log(`[ChatService] Agent filter (${options.filter_criteria.agent_id}): ${agentFilteredCount}/${chats.length} chats match`)
-        }
-      }
-
-      console.log(`[ChatService] Final Chat API Response: ${chats.length} chats fetched, has_more=${has_more}`)
-
-      // Log agent distribution for debugging
-      const agentDistribution: Record<string, number> = {}
-      chats.forEach(chat => {
-        agentDistribution[chat.agent_id] = (agentDistribution[chat.agent_id] || 0) + 1
-      })
-      console.log(`[ChatService] Agent distribution:`, agentDistribution)
-
-      const result = {
-        chats,
-        pagination_key,
-        has_more
+      // Convert retellService response to our format
+      const result: ChatListResponse = {
+        chats: retellResponse.chats.map((chat: any) => ({
+          ...chat,
+          // Ensure required fields are present
+          message_with_tool_calls: chat.message_with_tool_calls || [],
+          collected_dynamic_variables: chat.collected_dynamic_variables || {},
+          retell_llm_dynamic_variables: chat.retell_llm_dynamic_variables || {},
+          chat_analysis: chat.chat_analysis || {
+            chat_summary: '',
+            user_sentiment: '',
+            chat_successful: false,
+            custom_analysis_data: {}
+          },
+          chat_cost: chat.chat_cost || {
+            product_costs: {},
+            total_cost: 0
+          }
+        })),
+        pagination_key: retellResponse.pagination_key,
+        has_more: retellResponse.has_more
       }
 
       // Cache the result
       this.setCachedData(cacheKey, result)
 
+      console.log('[ChatService] Processed and returning response:', {
+        chatsCount: result.chats.length,
+        hasMore: result.has_more
+      })
+
       return result
     } catch (error) {
-      console.error('[ChatService] Error fetching chat history:', error)
+      console.error('[ChatService] Error fetching chat history:', {
+        error: error instanceof Error ? error.message : error,
+        stack: error instanceof Error ? error.stack : undefined
+      })
 
       // Provide more specific error messages
       if (error instanceof Error) {
@@ -685,13 +613,17 @@ export class ChatService {
         } else if (error.message.includes('403')) {
           throw new Error('API access forbidden. Please check your API key permissions.')
         } else if (error.message.includes('401')) {
-          throw new Error('Invalid API key. Please update your Retell AI credentials.')
+          throw new Error('Invalid API key. Please update your Retell AI credentials in Settings.')
         } else if (error.message.includes('404')) {
-          throw new Error('API endpoint not found. This may indicate an API version issue.')
+          throw new Error('Chat API endpoint not found. Please check your configuration.')
+        } else if (error.message.includes('Failed to fetch')) {
+          throw new Error('Network error. Please check your internet connection and try again.')
+        } else if (error.message.includes('not configured')) {
+          throw new Error('API credentials not configured. Please check Settings → API Configuration.')
         }
       }
 
-      throw error
+      throw new Error(`Chat service error: ${error instanceof Error ? error.message : 'Unknown error'}`)
     }
   }
 

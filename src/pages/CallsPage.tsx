@@ -42,9 +42,9 @@ import { patientIdService } from '@/services/patientIdService'
 
 // CRITICAL FIX: Disable console logging in production to prevent infinite loops
 const isProduction = !import.meta.env.DEV
-const safeLog = isProduction ? () => {} : safeLog
-const safeWarn = isProduction ? () => {} : safeWarn
-const safeError = isProduction ? () => {} : safeError
+const safeLog = isProduction ? () => {} : console.log
+const safeWarn = isProduction ? () => {} : console.warn
+const safeError = isProduction ? () => {} : console.error
 
 interface CallsPageProps {
   user: any
@@ -195,7 +195,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
     fetchCalls()
   }, [currentPage])
 
-  // Listen for API configuration events from AuthContext
+  // Listen for API configuration events from AuthContext and ensure services are initialized
   useEffect(() => {
     const handleApiConfigurationReady = (event: CustomEvent) => {
       console.log('🚀 [CallsPage]: Received apiConfigurationReady event', event.detail)
@@ -205,6 +205,22 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
         fetchCalls()
       }
     }
+
+    // Ensure services are initialized on page load
+    const initializeServices = async () => {
+      try {
+        console.log('🔧 [CallsPage]: Ensuring services are initialized...')
+        const { globalServiceInitializer } = await import('../services/globalServiceInitializer')
+        await globalServiceInitializer.initialize()
+
+        const status = globalServiceInitializer.getStatus()
+        console.log('✅ [CallsPage]: Services status:', status)
+      } catch (error) {
+        console.error('❌ [CallsPage]: Service initialization error:', error)
+      }
+    }
+
+    initializeServices()
 
     window.addEventListener('apiConfigurationReady', handleApiConfigurationReady as EventListener)
 

@@ -218,26 +218,33 @@ export class EnhancedUserService {
         if (userError) throw userError
       }
 
-      // Update user_profiles table with fallback for missing columns
+      // Update user_profiles table with graceful fallback for missing columns
       const profileData: any = {
         updated_at: new Date().toISOString()
       }
 
-      if (profileUpdates.display_name !== undefined) profileData.display_name = profileUpdates.display_name
-      if (profileUpdates.first_name !== undefined) profileData.first_name = profileUpdates.first_name
-      if (profileUpdates.last_name !== undefined) profileData.last_name = profileUpdates.last_name
+      // Collect fields that might not exist in the schema
+      const potentiallyMissingFields: any = {}
+
+      if (profileUpdates.display_name !== undefined) potentiallyMissingFields.display_name = profileUpdates.display_name
+      if (profileUpdates.first_name !== undefined) potentiallyMissingFields.first_name = profileUpdates.first_name
+      if (profileUpdates.last_name !== undefined) potentiallyMissingFields.last_name = profileUpdates.last_name
+      if (profileUpdates.department !== undefined) potentiallyMissingFields.department = profileUpdates.department
+
+      // Phone is likely to exist, add it to profileData directly
       if (profileUpdates.phone !== undefined) profileData.phone = profileUpdates.phone
 
-      // First try with all fields including department
+      // Try to update user_profiles with all fields first
       let profileError = null
-      try {
-        if (profileUpdates.department !== undefined) profileData.department = profileUpdates.department
+      let fieldsToRemove: string[] = []
 
+      try {
         const { error } = await supabase
           .from('user_profiles')
           .upsert({
             user_id: userId,
-            ...profileData
+            ...profileData,
+            ...potentiallyMissingFields
           })
 
         profileError = error
@@ -245,41 +252,90 @@ export class EnhancedUserService {
         profileError = error
       }
 
-      // If department column doesn't exist, retry without it and store in user_settings instead
-      if (profileError && profileError.message && profileError.message.includes('department')) {
-        console.log('Department column not found in user_profiles, storing in user_settings as fallback')
+      // If there's a schema error, identify which columns don't exist
+      if (profileError && profileError.message) {
+        console.log('Profile update error:', profileError.message)
 
-        // Remove department from profileData and retry
-        const { department, ...profileDataWithoutDepartment } = profileData
+        // Check for schema cache errors indicating missing columns
+        if (profileError.message.includes('Could not find') && profileError.message.includes('column')) {
+          // Check for each potentially missing field in the error message
+          for (const field of Object.keys(potentiallyMissingFields)) {
+            if (profileError.message.includes(`'${field}'`)) {
+              fieldsToRemove.push(field)
+              console.log(`Field '${field}' not found in user_profiles table`)
+            }
+          }
 
-        const { error: retryError } = await supabase
-          .from('user_profiles')
-          .upsert({
-            user_id: userId,
-            ...profileDataWithoutDepartment
-          })
-
-        if (retryError) throw retryError
-
-        // Store department in user_settings as fallback
-        if (profileUpdates.department !== undefined) {
-          const { error: deptError } = await supabase
-            .from('user_settings')
-            .upsert({
-              user_id: userId,
-              retell_config: JSON.stringify({
-                fallback_department: profileUpdates.department
-              }),
-              updated_at: new Date().toISOString()
-            })
-
-          if (deptError) {
-            console.warn('Could not store department in user_settings:', deptError)
-            // Don't throw - department storage is not critical
+          // If no specific fields identified but it's a schema error, remove all potentially missing fields
+          if (fieldsToRemove.length === 0) {
+            fieldsToRemove = Object.keys(potentiallyMissingFields)
+            console.log('Schema error detected, removing all potentially missing fields:', fieldsToRemove)
           }
         }
-      } else if (profileError) {
-        throw profileError
+
+        // If we identified missing fields, retry without them
+        if (fieldsToRemove.length > 0) {
+          const safeProfileData = { ...profileData }
+          const fallbackData: any = {}
+
+          // Add only the fields that exist to safeProfileData
+          for (const [key, value] of Object.entries(potentiallyMissingFields)) {
+            if (!fieldsToRemove.includes(key)) {
+              safeProfileData[key] = value
+            } else {
+              fallbackData[key] = value
+            }
+          }
+
+          // Retry with only existing columns (skip if no safe fields remain)
+          if (Object.keys(safeProfileData).length > 1) { // More than just updated_at
+            const { error: retryError } = await supabase
+              .from('user_profiles')
+              .upsert({
+                user_id: userId,
+                ...safeProfileData
+              })
+
+            if (retryError) {
+              console.error('Failed to update user_profiles even with safe fields:', retryError)
+              throw retryError
+            }
+          } else {
+            console.log('No safe fields to update in user_profiles, skipping database update')
+          }
+
+          // Store missing fields in user_settings as fallback
+          if (Object.keys(fallbackData).length > 0) {
+            console.log('Storing missing fields in user_settings:', Object.keys(fallbackData))
+
+            const settingsFallback: any = {
+              user_id: userId,
+              updated_at: new Date().toISOString()
+            }
+
+            // Store display_name and other missing profile fields
+            if (fallbackData.display_name) settingsFallback.profile_display_name = fallbackData.display_name
+            if (fallbackData.first_name) settingsFallback.profile_first_name = fallbackData.first_name
+            if (fallbackData.last_name) settingsFallback.profile_last_name = fallbackData.last_name
+            if (fallbackData.department) {
+              settingsFallback.retell_config = JSON.stringify({
+                fallback_department: fallbackData.department
+              })
+            }
+
+            const { error: settingsError } = await supabase
+              .from('user_settings')
+              .upsert(settingsFallback)
+
+            if (settingsError) {
+              console.warn('Could not store fallback data in user_settings:', settingsError)
+              // Don't throw - fallback storage is not critical
+            }
+          }
+        } else if (profileError) {
+          // Some other error occurred, not a schema issue
+          throw profileError
+        }
       }
 
       // Update user_settings table for profile name persistence

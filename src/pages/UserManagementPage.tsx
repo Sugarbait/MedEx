@@ -16,13 +16,7 @@ import {
 } from 'lucide-react'
 import { userManagementService, SystemUserWithCredentials } from '@/services/userManagementService'
 import { userProfileService } from '@/services/userProfileService'
-import { runDuplicatePreventionTests, displayTestResults } from '@/utils/duplicateUserTest'
 import { fixUserIssues } from '@/utils/fixUserIssues'
-import { testUserFixes } from '@/utils/testUserFixes'
-import { AuthenticationFixer } from '@/utils/authenticationFixer'
-import { AuthenticationDebugger } from '@/utils/authenticationDebugger'
-import { NewUserAuthTester } from '@/utils/newUserAuthTest'
-import { forcePierreUser } from '@/utils/forcePierreUser'
 
 // Use the SystemUserWithCredentials type from the service
 type User = SystemUserWithCredentials
@@ -159,7 +153,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
             // Transform legacy format to new format
             const transformedUsers = parsedUsers.map((u: any) => ({
               ...u,
-              role: u.role === 'super_user' ? 'admin' : u.role,
+              role: u.role, // Keep original role - don't transform super_user to admin
               settings: u.settings || {},
               credentials: undefined,
               isLocked: false,
@@ -393,7 +387,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
         setEditingUser(null)
 
         // Refresh the users list to reflect any changes
-        await fetchUsers()
+        await loadUsers()
       } else {
         alert(`Failed to change password: ${response.error}`)
       }
@@ -964,6 +958,16 @@ ${report.recommendations.map(rec => `• ${rec}`).join('\n')}`
           </p>
         </div>
 
+        <div className="flex items-center gap-3">
+          <button
+            onClick={() => setIsAddingUser(true)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+            disabled={isLoading}
+          >
+            <UserIcon className="w-4 h-4" />
+            Add User
+          </button>
+        </div>
       </div>
 
 
@@ -1024,6 +1028,46 @@ ${report.recommendations.map(rec => `• ${rec}`).join('\n')}`
                         )}
                       </div>
                     </div>
+                  </div>
+
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => setEditingUser(userItem)}
+                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                      title="Edit user"
+                    >
+                      <EditIcon className="w-4 h-4" />
+                    </button>
+
+                    {userItem.isLocked && (
+                      <button
+                        onClick={() => handleClearLockout(userItem.id, userItem.name)}
+                        className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
+                        title="Clear lockout"
+                        disabled={isLoading}
+                      >
+                        <UnlockIcon className="w-4 h-4" />
+                      </button>
+                    )}
+
+                    <button
+                      onClick={() => handleDeleteUser(userItem.id)}
+                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                      title="Delete user permanently"
+                      disabled={isLoading || userItem.id === user.id}
+                    >
+                      <TrashIcon className="w-4 h-4" />
+                    </button>
+
+                    <button
+                      onClick={() => setIsChangingPassword(true) || setEditingUser(userItem)}
+                      className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
+                      title="Change password"
+                      disabled={isLoading}
+                    >
+                      <KeyIcon className="w-4 h-4" />
+                    </button>
                   </div>
 
                 </div>
@@ -1102,6 +1146,23 @@ ${report.recommendations.map(rec => `• ${rec}`).join('\n')}`
               </div>
             </div>
 
+            {/* Modal Actions */}
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setIsAddingUser(false)}
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+                disabled={isLoading}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddUser}
+                disabled={isLoading || !newUser.name.trim() || !newUser.email.trim() || !newUser.password.trim()}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              >
+                {isLoading ? 'Adding...' : 'Add User'}
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -1193,6 +1254,47 @@ ${report.recommendations.map(rec => `• ${rec}`).join('\n')}`
               )}
             </div>
 
+            {/* Modal Actions */}
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => {
+                  setEditingUser(null)
+                  setNewPassword('')
+                  setIsChangingPassword(false)
+                }}
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+                disabled={isLoading}
+              >
+                Cancel
+              </button>
+
+              {isChangingPassword ? (
+                <button
+                  onClick={handleChangePassword}
+                  disabled={isLoading || !newPassword.trim()}
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                >
+                  {isLoading ? 'Changing...' : 'Change Password'}
+                </button>
+              ) : (
+                <>
+                  <button
+                    onClick={() => setIsChangingPassword(true)}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                    disabled={isLoading}
+                  >
+                    Change Password
+                  </button>
+                  <button
+                    onClick={() => handleEditUser(editingUser)}
+                    disabled={isLoading || !editingUser.name.trim() || !editingUser.email.trim()}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  >
+                    {isLoading ? 'Saving...' : 'Save Changes'}
+                  </button>
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

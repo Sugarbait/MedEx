@@ -10,7 +10,7 @@
 
 import React, { useState, useEffect, useCallback } from 'react'
 import { QrCode, Shield, Copy, Check, AlertCircle, Key, CheckCircle } from 'lucide-react'
-import { FreshMfaService } from '../../services/freshMfaService'
+import FreshMfaService from '../../services/freshMfaService'
 
 interface FreshMfaSetupProps {
   userId: string

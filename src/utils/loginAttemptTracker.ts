@@ -14,7 +14,7 @@ interface FailedAttempt {
 const STORAGE_KEY = 'failed_login_attempts'
 const MAX_ATTEMPTS = 3
 const BLOCK_DURATION = 60 * 60 * 1000 // 1 hour in milliseconds for maximum security
-const ATTEMPT_WINDOW = 5 * 60 * 1000 // 5 minutes window for attempts
+const ATTEMPT_WINDOW = 30 * 60 * 1000 // 30 minutes window for attempts - User requested 30min reset
 
 export class LoginAttemptTracker {
   /**

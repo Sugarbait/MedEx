@@ -473,13 +473,33 @@ export class AvatarStorageService {
     const errors: string[] = []
 
     try {
-      // 1. Update Supabase database (primary source)
+      // 1. Update Supabase database (primary source) with role preservation
+      // First get current user data to preserve important fields like role
+      const { data: currentUser, error: fetchError } = await supabase
+        .from('users')
+        .select('role, email')
+        .eq('id', userId)
+        .single()
+
+      // Prepare update data with role preservation
+      const updateData: any = {
+        avatar_url: avatarInfo?.url || null,
+        updated_at: new Date().toISOString()
+      }
+
+      // CRITICAL: Preserve Super User role during avatar database updates
+      if (currentUser && (currentUser.email === 'elmfarrell@yahoo.com' || currentUser.email === 'pierre@phaetonai.com')) {
+        updateData.role = 'super_user'
+        console.log(`✅ AVATAR DB UPDATE: Preserving Super User role for ${currentUser.email}`)
+      } else if (currentUser?.role) {
+        // Preserve any existing role
+        updateData.role = currentUser.role
+        console.log(`✅ AVATAR DB UPDATE: Preserving existing role ${currentUser.role}`)
+      }
+
       const { error: dbError } = await supabase
         .from('users')
-        .update({
-          avatar_url: avatarInfo?.url || null,
-          updated_at: new Date().toISOString()
-        })
+        .update(updateData)
         .eq('id', userId)
 
       if (dbError) {
@@ -511,6 +531,13 @@ export class AvatarStorageService {
             delete profile.avatar
             profile.updated_at = new Date().toISOString()
           }
+
+          // CRITICAL: Preserve Super User role during avatar updates
+          if (profile.email === 'elmfarrell@yahoo.com' || profile.email === 'pierre@phaetonai.com') {
+            profile.role = 'super_user'
+            console.log(`✅ AVATAR SYNC: Preserved Super User role in userProfile for ${profile.email}`)
+          }
+
           localStorage.setItem(`userProfile_${userId}`, JSON.stringify(profile))
           console.log('AvatarStorageService: Updated individual user profile with avatar:', userId)
         } catch (parseError) {
@@ -529,6 +556,13 @@ export class AvatarStorageService {
           } else {
             delete settingsUser.avatar
           }
+
+          // CRITICAL: Preserve Super User role during avatar updates
+          if (settingsUser.email === 'elmfarrell@yahoo.com' || settingsUser.email === 'pierre@phaetonai.com') {
+            settingsUser.role = 'super_user'
+            console.log(`✅ AVATAR SYNC: Preserved Super User role in settingsUser for ${settingsUser.email}`)
+          }
+
           localStorage.setItem(`settingsUser_${userId}`, JSON.stringify(settingsUser))
         }
       } catch (settingsError) {
@@ -566,6 +600,14 @@ export class AvatarStorageService {
           } else {
             delete users[userIndex].avatar
           }
+
+          // CRITICAL: Preserve Super User role during avatar updates
+          if (users[userIndex].email === 'elmfarrell@yahoo.com' || users[userIndex].email === 'pierre@phaetonai.com') {
+            users[userIndex].role = 'super_user'
+            console.log(`✅ AVATAR STORAGE: Preserved Super User role for ${users[userIndex].email}`)
+          }
+
+          users[userIndex].updated_at = new Date().toISOString()
           localStorage.setItem('systemUsers', JSON.stringify(users))
         }
       }
@@ -581,6 +623,14 @@ export class AvatarStorageService {
             } else {
               delete user.avatar
             }
+
+            // CRITICAL: Preserve Super User role during avatar updates
+            if (user.email === 'elmfarrell@yahoo.com' || user.email === 'pierre@phaetonai.com') {
+              user.role = 'super_user'
+              console.log(`✅ AVATAR STORAGE: Preserved Super User role for ${user.email}`)
+            }
+
+            user.updated_at = new Date().toISOString()
             localStorage.setItem('currentUser', JSON.stringify(user))
 
             // Trigger update events

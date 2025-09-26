@@ -18,12 +18,12 @@ export interface UserIdMapping {
 }
 
 class UserIdTranslationService {
-  // Static mapping for demo/known users
+  // Static mapping for demo/known users - FIXED USER MAPPINGS
   private static readonly DEMO_USER_MAPPINGS: { [key: string]: string } = {
-    'pierre-user-789': 'c550502f-c39d-4bb3-bb8c-d193657fdb24',
-    'super-user-456': 'c550502f-c39d-4bb3-bb8c-d193657fdb24', // Using same UUID for demo
-    'guest-user-456': 'c550502f-c39d-4bb3-bb8c-d193657fdb24', // Using same UUID for demo
-    'dynamic-pierre-user': 'c550502f-c39d-4bb3-bb8c-d193657fdb24' // Dynamic user mapping
+    'pierre-user-789': 'c550502f-c39d-4bb3-bb8c-d193657fdb24', // pierre@phaetonai.com
+    'super-user-456': 'ee77ed8f-525f-43c9-a70a-b81cb8dc8d5d', // elmfarrell@yahoo.com - FIXED
+    'guest-user-456': 'demo-user-uuid-placeholder', // Guest user separate UUID
+    'dynamic-pierre-user': 'c550502f-c39d-4bb3-bb8c-d193657fdb24' // Dynamic pierre mapping - FIXED to match current UUID
   }
 
   // Cache for dynamic mappings
@@ -63,12 +63,13 @@ class UserIdTranslationService {
         return user.id
       }
 
-      // If no existing user found, generate a new UUID for this string ID
-      const newUuid = crypto.randomUUID()
-      this.userMappingCache.set(stringId, newUuid)
+      // If no existing user found, generate a DETERMINISTIC UUID for this string ID
+      // This ensures the same string ID always gets the same UUID, preserving MFA data
+      const deterministicUuid = this.generateDeterministicUuid(stringId)
+      this.userMappingCache.set(stringId, deterministicUuid)
 
-      console.log(`Created new UUID mapping: ${stringId} -> ${newUuid}`)
-      return newUuid
+      console.log(`Created deterministic UUID mapping: ${stringId} -> ${deterministicUuid}`)
+      return deterministicUuid
 
     } catch (error) {
       console.error('Error in UUID translation:', error)
@@ -149,9 +150,41 @@ class UserIdTranslationService {
    */
   private async findUserByStringId(stringId: string): Promise<{ id: string } | null> {
     try {
-      // Try to find user by metadata or email that might contain the string ID
-      // This is a placeholder - in a real implementation you'd search your users table
-      // For now, we'll use the demo mappings
+      // Search the user_settings table for existing user data
+      // This helps preserve MFA and other settings after logout/login
+      const { data: userSettings, error } = await supabase
+        .from('user_settings')
+        .select('user_id')
+        .limit(10) // Get some recent users
+
+      if (error) {
+        console.error('Error querying user_settings:', error)
+        return null
+      }
+
+      if (userSettings && userSettings.length > 0) {
+        // For known demo users, try to match patterns
+        if (stringId.includes('super-user') || stringId.includes('pierre') || stringId.includes('guest')) {
+          // Look through existing UUIDs to find one that might belong to this user
+          for (const setting of userSettings) {
+            // Check if this UUID is one of our demo user mappings
+            for (const [demoString, demoUuid] of Object.entries(UserIdTranslationService.DEMO_USER_MAPPINGS)) {
+              if (setting.user_id === demoUuid && stringId.includes(demoString.split('-')[0])) {
+                console.log(`🔍 Found existing UUID for ${stringId}: ${setting.user_id}`)
+                return { id: setting.user_id }
+              }
+            }
+          }
+        }
+
+        // If string ID matches any existing pattern, return the first available UUID
+        // This ensures we don't create duplicate UUIDs for existing users
+        if (userSettings.length === 1) {
+          console.log(`🔍 Using existing single user UUID for ${stringId}: ${userSettings[0].user_id}`)
+          return { id: userSettings[0].user_id }
+        }
+      }
+
       return null
     } catch (error) {
       console.error('Error finding user by string ID:', error)

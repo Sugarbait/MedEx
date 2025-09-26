@@ -10,7 +10,7 @@ import {
   ArrowRight,
   RefreshCw
 } from 'lucide-react'
-import { FreshMfaService } from '@/services/freshMfaService'
+import FreshMfaService from '@/services/freshMfaService'
 
 interface MfaProtectedRouteProps {
   children: React.ReactNode
@@ -121,7 +121,7 @@ export const MfaProtectedRoute: React.FC<MfaProtectedRouteProps> = ({
   // Show MFA requirement screen
   if (showMfaRequirement) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center py-12 px-4 sm:px-6 lg:px-8">
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-start justify-center pt-4 px-4 sm:px-6 lg:px-8">
         <div className="max-w-md w-full space-y-8">
           <div className="text-center">
             <div className="mx-auto h-16 w-16 bg-red-100 dark:bg-red-900/30 rounded-full flex items-center justify-center">

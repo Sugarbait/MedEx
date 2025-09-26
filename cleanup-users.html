@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Ultimate User Cleanup</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; background: #f5f5f5; }
+        .container { max-width: 1000px; margin: 0 auto; background: white; padding: 30px; border-radius: 8px; }
+        .output { background: #f8f9fa; padding: 15px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #007bff; }
+        .success { border-left-color: #28a745; background: #d4edda; }
+        .warning { border-left-color: #ffc107; background: #fff3cd; }
+        .error { border-left-color: #dc3545; background: #f8d7da; }
+        button { padding: 12px 24px; margin: 8px; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; }
+        .btn-danger { background: #dc3545; color: white; }
+        .btn-success { background: #28a745; color: white; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-warning { background: #ffc107; color: black; }
+        pre { background: #f8f9fa; padding: 10px; border-radius: 4px; overflow-x: auto; font-size: 12px; }
+        .script-box { background: #2d3748; color: #e2e8f0; padding: 20px; border-radius: 8px; margin: 20px 0; }
+        .copy-btn { position: relative; float: right; margin-top: -10px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚨 Ultimate User Cleanup Tool</h1>
+        <p><strong>This tool will completely eliminate the persistent "User User" profile.</strong></p>
+
+        <div class="output warning">
+            <h3>⚠️ Instructions</h3>
+            <p>Copy and paste the script below into your browser console on the main app page:</p>
+            <ol>
+                <li>Open your main app at <code>http://localhost:3010</code></li>
+                <li>Press <kbd>F12</kbd> to open Developer Tools</li>
+                <li>Click the <strong>Console</strong> tab</li>
+                <li>Copy the script below and paste it into the console</li>
+                <li>Press <kbd>Enter</kbd> to run it</li>
+                <li>Refresh the page after completion</li>
+            </ol>
+        </div>
+
+        <div class="script-box">
+            <button class="copy-btn btn-primary" onclick="copyScript()">Copy Script</button>
+            <h3 style="color: #63b3ed; margin-top: 0;">💻 Console Script - Copy This:</h3>
+            <pre id="script-content">// ULTIMATE USER CLEANUP - Paste this in browser console
+console.log('🚨 STARTING ULTIMATE USER CLEANUP...');
+
+// Define allowed users
+const ALLOWED_USERS = [
+  {email: 'pierre@phaetonai.com', role: 'super_user', name: 'Pierre PhaetonAI', id: 'pierre-user-789'},
+  {email: 'elmfarrell@yahoo.com', role: 'super_user', name: 'Elmer Farrell', id: 'super-user-456'},
+  {email: 'guest@email.com', role: 'user', name: 'Guest User', id: 'demo-user-123'}
+];
+
+// 1. NUCLEAR OPTION - Clear ALL user-related data
+console.log('🧹 STEP 1: Nuclear cleanup of all user data...');
+const allKeys = Object.keys(localStorage);
+let removedCount = 0;
+
+allKeys.forEach(key => {
+  if (key.includes('user') || key.includes('User') || key.includes('current') ||
+      key.includes('settings') || key.includes('profile') || key.includes('auth') ||
+      key.includes('session') || key.includes('mfa') || key.includes('super')) {
+    try {
+      localStorage.removeItem(key);
+      removedCount++;
+      console.log(`🗑️ Removed: ${key}`);
+    } catch (e) {
+      console.warn(`❌ Failed to remove: ${key}`);
+    }
+  }
+});
+
+console.log(`✅ STEP 1 COMPLETE: Removed ${removedCount} keys`);
+
+// 2. REBUILD CLEAN USERS
+console.log('🔧 STEP 2: Rebuilding clean user data...');
+
+// Create clean users array with timestamps
+const cleanUsers = ALLOWED_USERS.map(user => ({
+  ...user,
+  created_at: new Date().toISOString(),
+  last_login: new Date().toISOString(),
+  mfa_enabled: user.role === 'super_user'
+}));
+
+localStorage.setItem('users', JSON.stringify(cleanUsers));
+console.log('✅ Clean users array created');
+
+// Set Pierre as current user
+const pierreUser = cleanUsers.find(u => u.email === 'pierre@phaetonai.com');
+localStorage.setItem('currentUser', JSON.stringify(pierreUser));
+console.log('✅ Pierre set as current user with Super User role');
+
+// Create settings for each user
+ALLOWED_USERS.forEach(user => {
+  const settings = {
+    theme: 'light',
+    mfaEnabled: user.role === 'super_user',
+    refreshInterval: 30000,
+    sessionTimeout: 15,
+    notifications: { calls: true, sms: true, system: true },
+    email: user.email,
+    userEmail: user.email,
+    userId: user.id
+  };
+  localStorage.setItem(`settings_${user.id}`, JSON.stringify(settings));
+  console.log(`✅ Settings created for ${user.name}`);
+});
+
+// 3. VERIFY NO "USER USER" EXISTS
+console.log('🔍 STEP 3: Verification scan...');
+let foundProblems = false;
+
+Object.keys(localStorage).forEach(key => {
+  try {
+    const value = localStorage.getItem(key);
+    if (value && value.includes('"User"') && value.includes('"User"')) {
+      console.warn(`⚠️ Potential problem in ${key}: ${value.substring(0, 100)}`);
+      foundProblems = true;
+    }
+  } catch (e) {}
+});
+
+if (!foundProblems) {
+  console.log('✅ STEP 3 COMPLETE: No "User User" profiles found');
+} else {
+  console.warn('⚠️ STEP 3: Found potential issues - manual review needed');
+}
+
+// 4. FINAL VERIFICATION
+console.log('📊 STEP 4: Final verification...');
+try {
+  const finalUsers = JSON.parse(localStorage.getItem('users') || '[]');
+  const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+
+  console.log('👥 Final users in system:');
+  finalUsers.forEach((user, index) => {
+    console.log(`  ${index + 1}. ${user.name} (${user.email}) - ${user.role}`);
+  });
+
+  console.log('👤 Current user:', currentUser.name, currentUser.email, currentUser.role);
+
+  if (finalUsers.length === 3 && currentUser.role === 'super_user') {
+    console.log('🎉 SUCCESS: User cleanup completed successfully!');
+    console.log('🔄 Please refresh the page to see changes');
+  } else {
+    console.warn('⚠️ Something may be wrong - please check manually');
+  }
+} catch (e) {
+  console.error('❌ Error in final verification:', e);
+}
+
+console.log('🚀 ULTIMATE USER CLEANUP COMPLETE!');
+console.log('📍 Next step: Refresh your browser page');</pre>
+        </div>
+
+        <div style="text-align: center; margin: 30px 0;">
+            <button class="btn-primary" onclick="openMainApp()">Open Main App</button>
+            <button class="btn-success" onclick="copyScript()">Copy Script Again</button>
+            <button class="btn-warning" onclick="window.location.reload()">Refresh This Tool</button>
+        </div>
+
+        <div id="output"></div>
+
+        <div class="output">
+            <h3>🎯 What This Script Does:</h3>
+            <ul>
+                <li><strong>Step 1:</strong> Nuclear removal of ALL user-related localStorage data</li>
+                <li><strong>Step 2:</strong> Rebuilds only the 3 authorized users with correct roles</li>
+                <li><strong>Step 3:</strong> Scans for any remaining "User User" references</li>
+                <li><strong>Step 4:</strong> Verifies the cleanup was successful</li>
+            </ul>
+            <p><strong>Result:</strong> Only pierre@phaetonai.com (Super User), elmfarrell@yahoo.com (Super User), and guest@email.com (User) will remain.</p>
+        </div>
+    </div>
+
+    <script>
+        function copyScript() {
+            const scriptContent = document.getElementById('script-content').textContent;
+            navigator.clipboard.writeText(scriptContent).then(() => {
+                alert('✅ Script copied to clipboard! Now paste it in your browser console on the main app.');
+            }).catch(err => {
+                console.error('Failed to copy script:', err);
+                // Fallback - select the text
+                const range = document.createRange();
+                range.selectNode(document.getElementById('script-content'));
+                window.getSelection().removeAllRanges();
+                window.getSelection().addRange(range);
+                alert('⚠️ Auto-copy failed. Please manually select and copy the script above.');
+            });
+        }
+
+        function openMainApp() {
+            window.open('http://localhost:3010', '_blank');
+        }
+
+        // Auto-copy script on page load
+        window.onload = () => {
+            setTimeout(() => {
+                alert('📋 Ready! Click "Copy Script" button or manually copy the code above, then paste it in your main app console.');
+            }, 500);
+        }
+    </script>
+</body>
+</html>

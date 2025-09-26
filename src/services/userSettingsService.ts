@@ -1160,17 +1160,7 @@ class UserSettingsServiceClass {
             }
           }
 
-          // Also try other robust settings service if available
-          console.log('🔧 ALTERNATIVE SYNC: Checking RobustUserSettingsService...')
-          const { RobustUserSettingsService } = await import('./userSettingsServiceRobust')
-          const robustResponse = await RobustUserSettingsService.getUserSettings(userId)
-
-          if (robustResponse.status === 'success' && robustResponse.data?.retell_config) {
-            console.log('✅ ALTERNATIVE SYNC: Found settings in RobustUserSettingsService')
-            const transformedSettings = this.transformRobustToLocal(robustResponse.data)
-            this.updateLocalCache(userId, transformedSettings)
-            return transformedSettings
-          }
+          // Robust service fallback removed - service no longer exists
 
         } catch (alternativeError) {
           console.warn('⚠️ ALTERNATIVE SYNC: Alternative methods failed:', alternativeError)

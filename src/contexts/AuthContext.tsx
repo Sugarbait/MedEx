@@ -6,8 +6,10 @@ import { useSupabase } from './SupabaseContext'
 import { userSettingsService } from '@/services/userSettingsService'
 import { secureStorage } from '@/services/secureStorage'
 import { secureLogger } from '@/services/secureLogger'
-import { FreshMfaService } from '@/services/freshMfaService'
+import FreshMfaService from '@/services/freshMfaService'
 import { retellService } from '@/services'
+import { AvatarStorageService } from '@/services/avatarStorageService'
+import { getBulletproofCredentials, storeCredentialsEverywhere, validateCredentials } from '@/config/retellCredentials'
 
 const logger = secureLogger.component('AuthContext')
 
@@ -60,10 +62,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null)
   const [userSettings, setUserSettings] = useState<any>(null)
   const [mfaInitiated, setMfaInitiated] = useState(false)
+  const [authInitialized, setAuthInitialized] = useState(false)
 
   useEffect(() => {
     const initializeAuth = async () => {
+      // Prevent re-initialization if already initialized or have a user
+      if (authInitialized || (isDemoMode && user)) {
+        if (isDemoMode && user) {
+          console.log('🔧 DEMO MODE: User already initialized, skipping re-initialization')
+        }
+        return
+      }
+
       setIsLoading(true)
+      setAuthInitialized(true) // Mark as initialized to prevent re-runs
       try {
         if (isDemoMode) {
           // Demo mode - create a mock user for development
@@ -80,29 +92,56 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           setUser(demoUser)
           setMfaRequired(false) // Skip MFA in demo mode
 
+          // Sync avatar in demo mode too
+          try {
+            console.log('🖼️ [DEMO] Syncing avatar for demo user:', demoUser.id)
+            const avatarSyncResult = await AvatarStorageService.syncAvatarAcrossDevices(demoUser.id)
+            if (avatarSyncResult.status === 'success' && avatarSyncResult.data) {
+              demoUser.avatar = avatarSyncResult.data
+              setUser({ ...demoUser }) // Update with synced avatar
+              console.log('✅ [DEMO] Avatar synced successfully')
+            }
+          } catch (avatarError) {
+            console.log('⚠️ [DEMO] Avatar sync failed, but continuing:', avatarError)
+          }
+
           // CRITICAL: Load API keys in demo mode too
           console.log('🚀 DEMO MODE: Loading API keys for demo user...')
           try {
             // Set up demo localStorage structure
             localStorage.setItem('currentUser', JSON.stringify({ id: demoUser.id }))
+            // Get bulletproof credentials for demo mode
+            const bulletproofCreds = getBulletproofCredentials()
             const demoSettings = {
               theme: 'light',
               mfaEnabled: false,
               refreshInterval: 30000,
               sessionTimeout: 15,
               notifications: { calls: true, sms: true, system: true },
-              retellApiKey: 'key_c3f084f5ca67781070e188b47d7f',
-              callAgentId: 'agent_447a1b9da540237693b0440df6',
-              smsAgentId: 'agent_643486efd4b5a0e9d7e094ab99'
+              retellApiKey: bulletproofCreds.apiKey,
+              callAgentId: bulletproofCreds.callAgentId,
+              smsAgentId: bulletproofCreds.smsAgentId
             }
             localStorage.setItem(`settings_${demoUser.id}`, JSON.stringify(demoSettings))
 
+            // Store bulletproof credentials everywhere for maximum persistence
+            storeCredentialsEverywhere(bulletproofCreds)
+
             // API keys are already loaded in main.tsx
             retellService.loadCredentials()
-            console.log('✅ DEMO MODE: API keys loaded from main.tsx initialization')
+            console.log('✅ DEMO MODE: Bulletproof credentials stored and loaded successfully')
           } catch (error) {
             console.error('❌ DEMO MODE: Error loading API keys:', error)
+            // Force update with bulletproof credentials
             retellService.forceUpdateCredentials()
+
+            // Ensure credentials are stored everywhere as fallback
+            try {
+              const bulletproofCreds = getBulletproofCredentials()
+              storeCredentialsEverywhere(bulletproofCreds)
+            } catch (fallbackError) {
+              console.error('❌ DEMO MODE: Fallback credential storage failed:', fallbackError)
+            }
           }
 
           setIsLoading(false)
@@ -170,6 +209,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             }
             setUser(userProfile)
 
+            // Sync avatar across devices after successful authentication
+            try {
+              console.log('🖼️ [AUTH] Syncing avatar across devices for user:', userProfile.id)
+              const avatarSyncResult = await AvatarStorageService.syncAvatarAcrossDevices(userProfile.id)
+              if (avatarSyncResult.status === 'success') {
+                console.log('✅ [AUTH] Avatar successfully synced across devices')
+                // Update user profile with synced avatar if available
+                if (avatarSyncResult.data) {
+                  userProfile.avatar = avatarSyncResult.data
+                  setUser({ ...userProfile }) // Update with synced avatar
+                }
+              } else {
+                console.log('⚠️ [AUTH] Avatar sync failed, but continuing authentication:', avatarSyncResult.error)
+              }
+            } catch (avatarError) {
+              console.log('⚠️ [AUTH] Avatar sync error, but continuing authentication:', avatarError)
+            }
+
             // Create or retrieve secure session
             let session: SessionInfo
             try {
@@ -195,6 +252,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 setUserSettings(settings)
                 await secureStorage.setUserPreference('user_settings', settings, false)
 
+                // AUTO-POPULATE: Ensure bulletproof credentials are always available
+                let finalApiKey = settings?.retell_config?.api_key
+                let finalCallAgentId = settings?.retell_config?.call_agent_id
+                let finalSmsAgentId = settings?.retell_config?.sms_agent_id
+
+                // If no credentials in user settings, use bulletproof fallback
+                if (!finalApiKey || !finalCallAgentId || !finalSmsAgentId) {
+                  console.log('🔐 AuthContext: User missing credentials, auto-populating with bulletproof values...')
+                  try {
+                    const bulletproofCreds = getBulletproofCredentials()
+                    finalApiKey = finalApiKey || bulletproofCreds.apiKey
+                    finalCallAgentId = finalCallAgentId || bulletproofCreds.callAgentId
+                    finalSmsAgentId = finalSmsAgentId || bulletproofCreds.smsAgentId
+
+                    // Store bulletproof credentials everywhere for persistence
+                    storeCredentialsEverywhere(bulletproofCreds)
+
+                    console.log('✅ AuthContext: Bulletproof credentials auto-populated for user')
+                  } catch (credError) {
+                    console.error('❌ AuthContext: Failed to load bulletproof credentials:', credError)
+                  }
+                }
+
                 // Store in localStorage for SettingsPage
                 localStorage.setItem(`settings_${userProfile.id}`, JSON.stringify({
                   theme: settings?.theme || 'light',
@@ -206,9 +286,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                     sms: settings?.notifications?.sms_alerts ?? true,
                     system: settings?.notifications?.security_alerts ?? true
                   },
-                  retellApiKey: settings?.retell_config?.api_key,
-                  callAgentId: settings?.retell_config?.call_agent_id,
-                  smsAgentId: settings?.retell_config?.sms_agent_id
+                  retellApiKey: finalApiKey,
+                  callAgentId: finalCallAgentId,
+                  smsAgentId: finalSmsAgentId
                 }))
 
                 // API keys are now loaded in main.tsx before React starts
@@ -254,7 +334,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
               } catch (error) {
                 console.warn('Failed to load settings:', error)
-                // Fallback settings handling
+                // Fallback settings handling with bulletproof credentials
                 try {
                   const fallbackSettings = await userSettingsService.getUserSettings(userProfile.id)
                   setUserSettings(fallbackSettings)
@@ -265,9 +345,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                       fallbackSettings.retell_config.call_agent_id,
                       fallbackSettings.retell_config.sms_agent_id
                     )
+                  } else {
+                    // Force bulletproof credentials if no settings found
+                    console.log('🔐 AuthContext: Fallback settings empty, forcing bulletproof credentials...')
+                    retellService.forceUpdateCredentials()
                   }
                 } catch (fallbackError) {
-                  console.error('Settings fallback also failed:', fallbackError)
+                  console.error('❌ AuthContext: Settings fallback failed, using bulletproof credentials:', fallbackError)
+                  // Ultimate fallback: Force bulletproof credentials
+                  retellService.forceUpdateCredentials()
+
+                  try {
+                    const bulletproofCreds = getBulletproofCredentials()
+                    storeCredentialsEverywhere(bulletproofCreds)
+                  } catch (ultimateFallbackError) {
+                    console.error('❌ AuthContext: Ultimate fallback failed:', ultimateFallbackError)
+                  }
                 }
               }
             }
@@ -400,6 +493,24 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
         setUser(userProfile)
 
+        // Sync avatar across devices after successful MFA completion
+        try {
+          console.log('🖼️ [MFA] Syncing avatar across devices for user:', userProfile.id)
+          const avatarSyncResult = await AvatarStorageService.syncAvatarAcrossDevices(userProfile.id)
+          if (avatarSyncResult.status === 'success') {
+            console.log('✅ [MFA] Avatar successfully synced across devices')
+            // Update user profile with synced avatar if available
+            if (avatarSyncResult.data) {
+              userProfile.avatar = avatarSyncResult.data
+              setUser({ ...userProfile }) // Update with synced avatar
+            }
+          } else {
+            console.log('⚠️ [MFA] Avatar sync failed, but continuing authentication:', avatarSyncResult.error)
+          }
+        } catch (avatarError) {
+          console.log('⚠️ [MFA] Avatar sync error, but continuing authentication:', avatarError)
+        }
+
         const session = await authService.getSessionInfo()
         setSessionInfo(session)
 
@@ -427,6 +538,14 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
             setUserSettings(settings)
             await secureStorage.setUserPreference('user_settings', settings, false)
+
+            // AUTO-POPULATE: Ensure bulletproof credentials for post-MFA
+            try {
+              const bulletproofCreds = getBulletproofCredentials()
+              storeCredentialsEverywhere(bulletproofCreds)
+            } catch (credError) {
+              console.warn('⚠️ Post-MFA: Error storing bulletproof credentials:', credError)
+            }
 
             // API keys are now loaded in main.tsx before React starts
             retellService.loadCredentials()
@@ -459,6 +578,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             })
           } catch (error) {
             console.error('❌ Post-MFA: Error loading settings:', error)
+            // Force bulletproof credentials as post-MFA fallback
+            console.log('🔐 Post-MFA: Forcing bulletproof credentials due to settings error...')
+            retellService.forceUpdateCredentials()
+
+            try {
+              const bulletproofCreds = getBulletproofCredentials()
+              storeCredentialsEverywhere(bulletproofCreds)
+            } catch (fallbackError) {
+              console.error('❌ Post-MFA: Bulletproof fallback failed:', fallbackError)
+            }
           }
         }
 
@@ -480,6 +609,19 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setSessionInfo(session)
 
       const updatedUser = await authService.getUserProfile(user.id)
+
+      // Sync avatar during session refresh to ensure cross-device consistency
+      try {
+        console.log('🖼️ [REFRESH] Syncing avatar during session refresh for user:', updatedUser.id)
+        const avatarSyncResult = await AvatarStorageService.syncAvatarAcrossDevices(updatedUser.id)
+        if (avatarSyncResult.status === 'success' && avatarSyncResult.data) {
+          updatedUser.avatar = avatarSyncResult.data
+          console.log('✅ [REFRESH] Avatar synced during session refresh')
+        }
+      } catch (avatarError) {
+        console.log('⚠️ [REFRESH] Avatar sync failed during refresh, but continuing:', avatarError)
+      }
+
       setUser(updatedUser)
     } catch (error) {
       console.error('Session refresh error:', error)

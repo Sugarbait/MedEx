@@ -139,7 +139,21 @@
       "Bash(git revert:*)",
       "Bash(set:*)",
       "Bash(psql:*)",
-      "Bash(start http://localhost:3004/settings)"
+      "Bash(start http://localhost:3004/settings)",
+      "Bash(start http://localhost:3000/sms)",
+      "Bash(netstat:*)",
+      "Bash(start http://localhost:3000/debug-sms-api.js)",
+      "Bash(start http://localhost:3000/debug-sms-api.html)",
+      "Bash(start \"I:\\Apps Back Up\\CareXPS CRM\\debug-user-role.js\")",
+      "Bash(xargs sed:*)",
+      "Bash(start http://localhost:3020/test.html)",
+      "Bash(start \"I:\\Apps Back Up\\CareXPS CRM\\debug-user-profiles.js\")",
+      "Bash(start \"I:\\Apps Back Up\\CareXPS CRM\\cleanup-duplicate-profiles.js\")",
+      "Bash(if exist \"I:\\Apps Back Up\\CareXPS CRM\\Git-Deploy\" rmdir /s /q \"I:\\Apps Back Up\\CareXPS CRM\\Git-Deploy\")",
+      "Bash(start \"I:\\Apps Back Up\\CareXPS CRM\\show-users.html\")",
+      "Bash(start \"I:\\Apps Back Up\\CareXPS CRM\\cleanup-users.html\")",
+      "Bash(start \"I:\\Apps Back Up\\CareXPS CRM\\aggressive-user-cleanup.html\")",
+      "Bash(start \"I:\\Apps Back Up\\CareXPS CRM\\fix-pierre-role.js\")"
     ],
     "deny": [],
     "ask": []

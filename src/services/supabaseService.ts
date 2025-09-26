@@ -154,7 +154,7 @@ export class UserService extends SupabaseService {
   static async createUser(azureAdId: string, userData: {
     email: string
     name: string
-    role?: 'admin' | 'healthcare_provider' | 'staff'
+    role?: 'admin' | 'super_user' | 'healthcare_provider' | 'staff'
   }): Promise<ServiceResponse<Tables['users']['Row']>> {
     try {
       const { data, error } = await this.withAuditLog(

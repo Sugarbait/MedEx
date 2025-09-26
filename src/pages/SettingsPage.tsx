@@ -20,12 +20,12 @@ import {
   KeyIcon,
   LinkIcon
 } from 'lucide-react'
-import { FreshMfaService } from '@/services/freshMfaService'
+import FreshMfaService from '@/services/freshMfaService'
 import { FreshMfaSettings } from '@/components/settings/FreshMfaSettings'
 import { auditLogger } from '@/services/auditLogger'
 import { retellService } from '@/services'
 import { userProfileService } from '@/services/userProfileService'
-import { RobustUserSettingsService } from '@/services/userSettingsServiceRobust'
+import { userSettingsService } from '@/services/userSettingsService'
 import { UserSettings } from '@/types/supabase'
 import { avatarStorageService } from '@/services/avatarStorageService'
 import { SimpleUserManager } from '@/components/settings/SimpleUserManager'
@@ -144,23 +144,17 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
     const loadSettings = async () => {
       setIsLoading(true)
       try {
-        // Initialize the robust settings service
-        await RobustUserSettingsService.initialize()
-
-        // Load settings from cloud and localStorage
-
         // Load user settings with automatic fallback
-        console.log('Loading settings with robust service...')
-        const response = await RobustUserSettingsService.getUserSettings(user.id)
+        console.log('Loading settings with userSettingsService...')
+        const settings = await userSettingsService.getUserSettings(user.id)
 
-        if (response.status === 'success' && response.data) {
+        if (settings && typeof settings === 'object') {
           console.log('✅ Settings loaded successfully')
-          const settings = response.data
 
           // Check actual MFA status from service
           let actualMFAEnabled = false
           try {
-            actualMFAEnabled = await mfaService.hasMFAEnabled(user.id)
+            actualMFAEnabled = await FreshMfaService.hasMFAEnabled(user.id)
             console.log('Actual MFA status from service:', actualMFAEnabled)
           } catch (error) {
             console.warn('Failed to get MFA status from service:', error)
@@ -203,10 +197,25 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
           console.log('Settings loaded and applied successfully')
         } else {
-          console.warn('Failed to load settings:', response.error)
-          setErrorMessage(`Failed to load settings: ${response.error}`)
+          console.warn('No settings returned from service - using default settings')
 
-          // Set default settings on error
+          // Try to load from localStorage first
+          const localSettings = localStorage.getItem(`settings_${user.id}`)
+          if (localSettings) {
+            try {
+              const parsedLocal = JSON.parse(localSettings)
+              console.log('✅ Loaded settings from localStorage fallback')
+              setUserSettings(parsedLocal)
+              setErrorMessage('Settings loaded from local storage (offline mode)')
+              return
+            } catch (error) {
+              console.warn('Failed to parse localStorage settings:', error)
+            }
+          }
+
+          // Last resort: use default settings
+          console.log('Using default settings as final fallback')
+          setErrorMessage('Using default settings - connection may be limited')
           const defaultSettings = {
             theme: 'light',
             mfaEnabled: true, // SECURITY POLICY: MFA is always mandatory
@@ -224,25 +233,49 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
         }
       } catch (error) {
         console.error('Failed to load settings:', error)
-        setErrorMessage(`Failed to load settings: ${error instanceof Error ? error.message : 'Unknown error'}`)
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        console.log(`Settings loading failed: ${errorMessage}. Attempting localStorage fallback...`)
 
-        // Set default settings on error
-        const errorDefaultSettings = {
-          theme: 'light',
-          mfaEnabled: true, // SECURITY POLICY: MFA is always mandatory
-          refreshInterval: 30000,
-          sessionTimeout: 15,
-          notifications: {
-            calls: true,
-            sms: true,
-            system: true
+        // Try localStorage fallback even in error case
+        try {
+          const localSettings = localStorage.getItem(`settings_${user.id}`)
+          if (localSettings) {
+            const parsedLocal = JSON.parse(localSettings)
+            console.log('✅ Settings recovered from localStorage after error')
+            setUserSettings(parsedLocal)
+            setErrorMessage(`Settings loaded from cache (service error: ${errorMessage})`)
+          } else {
+            throw new Error('No localStorage fallback available')
           }
+        } catch (fallbackError) {
+          console.log('localStorage fallback also failed, using defaults')
+          setErrorMessage(`Service error - using defaults: ${errorMessage}`)
+
+          // Final fallback: use default settings
+          const errorDefaultSettings = {
+            theme: 'light',
+            mfaEnabled: true, // SECURITY POLICY: MFA is always mandatory
+            refreshInterval: 30000,
+            sessionTimeout: 15,
+            notifications: {
+              calls: true,
+              sms: true,
+              system: true
+            }
+          }
+          setUserSettings(errorDefaultSettings)
+          // Save default settings to localStorage for future fallback
+          localStorage.setItem(`settings_${user.id}`, JSON.stringify(errorDefaultSettings))
         }
-        setUserSettings(errorDefaultSettings)
-        // Save default settings to localStorage
-        localStorage.setItem(`settings_${user.id}`, JSON.stringify(errorDefaultSettings))
       } finally {
         setIsLoading(false)
+
+        // Auto-dismiss error message after 10 seconds if it's just an informational message
+        if (errorMessage && (errorMessage.includes('cache') || errorMessage.includes('offline mode'))) {
+          setTimeout(() => {
+            setErrorMessage(null)
+          }, 10000)
+        }
       }
     }
 
@@ -255,46 +288,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
       console.error('Failed to load company logos:', error)
     })
 
-    // Subscribe to settings changes for this user with robust service
-    const unsubscribe = RobustUserSettingsService.subscribeToUserSettings(user.id, (updatedSettings) => {
-      console.log('Real-time settings update received:', updatedSettings)
-
-      // Check actual MFA status
-      mfaService.hasMFAEnabled(user.id).then(actualMFAEnabled => {
-        const localSettings = {
-          theme: updatedSettings.theme || 'light',
-          mfaEnabled: actualMFAEnabled,
-          refreshInterval: 30000,
-          sessionTimeout: updatedSettings.security_preferences?.session_timeout || 15,
-          notifications: {
-            calls: updatedSettings.notifications?.call_alerts ?? true,
-            sms: updatedSettings.notifications?.sms_alerts ?? true,
-            system: updatedSettings.notifications?.security_alerts ?? true
-          },
-          retellApiKey: updatedSettings.retell_config?.api_key,
-          callAgentId: updatedSettings.retell_config?.call_agent_id,
-          smsAgentId: updatedSettings.retell_config?.sms_agent_id
-        }
-
-        setUserSettings(localSettings)
-        // setSyncStatus('loaded')
-
-        // Update retell service with loaded credentials using bulletproof system
-        if (localSettings.retellApiKey || localSettings.callAgentId || localSettings.smsAgentId) {
-          retellService.updateCredentials(
-            localSettings.retellApiKey,
-            localSettings.callAgentId,
-            localSettings.smsAgentId
-          )
-          // Ensure credentials are fully loaded
-          retellService.ensureCredentialsLoaded().catch(error => {
-            console.warn('Failed to ensure credentials during real-time update:', error)
-          })
-        }
-      }).catch(error => {
-        console.warn('Failed to get MFA status during real-time update:', error)
-      })
-    })
+    // Real-time subscription removed - not available in current userSettingsService
 
 
     // Initialize avatar preview from user data if available
@@ -317,10 +311,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
     initializeAvatar()
 
-    // Cleanup function
-    return () => {
-      unsubscribe()
-    }
+    // No cleanup needed - subscription was removed
   }, [user.id, user?.mfa_enabled, user?.avatar])
 
   const updateSettings = async (newSettings: Partial<LocalUserSettings>) => {
@@ -362,16 +353,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
       }
 
       // Use robust settings service
-      const response = await RobustUserSettingsService.updateUserSettings(
+      const updatedSettingsFromService = await userSettingsService.updateUserSettings(
         user.id,
-        settingsForSupabase,
-        true // Enable optimistic updates
+        settingsForSupabase
       )
 
-      if (response.status === 'success') {
+      if (updatedSettingsFromService) {
         console.log('✅ Settings updated successfully')
         setSaveStatus('saved')
-        // setSyncStatus('loaded')
 
         // Save to localStorage for immediate access
         localStorage.setItem(`settings_${user.id}`, JSON.stringify(updatedSettings))
@@ -393,10 +382,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
           })
         }
       } else {
-        console.error('❌ Failed to update settings:', response.error)
+        console.error('❌ Failed to update settings: No data returned from service')
         setSaveStatus('error')
-        // setSyncStatus('error')
-        setErrorMessage(`Failed to update settings: ${response.error}`)
+        setErrorMessage('Failed to update settings: Service returned no data')
 
         setTimeout(() => setSaveStatus('idle'), 3000)
         setTimeout(() => setErrorMessage(null), 5000)
@@ -404,8 +392,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
     } catch (error) {
       console.error('❌ Settings update failed:', error)
       setSaveStatus('error')
-      // setSyncStatus('error')
-      setErrorMessage(`Settings update failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      setErrorMessage(`Settings update failed: ${errorMessage}`)
+
+      // Try to save to localStorage as backup even if service fails
+      try {
+        localStorage.setItem(`settings_${user.id}`, JSON.stringify(updatedSettings))
+        console.log('💾 Settings saved to localStorage as backup despite service error')
+        setErrorMessage(`Settings saved locally (service error: ${errorMessage})`)
+      } catch (storageError) {
+        console.error('Failed to save to localStorage backup:', storageError)
+        setErrorMessage(`Complete save failure: ${errorMessage}`)
+      }
 
       setTimeout(() => setSaveStatus('idle'), 3000)
       setTimeout(() => setErrorMessage(null), 5000)
@@ -423,8 +421,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   }
 
   const handleMFAToggle = async (enabled: boolean) => {
-    // Immediately update local state for instant visual feedback
-    setMfaToggleEnabled(enabled)
+    // Update local settings state immediately for UI feedback
+    setUserSettings(prev => ({ ...prev, mfaEnabled: enabled }))
 
     try {
       console.log('🔒 TOTP toggle called:', {
@@ -453,7 +451,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
         if (!disabled) {
           console.error('❌ Failed to disable TOTP')
           // Revert local state since disable failed
-          setMfaToggleEnabled(true)
+          setUserSettings(prev => ({ ...prev, mfaEnabled: true }))
           setErrorMessage('Failed to disable TOTP. Please try again.')
           return
         }
@@ -467,7 +465,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
     } catch (error) {
       console.error('❌ TOTP toggle error:', error)
       // Revert local state since operation failed
-      setMfaToggleEnabled(!enabled)
+      setUserSettings(prev => ({ ...prev, mfaEnabled: !enabled }))
       setErrorMessage('Failed to update TOTP settings. Please try again.')
       return
     }
@@ -745,21 +743,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   const testSupabaseConnection = async () => {
     try {
       console.log('Testing Supabase connection...')
-      const testResponse = await UserSettingsService.getUserSettings(user.id)
+      const testSettings = await userSettingsService.getUserSettings(user.id)
 
-      if (testResponse.status === 'success') {
+      if (testSettings) {
         console.log('✅ Supabase connection successful')
-        // setSyncStatus('loaded')
         return true
       } else {
-        console.error('❌ Supabase connection failed:', testResponse.error)
-        // setSyncStatus('error')
-        setErrorMessage(`Database connection failed: ${testResponse.error}`)
+        console.error('❌ Supabase connection failed: No settings returned')
+        setErrorMessage('Database connection failed: No data returned')
         return false
       }
     } catch (error) {
       console.error('❌ Supabase connection error:', error)
-      // setSyncStatus('error')
       setErrorMessage(`Database connection error: ${error instanceof Error ? error.message : 'Unknown error'}`)
       return false
     }

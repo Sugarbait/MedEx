@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { useCompanyLogos } from '@/hooks/useCompanyLogos'
-import { FreshMfaService } from '@/services/freshMfaService'
+import FreshMfaService from '@/services/freshMfaService'
 import {
   HomeIcon,
   PhoneIcon,
@@ -45,7 +45,7 @@ const getNavigationItems = (user: any, mfaStatus: MfaStatus) => {
       name: 'Calls',
       href: '/calls',
       icon: PhoneIcon,
-      description: hasMFA ? 'Call management and analytics' : 'MFA required',
+      description: hasMFA ? 'Call management and analytics' : 'Requires MFA setup',
       requiresMFA: true,
       mfaEnabled: hasMFA
     },
@@ -53,7 +53,7 @@ const getNavigationItems = (user: any, mfaStatus: MfaStatus) => {
       name: 'SMS',
       href: '/sms',
       icon: MessageSquareIcon,
-      description: hasMFA ? 'SMS management and analytics' : 'MFA required',
+      description: hasMFA ? 'SMS management and analytics' : 'Requires MFA setup',
       requiresMFA: true,
       mfaEnabled: hasMFA
     },
@@ -124,11 +124,18 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, user }) => {
         error: null
       })
 
-      console.log('Sidebar MFA Status Check:', {
+      console.log('🛡️ Sidebar MFA Status Check:', {
         userId: user.id,
         hasSetup: isEnabled,
-        isEnabled: isEnabled
+        isEnabled: isEnabled,
+        hasMFA: isEnabled,
+        willShowMFARequired: !isEnabled
       })
+
+      // Force re-render of navigation items
+      setTimeout(() => {
+        console.log('🔄 Sidebar forcing navigation refresh after MFA status change')
+      }, 100)
 
     } catch (error: any) {
       console.error('MFA status check failed:', error)
@@ -228,6 +235,8 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, user }) => {
                   <p className={`text-xs mt-0.5 ${
                     requiresMFA && !mfaEnabled
                       ? 'text-amber-600 dark:text-amber-400'
+                      : requiresMFA && mfaEnabled
+                      ? 'text-green-600 dark:text-green-400'
                       : 'text-gray-500 dark:text-gray-400'
                   }`}>
                     {item.description}

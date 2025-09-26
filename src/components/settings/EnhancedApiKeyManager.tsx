@@ -63,9 +63,70 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false)
 
   useEffect(() => {
-    loadApiKeys()
-    checkSchemaStatus()
+    // CRITICAL: Ensure services are initialized globally before loading API keys
+    const initializeAndLoad = async () => {
+      try {
+        // Initialize global services first
+        const { globalServiceInitializer } = await import('../../services/globalServiceInitializer')
+        await globalServiceInitializer.initialize()
+
+        // Force hardwired credentials as backup
+        forceHardwiredCredentials()
+
+        // Load API keys and check schema
+        loadApiKeys()
+        checkSchemaStatus()
+
+        console.log('✅ API Key Manager: Services and credentials initialized')
+      } catch (error) {
+        console.error('❌ API Key Manager: Initialization error:', error)
+        // Fallback to old method
+        forceHardwiredCredentials()
+        loadApiKeys()
+        checkSchemaStatus()
+      }
+    }
+
+    initializeAndLoad()
   }, [user.id])
+
+  const forceHardwiredCredentials = () => {
+    console.log('🔧 API KEY MANAGEMENT: Forcing hardwired credentials immediately')
+
+    // Always use the hardwired credentials requested by user
+    const hardwiredApiKeys = {
+      retell_api_key: 'key_c3f084f5ca67781070e188b47d7f',
+      call_agent_id: 'agent_447a1b9da540237693b0440df6',
+      sms_agent_id: 'agent_643486efd4b5a0e9d7e094ab99'
+    }
+
+    // Set in component state immediately
+    setApiKeys(hardwiredApiKeys)
+
+    // Update retell service immediately
+    retellService.updateCredentials(
+      hardwiredApiKeys.retell_api_key,
+      hardwiredApiKeys.call_agent_id,
+      hardwiredApiKeys.sms_agent_id
+    )
+
+    // Force update localStorage for persistence
+    try {
+      const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
+      if (currentUser.id) {
+        const settings = JSON.parse(localStorage.getItem(`settings_${currentUser.id}`) || '{}')
+        settings.retellApiKey = hardwiredApiKeys.retell_api_key
+        settings.callAgentId = hardwiredApiKeys.call_agent_id
+        settings.smsAgentId = hardwiredApiKeys.sms_agent_id
+        localStorage.setItem(`settings_${currentUser.id}`, JSON.stringify(settings))
+        console.log('✅ API KEY MANAGEMENT: Hardwired credentials set in localStorage')
+      }
+    } catch (error) {
+      console.warn('Failed to update localStorage with hardwired credentials:', error)
+    }
+
+    console.log('✅ API KEY MANAGEMENT: Hardwired credentials loaded successfully')
+  }
 
   const checkSchemaStatus = async () => {
     try {
@@ -76,12 +137,6 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
       console.warn('Could not check schema status:', error)
     }
   }
-
-  // Load API keys on component mount
-  useEffect(() => {
-    loadApiKeys()
-    checkSchemaStatus()
-  }, [user.id])
 
   // Track unsaved changes
   useEffect(() => {
@@ -446,10 +501,13 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
             <Settings className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>
           <button
-            onClick={loadApiKeys}
+            onClick={() => {
+              forceHardwiredCredentials()
+              loadApiKeys()
+            }}
             disabled={isLoading}
             className="p-2 text-gray-500 hover:text-gray-700 dark:text-gray-400 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-            title="Refresh API keys"
+            title="Force reload hardwired credentials and refresh API keys"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
           </button>

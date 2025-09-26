@@ -23,7 +23,7 @@ export const Header: React.FC = () => {
                 {user?.name || 'User'}
               </p>
               <p className="text-xs text-neutral-500 capitalize">
-                {user?.role?.replace('_', ' ') || 'Staff'}
+                {user?.role === 'super_user' ? 'Super User' : user?.role?.replace('_', ' ') || 'Staff'}
               </p>
             </div>
           </div>

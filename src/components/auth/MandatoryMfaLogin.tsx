@@ -8,7 +8,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { Shield, AlertTriangle, Loader2, Settings } from 'lucide-react'
-import { FreshMfaService } from '@/services/freshMfaService'
+import FreshMfaService from '@/services/freshMfaService'
 import { FreshMfaVerification } from './FreshMfaVerification'
 import { FreshMfaSetup } from './FreshMfaSetup'
 import { auditLogger, AuditAction, AuditOutcome } from '@/services/auditLogger'

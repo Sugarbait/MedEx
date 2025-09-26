@@ -89,10 +89,14 @@ export const SupabaseProvider: React.FC<SupabaseProviderProps> = ({ children }) 
       }
 
       // User doesn't exist, create new user
+      // Check if this is a super user email
+      const superUserEmails = ['elmfarrell@yahoo.com', 'pierre@phaetonai.com']
+      const userRole = superUserEmails.includes(azureUser.username.toLowerCase()) ? 'super_user' : 'staff'
+
       const createUserResponse = await UserService.createUser(azureUser.homeAccountId, {
         email: azureUser.username,
         name: azureUser.name,
-        role: 'staff' // Default role
+        role: userRole
       })
 
       if (createUserResponse.status === 'success' && createUserResponse.data) {

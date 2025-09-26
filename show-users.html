@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Show All Users</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        .user { background: #f5f5f5; padding: 10px; margin: 10px 0; border-radius: 5px; }
+        .super-user { background: #e3f2fd; }
+        .regular-user { background: #f3e5f5; }
+        .current-user { background: #e8f5e8; }
+        pre { background: #f8f8f8; padding: 10px; border-radius: 5px; }
+    </style>
+</head>
+<body>
+    <h1>📊 ALL USERS IN THE SYSTEM</h1>
+    <div id="output"></div>
+
+    <script>
+        function showAllUsers() {
+            const output = document.getElementById('output')
+            let html = ''
+
+            // 1. Check localStorage 'users' array
+            html += '<h2>📁 USERS IN localStorage "users" ARRAY:</h2>'
+            try {
+                const users = localStorage.getItem('users')
+                if (users) {
+                    const userList = JSON.parse(users)
+                    html += `<p>Found ${userList.length} users:</p>`
+                    userList.forEach((user, index) => {
+                        const userClass = user.role === 'super_user' ? 'super-user' : 'regular-user'
+                        html += `
+                        <div class="user ${userClass}">
+                            <strong>${index + 1}. ${user.name || 'Unknown Name'}</strong><br>
+                            📧 Email: ${user.email}<br>
+                            🔑 ID: ${user.id}<br>
+                            👤 Role: ${user.role}<br>
+                            📅 Created: ${user.created_at || 'Unknown'}<br>
+                            🔐 MFA: ${user.mfa_enabled ? 'Enabled' : 'Disabled'}
+                        </div>`
+                    })
+                } else {
+                    html += '<p>❌ No users array found in localStorage</p>'
+                }
+            } catch (e) {
+                html += `<p>Error reading users array: ${e}</p>`
+            }
+
+            // 2. Check current user
+            html += '<h2>👤 CURRENT USER:</h2>'
+            try {
+                const currentUser = localStorage.getItem('currentUser')
+                if (currentUser) {
+                    const user = JSON.parse(currentUser)
+                    html += `
+                    <div class="user current-user">
+                        <strong>Name:</strong> ${user.name}<br>
+                        <strong>Email:</strong> ${user.email}<br>
+                        <strong>ID:</strong> ${user.id}<br>
+                        <strong>Role:</strong> ${user.role}
+                    </div>`
+                } else {
+                    html += '<p>❌ No current user logged in</p>'
+                }
+            } catch (e) {
+                html += `<p>Error reading current user: ${e}</p>`
+            }
+
+            // 3. Check for user-specific settings
+            html += '<h2>⚙️ USER SETTINGS FOUND:</h2>'
+            const settingsKeys = []
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i)
+                if (key && (key.startsWith('settings_') || key.startsWith('user_') || key.startsWith('profile_'))) {
+                    settingsKeys.push(key)
+                }
+            }
+
+            if (settingsKeys.length > 0) {
+                html += `<p>Found ${settingsKeys.length} user-related settings:</p>`
+                settingsKeys.forEach(key => {
+                    try {
+                        const value = localStorage.getItem(key)
+                        const parsed = JSON.parse(value)
+                        if (parsed.email) {
+                            html += `
+                            <div class="user">
+                                📌 <strong>${key}:</strong><br>
+                                Email: ${parsed.email}<br>
+                                Name: ${parsed.name || 'N/A'}
+                            </div>`
+                        } else {
+                            html += `<p>📌 ${key}: (no email field)</p>`
+                        }
+                    } catch (e) {
+                        html += `<p>📌 ${key}: (non-JSON or error parsing)</p>`
+                    }
+                })
+            } else {
+                html += '<p>No user-specific settings found</p>'
+            }
+
+            // 4. Summary
+            html += '<h2>📊 SUMMARY:</h2>'
+            try {
+                const users = localStorage.getItem('users')
+                if (users) {
+                    const userList = JSON.parse(users)
+                    const superUsers = userList.filter(u => u.role === 'super_user')
+                    const regularUsers = userList.filter(u => u.role === 'user')
+
+                    html += `
+                    <div class="user">
+                        <strong>Total Users:</strong> ${userList.length}<br>
+                        <strong>Super Users:</strong> ${superUsers.length}<br>
+                        <strong>Regular Users:</strong> ${regularUsers.length}
+                    </div>
+
+                    <h3>🔹 Super Users:</h3>
+                    `
+                    superUsers.forEach(u => {
+                        html += `<p>- ${u.email} (${u.name})</p>`
+                    })
+
+                    html += '<h3>🔹 Regular Users:</h3>'
+                    regularUsers.forEach(u => {
+                        html += `<p>- ${u.email} (${u.name})</p>`
+                    })
+                }
+            } catch (e) {
+                html += `<p>Error creating summary: ${e}</p>`
+            }
+
+            output.innerHTML = html
+        }
+
+        // Run the function when page loads
+        showAllUsers()
+    </script>
+</body>
+</html>
