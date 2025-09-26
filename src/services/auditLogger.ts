@@ -404,12 +404,21 @@ class HIPAAAuditLogger {
         throw new Error('Supabase not properly configured - using localStorage fallback')
       }
 
-      // Use ONLY the core columns that exist in the actual database
+      // Store complete audit data for cross-device login history access
       const auditData = {
         user_id: encryptedEntry.user_id,
+        user_name: encryptedEntry.user_name, // Encrypted user name for login history
+        user_role: encryptedEntry.user_role,
         action: encryptedEntry.action,
         resource_type: encryptedEntry.resource_type,
+        resource_id: encryptedEntry.resource_id,
+        phi_accessed: encryptedEntry.phi_accessed || false,
+        source_ip: encryptedEntry.source_ip,
+        user_agent: encryptedEntry.user_agent,
+        session_id: encryptedEntry.session_id,
         outcome: encryptedEntry.outcome,
+        failure_reason: encryptedEntry.failure_reason,
+        additional_info: encryptedEntry.additional_info,
         timestamp: encryptedEntry.timestamp
       }
 
@@ -429,6 +438,8 @@ class HIPAAAuditLogger {
 CREATE TABLE IF NOT EXISTS public.audit_logs (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
   user_id TEXT,
+  user_name TEXT, -- Encrypted user name for cross-device access
+  user_role TEXT,
   action TEXT NOT NULL,
   resource_type TEXT NOT NULL,
   resource_id TEXT,
@@ -442,6 +453,23 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
   timestamp TIMESTAMPTZ DEFAULT NOW(),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Enable Row Level Security for HIPAA compliance
+ALTER TABLE public.audit_logs ENABLE ROW LEVEL SECURITY;
+
+-- Create policy for users to access their own audit logs
+CREATE POLICY "Users can view their own audit logs" ON public.audit_logs
+  FOR SELECT USING (user_id = auth.uid()::text);
+
+-- Create policy for admin users to view all audit logs
+CREATE POLICY "Admins can view all audit logs" ON public.audit_logs
+  FOR SELECT USING (
+    EXISTS (
+      SELECT 1 FROM public.users
+      WHERE users.id = auth.uid()::text
+      AND users.role IN ('super_user', 'admin')
+    )
+  );
           `)
           throw new Error('Audit logs table missing - using localStorage fallback')
         }
@@ -521,14 +549,15 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
 
       let encryptedEntries = []
 
-      // Temporarily disable Supabase and use only localStorage
-      // TODO: Re-enable Supabase once properly configured
-      console.log('Audit retrieval: Using localStorage only (Supabase disabled)')
-      encryptedEntries = this.getAuditLogsFromLocalStorage(criteria)
+      // Try to get from Supabase first for cloud storage and cross-device access
+      console.log('Audit retrieval: Attempting Supabase first, fallback to localStorage')
 
-      /* Supabase integration disabled temporarily due to 404 errors
-      // Try to get from Supabase first
       try {
+        // Check if Supabase is properly configured
+        if (!supabase || typeof supabase.from !== 'function') {
+          throw new Error('Supabase not properly configured - using localStorage fallback')
+        }
+
         let query = supabase
           .from('audit_logs')
           .select('*')
@@ -567,13 +596,13 @@ CREATE TABLE IF NOT EXISTS public.audit_logs (
           console.warn('Supabase audit log retrieval failed, using local storage:', error.message)
           encryptedEntries = this.getAuditLogsFromLocalStorage(criteria)
         } else {
+          console.log(`✅ Retrieved ${data?.length || 0} audit entries from Supabase`)
           encryptedEntries = data || []
         }
       } catch (error) {
         console.warn('Supabase connection failed, using local storage for audit logs:', error)
         encryptedEntries = this.getAuditLogsFromLocalStorage(criteria)
       }
-      */
 
       // Decrypt audit entries
       const decryptedEntries: AuditLogEntry[] = []
