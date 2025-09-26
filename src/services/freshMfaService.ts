@@ -11,6 +11,7 @@
 import * as OTPAuth from 'otpauth'
 import QRCode from 'qrcode'
 import { supabase } from '../config/supabase'
+import { userIdTranslationService } from './userIdTranslationService'
 
 export interface FreshMfaSetup {
   secret: string
@@ -23,7 +24,7 @@ export interface FreshMfaVerification {
   message: string
 }
 
-export class FreshMfaService {
+class FreshMfaService {
   /**
    * Generate a completely fresh TOTP setup
    */
@@ -84,14 +85,33 @@ export class FreshMfaService {
     try {
       console.log('🔍 FreshMFA: Verifying TOTP code for user:', userId)
 
+      // Sanitize input: remove spaces, ensure 6 digits
+      const sanitizedCode = totpCode.replace(/\s/g, '').replace(/O/g, '0')
+
+      if (!/^\d{6}$/.test(sanitizedCode)) {
+        return {
+          success: false,
+          message: 'Invalid code format. Please enter a 6-digit code.'
+        }
+      }
+
+      console.log('🔍 Input sanitized:', { original: totpCode, sanitized: sanitizedCode })
+
       // Get fresh MFA data from database
       const mfaData = await this.getFreshMfaData(userId)
       if (!mfaData) {
+        console.log('❌ No MFA data found for user:', userId)
         return {
           success: false,
           message: 'MFA setup not found. Please start setup again.'
         }
       }
+
+      console.log('✅ MFA data retrieved:', {
+        hasSecret: !!mfaData.secret,
+        secretLength: mfaData.secret?.length,
+        enabled: mfaData.enabled
+      })
 
       // Create TOTP instance with stored secret
       const totp = new OTPAuth.TOTP({
@@ -101,10 +121,22 @@ export class FreshMfaService {
         period: 30,
       })
 
-      // Verify the code
+      // Verify the code with increased window tolerance
+      // Window 2 = ±60 seconds tolerance (previous, current, next time step)
+      // This accounts for clock drift and user input delays
       const isValid = totp.validate({
-        token: totpCode,
-        window: 1 // Allow 1 time step tolerance
+        token: sanitizedCode,
+        window: 2 // Allow 2 time steps tolerance (±60 seconds)
+      })
+
+      console.log('🔍 TOTP Verification Details:', {
+        originalToken: totpCode,
+        sanitizedToken: sanitizedCode,
+        timestamp: Math.floor(Date.now() / 1000),
+        timeStep: Math.floor(Date.now() / 1000 / 30),
+        window: 2,
+        result: isValid !== null ? 'VALID' : 'INVALID',
+        delta: isValid
       })
 
       if (isValid !== null) {
@@ -153,6 +185,13 @@ export class FreshMfaService {
    */
   static async verifyLoginCode(userId: string, totpCode: string): Promise<boolean> {
     try {
+      // Sanitize input
+      const sanitizedCode = totpCode.replace(/\s/g, '').replace(/O/g, '0')
+      if (!/^\d{6}$/.test(sanitizedCode)) {
+        console.log('❌ Invalid login code format:', totpCode)
+        return false
+      }
+
       const mfaData = await this.getFreshMfaData(userId)
       if (!mfaData?.enabled) {
         return false
@@ -166,8 +205,15 @@ export class FreshMfaService {
       })
 
       const isValid = totp.validate({
-        token: totpCode,
-        window: 1
+        token: sanitizedCode,
+        window: 2 // Increased tolerance for login scenarios
+      })
+
+      console.log('🔍 Login TOTP Verification:', {
+        originalToken: totpCode,
+        sanitizedToken: sanitizedCode,
+        result: isValid !== null ? 'VALID' : 'INVALID',
+        delta: isValid
       })
 
       return isValid !== null
@@ -182,6 +228,15 @@ export class FreshMfaService {
    */
   static async disableMfa(userId: string): Promise<boolean> {
     try {
+      // CRITICAL SECURITY FIX: Always translate user ID to UUID for database operations
+      const uuid = await userIdTranslationService.stringToUuid(userId)
+      if (!uuid) {
+        console.error(`❌ Failed to translate user ID to UUID for MFA disable: ${userId}`)
+        return false
+      }
+
+      console.log(`🔄 MFA Disable: ${userId} → ${uuid}`)
+
       const { error } = await supabase
         .from('user_settings')
         .update({
@@ -190,14 +245,14 @@ export class FreshMfaService {
           fresh_mfa_setup_completed: false,
           fresh_mfa_backup_codes: null
         })
-        .eq('user_id', userId)
+        .eq('user_id', uuid) // Use translated UUID, not string ID
 
       if (error) {
         console.error('❌ Error disabling MFA:', error)
         return false
       }
 
-      console.log('✅ MFA disabled successfully')
+      console.log(`✅ MFA disabled successfully for ${userId} (UUID: ${uuid})`)
       return true
     } catch (error) {
       console.error('❌ Error disabling MFA:', error)
@@ -252,10 +307,18 @@ export class FreshMfaService {
    * Store fresh MFA data in database (clean storage)
    */
   private static async storeFreshMfaData(userId: string, data: any): Promise<void> {
+    // CRITICAL SECURITY FIX: Always translate user ID to UUID for database storage
+    const uuid = await userIdTranslationService.stringToUuid(userId)
+    if (!uuid) {
+      throw new Error(`Failed to translate user ID to UUID: ${userId}`)
+    }
+
+    console.log(`🔄 MFA Storage: ${userId} → ${uuid}`)
+
     const { error } = await supabase
       .from('user_settings')
       .upsert({
-        user_id: userId,
+        user_id: uuid, // Use translated UUID, not string ID
         fresh_mfa_secret: data.secret, // Store as plain text - no encryption corruption
         fresh_mfa_enabled: data.enabled,
         fresh_mfa_setup_completed: data.setupCompleted,
@@ -270,21 +333,30 @@ export class FreshMfaService {
       throw new Error('Failed to store MFA data')
     }
 
-    console.log('✅ Fresh MFA data stored successfully')
+    console.log(`✅ Fresh MFA data stored successfully for ${userId} (UUID: ${uuid})`)
   }
 
   /**
    * Get fresh MFA data from database
    */
   private static async getFreshMfaData(userId: string): Promise<any> {
+    // CRITICAL SECURITY FIX: Always translate user ID to UUID for database lookup
+    const uuid = await userIdTranslationService.stringToUuid(userId)
+    if (!uuid) {
+      console.warn(`⚠️ Failed to translate user ID to UUID: ${userId}`)
+      return null
+    }
+
+    console.log(`🔍 MFA Lookup: ${userId} → ${uuid}`)
+
     const { data, error } = await supabase
       .from('user_settings')
       .select('fresh_mfa_secret, fresh_mfa_enabled, fresh_mfa_setup_completed, fresh_mfa_backup_codes')
-      .eq('user_id', userId)
+      .eq('user_id', uuid) // Use translated UUID, not string ID
       .single()
 
     if (error || !data) {
-      console.log('ℹ️ No fresh MFA data found for user:', userId)
+      console.log(`ℹ️ No fresh MFA data found for user: ${userId} (UUID: ${uuid})`)
       return null
     }
 
@@ -300,6 +372,14 @@ export class FreshMfaService {
    * Enable fresh MFA after successful verification
    */
   private static async enableFreshMfa(userId: string): Promise<void> {
+    // CRITICAL FIX: Always translate user ID to UUID for database operations
+    const uuid = await userIdTranslationService.stringToUuid(userId)
+    if (!uuid) {
+      throw new Error(`Failed to translate user ID to UUID: ${userId}`)
+    }
+
+    console.log(`🔄 MFA Enable: ${userId} → ${uuid}`)
+
     const { error } = await supabase
       .from('user_settings')
       .update({
@@ -307,16 +387,204 @@ export class FreshMfaService {
         fresh_mfa_setup_completed: true,
         updated_at: new Date().toISOString()
       })
-      .eq('user_id', userId)
+      .eq('user_id', uuid) // Use translated UUID, not string ID
 
     if (error) {
       console.error('❌ Error enabling fresh MFA:', error)
       throw new Error('Failed to enable MFA')
     }
 
-    console.log('✅ Fresh MFA enabled successfully')
+    console.log(`✅ Fresh MFA enabled successfully for ${userId} (UUID: ${uuid})`)
+
+    // Trigger UI update events for real-time synchronization
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('mfaSetupCompleted', {
+        detail: { userId, uuid, enabled: true }
+      }))
+      window.dispatchEvent(new CustomEvent('totpStatusChanged', {
+        detail: { userId, uuid, enabled: true }
+      }))
+      console.log('🔄 Dispatched MFA status change events for UI synchronization')
+    }
+  }
+
+  /**
+   * Force refresh MFA status across all components (for cross-device sync)
+   */
+  static async refreshMfaStatusGlobally(userId: string): Promise<void> {
+    try {
+      const isEnabled = await this.isMfaEnabled(userId)
+
+      // Trigger UI refresh events
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('mfaStatusRefresh', {
+          detail: { userId, enabled: isEnabled }
+        }))
+        window.dispatchEvent(new CustomEvent('totpStatusChanged', {
+          detail: { userId, enabled: isEnabled }
+        }))
+
+        if (isEnabled) {
+          window.dispatchEvent(new CustomEvent('mfaSetupCompleted', {
+            detail: { userId, enabled: isEnabled }
+          }))
+        }
+
+        console.log(`🔄 Refreshed MFA status globally: ${userId} - enabled: ${isEnabled}`)
+      }
+    } catch (error) {
+      console.error('❌ Error refreshing MFA status globally:', error)
+    }
+  }
+
+  /**
+   * Verify TOTP for existing MFA (for login/auth purposes)
+   */
+  static async verifyTotp(userId: string, totpCode: string): Promise<boolean> {
+    try {
+      console.log('🔍 FreshMFA: Verifying TOTP for existing MFA:', userId)
+
+      // Sanitize input
+      const sanitizedCode = totpCode.replace(/\s/g, '').replace(/O/g, '0')
+      if (!/^\d{6}$/.test(sanitizedCode)) {
+        console.log('❌ Invalid TOTP code format:', totpCode)
+        return false
+      }
+
+      const mfaData = await this.getFreshMfaData(userId)
+      if (!mfaData || !mfaData.enabled) {
+        console.log('❌ MFA not enabled for user')
+        return false
+      }
+
+      // Create TOTP instance with stored secret
+      const totp = new OTPAuth.TOTP({
+        secret: mfaData.secret,
+        algorithm: 'SHA1',
+        digits: 6,
+        period: 30,
+      })
+
+      // Verify the code with increased tolerance
+      const isValid = totp.validate({
+        token: sanitizedCode,
+        window: 2 // Allow 2 time steps tolerance (±60 seconds)
+      })
+
+      const result = isValid !== null
+      console.log('🔍 General TOTP Verification:', {
+        originalToken: totpCode,
+        sanitizedToken: sanitizedCode,
+        result: result ? 'VALID' : 'INVALID',
+        delta: isValid
+      })
+
+      return result
+    } catch (error) {
+      console.error('❌ Error verifying TOTP:', error)
+      return false
+    }
+  }
+
+  /**
+   * Verify backup code and mark it as used (single-use enforcement)
+   */
+  static async verifyBackupCode(userId: string, backupCode: string): Promise<boolean> {
+    try {
+      console.log('🔍 FreshMFA: Verifying backup code')
+
+      // Sanitize input - remove spaces and ensure it's a valid backup code format
+      const sanitizedCode = backupCode.replace(/\s/g, '').replace(/O/g, '0')
+
+      if (!/^\d{8}$/.test(sanitizedCode)) {
+        console.log('❌ Invalid backup code format (must be 8 digits)')
+        return false
+      }
+
+      console.log(`🔍 Original backup code: "${backupCode}" → Sanitized: "${sanitizedCode}"`)
+
+      const mfaData = await this.getFreshMfaData(userId)
+      if (!mfaData?.backupCodes || !Array.isArray(mfaData.backupCodes)) {
+        console.log('❌ No backup codes found for user')
+        return false
+      }
+
+      // Check if the backup code exists in the unused codes list
+      const codeIndex = mfaData.backupCodes.indexOf(sanitizedCode)
+      if (codeIndex === -1) {
+        console.log('❌ Backup code not found or already used')
+        return false
+      }
+
+      // Remove the used backup code (single-use enforcement)
+      const updatedBackupCodes = [...mfaData.backupCodes]
+      updatedBackupCodes.splice(codeIndex, 1)
+
+      // Update the database to mark this backup code as used
+      await this.updateBackupCodes(userId, updatedBackupCodes)
+
+      console.log('✅ Backup code verified successfully and marked as used')
+      console.log(`📊 Remaining backup codes: ${updatedBackupCodes.length}/10`)
+
+      return true
+    } catch (error) {
+      console.error('❌ Error during backup code verification:', error)
+      return false
+    }
+  }
+
+  /**
+   * Update backup codes in database (for single-use enforcement)
+   */
+  private static async updateBackupCodes(userId: string, updatedBackupCodes: string[]): Promise<void> {
+    const uuid = await userIdTranslationService.stringToUuid(userId)
+    if (!uuid) {
+      throw new Error(`Failed to translate user ID to UUID: ${userId}`)
+    }
+
+    const { error } = await supabase
+      .from('user_settings')
+      .update({
+        fresh_mfa_backup_codes: JSON.stringify(updatedBackupCodes),
+        updated_at: new Date().toISOString()
+      })
+      .eq('user_id', uuid)
+
+    if (error) {
+      console.error('❌ Error updating backup codes:', error)
+      throw new Error('Failed to update backup codes')
+    }
+
+    console.log(`✅ Backup codes updated successfully for ${userId}`)
+  }
+
+  /**
+   * Get remaining backup codes count
+   */
+  static async getRemainingBackupCodesCount(userId: string): Promise<number> {
+    try {
+      const mfaData = await this.getFreshMfaData(userId)
+      if (!mfaData?.backupCodes || !Array.isArray(mfaData.backupCodes)) {
+        return 0
+      }
+      return mfaData.backupCodes.length
+    } catch (error) {
+      console.error('❌ Error getting backup codes count:', error)
+      return 0
+    }
   }
 }
 
-// Export singleton instance
-export const freshMfaService = new FreshMfaService()
+// Export static class as default
+export default FreshMfaService
+
+// Make globally available for debugging and cross-device sync
+if (typeof window !== 'undefined') {
+  (window as any).refreshMfaStatus = (userId: string) => FreshMfaService.refreshMfaStatusGlobally(userId)
+}
+
+console.log('🔧 Fresh MFA Service loaded!')
+console.log('💡 Available commands:')
+console.log('  - FreshMfaService.generateMfaSetup() - Generate fresh MFA setup')
+console.log('  - FreshMfaService.verifyAndEnableMfa() - Verify and enable MFA')
+console.log('  - refreshMfaStatus(userId) - Refresh MFA status globally')

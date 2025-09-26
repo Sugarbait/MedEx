@@ -9,8 +9,8 @@
  */
 
 import React, { useState, useEffect } from 'react'
-import { Shield, AlertCircle, Key, ArrowLeft, Lock } from 'lucide-react'
-import { FreshMfaService } from '../../services/freshMfaService'
+import { Shield, AlertCircle, Key, ArrowLeft, Lock, FileText } from 'lucide-react'
+import FreshMfaService from '../../services/freshMfaService'
 import { MfaLockoutService } from '../../services/mfaLockoutService'
 
 interface LockoutStatus {
@@ -42,6 +42,25 @@ export const FreshMfaVerification: React.FC<FreshMfaVerificationProps> = ({
   const [error, setError] = useState<string | null>(null)
   const [lockoutStatus, setLockoutStatus] = useState<LockoutStatus | null>(initialLockoutStatus || null)
   const [timeRemaining, setTimeRemaining] = useState<string>('')
+  const [useBackupCode, setUseBackupCode] = useState(false)
+  const [remainingBackupCodes, setRemainingBackupCodes] = useState<number>(0)
+
+  /**
+   * Load remaining backup codes count
+   */
+  useEffect(() => {
+    const loadBackupCodesCount = async () => {
+      try {
+        const count = await FreshMfaService.getRemainingBackupCodesCount(userId)
+        setRemainingBackupCodes(count)
+      } catch (error) {
+        console.error('Failed to load backup codes count:', error)
+        setRemainingBackupCodes(0)
+      }
+    }
+
+    loadBackupCodesCount()
+  }, [userId])
 
   /**
    * Update lockout status periodically
@@ -68,11 +87,14 @@ export const FreshMfaVerification: React.FC<FreshMfaVerificationProps> = ({
   }, [userId, userEmail])
 
   /**
-   * Handle TOTP code verification for login with attempt limiting
+   * Handle verification (TOTP or backup code) for login with attempt limiting
    */
   const handleVerifyCode = async () => {
-    if (!verificationCode || verificationCode.length !== 6) {
-      setError('Please enter a 6-digit verification code')
+    const expectedLength = useBackupCode ? 8 : 6
+    const codeType = useBackupCode ? 'backup code' : 'verification code'
+
+    if (!verificationCode || verificationCode.length !== expectedLength) {
+      setError(`Please enter a ${expectedLength}-digit ${codeType}`)
       return
     }
 
@@ -90,7 +112,9 @@ export const FreshMfaVerification: React.FC<FreshMfaVerificationProps> = ({
     try {
       console.log('🔍 FreshMFA: Verifying login code...')
 
-      const isValid = await FreshMfaService.verifyLoginCode(userId, verificationCode)
+      const isValid = useBackupCode
+        ? await FreshMfaService.verifyBackupCode(userId, verificationCode)
+        : await FreshMfaService.verifyLoginCode(userId, verificationCode)
 
       if (isValid) {
         console.log('✅ MFA verification successful - granting access')
@@ -126,7 +150,8 @@ export const FreshMfaVerification: React.FC<FreshMfaVerificationProps> = ({
    * Handle key press for Enter key submission
    */
   const handleKeyPress = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && verificationCode.length === 6) {
+    const expectedLength = useBackupCode ? 8 : 6
+    if (e.key === 'Enter' && verificationCode.length === expectedLength) {
       handleVerifyCode()
     }
   }
@@ -135,7 +160,8 @@ export const FreshMfaVerification: React.FC<FreshMfaVerificationProps> = ({
    * Handle input change with validation
    */
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value.replace(/\D/g, '').slice(0, 6)
+    const maxLength = useBackupCode ? 8 : 6
+    const value = e.target.value.replace(/\D/g, '').slice(0, maxLength)
     setVerificationCode(value)
 
     // Clear error when user starts typing
@@ -150,7 +176,10 @@ export const FreshMfaVerification: React.FC<FreshMfaVerificationProps> = ({
         <Shield className="w-12 h-12 text-blue-600 mx-auto mb-4" />
         <h2 className="text-2xl font-bold text-gray-900">Multi-Factor Authentication</h2>
         <p className="text-gray-600 mt-2">
-          Enter the 6-digit code from your authenticator app
+          {useBackupCode
+            ? 'Enter one of your 8-digit backup codes'
+            : 'Enter the 6-digit code from your authenticator app'
+          }
         </p>
         <p className="text-sm text-gray-500 mt-1">
           Signed in as: <span className="font-medium">{userEmail}</span>
@@ -164,11 +193,50 @@ export const FreshMfaVerification: React.FC<FreshMfaVerificationProps> = ({
         </div>
       )}
 
+      {/* Input Mode Toggle */}
+      <div className="mb-4 flex justify-center space-x-4">
+        <button
+          type="button"
+          onClick={() => {
+            setUseBackupCode(false)
+            setVerificationCode('')
+            setError(null)
+          }}
+          className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+            !useBackupCode
+              ? 'bg-blue-600 text-white'
+              : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+          }`}
+        >
+          <Key className="w-4 h-4 inline mr-2" />
+          Authenticator App
+        </button>
+
+        {remainingBackupCodes > 0 && (
+          <button
+            type="button"
+            onClick={() => {
+              setUseBackupCode(true)
+              setVerificationCode('')
+              setError(null)
+            }}
+            className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              useBackupCode
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <FileText className="w-4 h-4 inline mr-2" />
+            Backup Code ({remainingBackupCodes} left)
+          </button>
+        )}
+      </div>
+
       {/* Verification Code Input */}
       <div className="space-y-4">
         <div>
           <label htmlFor="verification-code" className="block text-sm font-medium text-gray-700 mb-2">
-            Verification Code
+            {useBackupCode ? 'Backup Code' : 'Verification Code'}
           </label>
           <input
             id="verification-code"
@@ -176,20 +244,23 @@ export const FreshMfaVerification: React.FC<FreshMfaVerificationProps> = ({
             value={verificationCode}
             onChange={handleInputChange}
             onKeyPress={handleKeyPress}
-            placeholder="000000"
+            placeholder={useBackupCode ? "12345678" : "000000"}
             className="w-full px-4 py-3 border border-gray-300 rounded-lg text-center text-2xl font-mono tracking-widest focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            maxLength={6}
+            maxLength={useBackupCode ? 8 : 6}
             autoComplete="one-time-code"
             autoFocus
           />
           <p className="text-xs text-gray-500 mt-1 text-center">
-            Enter the 6-digit code from your authenticator app
+            {useBackupCode
+              ? `Enter one of your 8-digit backup codes (${remainingBackupCodes} remaining)`
+              : 'Enter the 6-digit code from your authenticator app'
+            }
           </p>
         </div>
 
         <button
           onClick={handleVerifyCode}
-          disabled={isLoading || verificationCode.length !== 6 || (lockoutStatus?.isLocked || false)}
+          disabled={isLoading || verificationCode.length !== (useBackupCode ? 8 : 6) || (lockoutStatus?.isLocked || false)}
           className="w-full px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center"
         >
           {isLoading ? (
@@ -249,7 +320,7 @@ export const FreshMfaVerification: React.FC<FreshMfaVerificationProps> = ({
 
       {/* Progress Indicator */}
       <div className="mt-4 flex justify-center space-x-2">
-        {[...Array(6)].map((_, index) => (
+        {[...Array(useBackupCode ? 8 : 6)].map((_, index) => (
           <div
             key={index}
             className={`w-3 h-3 rounded-full transition-colors ${

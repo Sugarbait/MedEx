@@ -11,13 +11,17 @@ import { SupabaseProvider } from './contexts/SupabaseContext'
 import './test/smsCostCalculationTest'
 // MFA cross-device security test removed (now using TOTP)
 import { ThemeManager } from './utils/themeManager'
-// Import utility to make Pierre super user (available in console)
-import './utils/makePierreSuperUser'
-// Import utility to make multiple super users (available in console)
-import './utils/makeSuperUsers'
+// Import role correction utility
+import { correctAndStoreUserRole, checkAndFixStoredUser } from './utils/correctSuperUserRoles'
+// Import user role persistence fixer
+import './utils/fixUserRolePersistence'
 import { initializeSecureStorage } from './services/storageSecurityMigration'
 // Import bulletproof API key test utility
 import './utils/bulletproofApiKeyTest'
+// Import final user cleanup utility
+import './utils/finalUserCleanup'
+// Import automatic user fix to prevent "User User" profiles
+import './utils/autoUserFix'
 import { secureUserDataService } from './services/secureUserDataService'
 import { authService } from './services/authService'
 // Removed old TOTP service - using fresh MFA service
@@ -40,6 +44,7 @@ import { SettingsPage } from './pages/SettingsPage'
 import { UserManagementPage } from './pages/UserManagementPage'
 import { LoginPage } from './pages/LoginPage'
 import { MandatoryMfaLogin } from './components/auth/MandatoryMfaLogin'
+import { MfaProtectedRoute } from './components/auth/MfaProtectedRoute'
 
 import {
   ShieldCheckIcon,
@@ -308,11 +313,19 @@ const AppContent: React.FC<{
 
               <Route
                 path="/calls"
-                element={<CallsPage user={user} />}
+                element={
+                  <MfaProtectedRoute user={user} requiredForPages={['calls']}>
+                    <CallsPage user={user} />
+                  </MfaProtectedRoute>
+                }
               />
               <Route
                 path="/sms"
-                element={<SMSPage user={user} />}
+                element={
+                  <MfaProtectedRoute user={user} requiredForPages={['sms']}>
+                    <SMSPage user={user} />
+                  </MfaProtectedRoute>
+                }
               />
 
               <Route
@@ -351,8 +364,9 @@ const AppContent: React.FC<{
 }
 
 const App: React.FC = () => {
-  const [isLoading, setIsLoading] = useState(true)
+  // Removed isLoading state - main.tsx handles initial loading
   const [user, setUser] = useState<any>(null)
+  const [isInitializing, setIsInitializing] = useState(true)
   const [mfaRequired, setMfaRequired] = useState(false)
   const [pendingMfaUser, setPendingMfaUser] = useState<any>(null) // User awaiting MFA verification
   const [sidebarOpen, setSidebarOpen] = useState(true)
@@ -385,6 +399,8 @@ const App: React.FC = () => {
   useEffect(() => {
     // Initialize security and storage systems
     const initializeSecurity = async () => {
+      // Check and fix any stored user roles at startup
+      checkAndFixStoredUser()
       try {
         // Temporarily disable secure storage migration for stability
         // await initializeSecureStorage()
@@ -429,7 +445,7 @@ const App: React.FC = () => {
           console.log('🔐 MANDATORY MFA CHECK: Checking if user requires MFA verification')
 
           try {
-            const { FreshMfaService } = await import('./services/freshMfaService')
+            const FreshMfaService = (await import('./services/freshMfaService')).default
 
             // SECURITY ENHANCEMENT: Fail-secure MFA checking
             let mfaEnabled = false
@@ -506,7 +522,7 @@ const App: React.FC = () => {
                 ...userData,
                 mfaCheckFailed // Pass this info to help with debugging
               })
-              setIsLoading(false)
+              // Removed setIsLoading - main.tsx handles loading
               return // Exit early - don't load full user data until MFA is verified
             }
 
@@ -519,7 +535,7 @@ const App: React.FC = () => {
             if (userData.mfaEnabled || userData.email === 'elmfarrell@yahoo.com' || userData.email === 'pierre@phaetonai.com') {
               console.log('🚨 CRITICAL FAIL-SAFE: Enforcing MFA due to system failure for known MFA user')
               setPendingMfaUser(userData)
-              setIsLoading(false)
+              // Removed setIsLoading - main.tsx handles loading
               return
             }
             console.log('⚠️ MFA system failed but user not flagged for MFA - proceeding without verification')
@@ -597,11 +613,11 @@ const App: React.FC = () => {
                 }
               }
 
-              setUser(supabaseUser)
+              const correctedUser = correctAndStoreUserRole(supabaseUser)
+              setUser(correctedUser)
               console.log('User loaded from Supabase successfully')
 
-              // Store user data in localStorage for stability
-              localStorage.setItem('currentUser', JSON.stringify(supabaseUser))
+              // Store user data in localStorage for stability (correctedUser is already stored by correctAndStoreUserRole)
 
               // Start session monitoring for security
               await authService.startSessionMonitoring()
@@ -644,7 +660,8 @@ const App: React.FC = () => {
                 }
               }
 
-              setUser(userData)
+              const correctedUser = correctAndStoreUserRole(userData)
+              setUser(correctedUser)
               console.log('User loaded from localStorage (Supabase fallback)')
 
               // Load Retell credentials using bulletproof system
@@ -718,8 +735,8 @@ const App: React.FC = () => {
         localStorage.removeItem('currentUser')
         setUser(null)
       } finally {
-        console.log('✅ App.tsx: loadUser completed, setting loading to false')
-        setIsLoading(false)
+        console.log('✅ App.tsx: loadUser completed, setting initializing to false')
+        setIsInitializing(false)
       }
     }
 
@@ -889,7 +906,7 @@ const App: React.FC = () => {
       )
     ]).catch(error => {
       console.warn('⚠️ App.tsx: LoadUser timed out or failed:', error.message)
-      setIsLoading(false)
+      // Removed setIsLoading - main.tsx handles loading
     })
 
     // Add event listeners
@@ -1019,9 +1036,26 @@ const App: React.FC = () => {
     console.log('🚪 Logging out user and clearing all authentication data')
 
     try {
-      // SECURITY ENHANCEMENT: Comprehensive logout cleanup
+      // SECURITY ENHANCEMENT: Comprehensive logout cleanup with avatar preservation
       if (user?.id) {
         console.log('🔒 Clearing user-specific authentication data on logout')
+
+        // CRITICAL: Preserve avatar data before clearing currentUser
+        let preservedAvatar = null
+        try {
+          const currentUserData = localStorage.getItem('currentUser')
+          if (currentUserData) {
+            const userData = JSON.parse(currentUserData)
+            if (userData.avatar) {
+              preservedAvatar = userData.avatar
+              // Ensure avatar is stored in persistent avatar storage
+              localStorage.setItem(`avatar_data_${user.id}`, preservedAvatar)
+              console.log('💾 Avatar preserved for next login')
+            }
+          }
+        } catch (avatarError) {
+          console.warn('Failed to preserve avatar during logout:', avatarError)
+        }
 
         // Clear MFA sessions
         try {
@@ -1032,9 +1066,10 @@ const App: React.FC = () => {
           console.error('Error clearing MFA sessions:', mfaError)
         }
 
-        // Clear user-specific data
+        // Clear user-specific data (but not avatar data)
         localStorage.removeItem(`settings_${user.id}`)
         localStorage.removeItem(`user_settings_${user.id}`)
+        // NOTE: We DON'T clear avatar_data_${user.id} or avatar_${user.id} to preserve profile pictures
       } else {
         // Clear all MFA sessions when user ID is not available
         try {
@@ -1056,7 +1091,7 @@ const App: React.FC = () => {
       setUser(null)
       setMfaRequired(false)
 
-      console.log('✅ Complete logout cleanup performed')
+      console.log('✅ Complete logout cleanup performed with avatar preservation')
     } catch (error) {
       console.error('Error during logout cleanup:', error)
       // Still clear basic data even if advanced cleanup fails
@@ -1067,30 +1102,7 @@ const App: React.FC = () => {
     }
   }
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="w-16 h-16 bg-blue-500 rounded-full flex items-center justify-center mx-auto mb-4 animate-pulse">
-            <ShieldCheckIcon className="w-8 h-8 text-white" />
-          </div>
-          <p className="text-gray-600 dark:text-gray-300">Loading CareXPS Healthcare CRM...</p>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Initializing HIPAA-compliant environment</p>
-          <button
-            onClick={() => {
-              localStorage.clear()
-              sessionStorage.clear()
-              window.location.reload()
-            }}
-            className="mt-4 px-4 py-2 text-sm bg-red-500 text-white rounded hover:bg-red-600"
-          >
-            Emergency Logout & Clear All Data
-          </button>
-          <p className="text-xs text-gray-400 mt-2">Press Ctrl+Shift+L for emergency logout</p>
-        </div>
-      </div>
-    )
-  }
+  // Removed duplicate loading screen - main.tsx handles initial loading
 
   // Show mandatory MFA verification screen if user is pending MFA
   if (pendingMfaUser) {
@@ -1100,6 +1112,18 @@ const App: React.FC = () => {
         onMfaVerified={handleMandatoryMfaSuccess}
         onMfaCancel={handleMandatoryMfaCancel}
       />
+    )
+  }
+
+  // Show loading state during initialization to prevent login page flash
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
+        </div>
+      </div>
     )
   }
 
@@ -1138,6 +1162,100 @@ const App: React.FC = () => {
       </AuthProvider>
     </SupabaseProvider>
   )
+}
+
+// Make duplicate profile cleanup function available globally in console
+if (typeof window !== 'undefined') {
+  import('./services/userManagementService').then(({ UserManagementService }) => {
+    (window as any).cleanupDuplicateProfiles = async () => {
+      console.log('🧹 Starting duplicate profile cleanup...')
+      const result = await UserManagementService.cleanupDuplicateProfiles()
+      if (result.status === 'success') {
+        console.log(`✅ Cleanup completed: removed ${result.data?.removed} duplicate profiles`)
+        console.log('💡 Please refresh the page to see the changes')
+        return result
+      } else {
+        console.error('❌ Cleanup failed:', result.error)
+        return result
+      }
+    }
+
+    // Also expose debug function
+    (window as any).debugUserProfiles = () => {
+      console.log('🔍 DEBUGGING USER PROFILES - FINDING DUPLICATES')
+      console.log('===============================================')
+
+      // Check localStorage systemUsers
+      console.log('\n📱 localStorage systemUsers:')
+      const systemUsers = localStorage.getItem('systemUsers')
+      if (systemUsers) {
+        try {
+          const users = JSON.parse(systemUsers)
+          console.log(`Found ${users.length} users in systemUsers:`)
+          users.forEach((user: any, index: number) => {
+            console.log(`  ${index + 1}. ID: ${user.id}`)
+            console.log(`     Name: ${user.name}`)
+            console.log(`     Email: ${user.email}`)
+            console.log(`     Role: ${user.role}`)
+            console.log(`     Has Avatar: ${!!user.avatar}`)
+            console.log(`     ---`)
+          })
+
+          // Check for duplicates
+          console.log('\n🔍 DUPLICATE ANALYSIS:')
+          const usersByEmail: { [email: string]: any[] } = {}
+          users.forEach((user: any) => {
+            const email = user.email
+            if (!usersByEmail[email]) {
+              usersByEmail[email] = []
+            }
+            usersByEmail[email].push(user)
+          })
+
+          for (const [email, userList] of Object.entries(usersByEmail)) {
+            if (userList.length > 1) {
+              console.log(`⚠️ DUPLICATE FOUND for ${email}:`)
+              userList.forEach((user: any, i: number) => {
+                console.log(`  ${i + 1}. ID: ${user.id}, Role: ${user.role}, Name: ${user.name}`)
+              })
+            }
+          }
+        } catch (error) {
+          console.error('Failed to parse systemUsers:', error)
+        }
+      } else {
+        console.log('No systemUsers found in localStorage')
+      }
+
+      // Check currentUser
+      console.log('\n👤 localStorage currentUser:')
+      const currentUser = localStorage.getItem('currentUser')
+      if (currentUser) {
+        try {
+          const user = JSON.parse(currentUser)
+          console.log('Current user details:')
+          console.log(`  ID: ${user.id}`)
+          console.log(`  Name: ${user.name}`)
+          console.log(`  Email: ${user.email}`)
+          console.log(`  Role: ${user.role}`)
+          console.log(`  Has Avatar: ${!!user.avatar}`)
+        } catch (error) {
+          console.error('Failed to parse currentUser:', error)
+        }
+      } else {
+        console.log('No currentUser found in localStorage')
+      }
+
+      console.log('\n✅ Debug complete!')
+      console.log('💡 To fix duplicates, run: cleanupDuplicateProfiles()')
+    }
+
+    console.log('🔧 User profile management utilities loaded:')
+    console.log('  - cleanupDuplicateProfiles() - Remove duplicate User profiles, keep Super User')
+    console.log('  - debugUserProfiles() - Analyze user profiles for duplicates')
+  }).catch(error => {
+    console.warn('Failed to load user management utilities:', error)
+  })
 }
 
 export default App
