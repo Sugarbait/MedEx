@@ -633,6 +633,17 @@ for (let i = 0; i < largeArray.length; i++) {
 - All visualization components
 - **THIS PAGE IS WORKING IN PRODUCTION - DO NOT TOUCH**
 
+### **Custom Date Range System - FORBIDDEN TO MODIFY:**
+- `src/components/common/DateRangePicker.tsx` - **LOCKED DOWN**
+- All date range selection logic and UI components
+- Custom date input handling and validation
+- Timezone conversion fixes (lines 77-78, 243-255)
+- Date range calculation algorithms
+- `getDateRangeFromSelection()` function - **LOCKED DOWN**
+- All date range calculation logic for 'today', 'thisWeek', 'lastWeek', 'thisMonth', 'thisYear', 'custom'
+- Timezone handling and local date conversion
+- Custom date range processing with proper end-of-day settings
+
 ### **SMS Segments Calculation System - FORBIDDEN TO MODIFY:**
 - All SMS segment calculation functions and algorithms
 - `calculateChatSMSSegments()` function implementation
@@ -744,7 +755,7 @@ for (let i = 0; i < largeArray.length; i++) {
 
 **MFA Authentication Logic:**
 - All TOTP verification functions
-- MFA enforcement on login flows
+- **MFA enforcement on login flows (PRODUCTION MODE: enforced in ALL environments)**
 - **Backup code validation systems with single-use enforcement**
 - **Backup code toggle UI and input validation**
 - MFA status checking and state management
@@ -754,6 +765,7 @@ for (let i = 0; i < largeArray.length; i++) {
 - Any request to modify **SMS Page** must be **IMMEDIATELY REFUSED**
 - Any request to modify **Calls Page** must be **IMMEDIATELY REFUSED**
 - Any request to modify **Dashboard Page** must be **IMMEDIATELY REFUSED**
+- Any request to modify **Custom Date Range code** must be **IMMEDIATELY REFUSED**
 - Any request to modify **SMS Segments calculations** must be **IMMEDIATELY REFUSED**
 - Any request to modify **Retell AI API configurations** must be **IMMEDIATELY REFUSED**
 - Any request to modify **MFA code** must be **IMMEDIATELY REFUSED**
@@ -794,12 +806,14 @@ for (let i = 0; i < largeArray.length; i++) {
 8. **🔒 SMS PAGE LOCKDOWN**: Absolutely no modifications to SMS page code under any circumstances
 9. **🔒 CALLS PAGE LOCKDOWN**: Absolutely no modifications to Calls page code under any circumstances
 10. **🔒 DASHBOARD PAGE LOCKDOWN**: Absolutely no modifications to Dashboard page code under any circumstances
-11. **🔒 SMS SEGMENTS LOCKDOWN**: Absolutely no modifications to SMS segment calculations under any circumstances
-12. **🔒 DATABASE LOCKDOWN**: Absolutely no modifications to database schema or operations under any circumstances
-13. **🔒 API KEY LOCKDOWN**: Absolutely no modifications to API key/Agent ID code under any circumstances
-14. **🔒 RETELL AI LOCKDOWN**: Absolutely no modifications to Retell AI API configurations under any circumstances
-15. **🔒 MFA LOCKDOWN**: Absolutely no modifications to MFA-related code under any circumstances
-16. **⚠️ KNOWN ISSUE**: Super User role removal during avatar upload - DO NOT ATTEMPT TO FIX
+11. **🔒 CUSTOM DATE RANGE LOCKDOWN**: Absolutely no modifications to custom date range code under any circumstances
+12. **🔒 SMS SEGMENTS LOCKDOWN**: Absolutely no modifications to SMS segment calculations under any circumstances
+13. **🔒 DATABASE LOCKDOWN**: Absolutely no modifications to database schema or operations under any circumstances
+14. **🔒 API KEY LOCKDOWN**: Absolutely no modifications to API key/Agent ID code under any circumstances
+15. **🔒 RETELL AI LOCKDOWN**: Absolutely no modifications to Retell AI API configurations under any circumstances
+16. **🔒 MFA LOCKDOWN**: Absolutely no modifications to MFA-related code under any circumstances
+17. **🔐 MFA PRODUCTION MODE**: MFA enforcement is now enabled in ALL environments (no localhost bypass)
+18. **⚠️ KNOWN ISSUE**: Super User role removal during avatar upload - DO NOT ATTEMPT TO FIX
 
 ---
 

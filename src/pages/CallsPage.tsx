@@ -350,16 +350,8 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
 
       setCalls(transformedCalls)
 
-      // Check for new calls and show toast notifications
-      if (previousCallsRef.current.length > 0) {
-        const previousCallIds = new Set(previousCallsRef.current.map(call => call.call_id))
-        const newCalls = transformedCalls.filter(call => !previousCallIds.has(call.call_id))
-
-        newCalls.forEach(newCall => {
-          toastNotificationService.triggerTestNotification('call')
-          safeLog('🔔 New call detected:', newCall.call_id)
-        })
-      }
+      // Note: Toast notifications for truly new records are handled by toastNotificationService
+      // via Supabase real-time monitoring, not through pagination logic
 
       // Update previous calls reference
       previousCallsRef.current = [...transformedCalls]

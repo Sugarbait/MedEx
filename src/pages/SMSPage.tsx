@@ -578,9 +578,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
   // Fetch when page changes (no debouncing for pagination)
   useEffect(() => {
-    if (currentPage > 1) {
-      fetchChatsOptimized()
-    }
+    fetchChatsOptimized()
   }, [currentPage])
 
   // Listen for API configuration events from AuthContext
@@ -1121,16 +1119,8 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
       setChats(paginatedChats)
 
-      // Check for new chats and show toast notifications
-      if (previousChatsRef.current.length > 0) {
-        const previousChatIds = new Set(previousChatsRef.current.map(chat => chat.chat_id))
-        const newChats = paginatedChats.filter(chat => !previousChatIds.has(chat.chat_id))
-
-        newChats.forEach(newChat => {
-          toastNotificationService.triggerTestNotification('sms')
-          safeLog('🔔 New SMS detected:', newChat.chat_id)
-        })
-      }
+      // Note: Toast notifications for truly new records are handled by toastNotificationService
+      // via Supabase real-time monitoring, not through pagination logic
 
       // Update previous chats reference
       previousChatsRef.current = [...paginatedChats]

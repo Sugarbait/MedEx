@@ -12,7 +12,9 @@
     "test": "vitest",
     "test:coverage": "vitest --coverage",
     "audit:fix": "npm audit fix",
-    "update:deps": "npm update"
+    "update:deps": "npm update",
+    "email-server": "EMAIL_SERVER_PORT=4001 node src/api/emailServer.js",
+    "email-server:dev": "EMAIL_SERVER_PORT=4001 nodemon src/api/emailServer.js"
   },
   "dependencies": {
     "@azure/msal-browser": "^3.26.0",
@@ -21,6 +23,7 @@
     "@supabase/supabase-js": "^2.57.4",
     "@tanstack/react-query": "^5.56.2",
     "@types/html2canvas": "^0.5.35",
+    "@types/nodemailer": "^7.0.1",
     "@types/qrcode": "^1.5.5",
     "class-variance-authority": "^0.7.0",
     "clsx": "^2.1.1",
@@ -36,6 +39,7 @@
     "jspdf": "^2.5.1",
     "lucide-react": "^0.439.0",
     "node-fetch": "^3.3.2",
+    "nodemailer": "^7.0.6",
     "otpauth": "^9.3.2",
     "qrcode": "^1.5.4",
     "react": "^18.3.1",

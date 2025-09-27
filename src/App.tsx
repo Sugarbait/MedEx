@@ -486,31 +486,30 @@ const App: React.FC = () => {
             const mfaTimestamp = localStorage.getItem('freshMfaVerified')
             let hasValidMfaSession = false
 
-            // Check if this is a fresh browser session vs page refresh
-            // Use a persistent flag in localStorage to track if user already logged in this browser session
-            const browserSessionKey = `browserSession_${userProfile.id}`
-            const existingBrowserSession = localStorage.getItem(browserSessionKey)
-            const isNewBrowserSession = !existingBrowserSession
+            // MFA ENFORCEMENT: ALWAYS require MFA on login for MFA-enabled users
+            // Use sessionStorage to distinguish login vs page refresh
+            const isPageRefresh = sessionStorage.getItem('appInitialized')
 
-            if (isNewBrowserSession) {
-              // True fresh browser session - require MFA verification
-              console.log('🔐 NEW BROWSER SESSION: Clearing MFA session to enforce verification')
-              localStorage.removeItem('freshMfaVerified')
+            if (isPageRefresh) {
+              // Page refresh - check if MFA session is still valid
+              if (mfaTimestamp) {
+                const sessionAge = Date.now() - parseInt(mfaTimestamp)
+                const MAX_MFA_SESSION_AGE = 30 * 60 * 1000 // 30 minutes
+                hasValidMfaSession = sessionAge < MAX_MFA_SESSION_AGE
+
+                console.log('🔄 PAGE REFRESH - MFA session check:', {
+                  sessionAgeMinutes: Math.round(sessionAge / 60000),
+                  isValid: hasValidMfaSession
+                })
+              } else {
+                hasValidMfaSession = false
+                console.log('🔄 PAGE REFRESH - No MFA session found')
+              }
+            } else {
+              // Fresh login - ALWAYS require MFA for MFA-enabled users
               hasValidMfaSession = false
-              localStorage.setItem(browserSessionKey, Date.now().toString())
               sessionStorage.setItem('appInitialized', 'true')
-            } else if (mfaTimestamp) {
-              // In-session navigation - check for valid MFA session
-              const sessionAge = Date.now() - parseInt(mfaTimestamp)
-              const MAX_MFA_SESSION_AGE = 30 * 60 * 1000 // 30 minutes for in-session
-              hasValidMfaSession = sessionAge < MAX_MFA_SESSION_AGE
-
-              console.log('🔐 MFA session check (in-session):', {
-                mfaTimestamp,
-                sessionAgeMinutes: Math.round(sessionAge / 60000),
-                maxAgeMinutes: 30,
-                hasValidSession: hasValidMfaSession
-              })
+              console.log('🚪 FRESH LOGIN - MFA verification required (no skips)')
             }
 
             console.log('🔐 App MFA Status Check:', {
@@ -522,8 +521,8 @@ const App: React.FC = () => {
               requiresVerification: mfaEnabled && !hasValidMfaSession
             })
 
-            // If MFA is required and user doesn't have valid session, show MFA verification
-            // SECURITY FIX: Always enforce MFA if enabled, regardless of login timing
+            // MFA ENFORCEMENT: Always enforce MFA when enabled (production behavior)
+            // Note: This ensures consistent security behavior across all environments
             if (mfaEnabled && !hasValidMfaSession) {
               console.log('🔐 MANDATORY MFA required - showing MFA verification screen')
               setPendingMfaUser({

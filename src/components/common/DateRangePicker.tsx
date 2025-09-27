@@ -73,8 +73,9 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
 
   const handleCustomApply = () => {
     if (customStartDate && customEndDate) {
-      const startDate = new Date(customStartDate)
-      const endDate = new Date(customEndDate)
+      // Fix timezone issue by parsing as local date instead of UTC
+      const startDate = new Date(customStartDate + 'T00:00:00')
+      const endDate = new Date(customEndDate + 'T00:00:00')
       onRangeChange('custom', startDate, endDate)
       setIsOpen(false)
       setShowCustomInputs(false)
@@ -238,8 +239,9 @@ export const getDateRangeFromSelection = (range: DateRange, customStart?: Date, 
 
     case 'custom':
       if (customStart && customEnd) {
-        const start = new Date(customStart)
-        const end = new Date(customEnd)
+        // Fix timezone issue by ensuring dates are treated as local dates
+        const start = new Date(customStart.getFullYear(), customStart.getMonth(), customStart.getDate())
+        const end = new Date(customEnd.getFullYear(), customEnd.getMonth(), customEnd.getDate())
         end.setHours(23, 59, 59, 999)
         console.log('🔍 DateRangePicker: Custom date range generated:', {
           customStart: customStart.toISOString(),

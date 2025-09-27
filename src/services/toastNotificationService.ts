@@ -13,6 +13,7 @@
 import { supabase } from '@/config/supabase'
 import { RealtimeChannel } from '@supabase/supabase-js'
 import { ToastNotificationData } from '@/components/common/ToastNotification'
+import { sendNewSMSNotification, sendNewCallNotification } from './emailNotificationService'
 
 export interface ToastNotificationPreferences {
   enabled: boolean
@@ -49,8 +50,8 @@ class ToastNotificationService {
   private recentNotifications = new Map<string, number>()
   private readonly DEDUP_WINDOW = 5000 // 5 seconds
 
-  // Much stricter time window for truly new records
-  private readonly NEW_RECORD_WINDOW = 30000 // 30 seconds (reduced from 5 minutes)
+  // Time window for new records - balanced for development and production
+  private readonly NEW_RECORD_WINDOW = 60000 // 60 seconds (1 minute for development testing)
 
   // Tab visibility tracking
   private isTabVisible = true
@@ -245,7 +246,7 @@ class ToastNotificationService {
           {
             event: 'INSERT',
             schema: 'public',
-            table: 'chats'
+            table: 'sms_messages'
           },
           (payload) => {
             this.handleNewSMS(payload.new as any)
@@ -286,7 +287,7 @@ class ToastNotificationService {
     const recordTime = new Date(recordTimestamp).getTime()
     const now = Date.now()
 
-    // Check 1: Record must be created after service started monitoring
+    // Check 1: Record must be created after service started monitoring (primary check)
     if (recordTime < this.monitoringStartTime) {
       console.log(`🔔 Rejecting notification: Record ${recordId} created before monitoring started (${new Date(recordTime).toISOString()} < ${new Date(this.monitoringStartTime).toISOString()})`)
       return false
@@ -298,7 +299,7 @@ class ToastNotificationService {
       return false
     }
 
-    // Check 3: Record must be very recent (within NEW_RECORD_WINDOW)
+    // Check 3: Record must be recent (within NEW_RECORD_WINDOW) - for development testing
     const age = now - recordTime
     if (age > this.NEW_RECORD_WINDOW) {
       console.log(`🔔 Rejecting notification: Record ${recordId} too old (age: ${Math.round(age/1000)}s, limit: ${this.NEW_RECORD_WINDOW/1000}s)`)
@@ -306,12 +307,19 @@ class ToastNotificationService {
     }
 
     // Check 4: Record must not be from the future (clock skew protection)
-    const maxFutureSkew = 30000 // 30 seconds
+    const maxFutureSkew = 10000 // 10 seconds (reduced from 30)
     if (recordTime > now + maxFutureSkew) {
       console.log(`🔔 Rejecting notification: Record ${recordId} appears to be from the future (${new Date(recordTime).toISOString()})`)
       return false
     }
 
+    // Check 5: Final validation - Record must be within acceptable time window
+    if (age < -10000 || age > this.NEW_RECORD_WINDOW) {
+      console.log(`🔔 Rejecting notification: Record ${recordId} not in acceptable window (age: ${Math.round(age/1000)}s)`)
+      return false
+    }
+
+    console.log(`✅ Accepting notification: Record ${recordId} is truly new (age: ${Math.round(age/1000)}s)`)
     return true
   }
 
@@ -343,6 +351,13 @@ class ToastNotificationService {
     }
 
     this.processNotification(notification)
+
+    // Send email notification
+    try {
+      sendNewCallNotification(1)
+    } catch (error) {
+      console.error('Failed to send call email notification:', error)
+    }
   }
 
   /**
@@ -353,26 +368,33 @@ class ToastNotificationService {
 
     // Use strict validation to ensure record is truly new
     const recordTimestamp = smsRecord.created_at
-    if (!recordTimestamp || !this.isRecordTrulyNew(recordTimestamp, smsRecord.chat_id)) {
+    if (!recordTimestamp || !this.isRecordTrulyNew(recordTimestamp, smsRecord.id)) {
       return
     }
 
     const recordTime = new Date(recordTimestamp)
 
-    const notificationId = `sms_${smsRecord.chat_id}_${Date.now()}`
+    const notificationId = `sms_${smsRecord.id}_${Date.now()}`
 
     // Check for recent duplicates
-    if (this.isDuplicate(notificationId, smsRecord.chat_id)) return
+    if (this.isDuplicate(notificationId, smsRecord.id)) return
 
     const notification: ToastNotificationData = {
       id: notificationId,
       type: 'sms',
-      title: 'New SMS Record Received',
+      title: 'New SMS Message Received',
       timestamp: recordTime,
-      recordId: smsRecord.chat_id
+      recordId: smsRecord.id
     }
 
     this.processNotification(notification)
+
+    // Send email notification
+    try {
+      sendNewSMSNotification(1)
+    } catch (error) {
+      console.error('Failed to send SMS email notification:', error)
+    }
   }
 
   /**

@@ -36,6 +36,7 @@ import { ThemeManager } from '@/utils/themeManager'
 import { SiteHelpChatbot } from '@/components/common/SiteHelpChatbot'
 import { toastNotificationService, ToastNotificationPreferences } from '@/services/toastNotificationService'
 import { logoService, CompanyLogos } from '@/services/logoService'
+import { EmailNotificationSettings } from '@/components/settings/EmailNotificationSettings'
 // Removed old TOTP hook - using fresh MFA service directly
 
 interface User {
@@ -1094,63 +1095,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                 Notification Preferences
               </h2>
 
-              <div className="space-y-4">
-                {/* Email Notifications - Coming Soon */}
-                <div className="bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg p-4 opacity-60">
-                  <div className="flex items-center justify-between mb-3">
-                    <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Email Notifications</h3>
-                    <span className="px-2 py-1 text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200 rounded-full">
-                      Coming Soon
-                    </span>
-                  </div>
-
-                  <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium text-gray-500 dark:text-gray-400">Call Notifications</h4>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          Get email alerts about incoming and missed calls
-                        </p>
-                      </div>
-                      <button
-                        disabled={true}
-                        className="relative inline-flex h-6 w-11 items-center rounded-full bg-gray-300 dark:bg-gray-600 cursor-not-allowed"
-                      >
-                        <span className="inline-block h-4 w-4 transform rounded-full bg-white translate-x-1" />
-                      </button>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium text-gray-500 dark:text-gray-400">SMS Notifications</h4>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          Get email summaries of new SMS conversations
-                        </p>
-                      </div>
-                      <button
-                        disabled={true}
-                        className="relative inline-flex h-6 w-11 items-center rounded-full bg-gray-300 dark:bg-gray-600 cursor-not-allowed"
-                      >
-                        <span className="inline-block h-4 w-4 transform rounded-full bg-white translate-x-1" />
-                      </button>
-                    </div>
-
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium text-gray-500 dark:text-gray-400">System Alerts</h4>
-                        <p className="text-sm text-gray-500 dark:text-gray-400">
-                          Get email alerts about system maintenance and security updates
-                        </p>
-                      </div>
-                      <button
-                        disabled={true}
-                        className="relative inline-flex h-6 w-11 items-center rounded-full bg-gray-300 dark:bg-gray-600 cursor-not-allowed"
-                      >
-                        <span className="inline-block h-4 w-4 transform rounded-full bg-white translate-x-1" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
+              <div className="space-y-6">
+                {/* Email Notifications - Now Active */}
+                <EmailNotificationSettings user={user} />
 
                 {/* Toast Notifications Section */}
                 <div className="pt-4 border-t border-gray-200 dark:border-gray-700">

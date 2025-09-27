@@ -165,13 +165,15 @@ export class AutoUserFix {
   }
 }
 
-// Auto-initialize when imported
+// Auto-initialize when imported - TEMPORARILY DISABLED for MFA debugging
 if (typeof window !== 'undefined') {
   // Make available globally for debugging
   (window as any).autoUserFix = AutoUserFix
 
-  // Initialize on next tick
-  setTimeout(() => {
-    AutoUserFix.initialize()
-  }, 100)
+  // Initialize on next tick - DISABLED for MFA debugging
+  // setTimeout(() => {
+  //   AutoUserFix.initialize()
+  // }, 100)
+
+  console.log('🔧 AutoUserFix available but auto-initialization disabled for MFA debugging')
 }
