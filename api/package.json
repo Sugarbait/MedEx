@@ -1,1 +1,22 @@
-{ "name": "carexps-azure-functions", "version": "1.0.0", "description": "Azure Functions for CareXPS Healthcare CRM", "main": "index.js", "scripts": { "start": "func start", "test": "echo \"No tests specified\"" }, "dependencies": { "nodemailer": "^6.9.8" }, "devDependencies": { "azure-functions-core-tools": "^4.0.5198" }, "engines": { "node": ">=18.0.0" } }
+{
+  "name": "carexps-azure-functions",
+  "version": "1.0.0",
+  "description": "Azure Functions for CareXPS Healthcare CRM",
+  "main": "index.js",
+  "scripts": {
+    "start": "func start",
+    "test": "echo \"No tests specified\"",
+    "preinstall": "npm cache clean --force",
+    "postinstall": "echo 'Azure Function dependencies installed successfully'"
+  },
+  "dependencies": {
+    "nodemailer": "^6.9.8",
+    "@azure/functions": "^4.0.0"
+  },
+  "devDependencies": {
+    "azure-functions-core-tools": "^4.0.5198"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}

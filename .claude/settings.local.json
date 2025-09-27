@@ -161,7 +161,8 @@
       "Bash(start \"I:\\Apps Back Up\\CareXPS CRM\\debug-sms-cost.html\")",
       "Bash(start http://localhost:3000/settings)",
       "Bash(start http://localhost:3025)",
-      "Bash(start http://localhost:4173)"
+      "Bash(start http://localhost:4173)",
+      "Bash(start http://localhost:4174)"
     ],
     "deny": [],
     "ask": []
