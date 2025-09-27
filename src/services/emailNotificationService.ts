@@ -274,13 +274,13 @@ class EmailNotificationServiceClass {
           return `${prodEmailApi}/api/send-notification-email`
         }
 
-        // Check if we're in production (Azure or deployed)
-        if (window.location.hostname !== 'localhost' &&
-            window.location.hostname !== '127.0.0.1') {
-          // In production, try to use a relative API endpoint
-          // This assumes the email API is deployed on the same domain
-          return '/api/send-notification-email'
-        }
+        // TEMPORARY: Always use localhost while Azure Function is debugged
+        // if (window.location.hostname !== 'localhost' &&
+        //     window.location.hostname !== '127.0.0.1') {
+        //   // In production, try to use a relative API endpoint
+        //   // This assumes the email API is deployed on the same domain
+        //   return '/api/send-notification-email'
+        // }
 
         // Development fallback to localhost
         return 'http://localhost:4001/api/send-notification-email'
@@ -734,10 +734,11 @@ if (typeof window !== 'undefined') {
         if (prodEmailApi) {
           return `${prodEmailApi}/api/test-email`
         }
-        if (window.location.hostname !== 'localhost' &&
-            window.location.hostname !== '127.0.0.1') {
-          return '/api/test-email'
-        }
+        // TEMPORARY: Use localhost while Azure Function is debugged
+        // if (window.location.hostname !== 'localhost' &&
+        //     window.location.hostname !== '127.0.0.1') {
+        //   return '/api/test-email'
+        // }
         return 'http://localhost:4001/api/test-email'
       })()
 
