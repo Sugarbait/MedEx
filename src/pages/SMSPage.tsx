@@ -212,7 +212,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   const [totalSegments, setTotalSegments] = useState<number>(0)
   const [smsAgentConfigured, setSmsAgentConfigured] = useState<boolean>(true)
   const [smsAgentId, setSmsAgentId] = useState<string>('')
-  const recordsPerPage = 25
+  const recordsPerPage = 20
 
   // Cache for SMS segment calculations to avoid repeated API calls
   const [segmentCache, setSegmentCache] = useState<Map<string, number>>(new Map())
@@ -1167,7 +1167,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       safeLog('Optimized SMS Chats fetched:', {
         agentFilter: smsAgentId || 'All agents',
         displayedChats: paginatedChats.length,
-        totalFilteredChats: finalFiltered.length,
+        totalFilteredChats: allFiltered.length,
         cacheUsed: Date.now() - lastDataFetch < 300000
       })
 
