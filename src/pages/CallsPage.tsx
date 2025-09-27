@@ -869,9 +869,9 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
   }, [calls, searchTerm, statusFilter, sentimentFilter, isFuzzySearchEnabled])
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-4 lg:space-y-6 min-h-screen">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-4">
         <DateRangePicker
           selectedRange={selectedDateRange}
           customStartDate={customStartDate}
@@ -900,47 +900,49 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
             safeLog('Calls date range changed:', { range, start, end, customStart, customEnd })
           }}
         />
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
           <button
             onClick={fetchCalls}
-            className="flex items-center gap-2 px-3 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors"
+            className="flex items-center gap-2 px-3 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors min-h-[44px] text-sm sm:text-base touch-manipulation"
           >
             <RefreshCwIcon className="w-4 h-4" />
-            Refresh
+            <span className="hidden sm:inline">Refresh</span>
           </button>
           <button
             onClick={() => toastNotificationService.triggerTestNotification('call')}
-            className="flex items-center gap-2 px-3 py-2 text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 transition-colors"
+            className="flex items-center gap-2 px-3 py-2 text-green-600 dark:text-green-400 hover:text-green-800 dark:hover:text-green-300 transition-colors min-h-[44px] text-sm sm:text-base touch-manipulation"
           >
             <ZapIcon className="w-4 h-4" />
-            Test Toast
+            <span className="hidden sm:inline">Test Toast</span>
           </button>
           <button
             onClick={exportAllCallsToPDF}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors min-h-[44px] text-sm sm:text-base flex-1 sm:flex-initial justify-center touch-manipulation"
             title={`Export all calls for ${selectedDateRange} to PDF`}
           >
             <DownloadIcon className="w-4 h-4" />
-            Export Call Report
+            <span className="hidden sm:inline">Export Call Report</span>
+            <span className="sm:hidden">Export</span>
           </button>
         </div>
       </div>
-      <div className="text-xs text-gray-500 dark:text-gray-400 mb-6">
-        Last refreshed: {formatLastRefreshTime()} (Auto-refresh every minute)
+      <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-4 sm:mb-6 text-center sm:text-left px-2 sm:px-0">
+        Last refreshed: {formatLastRefreshTime()}
+        <span className="hidden sm:inline"> (Auto-refresh every minute)</span>
       </div>
 
       {/* Key Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         {/* Total Calls */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600 dark:text-gray-400">Total Calls</span>
             <PhoneIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-1 numeric-data">
+          <div className="text-2xl sm:text-3xl font-black text-blue-600 dark:text-blue-400 mb-1 numeric-data">
             {loading ? '...' : metrics.totalCalls}
           </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">
+          <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
             {metrics.totalCalls > 0 ? (
               <><span className="numeric-data">{metrics.totalCalls - metrics.failedCalls}</span> completed, <span className="numeric-data">{metrics.failedCalls}</span> failed</>
             ) : 'No calls made'}
@@ -948,43 +950,43 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
         </div>
 
         {/* Avg Call Duration */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 sm:p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600 dark:text-gray-400">Avg Call Duration</span>
             <ClockIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-1 numeric-data">
+          <div className="text-2xl sm:text-3xl font-black text-blue-600 dark:text-blue-400 mb-1 numeric-data">
             {loading ? '...' : metrics.avgDuration}
           </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">
+          <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
             Longest: <span className="numeric-data">{metrics.avgDuration}</span>
           </div>
         </div>
 
         {/* Avg Cost Per Call */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 sm:p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600 dark:text-gray-400">Avg Cost Per Call</span>
             <DollarSignIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-1 numeric-data">
+          <div className="text-xl sm:text-2xl lg:text-3xl font-black text-blue-600 dark:text-blue-400 mb-1 numeric-data">
             CAD ${loading ? '...' : (metrics.avgCostPerCall || 0).toFixed(3)}
           </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">
+          <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
             Total cost: CAD $<span className="numeric-data">{(metrics.totalCost || 0).toFixed(2)}</span>
           </div>
         </div>
 
         {/* Success Rate */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 sm:p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600 dark:text-gray-400">Success Rate</span>
             <TrendingUpIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-1 numeric-data">
+          <div className="text-2xl sm:text-3xl font-black text-blue-600 dark:text-blue-400 mb-1 numeric-data">
             {loading ? '...' : `${metrics.successRate.toFixed(1)}%`}
           </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">
+          <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
             {metrics.totalCalls > 0 ? (
               <><span className="numeric-data">{metrics.totalCalls - metrics.failedCalls}</span> goals achieved</>
             ) : (<><span className="numeric-data">0</span> goals achieved</>)}
@@ -992,75 +994,75 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
         </div>
 
         {/* Total Duration */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 sm:p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600 dark:text-gray-400">Total Duration</span>
             <ClockIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-1 numeric-data">
+          <div className="text-2xl sm:text-3xl font-black text-blue-600 dark:text-blue-400 mb-1 numeric-data">
             {loading ? '...' : metrics.totalDuration}
           </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">
+          <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
             0 calls analyzed
           </div>
         </div>
 
         {/* Total Minutes */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 sm:p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600 dark:text-gray-400">Total Minutes</span>
             <ClockIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-1 numeric-data">
+          <div className="text-2xl sm:text-3xl font-black text-blue-600 dark:text-blue-400 mb-1 numeric-data">
             {loading ? '...' : (metrics.totalMinutes || 0)}
           </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">
+          <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
             <span className="numeric-data">{metrics.totalCalls}</span> calls
           </div>
         </div>
 
         {/* Highest Cost Call */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 sm:p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600 dark:text-gray-400">Highest Cost Call</span>
             <TrendingUpIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-1 numeric-data">
+          <div className="text-xl sm:text-2xl lg:text-3xl font-black text-blue-600 dark:text-blue-400 mb-1 numeric-data">
             CAD ${loading ? '...' : (metrics.highestCostCall || 0).toFixed(3)}
           </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">
+          <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
             Per-call range with Retell + Twilio costs
           </div>
         </div>
 
         {/* Failed Calls */}
-        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-3 sm:p-4">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600 dark:text-gray-400">Failed Calls</span>
             <AlertCircleIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 dark:text-blue-400 mb-1">
+          <div className="text-2xl sm:text-3xl font-black text-blue-600 dark:text-blue-400 mb-1">
             {loading ? '...' : metrics.failedCalls}
           </div>
-          <div className="text-xs text-gray-500 dark:text-gray-400">
+          <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
             0% failure rate
           </div>
         </div>
       </div>
 
       {/* Total Call Costs Section */}
-      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
+      <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
+          <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
               <DollarSignIcon className="w-5 h-5 text-green-600" />
-              <span className="text-lg font-semibold text-gray-900 dark:text-gray-100">Total Call Costs</span>
+              <span className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100">Total Call Costs</span>
             </div>
-            <p className="text-sm text-gray-500 dark:text-gray-400">Complete cost breakdown for selected date range</p>
+            <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400">Complete cost breakdown for selected date range</p>
           </div>
-          <div className="text-right">
-            <div className="text-3xl font-black text-green-600 dark:text-green-400">CAD ${loading ? '...' : (metrics.totalCost || 0).toFixed(2)}</div>
-            <div className="text-sm text-gray-500 dark:text-gray-400">{metrics.totalCalls} calls</div>
+          <div className="text-left sm:text-right w-full sm:w-auto">
+            <div className="text-2xl sm:text-3xl font-black text-green-600 dark:text-green-400">CAD ${loading ? '...' : (metrics.totalCost || 0).toFixed(2)}</div>
+            <div className="text-sm sm:text-base text-gray-500 dark:text-gray-400">{metrics.totalCalls} calls</div>
           </div>
         </div>
       </div>
@@ -1081,21 +1083,21 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
 
         {/* Active Call Interface */}
         {isCallActive && (
-          <div className="mb-8 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-600 rounded-xl p-6 shadow-sm">
-            <div className="flex justify-between items-center mb-6">
+          <div className="mb-4 sm:mb-6 lg:mb-8 bg-white dark:bg-gray-800 border border-blue-200 dark:border-blue-600 rounded-xl p-4 sm:p-6 shadow-sm">
+            <div className="flex flex-col sm:flex-row sm:justify-between sm:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center">
                   <PhoneCallIcon className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Active Call</h3>
-                  <p className="text-gray-600 dark:text-gray-400">Status: {callStatus}</p>
+                  <h3 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100">Active Call</h3>
+                  <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">Status: {callStatus}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 sm:gap-3 justify-center sm:justify-end">
                 <button
                   onClick={toggleMute}
-                  className={`p-3 rounded-lg transition-colors ${
+                  className={`p-3 rounded-lg transition-colors min-h-[44px] min-w-[44px] touch-manipulation ${
                     isMuted ? 'bg-red-100 text-red-600 hover:bg-red-200' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                   }`}
                 >
@@ -1103,7 +1105,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
                 </button>
                 <button
                   onClick={stopCall}
-                  className="bg-red-600 hover:bg-red-700 text-white p-3 rounded-lg transition-colors"
+                  className="bg-red-600 hover:bg-red-700 text-white p-3 rounded-lg transition-colors min-h-[44px] min-w-[44px] touch-manipulation"
                 >
                   <PhoneOffIcon className="w-5 h-5" />
                 </button>
@@ -1111,9 +1113,9 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
             </div>
 
             {/* Live Transcript */}
-            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
+            <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 sm:p-4">
               <h4 className="font-medium text-gray-900 dark:text-gray-100 mb-3">Live Transcript</h4>
-              <div className="h-32 overflow-y-auto bg-white dark:bg-gray-800 p-4 rounded border border-gray-200 dark:border-gray-600 text-sm text-gray-900 dark:text-gray-100">
+              <div className="h-24 sm:h-32 overflow-y-auto bg-white dark:bg-gray-800 p-3 sm:p-4 rounded border border-gray-200 dark:border-gray-600 text-sm sm:text-base text-gray-900 dark:text-gray-100">
                 {currentTranscript || 'Listening...'}
               </div>
             </div>
@@ -1121,8 +1123,8 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
         )}
 
         {/* Search and Filters */}
-        <div className="mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-          <div className="flex flex-col lg:flex-row gap-4">
+        <div className="mb-4 sm:mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-5 lg:p-6">
+          <div className="flex flex-col gap-3 sm:gap-4">
             <div className="flex-1 relative">
               <SearchIcon className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
               <input
@@ -1130,7 +1132,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
                 placeholder="Search calls by patient name, ID, or content..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-12 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="w-full pl-10 pr-12 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[44px] text-sm sm:text-base touch-manipulation"
               />
               <button
                 onClick={() => setIsFuzzySearchEnabled(!isFuzzySearchEnabled)}
@@ -1144,11 +1146,11 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
                 <ZapIcon className="w-4 h-4" />
               </button>
             </div>
-            <div className="flex gap-3">
+            <div className="flex flex-col sm:flex-row gap-3">
               <select
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[120px]"
+                className="px-3 sm:px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px] text-sm sm:text-base flex-1 sm:min-w-[120px] touch-manipulation"
               >
                 <option value="all">All Status</option>
                 <option value="active">Active</option>
@@ -1158,7 +1160,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
               <select
                 value={sentimentFilter}
                 onChange={(e) => setSentimentFilter(e.target.value)}
-                className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[130px]"
+                className="px-3 sm:px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px] text-sm sm:text-base flex-1 sm:min-w-[130px] touch-manipulation"
               >
                 <option value="all">All Sentiment</option>
                 <option value="positive">Positive</option>
@@ -1172,15 +1174,15 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
         {/* Calls Table */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 overflow-hidden">
           {loading ? (
-            <div className="text-center py-12">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto"></div>
-              <p className="text-gray-600 dark:text-gray-400 mt-4">Loading calls...</p>
+            <div className="text-center py-8 sm:py-12">
+              <div className="animate-spin rounded-full h-8 w-8 sm:h-10 sm:w-10 border-b-2 border-blue-600 mx-auto"></div>
+              <p className="text-gray-600 dark:text-gray-400 mt-3 sm:mt-4 text-sm sm:text-base">Loading calls...</p>
             </div>
           ) : filteredCalls.length > 0 ? (
             <div className="overflow-x-auto">
               {/* Table Header */}
-              <div className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 px-6 py-3 hidden md:block">
-                <div className="grid grid-cols-12 gap-4 text-sm font-medium text-gray-700 dark:text-gray-300">
+              <div className="bg-gray-50 dark:bg-gray-700 border-b border-gray-200 dark:border-gray-600 px-4 sm:px-6 py-3 hidden lg:block">
+                <div className="grid grid-cols-12 gap-2 lg:gap-4 text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">
                   <div className="col-span-1">#</div>
                   <div className="col-span-3">Patient</div>
                   <div className="col-span-2">Date & Time</div>
@@ -1202,14 +1204,14 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
                   return (
                     <div
                       key={call.call_id}
-                      className={`px-6 py-4 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer transition-colors ${rowBgColor}`}
+                      className={`px-4 sm:px-6 py-4 hover:bg-blue-50 dark:hover:bg-blue-900/20 cursor-pointer transition-colors ${rowBgColor}`}
                       onClick={() => {
                         setSelectedCall(call)
                         setIsDetailModalOpen(true)
                       }}
                     >
                       {/* Desktop Layout */}
-                      <div className="hidden md:grid grid-cols-12 gap-4 items-center">
+                      <div className="hidden lg:grid grid-cols-12 gap-2 lg:gap-4 items-center">
                         {/* Row Number */}
                         <div className="col-span-1">
                           <span className="text-sm font-medium text-gray-500 dark:text-gray-400">#{rowNumber}</span>
@@ -1283,30 +1285,38 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
 
                     </div>
 
-                    {/* Mobile Layout */}
-                    <div className="md:hidden space-y-3">
+                    {/* Mobile and Tablet Layout */}
+                    <div className="lg:hidden space-y-2 sm:space-y-3">
                       <div className="flex items-start justify-between">
-                        <div className="flex items-center">
-                          <div>
-                            <div className="font-semibold text-gray-900">
+                        <div className="flex items-center min-w-0 flex-1">
+                          <div className="min-w-0 flex-1">
+                            <div className="font-semibold text-sm sm:text-base text-gray-900 dark:text-gray-100 truncate">
                               {call.metadata?.patient_name || `Patient ${call.patient_id}`}
+                              {hasNotes(call.call_id) && (
+                                <span className="ml-2 inline-flex items-center gap-1">
+                                  <StickyNoteIcon className="h-3 w-3 text-blue-500" />
+                                  <span className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                                    {getNoteCount(call.call_id)}
+                                  </span>
+                                </span>
+                              )}
                             </div>
-                            <div className="text-sm text-gray-500 dark:text-gray-400">
+                            <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 truncate">
                               {call.from_number || call.to_number || 'No phone number'}
                             </div>
                           </div>
                         </div>
                       </div>
 
-                      <div className="flex flex-wrap items-center gap-2 text-sm">
+                      <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
                         <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(call.call_status)}`}>
                           {call.call_status}
                         </span>
-                        <span className="flex items-center gap-1 text-gray-600">
+                        <span className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
                           <ClockIcon className="w-3 h-3" />
                           {formatDuration(call.call_length_seconds)}
                         </span>
-                        <span className="flex items-center gap-1 text-gray-600">
+                        <span className="flex items-center gap-1 text-gray-600 dark:text-gray-400">
                           <DollarSignIcon className="w-3 h-3" />
                           {formatCallCost(call)}
                         </span>
@@ -1337,19 +1347,20 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
 
         {/* Pagination */}
         {totalCallsCount > recordsPerPage && (
-          <div className="flex items-center justify-between mt-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 px-6 py-4">
-            <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 mt-4 sm:mt-6 lg:mt-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
+            <div className="flex items-center text-xs sm:text-sm text-gray-700 dark:text-gray-300 text-center sm:text-left">
               <span>
                 Showing {((currentPage - 1) * recordsPerPage) + 1} to {Math.min(currentPage * recordsPerPage, totalCallsCount)} of {totalCallsCount} calls
               </span>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1 sm:space-x-2 flex-wrap justify-center">
               <button
                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
-                className="px-3 py-2 text-sm font-medium text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-2 sm:px-3 py-2 text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] touch-manipulation"
               >
-                Previous
+                <span className="sm:hidden">Prev</span>
+                <span className="hidden sm:inline">Previous</span>
               </button>
 
               {/* Page Numbers */}
@@ -1416,7 +1427,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
               <button
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(totalCallsCount / recordsPerPage)))}
                 disabled={currentPage >= Math.ceil(totalCallsCount / recordsPerPage)}
-                className="px-3 py-2 text-sm font-medium text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-2 sm:px-3 py-2 text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] touch-manipulation"
               >
                 Next
               </button>

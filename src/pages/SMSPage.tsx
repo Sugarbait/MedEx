@@ -1903,10 +1903,10 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   // Remove displayChats - render filteredChats directly like CallsPage
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-4 lg:space-y-6 min-h-screen">
 
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-4">
         <DateRangePicker
           selectedRange={selectedDateRange}
           customStartDate={customStartDate}
@@ -1935,7 +1935,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
             safeLog('SMS date range changed:', { range, start, end, customStart, customEnd })
           }}
         />
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
           <button
             onClick={() => {
               console.log('🔴 [SMS DEBUG] Refresh button clicked at:', new Date().toLocaleTimeString())
@@ -1958,40 +1958,43 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
               console.log('🔴 [SMS DEBUG] fetchChatsOptimized called')
             }}
             disabled={loading}
-            className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 transition-colors disabled:opacity-50"
+            className="flex items-center gap-2 px-3 py-2 text-gray-600 hover:text-gray-900 transition-colors disabled:opacity-50 min-h-[44px] text-sm sm:text-base touch-manipulation"
           >
             <RefreshCwIcon className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-            Refresh
+            <span className="hidden sm:inline">Refresh</span>
           </button>
           <button
             onClick={() => toastNotificationService.triggerTestNotification('sms')}
-            className="flex items-center gap-2 px-3 py-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors"
+            className="flex items-center gap-2 px-3 py-2 text-green-600 hover:text-green-800 hover:bg-green-50 rounded-lg transition-colors min-h-[44px] text-sm sm:text-base touch-manipulation"
             title="Test SMS toast notification"
           >
             <MessageCircleIcon className="w-4 h-4" />
-            Test Toast
+            <span className="hidden sm:inline">Test Toast</span>
           </button>
           <button
             onClick={clearAllSegmentCaches}
-            className="flex items-center gap-2 px-3 py-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors"
+            className="flex items-center gap-2 px-3 py-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors min-h-[44px] text-sm sm:text-base touch-manipulation"
             title="Clear all SMS segment calculation caches"
           >
             <TrashIcon className="w-4 h-4" />
-            Clear Cache
+            <span className="hidden sm:inline">Clear Cache</span>
           </button>
           <button
             onClick={exportAllChatsToPDF}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors min-h-[44px] text-sm sm:text-base flex-1 sm:flex-initial justify-center touch-manipulation"
             title={`Export all SMS chats for ${selectedDateRange} to PDF`}
           >
             <DownloadIcon className="w-4 h-4" />
-            Export Chat Report
+            <span className="hidden sm:inline">Export Chat Report</span>
+            <span className="sm:hidden">Export</span>
           </button>
         </div>
       </div>
-      <div className="text-xs text-gray-500 mb-6 flex items-center justify-between">
-        <div>
-          Last refreshed: {formatLastRefreshTime()} (Auto-refresh every minute) | {totalChatsCount} total chats
+      <div className="text-xs sm:text-sm text-gray-500 mb-4 sm:mb-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2 px-2 sm:px-0">
+        <div className="text-center sm:text-left">
+          Last refreshed: {formatLastRefreshTime()}
+          <span className="hidden sm:inline"> (Auto-refresh every minute)</span>
+          <span className="block sm:inline sm:ml-2">{totalChatsCount} total chats</span>
         </div>
         {smsCostManager.progress && (
           <div className="flex items-center gap-2">
@@ -2009,17 +2012,17 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       </div>
 
       {/* Key Metrics Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 sm:gap-4">
         {/* Total Chats */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600">Total Chats</span>
             <MessageCircleIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 mb-1 numeric-data">
+          <div className="text-xl sm:text-2xl lg:text-3xl font-black text-blue-600 mb-1 numeric-data">
             {loading ? '...' : metrics.totalChats}
           </div>
-          <div className="text-xs text-gray-500">
+          <div className="text-xs sm:text-sm text-gray-500">
             {metrics.totalChats > 0 ? (
               <><span className="numeric-data">{metrics.completedChats}</span> completed, <span className="numeric-data">{metrics.errorChats}</span> failed</>
             ) : 'No chats started'}
@@ -2027,12 +2030,12 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         </div>
 
         {/* Active Chats */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600">Active Chats</span>
             <PlayCircleIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 mb-1 numeric-data">
+          <div className="text-xl sm:text-2xl lg:text-3xl font-black text-blue-600 mb-1 numeric-data">
             {loading ? '...' : metrics.activeChats}
           </div>
           <div className="text-xs text-gray-500">
@@ -2041,29 +2044,29 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         </div>
 
         {/* Avg Cost Per Chat */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600">Avg Cost Per Chat</span>
             <DollarSignIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 mb-1 numeric-data">
+          <div className="text-xl sm:text-2xl lg:text-3xl font-black text-blue-600 mb-1 numeric-data">
             ${loading ? '...' : metrics.avgCostPerChat.toFixed(3)}
           </div>
-          <div className="text-xs text-gray-500">
+          <div className="text-xs sm:text-sm text-gray-500">
             Total cost: $<span className="numeric-data">{metrics.totalCost.toFixed(2)}</span>
           </div>
         </div>
 
         {/* Success Rate */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600">Success Rate</span>
             <TrendingUpIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 mb-1 numeric-data">
+          <div className="text-xl sm:text-2xl lg:text-3xl font-black text-blue-600 mb-1 numeric-data">
             {loading ? '...' : `${metrics.successRate.toFixed(1)}%`}
           </div>
-          <div className="text-xs text-gray-500">
+          <div className="text-xs sm:text-sm text-gray-500">
             {metrics.totalChats > 0 ? (
               <><span className="numeric-data">{Math.round(metrics.totalChats * metrics.successRate / 100)}</span> successful chats</>
             ) : (<><span className="numeric-data">0</span> successful chats</>)}
@@ -2071,12 +2074,12 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         </div>
 
         {/* Total SMS Segments */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600">Total SMS Segments</span>
             <MessageSquareIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 mb-1">
+          <div className="text-2xl sm:text-3xl font-black text-blue-600 mb-1">
             <span className="numeric-data">{loading ? '...' : metrics.totalSMSSegments}</span>
           </div>
 
@@ -2129,7 +2132,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                 <div className="mt-2 mb-1">
                   <button
                     onClick={() => loadAccurateSegmentsForAllChats()}
-                    className="flex items-center gap-1 px-2 py-1 text-[10px] bg-blue-50 hover:bg-blue-100 text-blue-600 rounded border border-blue-200 transition-colors"
+                    className="flex items-center gap-1 px-2 py-1 text-[10px] bg-blue-50 hover:bg-blue-100 text-blue-600 rounded border border-blue-200 transition-colors touch-manipulation"
                     title={`Calculate accurate segments for ${chatsToProcess.length} uncached chats`}
                   >
                     <RefreshCwIcon className="w-3 h-3" />
@@ -2146,15 +2149,15 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         </div>
 
         {/* Positive Sentiment */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600">Positive Sentiment</span>
             <ThumbsUpIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 mb-1">
+          <div className="text-2xl sm:text-3xl font-black text-blue-600 mb-1">
             <span className="numeric-data">{loading ? '...' : metrics.positiveSentimentCount}</span>
           </div>
-          <div className="text-xs text-gray-500">
+          <div className="text-xs sm:text-sm text-gray-500">
             {allFilteredChats.length > 0 ? (
               <><span className="numeric-data">{((metrics.positiveSentimentCount / allFilteredChats.length) * 100).toFixed(1)}</span>% positive</>
             ) : (<><span className="numeric-data">0</span>% positive</>)}
@@ -2162,15 +2165,15 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         </div>
 
         {/* Peak Hours */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600">Peak Hours</span>
             <ClockIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 mb-1">
+          <div className="text-2xl sm:text-3xl font-black text-blue-600 mb-1">
             <span className="numeric-data">{loading ? '...' : metrics.peakHour}</span>
           </div>
-          <div className="text-xs text-gray-500">
+          <div className="text-xs sm:text-sm text-gray-500">
             {metrics.peakHourCount > 0 ? (
               <><span className="numeric-data">{metrics.peakHourCount}</span> chat{metrics.peakHourCount === 1 ? '' : 's'} at peak time</>
             ) : 'No peak data'}
@@ -2178,15 +2181,15 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         </div>
 
         {/* Error Chats */}
-        <div className="bg-white rounded-lg border border-gray-200 p-4">
+        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-5">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm text-gray-600">Error Chats</span>
             <AlertCircleIcon className="w-4 h-4 text-gray-400" />
           </div>
-          <div className="text-3xl font-black text-blue-600 mb-1">
+          <div className="text-2xl sm:text-3xl font-black text-blue-600 mb-1">
             <span className="numeric-data">{loading ? '...' : metrics.errorChats}</span>
           </div>
-          <div className="text-xs text-gray-500">
+          <div className="text-xs sm:text-sm text-gray-500">
             {metrics.totalChats > 0 ? (
               <><span className="numeric-data">{((metrics.errorChats / metrics.totalChats) * 100).toFixed(1)}</span>% failure rate</>
             ) : (<><span className="numeric-data">0</span>% failure rate</>)}
@@ -2195,25 +2198,25 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       </div>
 
       {/* Total Chat Costs Section */}
-      <div className="bg-white rounded-lg border border-gray-200 p-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
+      <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
+          <div className="flex-1">
             <div className="flex items-center gap-2 mb-2">
               <DollarSignIcon className="w-5 h-5 text-green-600" />
-              <span className="text-lg font-semibold text-gray-900">Total SMS Costs</span>
+              <span className="text-lg sm:text-xl font-semibold text-gray-900">Total SMS Costs</span>
             </div>
-            <p className="text-sm text-gray-500">Complete cost breakdown for selected date range</p>
+            <p className="text-sm sm:text-base text-gray-500">Complete cost breakdown for selected date range</p>
           </div>
-          <div className="text-right">
-            <div className="text-3xl font-black text-green-600 numeric-data">${metrics.totalCost.toFixed(2)}</div>
-            <div className="text-sm text-gray-500">{metrics.totalChats} chats</div>
+          <div className="text-left sm:text-right w-full sm:w-auto">
+            <div className="text-2xl sm:text-3xl font-black text-green-600 numeric-data">${metrics.totalCost.toFixed(2)}</div>
+            <div className="text-sm sm:text-base text-gray-500">{metrics.totalChats} chats</div>
           </div>
         </div>
       </div>
 
       {/* Error Display */}
       {error && (
-        <div className="mb-6 bg-red-50 border border-red-200 rounded-lg p-4">
+        <div className="mb-4 sm:mb-6 bg-red-50 border border-red-200 rounded-lg p-3 sm:p-4">
           <div className="flex items-center gap-3 mb-3">
             <AlertCircleIcon className="w-5 h-5 text-red-600 flex-shrink-0" />
             <span className="text-red-700">{error}</span>
@@ -2272,13 +2275,13 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                     console.error('Failed to reinitialize hardwired credentials:', error)
                   }
                 }}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
+                className="px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm min-h-[44px] touch-manipulation"
               >
                 Fix API Keys
               </button>
               <button
                 onClick={() => window.location.href = '/settings'}
-                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm"
+                className="px-3 sm:px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors text-sm min-h-[44px] touch-manipulation"
               >
                 Go to Settings
               </button>
@@ -2290,8 +2293,8 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         {/* Chat Conversations List */}
         <div>
             {/* Search and Filters */}
-            <div className="mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-6">
-              <div className="flex flex-col lg:flex-row gap-4">
+            <div className="mb-4 sm:mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-5 lg:p-6">
+              <div className="flex flex-col gap-3 sm:gap-4">
                 <div className="flex-1 relative">
                   <SearchIcon className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
                   <input
@@ -2299,7 +2302,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                     placeholder="Search chats by phone number, patient name, or content..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-12 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full pl-10 pr-12 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[44px] text-sm sm:text-base touch-manipulation"
                   />
                   <button
                     onClick={() => setIsFuzzySearchEnabled(!isFuzzySearchEnabled)}
@@ -2313,11 +2316,11 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                     <ZapIcon className="w-4 h-4" />
                   </button>
                 </div>
-                <div className="flex gap-3">
+                <div className="flex flex-col sm:flex-row gap-3">
                   <select
                     value={statusFilter}
                     onChange={(e) => setStatusFilter(e.target.value)}
-                    className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[120px]"
+                    className="px-3 sm:px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px] text-sm sm:text-base flex-1 sm:min-w-[120px] touch-manipulation"
                   >
                     <option value="all">All Status</option>
                     <option value="ongoing">Ongoing</option>
@@ -2327,7 +2330,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                   <select
                     value={sentimentFilter}
                     onChange={(e) => setSentimentFilter(e.target.value)}
-                    className="px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 min-w-[130px]"
+                    className="px-3 sm:px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px] text-sm sm:text-base flex-1 sm:min-w-[130px] touch-manipulation"
                   >
                     <option value="all">All Sentiment</option>
                     <option value="positive">Positive</option>
@@ -2341,15 +2344,15 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
             {/* Chat Conversations Table */}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
               {loading ? (
-                <div className="text-center py-12">
-                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto"></div>
-                  <p className="text-gray-600 mt-4">Loading chat conversations...</p>
+                <div className="text-center py-8 sm:py-12">
+                  <div className="animate-spin rounded-full h-8 w-8 sm:h-10 sm:w-10 border-b-2 border-blue-600 mx-auto"></div>
+                  <p className="text-gray-600 mt-3 sm:mt-4 text-sm sm:text-base">Loading chat conversations...</p>
                 </div>
               ) : filteredChats.length > 0 ? (
                 <div className="overflow-x-auto">
                   {/* Table Header */}
-                  <div className="bg-gray-50 border-b border-gray-200 px-6 py-3 hidden md:block">
-                    <div className="grid grid-cols-12 gap-4 text-sm font-medium text-gray-700">
+                  <div className="bg-gray-50 border-b border-gray-200 px-4 sm:px-6 py-3 hidden lg:block">
+                    <div className="grid grid-cols-12 gap-2 lg:gap-4 text-xs sm:text-sm font-medium text-gray-700">
                       <div className="col-span-1">#</div>
                       <div className="col-span-3">Patient</div>
                       <div className="col-span-3">Chat Info</div>
@@ -2416,23 +2419,23 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                       return (
                         <div
                           key={chat.chat_id}
-                          className={`px-6 py-4 hover:bg-blue-50 cursor-pointer transition-colors ${rowBgColor}`}
+                          className={`px-3 sm:px-4 lg:px-6 py-3 sm:py-4 hover:bg-blue-50 cursor-pointer transition-colors touch-manipulation ${rowBgColor}`}
                           onClick={() => {
                             setSelectedChat(chat)
                             setIsChatDetailModalOpen(true)
                           }}
                         >
                           {/* Desktop Layout */}
-                          <div className="hidden md:grid grid-cols-12 gap-4 items-center">
+                          <div className="hidden lg:grid grid-cols-12 gap-2 lg:gap-4 items-center">
                             {/* Row Number */}
                             <div className="col-span-1">
-                              <span className="text-sm font-medium text-gray-500">#{rowNumber}</span>
+                              <span className="text-xs lg:text-sm font-medium text-gray-500">#{rowNumber}</span>
                             </div>
 
                             {/* Patient Info */}
                             <div className="col-span-3">
                               <div>
-                                <div className="font-medium text-gray-900 flex items-center gap-2">
+                                <div className="font-medium text-sm lg:text-base text-gray-900 flex items-center gap-2">
                                   {patientName}
                                   {hasNotes(chat.chat_id) && (
                                     <div className="flex items-center gap-1">
@@ -2443,7 +2446,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                                     </div>
                                   )}
                                 </div>
-                                <div className="text-sm text-gray-500">
+                                <div className="text-xs lg:text-sm text-gray-500">
                                   {phoneNumber || 'No phone number'}
                                 </div>
                               </div>
@@ -2451,7 +2454,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
                             {/* Chat Info */}
                             <div className="col-span-3">
-                              <div className="text-sm text-gray-900">
+                              <div className="text-xs lg:text-sm text-gray-900">
                                 {formatDateTime(chat.start_timestamp).date}
                               </div>
                               <div className="text-xs text-gray-500">
@@ -2468,7 +2471,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
                             {/* Cost */}
                             <div className="col-span-2">
-                              <div className="text-sm font-medium text-gray-900">
+                              <div className="text-xs lg:text-sm font-medium text-gray-900">
                                 <CostDisplay chat={chat} />
                               </div>
                               <div className="text-xs text-gray-500">
@@ -2518,10 +2521,10 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                             </div>
                           </div>
 
-                          {/* Mobile Layout */}
-                          <div className="md:hidden space-y-3">
+                          {/* Mobile and Tablet Layout */}
+                          <div className="lg:hidden space-y-2 sm:space-y-3">
                             <div className="flex items-start justify-between">
-                              <div className="flex items-center gap-3">
+                              <div className="flex items-center gap-2 sm:gap-3 min-w-0 flex-1">
                                 <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
                                   chat.chat_status === 'ongoing' ? 'bg-blue-100' :
                                   chat.chat_status === 'ended' ? 'bg-green-100' : 'bg-red-100'
@@ -2533,19 +2536,27 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                                     <AlertCircleIcon className="w-5 h-5 text-red-600" />
                                   }
                                 </div>
-                                <div>
-                                  <div className="font-semibold text-gray-900">
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-semibold text-sm sm:text-base text-gray-900 truncate">
                                     {patientName}
+                                    {hasNotes(chat.chat_id) && (
+                                      <span className="ml-2 inline-flex items-center gap-1">
+                                        <StickyNoteIcon className="h-3 w-3 text-blue-500" />
+                                        <span className="text-xs text-blue-600 font-medium">
+                                          {getNoteCount(chat.chat_id)}
+                                        </span>
+                                      </span>
+                                    )}
                                   </div>
-                                  <div className="text-sm text-gray-500">
+                                  <div className="text-xs sm:text-sm text-gray-500 truncate">
                                     {phoneNumber || 'No phone number'}
                                   </div>
                                 </div>
                               </div>
-                              <div className="flex items-center gap-1">
+                              <div className="flex items-center gap-1 flex-shrink-0">
                                 {chat.chat_status === 'ongoing' && (
                                   <button
-                                    className="p-1 hover:bg-red-200 rounded transition-colors"
+                                    className="p-2 hover:bg-red-200 rounded transition-colors min-h-[44px] min-w-[44px] touch-manipulation"
                                     onClick={(e) => {
                                       e.stopPropagation()
                                       endChat(chat.chat_id)
@@ -2557,13 +2568,13 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                               </div>
                             </div>
 
-                            <div className="bg-gray-50 rounded p-3">
+                            <div className="bg-gray-50 rounded p-2 sm:p-3">
                               <p className="text-sm text-gray-900 line-clamp-2">
                                 {chat.transcript || 'No conversation yet'}
                               </p>
                             </div>
 
-                            <div className="flex flex-wrap items-center gap-2 text-sm">
+                            <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm">
                               <span className={`px-2 py-1 rounded-full text-xs font-medium ${getChatStatusColor(chat.chat_status)}`}>
                                 {chat.chat_status}
                               </span>
@@ -2589,10 +2600,10 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-16">
-                  <MessageCircleIcon className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-xl font-medium text-gray-900 mb-2">No chat conversations found</h3>
-                  <p className="text-gray-600">No chat conversations have been started yet.</p>
+                <div className="text-center py-12 sm:py-16">
+                  <MessageCircleIcon className="w-12 h-12 sm:w-16 sm:h-16 text-gray-400 mx-auto mb-3 sm:mb-4" />
+                  <h3 className="text-lg sm:text-xl font-medium text-gray-900 mb-2">No chat conversations found</h3>
+                  <p className="text-sm sm:text-base text-gray-600">No chat conversations have been started yet.</p>
                 </div>
               )}
             </div>
@@ -2600,17 +2611,17 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
         {/* Pagination */}
         {filteredChatsCount > recordsPerPage && (
-          <div className="flex items-center justify-between mt-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 px-6 py-4">
-            <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 mt-4 sm:mt-6 lg:mt-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 px-3 sm:px-4 lg:px-6 py-3 sm:py-4">
+            <div className="flex items-center text-xs sm:text-sm text-gray-700 dark:text-gray-300 text-center sm:text-left">
               <span>
                 Showing {((currentPage - 1) * recordsPerPage) + 1} to {Math.min(currentPage * recordsPerPage, filteredChatsCount)} of {filteredChatsCount} chats
               </span>
             </div>
-            <div className="flex items-center space-x-2">
+            <div className="flex items-center space-x-1 sm:space-x-2 flex-wrap justify-center">
               <button
                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
-                className="px-3 py-2 text-sm font-medium text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-2 sm:px-3 py-2 text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] touch-manipulation"
               >
                 Previous
               </button>
@@ -2679,7 +2690,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
               <button
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(filteredChatsCount / recordsPerPage)))}
                 disabled={currentPage >= Math.ceil(filteredChatsCount / recordsPerPage)}
-                className="px-3 py-2 text-sm font-medium text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-2 sm:px-3 py-2 text-xs sm:text-sm font-medium text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] touch-manipulation"
               >
                 Next
               </button>
