@@ -374,6 +374,7 @@ const App: React.FC = () => {
   const [mfaRequired, setMfaRequired] = useState(false)
   const [pendingMfaUser, setPendingMfaUser] = useState<any>(null) // User awaiting MFA verification
   const [isTransitioningFromMfa, setIsTransitioningFromMfa] = useState(false) // Prevents dashboard flash during MFA transition
+  const [mfaCheckInProgress, setMfaCheckInProgress] = useState(false) // ANTI-FLASH: Prevents dashboard rendering during MFA check
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     // Start with sidebar closed on mobile devices
     if (typeof window !== 'undefined') {
@@ -399,6 +400,14 @@ const App: React.FC = () => {
     window.addEventListener('resize', handleResize)
     return () => window.removeEventListener('resize', handleResize)
   }, [])
+
+  // ANTI-FLASH FIX: Clear MFA check state when pending MFA user is set
+  useEffect(() => {
+    if (pendingMfaUser && mfaCheckInProgress) {
+      console.log('🔒 ANTI-FLASH: Clearing MFA check state as pending MFA user is set')
+      setMfaCheckInProgress(false)
+    }
+  }, [pendingMfaUser, mfaCheckInProgress])
 
   // Initialize bulletproof API key system on app start
   useEffect(() => {
@@ -455,6 +464,9 @@ const App: React.FC = () => {
 
       try {
         console.log('🔄 App.tsx: Starting loadUser function...')
+
+        // ANTI-FLASH FIX: Set MFA check in progress to prevent dashboard flash
+        setMfaCheckInProgress(true)
 
         // Use localStorage directly for stability
         let storedUser = null
@@ -594,11 +606,17 @@ const App: React.FC = () => {
             if (mfaEnabled && !hasValidMfaSession) {
               console.log('🔐 MANDATORY MFA required - showing MFA verification screen')
               mfaRequiredDuringLoad = true // Mark MFA as required for this load
+
+              // ANTI-FLASH FIX: Set pending user in state update function to ensure synchronization
               setPendingMfaUser({
                 ...userData,
                 mfaCheckFailed // Pass this info to help with debugging
               })
-              // Removed setIsLoading - main.tsx handles loading
+
+              // CRITICAL ANTI-FLASH: Keep mfaCheckInProgress true until MFA screen renders
+              // This prevents dashboard from flashing before MFA verification appears
+              console.log('🔒 ANTI-FLASH: Keeping MFA check in progress to prevent dashboard flash')
+
               return // Exit early - don't load full user data until MFA is verified
             }
 
@@ -611,8 +629,13 @@ const App: React.FC = () => {
             if (userData.mfaEnabled || userData.email === 'elmfarrell@yahoo.com' || userData.email === 'pierre@phaetonai.com') {
               console.log('🚨 CRITICAL FAIL-SAFE: Enforcing MFA due to system failure for known MFA user')
               mfaRequiredDuringLoad = true // Mark MFA as required for this load
+
+              // ANTI-FLASH FIX: Set pending user with proper state management
               setPendingMfaUser(userData)
-              // Removed setIsLoading - main.tsx handles loading
+
+              // CRITICAL ANTI-FLASH: Keep mfaCheckInProgress true for fail-safe MFA enforcement
+              console.log('🔒 FAIL-SAFE ANTI-FLASH: Keeping MFA check in progress for fail-safe enforcement')
+
               return
             }
             console.log('⚠️ MFA system failed but user not flagged for MFA - proceeding without verification')
@@ -830,12 +853,16 @@ const App: React.FC = () => {
         localStorage.removeItem('currentUser')
         setUser(null)
       } finally {
-        // CRITICAL FIX: Only stop initializing if MFA is not required to prevent dashboard flash
+        // ANTI-FLASH FIX: Manage both initialization and MFA check states
         if (!mfaRequiredDuringLoad) {
-          console.log('✅ App.tsx: loadUser completed, setting initializing to false')
+          console.log('✅ App.tsx: loadUser completed, setting initializing to false and clearing MFA check')
           setIsInitializing(false)
+          setMfaCheckInProgress(false)
         } else {
-          console.log('🔐 MFA required - keeping initializing state to prevent dashboard flash')
+          console.log('🔐 MFA required - keeping initializing state but allowing MFA check to complete')
+          // Clear MFA check in progress to allow MFA screen to render
+          // But keep isInitializing true to prevent dashboard flash
+          setMfaCheckInProgress(false)
         }
       }
     }
@@ -1106,6 +1133,9 @@ const App: React.FC = () => {
         // CRITICAL FIX: Stop initializing state after successful MFA verification
         setIsInitializing(false)
 
+        // ANTI-FLASH FIX: Clear all anti-flash states
+        setMfaCheckInProgress(false)
+
         // Clear transition state after user state is set (150ms delay to ensure state is applied)
         setTimeout(() => {
           setIsTransitioningFromMfa(false)
@@ -1151,6 +1181,9 @@ const App: React.FC = () => {
     setUser(null)
     setMfaRequired(false)
     setIsTransitioningFromMfa(false) // Clear transition state
+
+    // ANTI-FLASH FIX: Clear all anti-flash states when MFA is cancelled
+    setMfaCheckInProgress(false)
 
     // CRITICAL FIX: Stop initializing state when MFA is cancelled
     setIsInitializing(false)
@@ -1243,13 +1276,22 @@ const App: React.FC = () => {
     )
   }
 
-  // Show loading state during initialization to prevent login page flash
-  if (isInitializing) {
+  // ANTI-FLASH FIX: Show loading state during initialization OR MFA check to prevent dashboard flash
+  if (isInitializing || mfaCheckInProgress) {
+    const loadingMessage = mfaCheckInProgress
+      ? 'Checking security requirements...'
+      : 'Loading...'
+
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600 dark:text-gray-400">Loading...</p>
+          <p className="text-gray-600 dark:text-gray-400">{loadingMessage}</p>
+          {mfaCheckInProgress && (
+            <p className="text-sm text-gray-500 dark:text-gray-500 mt-2">
+              Verifying authentication requirements...
+            </p>
+          )}
         </div>
       </div>
     )
