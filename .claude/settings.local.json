@@ -155,7 +155,8 @@
       "Bash(start \"I:\\Apps Back Up\\CareXPS CRM\\aggressive-user-cleanup.html\")",
       "Bash(start \"I:\\Apps Back Up\\CareXPS CRM\\fix-pierre-role.js\")",
       "Bash(EMAIL_SERVER_PORT=4001 node src/api/emailServer.js)",
-      "Bash(start http://localhost:3018)"
+      "Bash(start http://localhost:3018)",
+      "Bash(start http://localhost:3019)"
     ],
     "deny": [],
     "ask": []

@@ -1738,21 +1738,23 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
   // Apply search and filter logic to paginated chats (like CallsPage pattern)
   const filteredChats = React.useMemo(() => {
-    let searchFilteredChats = chats
+    // CRITICAL FIX: Use allFilteredChats (full dataset) instead of chats (paginated data)
+    // This matches the CallsPage pattern and enables proper pagination
+    let searchFilteredChats = allFilteredChats
 
     // Apply search filter using fuzzy search or fallback to basic search
     if (debouncedSearchTerm && debouncedSearchTerm.trim()) {
       if (isFuzzySearchEnabled) {
         try {
           const fuzzyResults = fuzzySearchService.searchSMS(debouncedSearchTerm)
-          searchFilteredChats = fuzzyResults.filter(result => chats.some(chat => chat.chat_id === result.chat_id))
+          searchFilteredChats = fuzzyResults.filter(result => allFilteredChats.some(chat => chat.chat_id === result.chat_id))
         } catch (error) {
           console.error('Fuzzy search failed, falling back to basic search:', error)
-          searchFilteredChats = fuzzySearchService.basicSMSSearch(chats, debouncedSearchTerm)
+          searchFilteredChats = fuzzySearchService.basicSMSSearch(allFilteredChats, debouncedSearchTerm)
         }
       } else {
         // Use basic search when fuzzy search is disabled
-        searchFilteredChats = fuzzySearchService.basicSMSSearch(chats, debouncedSearchTerm)
+        searchFilteredChats = fuzzySearchService.basicSMSSearch(allFilteredChats, debouncedSearchTerm)
       }
     }
 
@@ -1763,7 +1765,19 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
       return matchesStatus && matchesSentiment
     })
-  }, [chats, debouncedSearchTerm, debouncedStatusFilter, debouncedSentimentFilter, isFuzzySearchEnabled])
+  }, [allFilteredChats, debouncedSearchTerm, debouncedStatusFilter, debouncedSentimentFilter, isFuzzySearchEnabled])
+
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1)
+  }, [debouncedSearchTerm, debouncedStatusFilter, debouncedSentimentFilter])
+
+  // Create paginated chats for display (similar to CallsPage pattern)
+  const displayChats = React.useMemo(() => {
+    const startIndex = (currentPage - 1) * recordsPerPage
+    const endIndex = startIndex + recordsPerPage
+    return filteredChats.slice(startIndex, endIndex)
+  }, [filteredChats, currentPage, recordsPerPage])
 
   return (
     <div className="p-6 space-y-6">
@@ -2208,7 +2222,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                   <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto"></div>
                   <p className="text-gray-600 mt-4">Loading chat conversations...</p>
                 </div>
-              ) : filteredChats.length > 0 ? (
+              ) : displayChats.length > 0 ? (
                 <div className="overflow-x-auto">
                   {/* Table Header */}
                   <div className="bg-gray-50 border-b border-gray-200 px-6 py-3 hidden md:block">
@@ -2224,7 +2238,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
                   {/* Table Rows */}
                   <div className="divide-y divide-gray-200">
-                    {filteredChats.map((chat, index) => {
+                    {displayChats.map((chat, index) => {
                       // Calculate the actual row number based on current page and pagination
                       const rowNumber = (currentPage - 1) * recordsPerPage + index + 1
                       // Determine if this row should have gray background (even rows)
@@ -2466,11 +2480,11 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           </div>
 
         {/* Pagination */}
-        {totalChatsCount > recordsPerPage && (
+        {filteredChats.length > recordsPerPage && (
           <div className="flex items-center justify-between mt-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 px-6 py-4">
             <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
               <span>
-                Showing {((currentPage - 1) * recordsPerPage) + 1} to {Math.min(currentPage * recordsPerPage, totalChatsCount)} of {totalChatsCount} chats
+                Showing {((currentPage - 1) * recordsPerPage) + 1} to {Math.min(currentPage * recordsPerPage, filteredChats.length)} of {filteredChats.length} chats
               </span>
             </div>
             <div className="flex items-center space-x-2">
@@ -2485,7 +2499,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
               {/* Page Numbers */}
               <div className="flex items-center space-x-1">
                 {(() => {
-                  const totalPages = Math.ceil(totalChatsCount / recordsPerPage)
+                  const totalPages = Math.ceil(filteredChats.length / recordsPerPage)
                   const pages = []
                   const startPage = Math.max(1, currentPage - 2)
                   const endPage = Math.min(totalPages, currentPage + 2)
@@ -2544,8 +2558,8 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
               </div>
 
               <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(totalChatsCount / recordsPerPage)))}
-                disabled={currentPage >= Math.ceil(totalChatsCount / recordsPerPage)}
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(filteredChats.length / recordsPerPage)))}
+                disabled={currentPage >= Math.ceil(filteredChats.length / recordsPerPage)}
                 className="px-3 py-2 text-sm font-medium text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Next
