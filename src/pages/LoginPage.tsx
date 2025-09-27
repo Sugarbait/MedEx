@@ -22,11 +22,77 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [error, setError] = useState('')
   const { logos } = useCompanyLogos()
   const [warning, setWarning] = useState('')
+  const [lockoutStatus, setLockoutStatus] = useState<{isLocked: boolean, timeRemaining?: string, userEmail?: string} | null>(null)
 
   // MFA verification state
   const [showMFAVerification, setShowMFAVerification] = useState(false)
   const [pendingUser, setPendingUser] = useState<any>(null)
   const [useCloudSyncMFA, setUseCloudSyncMFA] = useState(true) // Default to enhanced cloud sync MFA
+
+  // Function to check lockout status for known users
+  const checkLockoutStatus = async (emailToCheck: string) => {
+    if (!emailToCheck) {
+      setLockoutStatus(null)
+      return
+    }
+
+    try {
+      let userIdToCheck = null
+
+      // Check for known system users
+      if (emailToCheck === 'elmfarrell@yahoo.com') {
+        userIdToCheck = 'super-user-456'
+      } else if (emailToCheck === 'pierre@phaetonai.com') {
+        userIdToCheck = 'pierre-user-789'
+      } else if (emailToCheck === 'guest@email.com') {
+        userIdToCheck = 'guest-user-456'
+      } else {
+        // For other users, try to lookup their ID
+        try {
+          const userLookup = await userProfileService.getUserByEmail(emailToCheck)
+          if (userLookup.status === 'success' && userLookup.data) {
+            userIdToCheck = userLookup.data.id
+          }
+        } catch (lookupError) {
+          // Ignore lookup errors - user might not exist yet
+          setLockoutStatus(null)
+          return
+        }
+      }
+
+      if (userIdToCheck) {
+        const lockoutInfo = MfaLockoutService.getLockoutStatus(userIdToCheck, emailToCheck)
+        if (lockoutInfo.isLocked) {
+          const timeRemaining = MfaLockoutService.formatTimeRemaining(lockoutInfo.remainingTime!)
+          setLockoutStatus({
+            isLocked: true,
+            timeRemaining,
+            userEmail: emailToCheck
+          })
+        } else {
+          setLockoutStatus(null)
+        }
+      } else {
+        setLockoutStatus(null)
+      }
+    } catch (error) {
+      console.error('Error checking lockout status:', error)
+      setLockoutStatus(null)
+    }
+  }
+
+  // Check lockout status when email changes
+  React.useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (email.includes('@')) {
+        checkLockoutStatus(email)
+      } else {
+        setLockoutStatus(null)
+      }
+    }, 500) // Debounce to avoid too many lookups
+
+    return () => clearTimeout(timeoutId)
+  }, [email])
 
   // Emergency admin unlock function (press Ctrl+Shift+U on login page)
   // Emergency credential setup function (press Ctrl+Shift+S on login page)
@@ -442,6 +508,68 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         return
       }
 
+      // CRITICAL SECURITY FIX: Check MFA lockout status BEFORE any authentication attempts
+      // This prevents bypass of MFA lockout by clicking "Login" button
+      console.log('🔒 SECURITY: Checking MFA lockout status before authentication for email:', email)
+
+      // First, we need to identify the user ID to check lockout status
+      // Try to get user ID from various sources before authenticating
+      let userIdForLockoutCheck = null
+      let emailForLockoutCheck = email
+
+      // Check if this is a known system user
+      if (email === 'elmfarrell@yahoo.com') {
+        userIdForLockoutCheck = 'super-user-456'
+      } else if (email === 'pierre@phaetonai.com') {
+        userIdForLockoutCheck = 'pierre-user-789'
+      } else if (email === 'guest@email.com') {
+        userIdForLockoutCheck = 'guest-user-456'
+      } else {
+        // For non-system users, try to get user ID from recent login attempts or user profile service
+        try {
+          const userLookup = await userProfileService.getUserByEmail(email)
+          if (userLookup.status === 'success' && userLookup.data) {
+            userIdForLockoutCheck = userLookup.data.id
+          }
+        } catch (lookupError) {
+          console.warn('Could not lookup user ID for lockout check:', lookupError)
+          // Continue with authentication - lockout check will happen later if user is found
+        }
+      }
+
+      // If we have a user ID, check for active MFA lockout
+      if (userIdForLockoutCheck) {
+        const lockoutStatus = MfaLockoutService.getLockoutStatus(userIdForLockoutCheck, emailForLockoutCheck)
+
+        if (lockoutStatus.isLocked) {
+          const timeRemaining = MfaLockoutService.formatTimeRemaining(lockoutStatus.remainingTime!)
+          setError(`Authentication is temporarily blocked due to too many failed MFA attempts. Please try again in ${timeRemaining}.`)
+
+          // Log the blocked login attempt
+          await auditLogger.logPHIAccess(
+            AuditAction.LOGIN_FAILURE,
+            ResourceType.SYSTEM,
+            `login-blocked-lockout-${userIdForLockoutCheck}`,
+            AuditOutcome.FAILURE,
+            {
+              operation: 'login_blocked_mfa_lockout',
+              userId: userIdForLockoutCheck,
+              email: emailForLockoutCheck,
+              timeRemaining,
+              lockoutEnds: lockoutStatus.lockoutEnds,
+              attemptedBypass: true
+            }
+          )
+
+          console.log('🚫 SECURITY: Login attempt blocked due to active MFA lockout for user:', userIdForLockoutCheck)
+          return // CRITICAL: Block all authentication attempts during lockout
+        } else {
+          console.log('✅ SECURITY: No active MFA lockout found, proceeding with authentication')
+        }
+      } else {
+        console.log('ℹ️ SECURITY: Could not determine user ID for pre-auth lockout check, will check after authentication')
+      }
+
       // Check if user is currently blocked
       const blockStatus = LoginAttemptTracker.isUserBlocked(email)
       if (blockStatus.isBlocked) {
@@ -479,12 +607,51 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
       if (isSystemUser) {
         // Try system account login first for system users
-        if (await handleDemoAccountLogin(email, password)) {
-          // Force sync cross-device data for demo users too
+        const demoLoginResult = await handleDemoAccountLogin(email, password)
+        if (demoLoginResult) {
+          // CRITICAL SECURITY CHECK: Verify lockout status after demo account login
           const currentUser = localStorage.getItem('currentUser')
           if (currentUser) {
             try {
               const user = JSON.parse(currentUser)
+              console.log('🔒 SECURITY: Post-demo-login lockout verification for user:', user.id)
+              const demoLockoutStatus = MfaLockoutService.getLockoutStatus(user.id, user.email)
+
+              if (demoLockoutStatus.isLocked) {
+                const timeRemaining = MfaLockoutService.formatTimeRemaining(demoLockoutStatus.remainingTime!)
+                setError(`Demo account access denied. MFA lockout is active for ${timeRemaining}.`)
+
+                // Log the blocked demo access
+                await auditLogger.logPHIAccess(
+                  AuditAction.LOGIN_FAILURE,
+                  ResourceType.SYSTEM,
+                  `demo-blocked-${user.id}`,
+                  AuditOutcome.FAILURE,
+                  {
+                    operation: 'demo_account_lockout_block',
+                    userId: user.id,
+                    email: user.email,
+                    timeRemaining,
+                    lockoutEnds: demoLockoutStatus.lockoutEnds,
+                    accountType: 'demo'
+                  }
+                )
+
+                console.log('🚫 SECURITY: Demo account access blocked due to MFA lockout for user:', user.id)
+
+                // Clear the demo login data
+                localStorage.removeItem('currentUser')
+                return // CRITICAL: Block demo access during lockout
+              }
+            } catch (parseError) {
+              console.error('Error parsing currentUser for demo lockout check:', parseError)
+            }
+          }
+          // Force sync cross-device data for demo users too
+          const syncCurrentUser = localStorage.getItem('currentUser')
+          if (syncCurrentUser) {
+            try {
+              const user = JSON.parse(syncCurrentUser)
               console.log('🔄 Syncing cross-device data for demo user from Supabase...')
               // Note: MFA sync functionality not available in current service implementation
               console.log('🔄 Cross-device MFA sync would be performed here')
@@ -526,6 +693,38 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       if (authResponse.data) {
         // User authenticated successfully
         const userData = authResponse.data
+
+        // CRITICAL SECURITY CHECK: Verify MFA lockout status again after user identification
+        // This catches cases where user ID wasn't available during pre-auth check
+        console.log('🔒 SECURITY: Post-authentication lockout verification for user:', userData.id)
+        const postAuthLockoutStatus = MfaLockoutService.getLockoutStatus(userData.id, userData.email)
+
+        if (postAuthLockoutStatus.isLocked) {
+          const timeRemaining = MfaLockoutService.formatTimeRemaining(postAuthLockoutStatus.remainingTime!)
+          setError(`Access denied. MFA lockout is active for ${timeRemaining}. Please wait before trying again.`)
+
+          // Log the blocked access attempt
+          await auditLogger.logPHIAccess(
+            AuditAction.LOGIN_FAILURE,
+            ResourceType.SYSTEM,
+            `post-auth-blocked-${userData.id}`,
+            AuditOutcome.FAILURE,
+            {
+              operation: 'post_auth_lockout_block',
+              userId: userData.id,
+              email: userData.email,
+              timeRemaining,
+              lockoutEnds: postAuthLockoutStatus.lockoutEnds,
+              stage: 'post_authentication'
+            }
+          )
+
+          console.log('🚫 SECURITY: Post-authentication access blocked due to MFA lockout for user:', userData.id)
+
+          // Clear any stored user data
+          localStorage.removeItem('currentUser')
+          return // CRITICAL: Block access even after successful authentication
+        }
 
         // Save user profile as current user (replaces localStorage.setItem('currentUser'))
         const profileResponse = await userProfileService.saveUserProfile(userData)
@@ -579,10 +778,10 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         // Check for system accounts as fallback (only if user not found in system and not already tried)
         if (!isSystemUser && await handleDemoAccountLogin(email, password)) {
           // Force sync cross-device data for demo users
-          const currentUser = localStorage.getItem('currentUser')
-          if (currentUser) {
+          const fallbackCurrentUser = localStorage.getItem('currentUser')
+          if (fallbackCurrentUser) {
             try {
-              const user = JSON.parse(currentUser)
+              const user = JSON.parse(fallbackCurrentUser)
               console.log('🔄 Syncing cross-device data for fallback demo user from Supabase...')
               // Note: MFA sync functionality not available in current service implementation
               console.log('🔄 Cross-device MFA sync would be performed here')
@@ -887,6 +1086,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
             </div>
           )}
 
+          {lockoutStatus && lockoutStatus.isLocked && (
+            <div className="bg-red-50 border border-red-200 rounded p-3 mb-4 text-red-700 text-sm">
+              <div className="flex items-center gap-2">
+                <AlertCircleIcon className="w-4 h-4 flex-shrink-0" />
+                <div>
+                  <div className="font-medium">Account Temporarily Locked</div>
+                  <div className="text-xs mt-1">
+                    Due to multiple failed MFA attempts, access for <strong>{lockoutStatus.userEmail}</strong> is blocked for <strong>{lockoutStatus.timeRemaining}</strong>.
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Email Address</label>
@@ -934,10 +1147,15 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
             <button
               type="submit"
-              disabled={isLoading}
+              disabled={isLoading || (lockoutStatus && lockoutStatus.isLocked)}
               className="w-full bg-blue-600 text-white p-3 rounded font-medium hover:bg-blue-700 disabled:opacity-50"
             >
-              {isLoading ? 'Signing in...' : 'Sign In'}
+              {lockoutStatus && lockoutStatus.isLocked
+                ? `Locked (${lockoutStatus.timeRemaining})`
+                : isLoading
+                ? 'Signing in...'
+                : 'Sign In'
+              }
             </button>
           </form>
         </div>

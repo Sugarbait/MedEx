@@ -468,6 +468,48 @@ const App: React.FC = () => {
         if (storedUser) {
           const userData = storedUser
 
+          // CRITICAL SECURITY FIX: Check MFA lockout status before any user loading
+          // This prevents app-level bypass of MFA lockout
+          console.log('🔒 SECURITY: Checking MFA lockout status before user initialization')
+          try {
+            const { MfaLockoutService } = await import('./services/mfaLockoutService')
+            const appLockoutStatus = MfaLockoutService.getLockoutStatus(userData.id, userData.email)
+
+            if (appLockoutStatus.isLocked) {
+              const timeRemaining = MfaLockoutService.formatTimeRemaining(appLockoutStatus.remainingTime!)
+              console.log('🚫 SECURITY: App-level access blocked due to active MFA lockout for user:', userData.id)
+
+              // Log the blocked app access attempt
+              await auditLogger.logAuthenticationEvent(
+                AuditAction.LOGIN_FAILURE,
+                userData.id,
+                AuditOutcome.FAILURE,
+                JSON.stringify({
+                  operation: 'app_level_lockout_block',
+                  userId: userData.id,
+                  email: userData.email,
+                  timeRemaining,
+                  lockoutEnds: appLockoutStatus.lockoutEnds,
+                  bypassAttempt: 'app_initialization'
+                })
+              )
+
+              // Clear all user data and force logout
+              localStorage.removeItem('currentUser')
+              localStorage.removeItem('freshMfaVerified')
+              localStorage.removeItem('mfa_verified')
+              setUser(null)
+              setIsInitializing(false)
+              console.log('🔒 SECURITY: User data cleared due to active MFA lockout')
+              return // CRITICAL: Block app initialization during lockout
+            } else {
+              console.log('✅ SECURITY: No active MFA lockout found during app initialization')
+            }
+          } catch (lockoutCheckError) {
+            console.error('❌ SECURITY: Error checking MFA lockout during app initialization:', lockoutCheckError)
+            // Continue with normal flow but log the error
+          }
+
           // CRITICAL: Check if user requires mandatory MFA verification
           console.log('🔐 MANDATORY MFA CHECK: Checking if user requires MFA verification')
 
