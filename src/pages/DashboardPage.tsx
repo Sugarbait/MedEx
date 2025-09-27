@@ -19,7 +19,8 @@ import {
   DollarSignIcon,
   ThumbsUpIcon,
   AlertCircleIcon,
-  BarChart3Icon
+  BarChart3Icon,
+  TrashIcon
 } from 'lucide-react'
 
 interface DashboardPageProps {
@@ -560,8 +561,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
       console.log(`🔍 Dashboard DEBUG: Date range verification - Selected: ${selectedDateRange}, Chats processed: ${allFilteredChats.length}`)
 
       // DEBUGGING FIX: If we're getting significantly fewer segments than expected for today, trigger accurate recalculation
-      if (selectedDateRange === 'today' && calculatedTotalSegments < 10 && allFilteredChats.length > 0) {
-        console.warn(`🚨 Dashboard APPLYING FIX: Only ${calculatedTotalSegments} segments for ${allFilteredChats.length} chats today - this seems low`)
+      // Only trigger if we have many chats but very few segments (ratio-based check)
+      const avgSegmentsPerChat = allFilteredChats.length > 0 ? calculatedTotalSegments / allFilteredChats.length : 0
+      if (selectedDateRange === 'today' && allFilteredChats.length > 3 && avgSegmentsPerChat < 0.5) {
+        console.warn(`🚨 Dashboard APPLYING FIX: Only ${calculatedTotalSegments} segments for ${allFilteredChats.length} chats today - average ${avgSegmentsPerChat.toFixed(2)} segments per chat seems low`)
         console.warn(`🚨 Dashboard Triggering accurate segment recalculation for all today's chats`)
 
         // Clear cache for today's chats and trigger fresh calculation
@@ -656,7 +659,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
           try {
             const fullChatData = await chatService.getChat(chat.chat_id)
             if (fullChatData?.message_with_tool_calls) {
-              const segments = twilioCostService.calculateSMSSegments(fullChatData.message_with_tool_calls)
+              // Use same calculation method as the main calculateChatSMSSegments function
+              const messagesWithContent = fullChatData.message_with_tool_calls.filter(m => m.content && m.content.trim().length > 0)
+              const breakdown = twilioCostService.getDetailedSMSBreakdown(messagesWithContent)
+              const segments = Math.max(breakdown.segmentCount, 1)
 
               // Update the cache (batch updates for better performance)
               return { chatId: chat.chat_id, segments }
@@ -1064,6 +1070,24 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
     }
   }
 
+  const handleClearCache = () => {
+    try {
+      // Clear SMS segment cache
+      localStorage.removeItem(SMS_SEGMENT_CACHE_KEY)
+
+      // Clear fullDataSegmentCache state
+      setFullDataSegmentCache(new Map())
+
+      // Force refresh data after clearing cache
+      fetchDashboardData()
+
+      console.log('🗑️ Dashboard cache cleared successfully')
+    } catch (error) {
+      console.error('Failed to clear cache:', error)
+      setError('Failed to clear cache. Please try again.')
+    }
+  }
+
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       {/* Header */}
@@ -1105,6 +1129,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
           >
             <RefreshCwIcon className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">Refresh</span>
+          </button>
+          <button
+            onClick={handleClearCache}
+            disabled={isLoading}
+            className="flex items-center gap-2 px-3 py-2 text-red-600 hover:text-red-800 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 min-h-[44px]"
+            title="Clear all SMS segment calculation caches"
+          >
+            <TrashIcon className="w-4 h-4" />
+            Clear Cache
           </button>
           <button
             onClick={handleExportPDF}

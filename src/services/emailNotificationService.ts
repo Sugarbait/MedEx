@@ -53,7 +53,7 @@ class EmailNotificationServiceClass {
   }
 
   /**
-   * Load notification configuration from Supabase user_settings (cloud-synced)
+   * Load notification configuration from Supabase user_settings (cloud-synced with RLS fallback)
    */
   private async loadConfiguration(): Promise<void> {
     try {
@@ -72,42 +72,76 @@ class EmailNotificationServiceClass {
         .eq('user_id', userId)
         .single()
 
-      if (error && error.code !== 'PGRST116') { // PGRST116 = no rows found
-        console.warn('📧 Failed to load from Supabase, falling back to localStorage:', error)
+      if (error) {
+        if (error.code === 'PGRST116') {
+          // No rows found - this is OK, use defaults
+          console.log('📧 No email settings found in Supabase, checking localStorage')
+        } else if (error.code === '42501' || error.message?.includes('row-level security policy')) {
+          // RLS policy blocking read access
+          console.warn('🔒 EMAIL SETTINGS: RLS policy blocking read operation - using localStorage fallback')
+        } else {
+          // Other error
+          console.warn('📧 Failed to load from Supabase, falling back to localStorage:', error)
+        }
+
         // Fallback to localStorage
         const settingsKey = `settings_${userId}`
         const localSettings = localStorage.getItem(settingsKey)
         if (localSettings) {
           const settings = JSON.parse(localSettings)
           this.config = settings.emailNotifications || this.getDefaultConfig()
+          console.log('📧 Loaded email config from localStorage fallback')
         } else {
           this.config = this.getDefaultConfig()
+          console.log('📧 Using default email notification config')
         }
       } else if (userSettings?.email_notifications) {
         // Use Supabase settings
         this.config = userSettings.email_notifications as EmailNotificationConfig
         console.log('📧 Loaded email config from Supabase (cloud-synced)')
+
+        // Cache in localStorage for quick access
+        const settingsKey = `settings_${userId}`
+        const localSettings = JSON.parse(localStorage.getItem(settingsKey) || '{}')
+        localSettings.emailNotifications = this.config
+        localStorage.setItem(settingsKey, JSON.stringify(localSettings))
       } else {
         // No settings found, use defaults
         this.config = this.getDefaultConfig()
         console.log('📧 Using default email notification config')
       }
 
-      // Cache in localStorage for quick access
-      const settingsKey = `settings_${userId}`
-      const localSettings = JSON.parse(localStorage.getItem(settingsKey) || '{}')
-      localSettings.emailNotifications = this.config
-      localStorage.setItem(settingsKey, JSON.stringify(localSettings))
-
       console.log('📧 Email notification config loaded:', {
         enabled: this.config.enabled,
         recipientCount: this.config.recipientEmails.length,
         types: this.config.notificationTypes,
-        source: userSettings?.email_notifications ? 'supabase' : 'localStorage'
+        source: (userSettings?.email_notifications) ? 'supabase' : 'localStorage'
       })
     } catch (error) {
       console.error('❌ Failed to load email notification config:', error)
-      this.config = this.getDefaultConfig()
+
+      // Emergency fallback to localStorage
+      try {
+        const currentUser = localStorage.getItem('currentUser')
+        if (currentUser) {
+          const userData = JSON.parse(currentUser)
+          const settingsKey = `settings_${userData.id}`
+          const localSettings = localStorage.getItem(settingsKey)
+          if (localSettings) {
+            const settings = JSON.parse(localSettings)
+            this.config = settings.emailNotifications || this.getDefaultConfig()
+            console.log('📧 Emergency fallback: Loaded from localStorage')
+          } else {
+            this.config = this.getDefaultConfig()
+            console.log('📧 Emergency fallback: Using defaults')
+          }
+        } else {
+          this.config = this.getDefaultConfig()
+        }
+      } catch (fallbackError) {
+        console.error('❌ Even localStorage fallback failed:', fallbackError)
+        this.config = this.getDefaultConfig()
+      }
     }
   }
 
@@ -493,7 +527,7 @@ class EmailNotificationServiceClass {
   }
 
   /**
-   * Update notification configuration (cloud-synced to Supabase)
+   * Update notification configuration (cloud-synced to Supabase with RLS fallback)
    */
   async updateConfiguration(config: EmailNotificationConfig): Promise<void> {
     try {
@@ -505,7 +539,7 @@ class EmailNotificationServiceClass {
 
       console.log('📧 Updating email notification config to Supabase for user:', userId)
 
-      // Update in Supabase user_settings table
+      // Try to update in Supabase user_settings table
       const { error: upsertError } = await supabase
         .from('user_settings')
         .upsert({
@@ -517,11 +551,39 @@ class EmailNotificationServiceClass {
         })
 
       if (upsertError) {
-        console.error('❌ Failed to save to Supabase:', upsertError)
-        throw new Error(`Failed to save to cloud: ${upsertError.message}`)
+        // Check if this is an RLS policy error
+        if (upsertError.code === '42501' || upsertError.message?.includes('row-level security policy')) {
+          console.warn('🔒 EMAIL SETTINGS: RLS policy blocking operation - using localStorage fallback')
+
+          // Update local cache only (graceful fallback)
+          const settingsKey = `settings_${userId}`
+          const userSettings = JSON.parse(localStorage.getItem(settingsKey) || '{}')
+          userSettings.emailNotifications = config
+          localStorage.setItem(settingsKey, JSON.stringify(userSettings))
+
+          this.config = config
+          console.log('✅ Email notification configuration updated (localStorage fallback)')
+
+          // Trigger settings sync if available
+          window.dispatchEvent(new CustomEvent('userSettingsUpdated', {
+            detail: { userId, settings: userSettings }
+          }))
+
+          return
+        } else {
+          console.error('❌ Failed to save to Supabase:', upsertError)
+          // Still update localStorage even if cloud save fails
+          const settingsKey = `settings_${userId}`
+          const userSettings = JSON.parse(localStorage.getItem(settingsKey) || '{}')
+          userSettings.emailNotifications = config
+          localStorage.setItem(settingsKey, JSON.stringify(userSettings))
+          this.config = config
+          console.log('✅ Email notification configuration updated (localStorage only, cloud failed)')
+          return
+        }
       }
 
-      // Update local cache
+      // Supabase save successful - update local cache
       const settingsKey = `settings_${userId}`
       const userSettings = JSON.parse(localStorage.getItem(settingsKey) || '{}')
       userSettings.emailNotifications = config
@@ -537,7 +599,23 @@ class EmailNotificationServiceClass {
 
     } catch (error) {
       console.error('❌ Failed to update email notification configuration:', error)
-      throw error
+
+      // Final fallback - still try to save to localStorage
+      try {
+        const currentUser = localStorage.getItem('currentUser')
+        if (currentUser) {
+          const userData = JSON.parse(currentUser)
+          const settingsKey = `settings_${userData.id}`
+          const userSettings = JSON.parse(localStorage.getItem(settingsKey) || '{}')
+          userSettings.emailNotifications = config
+          localStorage.setItem(settingsKey, JSON.stringify(userSettings))
+          this.config = config
+          console.log('✅ Email notification configuration updated (localStorage emergency fallback)')
+        }
+      } catch (fallbackError) {
+        console.error('❌ Even localStorage fallback failed:', fallbackError)
+        throw new Error('Failed to save email settings anywhere')
+      }
     }
   }
 

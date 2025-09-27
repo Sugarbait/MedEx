@@ -23,6 +23,12 @@ export interface UserProfileData {
   role: 'admin' | 'super_user' | 'healthcare_provider' | 'staff'
   avatar?: string
   mfa_enabled?: boolean
+  // Extended profile fields
+  department?: string
+  phone?: string
+  bio?: string
+  location?: string
+  display_name?: string
   settings: {
     retellApiKey?: string
     callAgentId?: string
@@ -261,7 +267,26 @@ export class UserProfileService {
         if (!supabaseError && supabaseUser) {
           console.log('UserProfileService: Profile loaded from Supabase successfully')
 
-          // MAP existing schema to expected format
+          // Load extended profile information from user_profiles table
+          let extendedProfile = null
+          try {
+            const { data: profileData, error: profileError } = await supabase
+              .from('user_profiles')
+              .select('*')
+              .eq('user_id', supabaseUser.id)
+              .single()
+
+            if (!profileError && profileData) {
+              extendedProfile = profileData
+              console.log('UserProfileService: Extended profile loaded from user_profiles table')
+            } else {
+              console.log('UserProfileService: No extended profile found, using basic data only')
+            }
+          } catch (error) {
+            console.warn('UserProfileService: Failed to load extended profile:', error)
+          }
+
+          // MAP existing schema to expected format with extended profile data
           const userProfileData: UserProfileData = {
             id: supabaseUser.id,
             email: supabaseUser.email,
@@ -270,6 +295,12 @@ export class UserProfileService {
             // Map role from existing values
             role: this.mapExistingRoleToExpected(supabaseUser.role),
             mfa_enabled: supabaseUser.mfa_enabled || supabaseUser.is_mfa_enabled || false,
+            // Include extended profile fields
+            department: extendedProfile?.department || '',
+            phone: extendedProfile?.phone || '',
+            bio: extendedProfile?.bio || '',
+            location: extendedProfile?.location || '',
+            display_name: extendedProfile?.display_name || supabaseUser.name || '',
             settings: {
               theme: 'light',
               notifications: {}
@@ -299,7 +330,7 @@ export class UserProfileService {
         try {
           const userData = JSON.parse(storedUser)
           if (userData.id === userId) {
-            // Transform to expected format
+            // Transform to expected format including extended profile fields
             const userProfileData: UserProfileData = {
               id: userData.id,
               email: userData.email,
@@ -307,6 +338,12 @@ export class UserProfileService {
               role: userData.role || 'staff',
               avatar: userData.avatar,
               mfa_enabled: userData.mfa_enabled || false,
+              // Include extended profile fields from localStorage
+              department: userData.department || '',
+              phone: userData.phone || '',
+              bio: userData.bio || '',
+              location: userData.location || '',
+              display_name: userData.display_name || userData.name || '',
               settings: userData.settings || {}
             }
 
@@ -1352,7 +1389,8 @@ export class UserProfileService {
 
       // Save to Supabase first for cross-device persistence
       try {
-        const { error: supabaseError } = await supabase
+        // Update users table with basic info
+        const { error: usersError } = await supabase
           .from('users')
           .update({
             name: updatedProfile.name,
@@ -1362,11 +1400,38 @@ export class UserProfileService {
           })
           .eq('id', userId)
 
-        if (supabaseError) {
-          console.warn('Supabase update failed, continuing with localStorage:', supabaseError.message)
+        if (usersError) {
+          console.warn('Supabase users table update failed:', usersError.message)
         } else {
-          console.log('UserProfileService: Profile updated in Supabase successfully')
+          console.log('UserProfileService: Users table updated in Supabase successfully')
         }
+
+        // Update user_profiles table with extended profile fields (Department, Phone, Location, Bio)
+        const profileFields = {
+          user_id: userId,
+          department: updates.department || null,
+          phone: updates.phone || null,
+          bio: updates.bio || null,
+          location: updates.location || null,
+          display_name: updates.display_name || updates.name || null,
+          updated_at: updatedProfile.updated_at
+        }
+
+        // Filter out undefined values
+        const cleanProfileFields = Object.fromEntries(
+          Object.entries(profileFields).filter(([_, value]) => value !== undefined)
+        )
+
+        const { error: profileError } = await supabase
+          .from('user_profiles')
+          .upsert(cleanProfileFields, { onConflict: 'user_id' })
+
+        if (profileError) {
+          console.warn('Supabase user_profiles table update failed:', profileError.message)
+        } else {
+          console.log('UserProfileService: User profiles table updated successfully with fields:', Object.keys(cleanProfileFields))
+        }
+
       } catch (supabaseError) {
         console.warn('Supabase update error, continuing with localStorage:', supabaseError)
       }

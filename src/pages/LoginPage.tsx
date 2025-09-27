@@ -971,13 +971,17 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
       {/* MFA Verification Modal */}
       {showMFAVerification && pendingUser && (
-        <FreshMfaVerification
-          userId={pendingUser.id}
-          userEmail={pendingUser.email}
-          onVerificationSuccess={handleMFASuccess}
-          onCancel={handleMFACancel}
-          lockoutStatus={pendingUser.lockoutStatus}
-        />
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-start justify-center z-50 pt-2 md:pt-3">
+          <div className="w-full max-w-md mx-4">
+            <FreshMfaVerification
+              userId={pendingUser.id}
+              userEmail={pendingUser.email}
+              onVerificationSuccess={handleMFASuccess}
+              onCancel={handleMFACancel}
+              lockoutStatus={pendingUser.lockoutStatus}
+            />
+          </div>
+        </div>
       )}
     </div>
   )

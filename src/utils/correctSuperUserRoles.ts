@@ -41,15 +41,46 @@ export function correctUserRole(user: User | null): User | null {
 
 /**
  * Applies role correction and updates localStorage if needed
+ * Ensures extended profile fields are preserved
  */
 export function correctAndStoreUserRole(user: User | null): User | null {
   const correctedUser = correctUserRole(user)
 
-  if (correctedUser && correctedUser !== user) {
-    // Update localStorage with corrected user data
+  if (correctedUser) {
+    // Always update localStorage with user data to ensure extended profile fields are preserved
     try {
-      localStorage.setItem('currentUser', JSON.stringify(correctedUser))
-      console.log(`✅ ROLE CORRECTION: Updated localStorage for ${correctedUser.email}`)
+      // Ensure we preserve ALL fields including extended profile fields
+      const userToStore = {
+        ...correctedUser,
+        // Explicitly preserve extended profile fields that might be missing
+        department: correctedUser.department || '',
+        phone: correctedUser.phone || '',
+        bio: correctedUser.bio || '',
+        location: correctedUser.location || '',
+        display_name: correctedUser.display_name || correctedUser.name || '',
+        updated_at: new Date().toISOString()
+      }
+
+      localStorage.setItem('currentUser', JSON.stringify(userToStore))
+      console.log(`✅ ROLE CORRECTION: Updated localStorage with extended profile fields for ${correctedUser.email}`)
+
+      // Also update systemUsers to ensure consistency
+      const systemUsers = localStorage.getItem('systemUsers')
+      if (systemUsers) {
+        try {
+          const users = JSON.parse(systemUsers)
+          const userIndex = users.findIndex((u: any) => u.id === correctedUser.id)
+          if (userIndex >= 0) {
+            users[userIndex] = { ...users[userIndex], ...userToStore }
+            localStorage.setItem('systemUsers', JSON.stringify(users))
+            console.log(`✅ ROLE CORRECTION: Updated systemUsers with extended profile fields`)
+          }
+        } catch (systemUsersError) {
+          console.warn('Failed to update systemUsers:', systemUsersError)
+        }
+      }
+
+      return userToStore
     } catch (error) {
       console.warn('❌ ROLE CORRECTION: Failed to update localStorage:', error)
     }
