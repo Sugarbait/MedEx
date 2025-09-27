@@ -450,6 +450,8 @@ const App: React.FC = () => {
     })
 
     const loadUser = async () => {
+      let mfaRequiredDuringLoad = false // Track MFA requirement during this load
+
       try {
         console.log('🔄 App.tsx: Starting loadUser function...')
 
@@ -590,6 +592,7 @@ const App: React.FC = () => {
             // Note: This ensures consistent security behavior across all environments
             if (mfaEnabled && !hasValidMfaSession) {
               console.log('🔐 MANDATORY MFA required - showing MFA verification screen')
+              mfaRequiredDuringLoad = true // Mark MFA as required for this load
               setPendingMfaUser({
                 ...userData,
                 mfaCheckFailed // Pass this info to help with debugging
@@ -606,6 +609,7 @@ const App: React.FC = () => {
             // ULTIMATE FAIL-SAFE: If entire MFA system fails, still enforce for known MFA users
             if (userData.mfaEnabled || userData.email === 'elmfarrell@yahoo.com' || userData.email === 'pierre@phaetonai.com') {
               console.log('🚨 CRITICAL FAIL-SAFE: Enforcing MFA due to system failure for known MFA user')
+              mfaRequiredDuringLoad = true // Mark MFA as required for this load
               setPendingMfaUser(userData)
               // Removed setIsLoading - main.tsx handles loading
               return
@@ -826,7 +830,7 @@ const App: React.FC = () => {
         setUser(null)
       } finally {
         // CRITICAL FIX: Only stop initializing if MFA is not required to prevent dashboard flash
-        if (!pendingMfaUser) {
+        if (!mfaRequiredDuringLoad) {
           console.log('✅ App.tsx: loadUser completed, setting initializing to false')
           setIsInitializing(false)
         } else {
