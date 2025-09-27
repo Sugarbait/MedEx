@@ -1151,11 +1151,11 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       previousChatsRef.current = [...paginatedChats]
 
       // Proactively load segment data for accurate totals (async, don't block UI)
-      loadSegmentDataForChats(finalFiltered)
+      loadSegmentDataForChats(allFiltered)
       setLastDataFetch(Date.now())
 
       // Calculate basic metrics using optimized service (exclude SMS segments, handled separately)
-      const calculatedMetrics = chatService.getChatStats(finalFiltered)
+      const calculatedMetrics = chatService.getChatStats(allFiltered)
       safeLog('📊 Chat metrics calculated:', calculatedMetrics)
       setMetrics(prev => ({
         ...prev,
