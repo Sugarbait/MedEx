@@ -686,8 +686,14 @@ const App: React.FC = () => {
               }
 
               const correctedUser = correctAndStoreUserRole(supabaseUser)
-              setUser(correctedUser)
-              console.log('User loaded from Supabase successfully')
+
+              // CRITICAL FIX: Only set user if MFA is not required to prevent dashboard flash
+              if (!pendingMfaUser) {
+                setUser(correctedUser)
+                console.log('User loaded from Supabase successfully')
+              } else {
+                console.log('🔐 MFA required - user not set to prevent dashboard flash')
+              }
 
               // Store user data in localStorage for stability (correctedUser is already stored by correctAndStoreUserRole)
 
@@ -733,8 +739,14 @@ const App: React.FC = () => {
               }
 
               const correctedUser = correctAndStoreUserRole(userData)
-              setUser(correctedUser)
-              console.log('User loaded from localStorage (Supabase fallback)')
+
+              // CRITICAL FIX: Only set user if MFA is not required to prevent dashboard flash
+              if (!pendingMfaUser) {
+                setUser(correctedUser)
+                console.log('User loaded from localStorage (Supabase fallback)')
+              } else {
+                console.log('🔐 MFA required - user not set to prevent dashboard flash (fallback path)')
+              }
 
               // Load Retell credentials using bulletproof system
               await retellService.ensureCredentialsLoaded()
@@ -776,7 +788,13 @@ const App: React.FC = () => {
               }
             }
 
-            setUser(userData)
+            // CRITICAL FIX: Only set user if MFA is not required to prevent dashboard flash
+            if (!pendingMfaUser) {
+              setUser(userData)
+              console.log('✅ User set after fallback avatar processing')
+            } else {
+              console.log('🔐 MFA required - user not set to prevent dashboard flash (catch block)')
+            }
 
             // Load Retell credentials using bulletproof system
             await retellService.ensureCredentialsLoaded().catch(err => {
