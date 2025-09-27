@@ -1091,56 +1091,19 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         return isInRange
       })
 
-      // Apply all filters BEFORE pagination (like calls page)
-      let allFiltered = dateFiltered
+      // Store all date-filtered chats for filtering in useMemo (like calls page)
+      const totalChats = dateFiltered
 
-      // Apply search filter
-      if (debouncedSearchTerm && debouncedSearchTerm.trim()) {
-        if (isFuzzySearchEnabled) {
-          try {
-            const fuzzyResults = fuzzySearchService.searchSMS(debouncedSearchTerm)
-            allFiltered = fuzzyResults.filter(result => allFiltered.some(chat => chat.chat_id === result.chat_id))
-          } catch (error) {
-            safeWarn('Fuzzy search failed, falling back to basic search:', error)
-            allFiltered = fuzzySearchService.basicSMSSearch(allFiltered, debouncedSearchTerm)
-          }
-        } else {
-          allFiltered = fuzzySearchService.basicSMSSearch(allFiltered, debouncedSearchTerm)
-        }
-      }
+      safeLog(`📊 After date filtering: ${totalChats.length} chats in date range ${selectedDateRange}`)
+      safeLog(`📅 Date range: ${start.toLocaleString()} to ${end.toLocaleString()}`)
 
-      // Apply status and sentiment filters
-      allFiltered = allFiltered.filter(chat => {
-        const matchesStatus = debouncedStatusFilter === 'all' || chat.chat_status === debouncedStatusFilter
-        const matchesSentiment = debouncedSentimentFilter === 'all' || chat.chat_analysis?.user_sentiment === debouncedSentimentFilter
-        return matchesStatus && matchesSentiment
-      })
+      setTotalChatsCount(totalChats.length)
+      setAllFilteredChats(totalChats)
 
-      safeLog(`📊 After all filtering: ${allFiltered.length} chats match criteria (${dateFiltered.length} after date filter)`)
-      safeLog(`🔍 DEBUG: Date filtering results for ${selectedDateRange}:`)
-      safeLog(`🔍 DEBUG: Expected many chats for today but got ${allFiltered.length}`)
-      safeLog(`🔍 DEBUG: Date range: ${start.toLocaleString()} to ${end.toLocaleString()}`)
-      if (allFiltered.length < 10 && selectedDateRange === 'today') {
-        safeLog(`🔍 DEBUG: Only ${allFiltered.length} chats for today - this seems low, investigating first few chats:`)
-        allFiltered.slice(0, 5).forEach((chat, idx) => {
-          safeLog(`🔍 Chat ${idx + 1}: ${chat.chat_id}, Date: ${new Date(chat.start_timestamp.toString().length <= 10 ? chat.start_timestamp * 1000 : chat.start_timestamp).toLocaleString()}`)
-        })
-      }
-
-      // If "today" has many chats, show warning
-      if (selectedDateRange === 'today' && allFiltered.length > 20) {
-        safeWarn(`⚠️ WARNING: "today" date range contains ${allFiltered.length} chats - this seems high!`)
-        safeWarn(`📅 Today range: ${start.toLocaleString()} to ${end.toLocaleString()}`)
-        safeWarn(`⏰ Current time: ${new Date().toLocaleString()}`)
-      }
-
-      setTotalChatsCount(allFiltered.length)
-      setAllFilteredChats(allFiltered)
-
-      // Calculate pagination AFTER all filters are applied
+      // Calculate pagination AFTER date filtering but BEFORE search/status/sentiment filters (like calls page)
       const startIndex = (currentPage - 1) * recordsPerPage
       const endIndex = startIndex + recordsPerPage
-      const paginatedChats = allFiltered.slice(startIndex, endIndex)
+      const paginatedChats = totalChats.slice(startIndex, endIndex)
 
       setChats(paginatedChats)
 
@@ -1151,11 +1114,11 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       previousChatsRef.current = [...paginatedChats]
 
       // Proactively load segment data for accurate totals (async, don't block UI)
-      loadSegmentDataForChats(allFiltered)
+      loadSegmentDataForChats(totalChats)
       setLastDataFetch(Date.now())
 
       // Calculate basic metrics using optimized service (exclude SMS segments, handled separately)
-      const calculatedMetrics = chatService.getChatStats(allFiltered)
+      const calculatedMetrics = chatService.getChatStats(totalChats)
       safeLog('📊 Chat metrics calculated:', calculatedMetrics)
       setMetrics(prev => ({
         ...prev,
@@ -1773,9 +1736,34 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     handleNavigationSync()
   }, []) // Empty dependency array - runs once per navigation/mount
 
-  // All filtering is now done in fetchChatsOptimized before pagination
-  // This ensures proper pagination behavior like the calls page
-  const filteredChats = chats
+  // Apply search and filter logic to paginated chats (like CallsPage pattern)
+  const filteredChats = React.useMemo(() => {
+    let searchFilteredChats = chats
+
+    // Apply search filter using fuzzy search or fallback to basic search
+    if (debouncedSearchTerm && debouncedSearchTerm.trim()) {
+      if (isFuzzySearchEnabled) {
+        try {
+          const fuzzyResults = fuzzySearchService.searchSMS(debouncedSearchTerm)
+          searchFilteredChats = fuzzyResults.filter(result => chats.some(chat => chat.chat_id === result.chat_id))
+        } catch (error) {
+          console.error('Fuzzy search failed, falling back to basic search:', error)
+          searchFilteredChats = fuzzySearchService.basicSMSSearch(chats, debouncedSearchTerm)
+        }
+      } else {
+        // Use basic search when fuzzy search is disabled
+        searchFilteredChats = fuzzySearchService.basicSMSSearch(chats, debouncedSearchTerm)
+      }
+    }
+
+    // Apply status and sentiment filters to search results
+    return searchFilteredChats.filter(chat => {
+      const matchesStatus = debouncedStatusFilter === 'all' || chat.chat_status === debouncedStatusFilter
+      const matchesSentiment = debouncedSentimentFilter === 'all' || chat.chat_analysis?.user_sentiment === debouncedSentimentFilter
+
+      return matchesStatus && matchesSentiment
+    })
+  }, [chats, debouncedSearchTerm, debouncedStatusFilter, debouncedSentimentFilter, isFuzzySearchEnabled])
 
   return (
     <div className="p-6 space-y-6">
