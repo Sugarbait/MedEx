@@ -266,8 +266,30 @@ class EmailNotificationServiceClass {
 
       console.log(`📧 Sending ${data.type} notification to ${this.config.recipientEmails.length} recipients`)
 
+      // Determine email API endpoint based on environment
+      const emailApiEndpoint = (() => {
+        // Check if we have a production email API configured
+        const prodEmailApi = import.meta.env.VITE_EMAIL_API_URL
+        if (prodEmailApi) {
+          return `${prodEmailApi}/api/send-notification-email`
+        }
+
+        // Check if we're in production (Azure or deployed)
+        if (window.location.hostname !== 'localhost' &&
+            window.location.hostname !== '127.0.0.1') {
+          // In production, try to use a relative API endpoint
+          // This assumes the email API is deployed on the same domain
+          return '/api/send-notification-email'
+        }
+
+        // Development fallback to localhost
+        return 'http://localhost:4001/api/send-notification-email'
+      })()
+
+      console.log(`📧 Using email API endpoint: ${emailApiEndpoint}`)
+
       // Send email via API endpoint
-      const response = await fetch('http://localhost:4001/api/send-notification-email', {
+      const response = await fetch(emailApiEndpoint, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -705,7 +727,21 @@ if (typeof window !== 'undefined') {
   ;(window as any).sendQuickTestEmail = async (email?: string) => {
     try {
       const testEmail = email || 'test@example.com'
-      const response = await fetch('http://localhost:4001/api/test-email', {
+
+      // Determine email API endpoint based on environment
+      const emailApiEndpoint = (() => {
+        const prodEmailApi = import.meta.env.VITE_EMAIL_API_URL
+        if (prodEmailApi) {
+          return `${prodEmailApi}/api/test-email`
+        }
+        if (window.location.hostname !== 'localhost' &&
+            window.location.hostname !== '127.0.0.1') {
+          return '/api/test-email'
+        }
+        return 'http://localhost:4001/api/test-email'
+      })()
+
+      const response = await fetch(emailApiEndpoint, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ recipient: testEmail })
