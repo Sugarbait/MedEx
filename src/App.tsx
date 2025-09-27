@@ -373,6 +373,7 @@ const App: React.FC = () => {
   const [isInitializing, setIsInitializing] = useState(true)
   const [mfaRequired, setMfaRequired] = useState(false)
   const [pendingMfaUser, setPendingMfaUser] = useState<any>(null) // User awaiting MFA verification
+  const [isTransitioningFromMfa, setIsTransitioningFromMfa] = useState(false) // Prevents dashboard flash during MFA transition
   const [sidebarOpen, setSidebarOpen] = useState(() => {
     // Start with sidebar closed on mobile devices
     if (typeof window !== 'undefined') {
@@ -1063,16 +1064,22 @@ const App: React.FC = () => {
               console.warn('Failed to load user avatar after MFA:', avatarError)
             }
 
-            setUser(supabaseUser)
+            // ANTI-FLASH FIX: Set user state after a brief delay to ensure smooth transition
+            setTimeout(() => {
+              setUser(supabaseUser)
+              console.log('✅ User loaded from Supabase after mandatory MFA verification')
+            }, 100)
             localStorage.setItem('currentUser', JSON.stringify(supabaseUser))
-            console.log('✅ User loaded from Supabase after mandatory MFA verification')
 
           } else {
             // Fallback to pending user data
             userData.mfaVerified = true
-            setUser(userData)
+            // ANTI-FLASH FIX: Set user state after a brief delay to ensure smooth transition
+            setTimeout(() => {
+              setUser(userData)
+              console.log('✅ User loaded from localStorage after mandatory MFA verification')
+            }, 100)
             localStorage.setItem('currentUser', JSON.stringify(userData))
-            console.log('✅ User loaded from localStorage after mandatory MFA verification')
           }
 
           // Start session monitoring and load credentials
@@ -1082,15 +1089,28 @@ const App: React.FC = () => {
         } catch (profileError) {
           console.warn('Failed to load full profile after MFA, using pending user data:', profileError)
           userData.mfaVerified = true
-          setUser(userData)
+          // ANTI-FLASH FIX: Set user state after a brief delay to ensure smooth transition
+          setTimeout(() => {
+            setUser(userData)
+          }, 100)
           localStorage.setItem('currentUser', JSON.stringify(userData))
         }
 
-        // Clear pending MFA user
+        // ANTI-FLASH FIX: Start transition state to prevent dashboard flash
+        console.log('🔄 Starting MFA transition state to prevent dashboard flash')
+        setIsTransitioningFromMfa(true)
+
+        // Clear pending MFA user immediately (this stops the MFA screen)
         setPendingMfaUser(null)
 
         // CRITICAL FIX: Stop initializing state after successful MFA verification
         setIsInitializing(false)
+
+        // Clear transition state after user state is set (150ms delay to ensure state is applied)
+        setTimeout(() => {
+          setIsTransitioningFromMfa(false)
+          console.log('✅ MFA transition completed - dashboard ready to render')
+        }, 150)
 
         // Log successful authentication
         const { auditLogger, AuditAction, AuditOutcome } = await import('./services/auditLogger')
@@ -1130,6 +1150,7 @@ const App: React.FC = () => {
     setPendingMfaUser(null)
     setUser(null)
     setMfaRequired(false)
+    setIsTransitioningFromMfa(false) // Clear transition state
 
     // CRITICAL FIX: Stop initializing state when MFA is cancelled
     setIsInitializing(false)
@@ -1234,6 +1255,20 @@ const App: React.FC = () => {
     )
   }
 
+  // ANTI-FLASH FIX: Show loading during MFA transition to prevent dashboard flash
+  if (isTransitioningFromMfa) {
+    console.log('🔄 ANTI-FLASH: Showing transition loading screen to prevent dashboard flash')
+    return (
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
+          <p className="text-gray-600 dark:text-gray-400">Completing authentication...</p>
+        </div>
+      </div>
+    )
+  }
+
+
   if (!user) {
     return <LoginPage onLogin={() => {
       console.log('🔄 Login completed - redirecting to dashboard')
@@ -1249,6 +1284,9 @@ const App: React.FC = () => {
       }
     }} />
   }
+
+  // Dashboard is ready to render without flash
+  console.log('🎯 ANTI-FLASH: Rendering dashboard content - no flash should occur')
 
   return (
     <SupabaseProvider>
