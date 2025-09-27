@@ -1903,39 +1903,41 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   // Remove displayChats - render filteredChats directly like CallsPage
 
   return (
-    <div className="p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-4 lg:space-y-6 min-h-screen">
+    <div className="p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-4 lg:space-y-6 min-h-screen overflow-x-hidden">
 
       {/* Header */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-4">
-        <DateRangePicker
-          selectedRange={selectedDateRange}
-          customStartDate={customStartDate}
-          customEndDate={customEndDate}
-          onRangeChange={(range, customStart, customEnd) => {
-            setSelectedDateRange(range)
-            // Save selected date range to localStorage
-            localStorage.setItem('sms_page_date_range', range)
+        <div className="w-full sm:w-auto min-w-0 flex-shrink-0">
+          <DateRangePicker
+            selectedRange={selectedDateRange}
+            customStartDate={customStartDate}
+            customEndDate={customEndDate}
+            onRangeChange={(range, customStart, customEnd) => {
+              setSelectedDateRange(range)
+              // Save selected date range to localStorage
+              localStorage.setItem('sms_page_date_range', range)
 
-            // Handle custom date range
-            if (range === 'custom' && customStart && customEnd) {
-              setCustomStartDate(customStart)
-              setCustomEndDate(customEnd)
-              // Save custom dates to localStorage
-              localStorage.setItem('sms_page_custom_start_date', customStart.toISOString())
-              localStorage.setItem('sms_page_custom_end_date', customEnd.toISOString())
-            } else if (range !== 'custom') {
-              // Clear custom dates when switching to non-custom range
-              setCustomStartDate(undefined)
-              setCustomEndDate(undefined)
-              localStorage.removeItem('sms_page_custom_start_date')
-              localStorage.removeItem('sms_page_custom_end_date')
-            }
+              // Handle custom date range
+              if (range === 'custom' && customStart && customEnd) {
+                setCustomStartDate(customStart)
+                setCustomEndDate(customEnd)
+                // Save custom dates to localStorage
+                localStorage.setItem('sms_page_custom_start_date', customStart.toISOString())
+                localStorage.setItem('sms_page_custom_end_date', customEnd.toISOString())
+              } else if (range !== 'custom') {
+                // Clear custom dates when switching to non-custom range
+                setCustomStartDate(undefined)
+                setCustomEndDate(undefined)
+                localStorage.removeItem('sms_page_custom_start_date')
+                localStorage.removeItem('sms_page_custom_end_date')
+              }
 
-            const { start, end } = getDateRangeFromSelection(range, customStart, customEnd)
-            safeLog('SMS date range changed:', { range, start, end, customStart, customEnd })
-          }}
-        />
-        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto">
+              const { start, end } = getDateRangeFromSelection(range, customStart, customEnd)
+              safeLog('SMS date range changed:', { range, start, end, customStart, customEnd })
+            }}
+          />
+        </div>
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full sm:w-auto min-w-0">
           <button
             onClick={() => {
               console.log('🔴 [SMS DEBUG] Refresh button clicked at:', new Date().toLocaleTimeString())
@@ -1981,11 +1983,11 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           </button>
           <button
             onClick={exportAllChatsToPDF}
-            className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors min-h-[44px] text-sm sm:text-base flex-1 sm:flex-initial justify-center touch-manipulation"
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors min-h-[44px] text-sm sm:text-base flex-shrink-0 justify-center touch-manipulation"
             title={`Export all SMS chats for ${selectedDateRange} to PDF`}
           >
-            <DownloadIcon className="w-4 h-4" />
-            <span className="hidden sm:inline">Export Chat Report</span>
+            <DownloadIcon className="w-4 h-4 flex-shrink-0" />
+            <span className="hidden sm:inline whitespace-nowrap">Export Chat Report</span>
             <span className="sm:hidden">Export</span>
           </button>
         </div>
