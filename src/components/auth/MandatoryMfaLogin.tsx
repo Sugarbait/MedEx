@@ -12,6 +12,7 @@ import FreshMfaService from '@/services/freshMfaService'
 import { FreshMfaVerification } from './FreshMfaVerification'
 import { FreshMfaSetup } from './FreshMfaSetup'
 import { auditLogger, AuditAction, AuditOutcome } from '@/services/auditLogger'
+import { MfaLockoutService } from '@/services/mfaLockoutService'
 
 interface MandatoryMfaLoginProps {
   user: {
@@ -144,6 +145,9 @@ export const MandatoryMfaLogin: React.FC<MandatoryMfaLoginProps> = ({
   const handleMfaSuccess = async () => {
     try {
       console.log('✅ MandatoryMfaLogin: MFA verification successful for user:', user.id)
+
+      // SECURITY FIX: Clear MFA lockout attempts on successful verification
+      await MfaLockoutService.clearMfaAttempts(user.id, user.email)
 
       // Store MFA verification timestamp for session management
       const mfaTimestamp = Date.now().toString()

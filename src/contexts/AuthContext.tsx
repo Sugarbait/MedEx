@@ -9,6 +9,7 @@ import { secureLogger } from '@/services/secureLogger'
 import FreshMfaService from '@/services/freshMfaService'
 import { retellService } from '@/services'
 import { AvatarStorageService } from '@/services/avatarStorageService'
+import { MfaLockoutService } from '@/services/mfaLockoutService'
 import { getBulletproofCredentials, storeCredentialsEverywhere, validateCredentials } from '@/config/retellCredentials'
 
 const logger = secureLogger.component('AuthContext')
@@ -519,6 +520,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const isValid = await FreshMfaService.verifyLoginCode(userProfile.id, code)
 
       if (isValid) {
+        // SECURITY FIX: Clear MFA lockout attempts on successful verification
+        await MfaLockoutService.clearMfaAttempts(userProfile.id, userProfile.email)
+
         userProfile.mfaVerified = true
         const mfaTimestamp = Date.now().toString()
         localStorage.setItem('freshMfaVerified', mfaTimestamp)

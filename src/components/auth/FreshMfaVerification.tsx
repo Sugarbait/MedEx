@@ -63,7 +63,7 @@ export const FreshMfaVerification: React.FC<FreshMfaVerificationProps> = ({
   }, [userId])
 
   /**
-   * Update lockout status periodically
+   * Update lockout status periodically and enforce on component load
    */
   useEffect(() => {
     const updateLockoutStatus = () => {
@@ -71,13 +71,17 @@ export const FreshMfaVerification: React.FC<FreshMfaVerificationProps> = ({
       setLockoutStatus(currentStatus)
 
       if (currentStatus.isLocked && currentStatus.remainingTime) {
-        setTimeRemaining(MfaLockoutService.formatTimeRemaining(currentStatus.remainingTime))
+        const timeLeft = MfaLockoutService.formatTimeRemaining(currentStatus.remainingTime)
+        setTimeRemaining(timeLeft)
+        // SECURITY FIX: Set error immediately if user is locked out on component load
+        setError(`Account is locked out. Please try again in ${timeLeft}.`)
       } else {
         setTimeRemaining('')
+        // Note: Error clearing handled by user interaction to avoid dependency cycles
       }
     }
 
-    // Update immediately
+    // Update immediately on component mount - prevents bypass
     updateLockoutStatus()
 
     // Update every 30 seconds
@@ -98,11 +102,14 @@ export const FreshMfaVerification: React.FC<FreshMfaVerificationProps> = ({
       return
     }
 
-    // Check lockout status before attempting verification
+    // SECURITY FIX: Always check current lockout status before attempting verification
     const currentLockoutStatus = MfaLockoutService.getLockoutStatus(userId, userEmail)
+    setLockoutStatus(currentLockoutStatus) // Update component state
+
     if (currentLockoutStatus.isLocked) {
       const timeLeft = MfaLockoutService.formatTimeRemaining(currentLockoutStatus.remainingTime!)
       setError(`Account is locked out. Please try again in ${timeLeft}.`)
+      setTimeRemaining(timeLeft)
       return
     }
 
@@ -118,6 +125,10 @@ export const FreshMfaVerification: React.FC<FreshMfaVerificationProps> = ({
 
       if (isValid) {
         console.log('✅ MFA verification successful - granting access')
+
+        // SECURITY FIX: Clear MFA lockout attempts on successful verification
+        await MfaLockoutService.clearMfaAttempts(userId, userEmail)
+
         onVerificationSuccess()
       } else {
         console.log('❌ MFA verification failed - recording attempt')
