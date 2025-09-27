@@ -1,0 +1,528 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SMS Pagination Debug Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .debug-section {
+            background: white;
+            margin: 20px 0;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .debug-section h2 {
+            color: #333;
+            border-bottom: 2px solid #007bff;
+            padding-bottom: 10px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .status.success { background-color: #d4edda; color: #155724; }
+        .status.error { background-color: #f8d7da; color: #721c24; }
+        .status.warning { background-color: #fff3cd; color: #856404; }
+        .test-result {
+            font-family: monospace;
+            background: #f8f9fa;
+            padding: 10px;
+            border-left: 4px solid #007bff;
+            margin: 10px 0;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        .iframe-container {
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+            margin: 20px 0;
+        }
+        iframe {
+            width: 100%;
+            height: 600px;
+            border: none;
+        }
+        .pagination-test {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin: 10px 0;
+        }
+        .pagination-button {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            background: white;
+            cursor: pointer;
+            border-radius: 4px;
+        }
+        .pagination-button.active {
+            background: #007bff;
+            color: white;
+        }
+        .pagination-button:hover {
+            background: #f8f9fa;
+        }
+        .pagination-button.active:hover {
+            background: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <h1>📊 SMS Pagination Debug Test</h1>
+    <p><strong>Purpose:</strong> Comprehensive testing of SMS page pagination functionality</p>
+
+    <!-- Live Application Test -->
+    <div class="debug-section">
+        <h2>🔴 Live Application Test</h2>
+        <p>Testing SMS page at: <strong>http://localhost:3022/sms</strong></p>
+        <button onclick="testLiveApp()">🚀 Test Live SMS Page</button>
+        <button onclick="openSMSPage()">📱 Open SMS Page in New Tab</button>
+        <div id="liveAppResults"></div>
+
+        <div class="iframe-container">
+            <iframe id="smsFrame" src="about:blank"></iframe>
+        </div>
+    </div>
+
+    <!-- Pagination Simulation -->
+    <div class="debug-section">
+        <h2>🧪 Pagination Logic Simulation</h2>
+        <p>Simulating the exact pagination logic used in SMS page</p>
+
+        <div>
+            <label>Total Records: </label>
+            <input type="number" id="totalRecords" value="157" min="1" max="1000">
+            <label>Records Per Page: </label>
+            <input type="number" id="recordsPerPage" value="20" min="1" max="100">
+            <button onclick="simulatePagination()">🔄 Simulate Pagination</button>
+        </div>
+
+        <div id="paginationSimulation"></div>
+
+        <div class="pagination-test" id="testPagination"></div>
+    </div>
+
+    <!-- Console Log Monitor -->
+    <div class="debug-section">
+        <h2>📋 Console Log Monitor</h2>
+        <p>Monitoring console logs for pagination-related errors</p>
+        <button onclick="clearLogs()">🗑️ Clear Logs</button>
+        <button onclick="startLogMonitoring()">👁️ Start Monitoring</button>
+        <div id="consoleLogOutput" style="max-height: 300px; overflow-y: auto; background: #000; color: #0f0; padding: 10px; font-family: monospace;"></div>
+    </div>
+
+    <!-- Network Request Monitor -->
+    <div class="debug-section">
+        <h2>🌐 Network Request Analysis</h2>
+        <p>Checking for API calls when pagination is used</p>
+        <button onclick="monitorNetworkRequests()">📡 Monitor Network</button>
+        <div id="networkResults"></div>
+    </div>
+
+    <!-- React State Inspector -->
+    <div class="debug-section">
+        <h2>⚛️ React State Inspector</h2>
+        <p>Inspecting React component state for pagination variables</p>
+        <button onclick="inspectReactState()">🔍 Inspect State</button>
+        <div id="reactStateResults"></div>
+    </div>
+
+    <!-- DOM Element Inspector -->
+    <div class="debug-section">
+        <h2>🔧 DOM Element Inspector</h2>
+        <p>Checking if pagination elements exist and are clickable</p>
+        <button onclick="inspectPaginationDOM()">🎯 Inspect Pagination DOM</button>
+        <div id="domInspectionResults"></div>
+    </div>
+
+    <!-- Quick Fix Tester -->
+    <div class="debug-section">
+        <h2>🚀 Quick Fix Tester</h2>
+        <p>Test potential fixes for pagination issues</p>
+        <button onclick="testQuickFix1()">🔧 Test Fix 1: Force Re-render</button>
+        <button onclick="testQuickFix2()">🔧 Test Fix 2: Reset State</button>
+        <button onclick="testQuickFix3()">🔧 Test Fix 3: Clear Cache</button>
+        <div id="quickFixResults"></div>
+    </div>
+
+    <script>
+        let logMonitoring = false;
+        let originalConsoleLog = console.log;
+        let originalConsoleError = console.error;
+        let originalConsoleWarn = console.warn;
+
+        function addResult(containerId, message, type = 'info') {
+            const container = document.getElementById(containerId);
+            const result = document.createElement('div');
+            result.className = `status ${type}`;
+            result.innerHTML = message;
+            container.appendChild(result);
+        }
+
+        function addTestResult(containerId, data) {
+            const container = document.getElementById(containerId);
+            const result = document.createElement('div');
+            result.className = 'test-result';
+            result.innerHTML = `<pre>${JSON.stringify(data, null, 2)}</pre>`;
+            container.appendChild(result);
+        }
+
+        function testLiveApp() {
+            const resultsContainer = document.getElementById('liveAppResults');
+            resultsContainer.innerHTML = '';
+
+            addResult('liveAppResults', '🔄 Loading SMS page in iframe...', 'warning');
+
+            const iframe = document.getElementById('smsFrame');
+            iframe.src = 'http://localhost:3022/sms';
+
+            iframe.onload = function() {
+                setTimeout(() => {
+                    try {
+                        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+
+                        // Check if page loaded successfully
+                        const title = iframeDoc.title;
+                        addResult('liveAppResults', `✅ Page loaded: ${title}`, 'success');
+
+                        // Check for pagination elements
+                        const paginationElements = iframeDoc.querySelectorAll('[class*="pagination"], [aria-label*="pagination"], button[onclick*="page"], button[onclick*="Page"]');
+                        addResult('liveAppResults', `📊 Found ${paginationElements.length} pagination elements`, paginationElements.length > 0 ? 'success' : 'error');
+
+                        // Check for page buttons
+                        const pageButtons = iframeDoc.querySelectorAll('button[onClick*="setCurrentPage"], .page-button, [class*="page-"]');
+                        addResult('liveAppResults', `🔢 Found ${pageButtons.length} page buttons`, pageButtons.length > 0 ? 'success' : 'error');
+
+                        // Check for error messages
+                        const errorElements = iframeDoc.querySelectorAll('[class*="error"], .alert-danger, [style*="color: red"]');
+                        if (errorElements.length > 0) {
+                            addResult('liveAppResults', `❌ Found ${errorElements.length} error elements`, 'error');
+                        } else {
+                            addResult('liveAppResults', '✅ No visible errors detected', 'success');
+                        }
+
+                        // Check for SMS data
+                        const tableRows = iframeDoc.querySelectorAll('table tr, .chat-item, [class*="chat"], [class*="sms"]');
+                        addResult('liveAppResults', `📋 Found ${tableRows.length} data rows/items`, tableRows.length > 0 ? 'success' : 'warning');
+
+                    } catch (error) {
+                        addResult('liveAppResults', `❌ Error accessing iframe: ${error.message}`, 'error');
+                        addResult('liveAppResults', '💡 This may be due to CORS restrictions. Try opening in new tab.', 'warning');
+                    }
+                }, 2000);
+            };
+
+            iframe.onerror = function() {
+                addResult('liveAppResults', '❌ Failed to load SMS page', 'error');
+                addResult('liveAppResults', '💡 Check if development server is running on port 3022', 'warning');
+            };
+        }
+
+        function openSMSPage() {
+            window.open('http://localhost:3022/sms', '_blank');
+            addResult('liveAppResults', '🌐 Opened SMS page in new tab for manual testing', 'success');
+        }
+
+        function simulatePagination() {
+            const totalRecords = parseInt(document.getElementById('totalRecords').value);
+            const recordsPerPage = parseInt(document.getElementById('recordsPerPage').value);
+
+            const container = document.getElementById('paginationSimulation');
+            container.innerHTML = '';
+
+            const totalPages = Math.ceil(totalRecords / recordsPerPage);
+
+            const simulation = {
+                totalRecords,
+                recordsPerPage,
+                totalPages,
+                pages: []
+            };
+
+            for (let page = 1; page <= totalPages; page++) {
+                const startIndex = (page - 1) * recordsPerPage;
+                const endIndex = Math.min(startIndex + recordsPerPage, totalRecords);
+
+                simulation.pages.push({
+                    page,
+                    startIndex,
+                    endIndex,
+                    recordsShown: endIndex - startIndex,
+                    showingText: `Showing ${startIndex + 1} to ${endIndex} of ${totalRecords}`
+                });
+            }
+
+            addTestResult('paginationSimulation', simulation);
+
+            // Create test pagination
+            const testContainer = document.getElementById('testPagination');
+            testContainer.innerHTML = '';
+
+            for (let page = 1; page <= Math.min(totalPages, 10); page++) {
+                const button = document.createElement('button');
+                button.className = 'pagination-button';
+                button.textContent = page;
+                button.onclick = () => selectTestPage(page, simulation);
+                testContainer.appendChild(button);
+            }
+
+            if (totalPages > 10) {
+                const moreButton = document.createElement('span');
+                moreButton.textContent = `... (${totalPages - 10} more pages)`;
+                moreButton.style.padding = '8px 12px';
+                testContainer.appendChild(moreButton);
+            }
+        }
+
+        function selectTestPage(page, simulation) {
+            // Remove active class from all buttons
+            document.querySelectorAll('.pagination-button').forEach(btn => btn.classList.remove('active'));
+
+            // Add active class to clicked button
+            event.target.classList.add('active');
+
+            const pageData = simulation.pages[page - 1];
+            addResult('paginationSimulation', `📄 Selected Page ${page}: ${pageData.showingText}`, 'success');
+        }
+
+        function startLogMonitoring() {
+            const output = document.getElementById('consoleLogOutput');
+            logMonitoring = true;
+
+            function logToDebug(message, type = 'log') {
+                if (logMonitoring) {
+                    const timestamp = new Date().toLocaleTimeString();
+                    const color = type === 'error' ? '#f00' : type === 'warn' ? '#fa0' : '#0f0';
+                    output.innerHTML += `<div style="color: ${color};">[${timestamp}] ${type.toUpperCase()}: ${message}</div>`;
+                    output.scrollTop = output.scrollHeight;
+                }
+            }
+
+            console.log = function(...args) {
+                originalConsoleLog.apply(console, args);
+                logToDebug(args.join(' '), 'log');
+            };
+
+            console.error = function(...args) {
+                originalConsoleError.apply(console, args);
+                logToDebug(args.join(' '), 'error');
+            };
+
+            console.warn = function(...args) {
+                originalConsoleWarn.apply(console, args);
+                logToDebug(args.join(' '), 'warn');
+            };
+
+            addResult('consoleLogOutput', '👁️ Console monitoring started. Check SMS page now.', 'success');
+        }
+
+        function clearLogs() {
+            document.getElementById('consoleLogOutput').innerHTML = '';
+        }
+
+        function monitorNetworkRequests() {
+            const container = document.getElementById('networkResults');
+            container.innerHTML = '';
+
+            addResult('networkResults', '📡 Monitoring network requests...', 'warning');
+
+            // Override fetch
+            const originalFetch = window.fetch;
+            window.fetch = function(...args) {
+                const url = args[0];
+                addResult('networkResults', `🌐 FETCH: ${url}`, 'info');
+                return originalFetch.apply(this, args);
+            };
+
+            // Override XMLHttpRequest
+            const originalXHR = window.XMLHttpRequest;
+            window.XMLHttpRequest = function() {
+                const xhr = new originalXHR();
+                const originalOpen = xhr.open;
+                xhr.open = function(method, url) {
+                    addResult('networkResults', `📡 XHR ${method}: ${url}`, 'info');
+                    return originalOpen.apply(this, arguments);
+                };
+                return xhr;
+            };
+
+            addResult('networkResults', '✅ Network monitoring active', 'success');
+        }
+
+        function inspectReactState() {
+            const container = document.getElementById('reactStateResults');
+            container.innerHTML = '';
+
+            // Try to access React DevTools or component state
+            try {
+                const iframe = document.getElementById('smsFrame');
+                const iframeWindow = iframe.contentWindow;
+
+                if (iframeWindow && iframeWindow.React) {
+                    addResult('reactStateResults', '✅ React detected in iframe', 'success');
+                } else {
+                    addResult('reactStateResults', '⚠️ React not accessible from iframe', 'warning');
+                }
+
+                // Check for common React state variables
+                const stateVariables = [
+                    'currentPage',
+                    'totalPages',
+                    'recordsPerPage',
+                    'filteredChats',
+                    'chats',
+                    'totalChatsCount',
+                    'pagination'
+                ];
+
+                addResult('reactStateResults', `🔍 Looking for state variables: ${stateVariables.join(', ')}`, 'info');
+
+            } catch (error) {
+                addResult('reactStateResults', `❌ Error inspecting React state: ${error.message}`, 'error');
+            }
+        }
+
+        function inspectPaginationDOM() {
+            const container = document.getElementById('domInspectionResults');
+            container.innerHTML = '';
+
+            try {
+                const iframe = document.getElementById('smsFrame');
+                const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+
+                // Check for pagination container
+                const paginationSelectors = [
+                    '[class*="pagination"]',
+                    '[id*="pagination"]',
+                    '.page-button',
+                    'button[onclick*="page"]',
+                    'button[onclick*="Page"]'
+                ];
+
+                let totalElements = 0;
+                paginationSelectors.forEach(selector => {
+                    const elements = iframeDoc.querySelectorAll(selector);
+                    totalElements += elements.length;
+                    addResult('domInspectionResults', `🎯 "${selector}": ${elements.length} elements`, elements.length > 0 ? 'success' : 'warning');
+                });
+
+                if (totalElements === 0) {
+                    addResult('domInspectionResults', '❌ No pagination elements found!', 'error');
+
+                    // Look for any buttons that might be pagination
+                    const allButtons = iframeDoc.querySelectorAll('button');
+                    addResult('domInspectionResults', `🔍 Total buttons on page: ${allButtons.length}`, 'info');
+
+                    allButtons.forEach((button, index) => {
+                        if (button.textContent.match(/^\d+$/) || button.textContent.includes('Next') || button.textContent.includes('Previous')) {
+                            addResult('domInspectionResults', `🎯 Potential pagination button ${index}: "${button.textContent}"`, 'warning');
+                        }
+                    });
+                }
+
+            } catch (error) {
+                addResult('domInspectionResults', `❌ Error inspecting DOM: ${error.message}`, 'error');
+            }
+        }
+
+        function testQuickFix1() {
+            addResult('quickFixResults', '🔧 Testing Fix 1: Force Re-render...', 'warning');
+
+            try {
+                const iframe = document.getElementById('smsFrame');
+                iframe.src = iframe.src; // Force reload
+
+                setTimeout(() => {
+                    addResult('quickFixResults', '✅ Fix 1: Forced iframe reload', 'success');
+                }, 1000);
+
+            } catch (error) {
+                addResult('quickFixResults', `❌ Fix 1 failed: ${error.message}`, 'error');
+            }
+        }
+
+        function testQuickFix2() {
+            addResult('quickFixResults', '🔧 Testing Fix 2: Reset State...', 'warning');
+
+            try {
+                // Try to reset pagination state in the iframe
+                const iframe = document.getElementById('smsFrame');
+                const iframeWindow = iframe.contentWindow;
+
+                if (iframeWindow) {
+                    // Try to call a reset function if it exists
+                    if (iframeWindow.resetPagination) {
+                        iframeWindow.resetPagination();
+                        addResult('quickFixResults', '✅ Fix 2: Called resetPagination()', 'success');
+                    } else if (iframeWindow.location) {
+                        iframeWindow.location.href = iframeWindow.location.href + '?reset=1';
+                        addResult('quickFixResults', '✅ Fix 2: Added reset parameter', 'success');
+                    } else {
+                        addResult('quickFixResults', '⚠️ Fix 2: No reset method available', 'warning');
+                    }
+                }
+
+            } catch (error) {
+                addResult('quickFixResults', `❌ Fix 2 failed: ${error.message}`, 'error');
+            }
+        }
+
+        function testQuickFix3() {
+            addResult('quickFixResults', '🔧 Testing Fix 3: Clear Cache...', 'warning');
+
+            try {
+                // Clear various caches
+                if ('caches' in window) {
+                    caches.keys().then(names => {
+                        names.forEach(name => {
+                            caches.delete(name);
+                        });
+                        addResult('quickFixResults', '✅ Fix 3: Cleared service worker caches', 'success');
+                    });
+                }
+
+                // Clear localStorage
+                localStorage.clear();
+                addResult('quickFixResults', '✅ Fix 3: Cleared localStorage', 'success');
+
+                // Clear sessionStorage
+                sessionStorage.clear();
+                addResult('quickFixResults', '✅ Fix 3: Cleared sessionStorage', 'success');
+
+                // Force hard refresh of iframe
+                const iframe = document.getElementById('smsFrame');
+                iframe.src = 'http://localhost:3022/sms?cache_bust=' + Date.now();
+                addResult('quickFixResults', '✅ Fix 3: Hard refresh with cache bust', 'success');
+
+            } catch (error) {
+                addResult('quickFixResults', `❌ Fix 3 failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Initialize with default simulation
+        window.onload = function() {
+            simulatePagination();
+        };
+    </script>
+</body>
+</html>

@@ -2474,11 +2474,11 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           </div>
 
         {/* Pagination */}
-        {totalChatsCount > recordsPerPage && (
+        {filteredChats.length > recordsPerPage && (
           <div className="flex items-center justify-between mt-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 px-6 py-4">
             <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
               <span>
-                Showing {((currentPage - 1) * recordsPerPage) + 1} to {Math.min(currentPage * recordsPerPage, totalChatsCount)} of {totalChatsCount} chats
+                Showing {((currentPage - 1) * recordsPerPage) + 1} to {Math.min(currentPage * recordsPerPage, filteredChats.length)} of {filteredChats.length} chats
               </span>
             </div>
             <div className="flex items-center space-x-2">
@@ -2493,7 +2493,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
               {/* Page Numbers */}
               <div className="flex items-center space-x-1">
                 {(() => {
-                  const totalPages = Math.ceil(totalChatsCount / recordsPerPage)
+                  const totalPages = Math.ceil(filteredChats.length / recordsPerPage)
                   const pages = []
                   const startPage = Math.max(1, currentPage - 2)
                   const endPage = Math.min(totalPages, currentPage + 2)
@@ -2552,8 +2552,8 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
               </div>
 
               <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(totalChatsCount / recordsPerPage)))}
-                disabled={currentPage >= Math.ceil(totalChatsCount / recordsPerPage)}
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(filteredChats.length / recordsPerPage)))}
+                disabled={currentPage >= Math.ceil(filteredChats.length / recordsPerPage)}
                 className="px-3 py-2 text-sm font-medium text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Next
