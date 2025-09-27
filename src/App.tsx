@@ -272,9 +272,9 @@ const AppContent: React.FC<{
       {/* Security Alerts Component */}
       <SecurityAlerts />
 
-      {/* HIPAA Compliance Banner */}
+      {/* HIPAA Compliance Banner - Hidden on mobile */}
       {hipaaMode && (
-        <div className="fixed top-0 left-0 right-0 bg-blue-600 text-white px-4 py-2 text-sm z-50">
+        <div className="hidden lg:block fixed top-0 left-0 right-0 bg-blue-600 text-white px-4 py-2 text-sm z-50">
           <div className="flex items-center gap-2">
             <ShieldCheckIcon className="w-4 h-4" />
             <span>HIPAA Compliant Mode Active - All actions are audited</span>
@@ -287,7 +287,7 @@ const AppContent: React.FC<{
         </div>
       )}
 
-      <div className={`flex ${hipaaMode ? 'pt-10' : ''}`}>
+      <div className={`flex ${hipaaMode ? 'lg:pt-10' : ''}`}>
         {/* Sidebar */}
         <Sidebar
           isOpen={sidebarOpen}
@@ -307,7 +307,7 @@ const AppContent: React.FC<{
             onExtendSession={handleExtendSession}
           />
 
-          <main className="flex-1 p-6 overflow-auto">
+          <main className="flex-1 p-3 sm:p-4 lg:p-6 overflow-auto">
             <Routes>
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route
@@ -373,8 +373,31 @@ const App: React.FC = () => {
   const [isInitializing, setIsInitializing] = useState(true)
   const [mfaRequired, setMfaRequired] = useState(false)
   const [pendingMfaUser, setPendingMfaUser] = useState<any>(null) // User awaiting MFA verification
-  const [sidebarOpen, setSidebarOpen] = useState(true)
+  const [sidebarOpen, setSidebarOpen] = useState(() => {
+    // Start with sidebar closed on mobile devices
+    if (typeof window !== 'undefined') {
+      return window.innerWidth >= 1024 // lg breakpoint
+    }
+    return true
+  })
   const [hipaaMode, setHipaaMode] = useState(true)
+
+  // Handle window resize for responsive sidebar behavior
+  useEffect(() => {
+    const handleResize = () => {
+      const isDesktop = window.innerWidth >= 1024
+      // Only update if transitioning between mobile and desktop
+      setSidebarOpen(current => {
+        if ((isDesktop && !current) || (!isDesktop && current && window.innerWidth < 768)) {
+          return isDesktop
+        }
+        return current
+      })
+    }
+
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   // Initialize bulletproof API key system on app start
   useEffect(() => {
