@@ -825,8 +825,13 @@ const App: React.FC = () => {
         localStorage.removeItem('currentUser')
         setUser(null)
       } finally {
-        console.log('✅ App.tsx: loadUser completed, setting initializing to false')
-        setIsInitializing(false)
+        // CRITICAL FIX: Only stop initializing if MFA is not required to prevent dashboard flash
+        if (!pendingMfaUser) {
+          console.log('✅ App.tsx: loadUser completed, setting initializing to false')
+          setIsInitializing(false)
+        } else {
+          console.log('🔐 MFA required - keeping initializing state to prevent dashboard flash')
+        }
       }
     }
 
@@ -1080,6 +1085,9 @@ const App: React.FC = () => {
         // Clear pending MFA user
         setPendingMfaUser(null)
 
+        // CRITICAL FIX: Stop initializing state after successful MFA verification
+        setIsInitializing(false)
+
         // Log successful authentication
         const { auditLogger, AuditAction, AuditOutcome } = await import('./services/auditLogger')
         await auditLogger.logAuthenticationEvent(
@@ -1118,6 +1126,9 @@ const App: React.FC = () => {
     setPendingMfaUser(null)
     setUser(null)
     setMfaRequired(false)
+
+    // CRITICAL FIX: Stop initializing state when MFA is cancelled
+    setIsInitializing(false)
 
     console.log('✅ Authentication state cleared after MFA cancellation')
   }
