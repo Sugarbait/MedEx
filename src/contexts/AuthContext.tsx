@@ -45,10 +45,8 @@ interface AuthProviderProps {
 }
 
 export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
-  // Check if we're in demo mode (localhost with fake Azure credentials)
-  const isDemoMode = window.location.hostname === 'localhost' &&
-    (import.meta.env.VITE_AZURE_CLIENT_ID === '12345678-1234-1234-1234-123456789012' ||
-     !import.meta.env.VITE_AZURE_CLIENT_ID)
+  // Demo mode disabled - always use real authentication
+  const isDemoMode = false
 
   // Only use MSAL hooks if not in demo mode
   const msalData = isDemoMode ? { instance: null, accounts: [] } : useMsal()
@@ -78,19 +76,53 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setAuthInitialized(true) // Mark as initialized to prevent re-runs
       try {
         if (isDemoMode) {
-          // Demo mode - create a mock user for development
-          console.log('🔧 DEMO MODE: Creating demo user for development')
-          const demoUser: User = {
-            id: 'demo-user-123',
-            email: 'demo@localhost.dev',
-            name: 'Demo User',
-            role: 'admin',
-            is_super_user: true,
-            is_enabled: true,
-            profile_status: 'enabled'
+          // Demo mode - try to preserve existing user profile if available
+          console.log('🔧 DEMO MODE: Checking for existing user profile')
+
+          let demoUser: User
+          try {
+            const existingUser = localStorage.getItem('currentUser')
+            if (existingUser) {
+              const parsedUser = JSON.parse(existingUser)
+              console.log('🔧 DEMO MODE: Using existing user profile:', parsedUser.email || parsedUser.name)
+              demoUser = {
+                id: parsedUser.id || 'demo-user-123',
+                email: parsedUser.email || 'demo@localhost.dev',
+                name: parsedUser.name || 'Demo User',
+                role: parsedUser.role || 'admin',
+                is_super_user: parsedUser.is_super_user ?? true,
+                is_enabled: parsedUser.is_enabled ?? true,
+                profile_status: parsedUser.profile_status || 'enabled'
+              }
+            } else {
+              console.log('🔧 DEMO MODE: Creating new demo user for development')
+              demoUser = {
+                id: 'demo-user-123',
+                email: 'demo@localhost.dev',
+                name: 'Demo User',
+                role: 'admin',
+                is_super_user: true,
+                is_enabled: true,
+                profile_status: 'enabled'
+              }
+            }
+          } catch (error) {
+            console.log('🔧 DEMO MODE: Error reading existing user, using default demo user')
+            demoUser = {
+              id: 'demo-user-123',
+              email: 'demo@localhost.dev',
+              name: 'Demo User',
+              role: 'admin',
+              is_super_user: true,
+              is_enabled: true,
+              profile_status: 'enabled'
+            }
           }
+
           setUser(demoUser)
-          setMfaRequired(false) // Skip MFA in demo mode
+          // In demo mode, still respect user's MFA settings for testing
+          // setMfaRequired(false) // Skip MFA in demo mode
+          console.log('🔧 DEMO MODE: MFA will be checked based on user settings (not automatically skipped)')
 
           // Sync avatar in demo mode too
           try {
@@ -161,11 +193,11 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
           try {
             mfaEnabled = await FreshMfaService.isMfaEnabled(userProfile.id)
 
-            // Check for existing valid MFA session (24 hour window)
+            // Check for existing valid MFA session (5 minute window after successful MFA)
             const mfaTimestamp = localStorage.getItem('freshMfaVerified')
             if (mfaTimestamp) {
               const sessionAge = Date.now() - parseInt(mfaTimestamp)
-              const MAX_MFA_SESSION_AGE = 24 * 60 * 60 * 1000 // 24 hours
+              const MAX_MFA_SESSION_AGE = 5 * 60 * 1000 // 5 minutes - short window for immediate re-auth scenarios
               hasValidMFASession = sessionAge < MAX_MFA_SESSION_AGE
             }
 
