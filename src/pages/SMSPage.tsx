@@ -1130,7 +1130,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       safeLog('Optimized SMS Chats fetched:', {
         agentFilter: smsAgentId || 'All agents',
         displayedChats: paginatedChats.length,
-        totalFilteredChats: allFiltered.length,
+        totalFilteredChats: allFilteredChats.length,
         cacheUsed: Date.now() - lastDataFetch < 300000
       })
 
@@ -2467,8 +2467,8 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
         {/* Pagination */}
         {totalChatsCount > recordsPerPage && (
-          <div className="flex items-center justify-between mt-8 bg-white rounded-lg border border-gray-200 px-6 py-4">
-            <div className="flex items-center text-sm text-gray-700">
+          <div className="flex items-center justify-between mt-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 px-6 py-4">
+            <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
               <span>
                 Showing {((currentPage - 1) * recordsPerPage) + 1} to {Math.min(currentPage * recordsPerPage, totalChatsCount)} of {totalChatsCount} chats
               </span>
@@ -2477,7 +2477,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
               <button
                 onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
                 disabled={currentPage === 1}
-                className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-2 text-sm font-medium text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Previous
               </button>
@@ -2496,13 +2496,13 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                       <button
                         key={1}
                         onClick={() => setCurrentPage(1)}
-                        className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                        className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600"
                       >
                         1
                       </button>
                     )
                     if (startPage > 2) {
-                      pages.push(<span key="ellipsis1" className="px-2 text-gray-500">...</span>)
+                      pages.push(<span key="ellipsis1" className="px-2 text-gray-500 dark:text-gray-400">...</span>)
                     }
                   }
 
@@ -2514,8 +2514,8 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                         onClick={() => setCurrentPage(i)}
                         className={`px-3 py-2 text-sm font-medium rounded-lg ${
                           i === currentPage
-                            ? 'text-blue-600 bg-blue-50 border border-blue-200'
-                            : 'text-gray-700 bg-white border border-gray-300 hover:bg-gray-50'
+                            ? 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-600'
+                            : 'text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 hover:bg-gray-50 dark:hover:bg-gray-600'
                         }`}
                       >
                         {i}
@@ -2526,13 +2526,13 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                   // Last page
                   if (endPage < totalPages) {
                     if (endPage < totalPages - 1) {
-                      pages.push(<span key="ellipsis2" className="px-2 text-gray-500">...</span>)
+                      pages.push(<span key="ellipsis2" className="px-2 text-gray-500 dark:text-gray-400">...</span>)
                     }
                     pages.push(
                       <button
                         key={totalPages}
                         onClick={() => setCurrentPage(totalPages)}
-                        className="px-3 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+                        className="px-3 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600"
                       >
                         {totalPages}
                       </button>
@@ -2546,7 +2546,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
               <button
                 onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(totalChatsCount / recordsPerPage)))}
                 disabled={currentPage >= Math.ceil(totalChatsCount / recordsPerPage)}
-                className="px-3 py-2 text-sm font-medium text-gray-500 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                className="px-3 py-2 text-sm font-medium text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Next
               </button>
