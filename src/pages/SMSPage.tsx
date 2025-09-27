@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react'
+import React, { useState, useEffect, useCallback, useMemo, useRef, memo } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useAutoRefresh } from '@/hooks/useAutoRefresh'
 import { useDebounce, useDebouncedCallback } from '@/hooks/useDebounce'
@@ -212,7 +212,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   const [totalSegments, setTotalSegments] = useState<number>(0)
   const [smsAgentConfigured, setSmsAgentConfigured] = useState<boolean>(true)
   const [smsAgentId, setSmsAgentId] = useState<string>('')
-  const recordsPerPage = 20
+  const recordsPerPage = 50
 
   // Cache for SMS segment calculations to avoid repeated API calls
   const [segmentCache, setSegmentCache] = useState<Map<string, number>>(new Map())
@@ -428,6 +428,103 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       delete (window as any).updateSMSSegments
     }
   }, [updateFullDataSegmentCache])
+
+  // Expose twilioCostService for debugging cost calculations
+  useEffect(() => {
+    (window as any).twilioCostService = twilioCostService
+    return () => {
+      delete (window as any).twilioCostService
+    }
+  }, [])
+
+  // Cache for full chat details to avoid repeated API calls
+  const fullChatCache = useRef<Map<string, Chat>>(new Map())
+
+  // Helper function to get full chat details with caching
+  const getFullChatDetails = useCallback(async (chatId: string): Promise<Chat | null> => {
+    // Check cache first
+    if (fullChatCache.current.has(chatId)) {
+      return fullChatCache.current.get(chatId) || null
+    }
+
+    try {
+      const fullChat = await chatService.getChatById(chatId)
+      if (fullChat) {
+        fullChatCache.current.set(chatId, fullChat)
+        return fullChat
+      }
+    } catch (error) {
+      console.error('Error fetching full chat details:', error)
+    }
+
+    return null
+  }, [])
+
+  // Helper function to calculate SMS cost for a chat - LOADS FULL DETAILS ON DEMAND
+  const calculateChatSMSCost = useCallback(async (chat: Chat): Promise<number> => {
+    try {
+      // Try to get full chat details (with message_with_tool_calls) like the modal does
+      const fullChat = await getFullChatDetails(chat.chat_id)
+      const chatToUse = fullChat || chat
+
+      let messages = []
+      if (chatToUse.message_with_tool_calls && Array.isArray(chatToUse.message_with_tool_calls) && chatToUse.message_with_tool_calls.length > 0) {
+        messages = chatToUse.message_with_tool_calls
+      } else if (chatToUse.transcript && chatToUse.transcript.trim().length > 0) {
+        messages = [{ content: chatToUse.transcript, role: 'user' }]
+      }
+
+      if (messages.length === 0) {
+        return 0
+      }
+
+      const cost = twilioCostService.getSMSCostCAD(messages)
+      console.log('SMS cost calculation (modal-style with full data):', {
+        chatId: chat.chat_id,
+        usingFullChat: !!fullChat,
+        messageCount: messages.length,
+        cost
+      })
+      return cost
+    } catch (error) {
+      console.error('Error calculating SMS cost for chat:', chat.chat_id, error)
+      return 0
+    }
+  }, [getFullChatDetails])
+
+  // Component to handle async cost calculation and display
+  const CostDisplay = memo(({ chat }: { chat: Chat }) => {
+    const [cost, setCost] = useState<number>(0)
+    const [loading, setLoading] = useState(true)
+
+    useEffect(() => {
+      let mounted = true
+      setLoading(true)
+
+      calculateChatSMSCost(chat).then(calculatedCost => {
+        if (mounted) {
+          setCost(calculatedCost)
+          setLoading(false)
+        }
+      }).catch(error => {
+        console.error('Error in CostDisplay:', error)
+        if (mounted) {
+          setCost(0)
+          setLoading(false)
+        }
+      })
+
+      return () => {
+        mounted = false
+      }
+    }, [chat.chat_id])
+
+    if (loading) {
+      return <span className="text-gray-400">...</span>
+    }
+
+    return <span>${cost.toFixed(3)}</span>
+  })
 
   // Smart cache management for date range changes
   // Only clear cache if the date range actually changed (not initial mount)
@@ -1100,18 +1197,14 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       setTotalChatsCount(totalChats.length)
       setAllFilteredChats(totalChats)
 
-      // Calculate pagination AFTER date filtering but BEFORE search/status/sentiment filters (like calls page)
-      const startIndex = (currentPage - 1) * recordsPerPage
-      const endIndex = startIndex + recordsPerPage
-      const paginatedChats = totalChats.slice(startIndex, endIndex)
-
-      setChats(paginatedChats)
+      // Store chats for display - cost calculation will load full details on demand
+      setChats(totalChats)
 
       // Note: Toast notifications for truly new records are handled by toastNotificationService
       // via Supabase real-time monitoring, not through pagination logic
 
       // Update previous chats reference
-      previousChatsRef.current = [...paginatedChats]
+      previousChatsRef.current = [...totalChats]
 
       // Proactively load segment data for accurate totals (async, don't block UI)
       loadSegmentDataForChats(totalChats)
@@ -1129,7 +1222,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
       safeLog('Optimized SMS Chats fetched:', {
         agentFilter: smsAgentId || 'All agents',
-        displayedChats: paginatedChats.length,
+        totalChats: totalChats.length,
         totalFilteredChats: allFilteredChats.length,
         cacheUsed: Date.now() - lastDataFetch < 300000
       })
@@ -1144,7 +1237,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         setLoading(false)
       }
     }
-  }, [selectedDateRange, customStartDate, customEndDate, currentPage])
+  }, [selectedDateRange, customStartDate, customEndDate])
 
   // Optimized data fetching - defined after fetchChatsOptimized to avoid dependency issues
   const { debouncedCallback: debouncedFetchChats, cancel: cancelDebouncedFetchChats } = useDebouncedCallback(
@@ -1738,7 +1831,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
   // Apply search and filter logic to paginated chats (exactly like CallsPage pattern)
   const filteredChats = React.useMemo(() => {
-    // Use chats (paginated data) - this matches CallsPage pattern exactly
+    // Use chats (all data) - apply filtering first, then pagination
     let searchFilteredChats = chats
 
     // Apply search filter using fuzzy search or fallback to basic search
@@ -1758,12 +1851,48 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
 
     // Apply status and sentiment filters to search results
-    return searchFilteredChats.filter(chat => {
+    const fullyFilteredChats = searchFilteredChats.filter(chat => {
       const matchesStatus = debouncedStatusFilter === 'all' || chat.chat_status === debouncedStatusFilter
       const matchesSentiment = debouncedSentimentFilter === 'all' || chat.chat_analysis?.user_sentiment === debouncedSentimentFilter
 
       return matchesStatus && matchesSentiment
     })
+
+    // Apply pagination to filtered results (CallsPage pattern)
+    const startIndex = (currentPage - 1) * recordsPerPage
+    const endIndex = startIndex + recordsPerPage
+    return fullyFilteredChats.slice(startIndex, endIndex)
+  }, [chats, debouncedSearchTerm, debouncedStatusFilter, debouncedSentimentFilter, isFuzzySearchEnabled, currentPage, recordsPerPage])
+
+  // Calculate total filtered count (before pagination) for pagination display
+  const filteredChatsCount = React.useMemo(() => {
+    let searchFilteredChats = chats
+
+    // Apply search filter using fuzzy search or fallback to basic search
+    if (debouncedSearchTerm && debouncedSearchTerm.trim()) {
+      if (isFuzzySearchEnabled) {
+        try {
+          const fuzzyResults = fuzzySearchService.searchSMS(debouncedSearchTerm)
+          searchFilteredChats = fuzzyResults.filter(result => chats.some(chat => chat.chat_id === result.chat_id))
+        } catch (error) {
+          console.error('Fuzzy search failed, falling back to basic search:', error)
+          searchFilteredChats = fuzzySearchService.basicSMSSearch(chats, debouncedSearchTerm)
+        }
+      } else {
+        // Use basic search when fuzzy search is disabled
+        searchFilteredChats = fuzzySearchService.basicSMSSearch(chats, debouncedSearchTerm)
+      }
+    }
+
+    // Apply status and sentiment filters to search results
+    const fullyFilteredChats = searchFilteredChats.filter(chat => {
+      const matchesStatus = debouncedStatusFilter === 'all' || chat.chat_status === debouncedStatusFilter
+      const matchesSentiment = debouncedSentimentFilter === 'all' || chat.chat_analysis?.user_sentiment === debouncedSentimentFilter
+
+      return matchesStatus && matchesSentiment
+    })
+
+    return fullyFilteredChats.length
   }, [chats, debouncedSearchTerm, debouncedStatusFilter, debouncedSentimentFilter, isFuzzySearchEnabled])
 
   // Reset to first page when filters change
@@ -2340,14 +2469,10 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                             {/* Cost */}
                             <div className="col-span-2">
                               <div className="text-sm font-medium text-gray-900">
-                                ${smsCostManager.getChatCost(chat.chat_id).cost.toFixed(3)}
+                                <CostDisplay chat={chat} />
                               </div>
                               <div className="text-xs text-gray-500">
-                                {smsCostManager.getChatCost(chat.chat_id).loading ? (
-                                  <span className="text-blue-600">Loading...</span>
-                                ) : (
-                                  "SMS cost"
-                                )}
+                                SMS cost
                               </div>
                             </div>
 
@@ -2454,7 +2579,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
                                 {chat.message_with_tool_calls?.length || 0} msgs
                               </span>
                               <span className="text-green-600 font-medium">
-                                ${smsCostManager.getChatCost(chat.chat_id).cost.toFixed(3)}
+                                <CostDisplay chat={chat} />
                               </span>
                             </div>
                           </div>
@@ -2474,11 +2599,11 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
           </div>
 
         {/* Pagination */}
-        {totalChatsCount > recordsPerPage && (
+        {filteredChatsCount > recordsPerPage && (
           <div className="flex items-center justify-between mt-8 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 px-6 py-4">
             <div className="flex items-center text-sm text-gray-700 dark:text-gray-300">
               <span>
-                Showing {((currentPage - 1) * recordsPerPage) + 1} to {Math.min(currentPage * recordsPerPage, totalChatsCount)} of {totalChatsCount} chats
+                Showing {((currentPage - 1) * recordsPerPage) + 1} to {Math.min(currentPage * recordsPerPage, filteredChatsCount)} of {filteredChatsCount} chats
               </span>
             </div>
             <div className="flex items-center space-x-2">
@@ -2493,7 +2618,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
               {/* Page Numbers */}
               <div className="flex items-center space-x-1">
                 {(() => {
-                  const totalPages = Math.ceil(totalChatsCount / recordsPerPage)
+                  const totalPages = Math.ceil(filteredChatsCount / recordsPerPage)
                   const pages = []
                   const startPage = Math.max(1, currentPage - 2)
                   const endPage = Math.min(totalPages, currentPage + 2)
@@ -2552,8 +2677,8 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
               </div>
 
               <button
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(totalChatsCount / recordsPerPage)))}
-                disabled={currentPage >= Math.ceil(totalChatsCount / recordsPerPage)}
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, Math.ceil(filteredChatsCount / recordsPerPage)))}
+                disabled={currentPage >= Math.ceil(filteredChatsCount / recordsPerPage)}
                 className="px-3 py-2 text-sm font-medium text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-600 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 Next
