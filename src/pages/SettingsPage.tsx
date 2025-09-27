@@ -933,37 +933,37 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   }
 
   return (
-    <div className="p-6 space-y-6 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors">
+    <div className="p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6 bg-gray-50 dark:bg-gray-900 min-h-screen transition-colors">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-            <SettingsIcon className="w-7 h-7 text-blue-600" />
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+            <SettingsIcon className="w-6 h-6 sm:w-7 sm:h-7 text-blue-600" />
             Settings
           </h1>
-          <p className="text-gray-600 dark:text-gray-300 mt-1">
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-300 mt-1">
             Manage your account preferences and security settings
           </p>
         </div>
 
         {/* Save Status Indicator */}
-        <div className="mt-4 sm:mt-0 flex flex-col items-end gap-2">
+        <div className="flex flex-col items-start sm:items-end gap-2">
           {saveStatus !== 'idle' && (
             <div className="flex items-center gap-2">
               {saveStatus === 'saving' ? (
                 <>
                   <div className="w-4 h-4 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" />
-                  <span className="text-sm text-gray-600 dark:text-gray-300">Saving...</span>
+                  <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-300">Saving...</span>
                 </>
               ) : saveStatus === 'saved' ? (
                 <>
                   <CheckIcon className="w-4 h-4 text-green-600" />
-                  <span className="text-sm text-green-600">Saved</span>
+                  <span className="text-xs sm:text-sm text-green-600">Saved</span>
                 </>
               ) : saveStatus === 'error' ? (
                 <>
                   <AlertTriangleIcon className="w-4 h-4 text-red-600" />
-                  <span className="text-sm text-red-600">Error</span>
+                  <span className="text-xs sm:text-sm text-red-600">Error</span>
                 </>
               ) : null}
             </div>
@@ -974,44 +974,44 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
       {/* Error Message Banner */}
       {errorMessage && (
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-4 flex items-start gap-3">
-          <AlertTriangleIcon className="w-5 h-5 flex-shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
+        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-700 rounded-lg p-3 sm:p-4 flex items-start gap-3">
+          <AlertTriangleIcon className="w-4 h-4 sm:w-5 sm:h-5 flex-shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
           <div className="flex-1">
-            <h4 className="text-sm font-medium text-red-800 dark:text-red-200">
+            <h4 className="text-xs sm:text-sm font-medium text-red-800 dark:text-red-200">
               Settings Error
             </h4>
-            <p className="text-sm mt-1 text-red-700 dark:text-red-300">
+            <p className="text-xs sm:text-sm mt-1 text-red-700 dark:text-red-300">
               {errorMessage}
             </p>
           </div>
           <button
             onClick={() => setErrorMessage(null)}
-            className="p-1 hover:opacity-75 text-red-600 dark:text-red-400"
+            className="p-1 hover:opacity-75 text-red-600 dark:text-red-400 min-h-[44px] min-w-[44px] flex items-center justify-center sm:min-h-auto sm:min-w-auto"
           >
             ×
           </button>
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4 sm:gap-6">
         {/* Settings Navigation */}
         <div className="lg:col-span-1">
           <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-0">
-            <nav className="space-y-1">
+            <nav className="space-y-0 sm:space-y-1">
               {tabs.map((tab) => {
                 const Icon = tab.icon
                 return (
                   <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors first:rounded-t-lg last:rounded-b-lg ${
+                    className={`w-full flex items-center gap-2 sm:gap-3 px-3 sm:px-4 py-3 text-left transition-colors first:rounded-t-lg last:rounded-b-lg min-h-[44px] ${
                       activeTab === tab.id
                         ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border-r-2 border-blue-500 dark:border-blue-400'
                         : 'text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-50 dark:hover:bg-gray-700'
                     }`}
                   >
-                    <Icon className="w-5 h-5" />
-                    <span className="font-medium text-gray-900 dark:text-gray-100">{tab.name}</span>
+                    <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
+                    <span className="text-sm sm:text-base font-medium text-gray-900 dark:text-gray-100">{tab.name}</span>
                   </button>
                 )
               })}
@@ -1028,12 +1028,12 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
           {/* Security Settings */}
           {activeTab === 'security' && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
                 Security Settings
               </h2>
 
-              <div className="space-y-6">
+              <div className="space-y-4 sm:space-y-6">
                 {/* Enhanced MFA Settings */}
                 <FreshMfaSettings
                   userId={user.id}
@@ -1044,18 +1044,18 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                   }}
                 />
 
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div className="flex-1">
-                    <h3 className="font-medium text-gray-900 dark:text-gray-100">Session Timeout</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                    <h3 className="text-sm sm:text-base font-medium text-gray-900 dark:text-gray-100">Session Timeout</h3>
+                    <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300">
                       Automatically log out after inactivity (HIPAA required)
                     </p>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 w-full sm:w-auto">
                     <select
                       value={userSettings?.sessionTimeout || 15}
                       onChange={(e) => handleSessionTimeoutChange(Number(e.target.value))}
-                      className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full sm:w-auto px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[44px]"
                     >
                       <option value={5}>5 minutes</option>
                       <option value={10}>10 minutes</option>
@@ -1065,21 +1065,21 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                     </select>
                     <div className="flex items-center gap-2">
                       <div className="w-2 h-2 rounded-full bg-green-500" />
-                      <span className="text-sm text-gray-600 dark:text-gray-300">Active</span>
+                      <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-300">Active</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                   <div>
-                    <h3 className="font-medium text-gray-900 dark:text-gray-100">Data Encryption</h3>
-                    <p className="text-sm text-gray-600 dark:text-gray-300">
+                    <h3 className="text-sm sm:text-base font-medium text-gray-900 dark:text-gray-100">Data Encryption</h3>
+                    <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300">
                       All data is encrypted with AES-256 encryption
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     <div className="w-2 h-2 rounded-full bg-green-500" />
-                    <span className="text-sm text-gray-600">Active</span>
+                    <span className="text-xs sm:text-sm text-gray-600 dark:text-gray-600">Active</span>
                   </div>
                 </div>
               </div>
@@ -1090,84 +1090,84 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
           {/* Notifications */}
           {activeTab === 'notifications' && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
                 Notification Preferences
               </h2>
 
-              <div className="space-y-6">
+              <div className="space-y-4 sm:space-y-6">
                 {/* Email Notifications - Now Active */}
                 <EmailNotificationSettings user={user} />
 
                 {/* Toast Notifications Section */}
                 <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">Toast Notifications</h3>
+                  <h3 className="text-base sm:text-lg font-medium text-gray-900 dark:text-gray-100 mb-4">Toast Notifications</h3>
 
                   <div className="space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium text-gray-900 dark:text-gray-100">Real-time Toasts</h4>
-                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex-1">
+                        <h4 className="text-sm sm:text-base font-medium text-gray-900 dark:text-gray-100">Real-time Toasts</h4>
+                        <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300">
                           Show popup notifications for new calls and SMS messages
                         </p>
                       </div>
                       <button
                         onClick={() => handleToastPreferenceChange('enabled', !toastPreferences.enabled)}
                         disabled={isLoading}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        className={`relative inline-flex h-8 w-14 sm:h-6 sm:w-11 items-center rounded-full transition-colors min-h-[44px] sm:min-h-auto ${
                           toastPreferences.enabled ? 'bg-blue-500' : 'bg-gray-300'
                         }`}
                       >
-                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          toastPreferences.enabled ? 'translate-x-6' : 'translate-x-1'
+                        <span className={`inline-block h-6 w-6 sm:h-4 sm:w-4 transform rounded-full bg-white transition-transform ${
+                          toastPreferences.enabled ? 'translate-x-7 sm:translate-x-6' : 'translate-x-1'
                         }`} />
                       </button>
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium text-gray-900 dark:text-gray-100">Sound Effects</h4>
-                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex-1">
+                        <h4 className="text-sm sm:text-base font-medium text-gray-900 dark:text-gray-100">Sound Effects</h4>
+                        <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300">
                           Play gentle sound with toast notifications
                         </p>
                       </div>
                       <button
                         onClick={() => handleToastPreferenceChange('soundEnabled', !toastPreferences.soundEnabled)}
                         disabled={isLoading || !toastPreferences.enabled}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        className={`relative inline-flex h-8 w-14 sm:h-6 sm:w-11 items-center rounded-full transition-colors min-h-[44px] sm:min-h-auto ${
                           toastPreferences.soundEnabled && toastPreferences.enabled ? 'bg-blue-500' : 'bg-gray-300'
                         } ${!toastPreferences.enabled ? 'opacity-50' : ''}`}
                       >
-                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          toastPreferences.soundEnabled && toastPreferences.enabled ? 'translate-x-6' : 'translate-x-1'
+                        <span className={`inline-block h-6 w-6 sm:h-4 sm:w-4 transform rounded-full bg-white transition-transform ${
+                          toastPreferences.soundEnabled && toastPreferences.enabled ? 'translate-x-7 sm:translate-x-6' : 'translate-x-1'
                         }`} />
                       </button>
                     </div>
 
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <h4 className="font-medium text-gray-900 dark:text-gray-100">Do Not Disturb</h4>
-                        <p className="text-sm text-gray-600 dark:text-gray-300">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                      <div className="flex-1">
+                        <h4 className="text-sm sm:text-base font-medium text-gray-900 dark:text-gray-100">Do Not Disturb</h4>
+                        <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300">
                           Silence notifications during specific hours
                         </p>
                       </div>
                       <button
                         onClick={() => handleDoNotDisturbChange('enabled', !toastPreferences.doNotDisturb.enabled)}
                         disabled={isLoading || !toastPreferences.enabled}
-                        className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                        className={`relative inline-flex h-8 w-14 sm:h-6 sm:w-11 items-center rounded-full transition-colors min-h-[44px] sm:min-h-auto ${
                           toastPreferences.doNotDisturb.enabled && toastPreferences.enabled ? 'bg-blue-500' : 'bg-gray-300'
                         } ${!toastPreferences.enabled ? 'opacity-50' : ''}`}
                       >
-                        <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                          toastPreferences.doNotDisturb.enabled && toastPreferences.enabled ? 'translate-x-6' : 'translate-x-1'
+                        <span className={`inline-block h-6 w-6 sm:h-4 sm:w-4 transform rounded-full bg-white transition-transform ${
+                          toastPreferences.doNotDisturb.enabled && toastPreferences.enabled ? 'translate-x-7 sm:translate-x-6' : 'translate-x-1'
                         }`} />
                       </button>
                     </div>
 
                     {toastPreferences.doNotDisturb.enabled && toastPreferences.enabled && (
-                      <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 space-y-3">
-                        <h5 className="text-sm font-medium text-gray-900 dark:text-gray-100">Quiet Hours</h5>
-                        <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-3 sm:p-4 space-y-3">
+                        <h5 className="text-xs sm:text-sm font-medium text-gray-900 dark:text-gray-100">Quiet Hours</h5>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                           <div>
                             <label className="block text-xs font-medium text-gray-700 dark:text-gray-300 mb-1">
                               Start Time
@@ -1176,7 +1176,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                               type="time"
                               value={toastPreferences.doNotDisturb.startTime}
                               onChange={(e) => handleDoNotDisturbChange('startTime', e.target.value)}
-                              className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 min-h-[44px]"
                             />
                           </div>
                           <div>
@@ -1187,7 +1187,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                               type="time"
                               value={toastPreferences.doNotDisturb.endTime}
                               onChange={(e) => handleDoNotDisturbChange('endTime', e.target.value)}
-                              className="w-full px-2 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100"
+                              className="w-full px-3 py-2 text-sm border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-900 dark:text-gray-100 min-h-[44px]"
                             />
                           </div>
                         </div>
@@ -1198,16 +1198,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                     )}
 
                     {/* Test Buttons Section */}
-                    <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4 border border-blue-200 dark:border-blue-800">
-                      <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-3">Test Toast Notifications</h4>
-                      <p className="text-sm text-blue-700 dark:text-blue-300 mb-4">
+                    <div className="mt-6 bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 sm:p-4 border border-blue-200 dark:border-blue-800">
+                      <h4 className="text-sm sm:text-base font-medium text-blue-900 dark:text-blue-100 mb-3">Test Toast Notifications</h4>
+                      <p className="text-xs sm:text-sm text-blue-700 dark:text-blue-300 mb-4">
                         Click the buttons below to see what the toast notifications look like
                       </p>
-                      <div className="flex gap-3">
+                      <div className="flex flex-col sm:flex-row gap-3">
                         <button
                           onClick={() => handleTestToastNotification('call')}
                           disabled={!toastPreferences.enabled}
-                          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                          className="w-full sm:w-auto px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 min-h-[44px] text-sm"
                         >
                           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                             <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z" />
@@ -1217,7 +1217,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                         <button
                           onClick={() => handleTestToastNotification('sms')}
                           disabled={!toastPreferences.enabled}
-                          className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center gap-2"
+                          className="w-full sm:w-auto px-4 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center justify-center gap-2 min-h-[44px] text-sm"
                         >
                           <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
                             <path fillRule="evenodd" d="M18 10c0 3.866-3.582 7-8 7a8.841 8.841 0 01-4.083-.98L2 17l1.338-3.123C2.493 12.767 2 11.434 2 10c0-3.866 3.582-7 8-7s8 3.134 8 7zM7 9H5v2h2V9zm8 0h-2v2h2V9zM9 9h2v2H9V9z" clipRule="evenodd" />
@@ -1226,7 +1226,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                         </button>
                       </div>
                       {!toastPreferences.enabled && (
-                        <p className="text-xs text-blue-600 dark:text-blue-400 mt-2">
+                        <p className="text-xs sm:text-sm text-blue-600 dark:text-blue-400 mt-2">
                           Enable "Real-time Toasts" above to test notifications
                         </p>
                       )}
@@ -1239,59 +1239,59 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
           {/* Appearance */}
           {activeTab === 'appearance' && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
                 Appearance Settings
               </h2>
 
-              <div className="space-y-6">
+              <div className="space-y-4 sm:space-y-6">
                 <div>
-                  <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-3">Theme</h3>
-                  <div className="grid grid-cols-3 gap-3">
+                  <h3 className="text-sm sm:text-base font-medium text-gray-900 dark:text-gray-100 mb-3">Theme</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <button
                       onClick={() => handleThemeChange('light')}
                       disabled={isLoading}
-                      className={`flex flex-col items-center gap-2 p-4 border-2 rounded-lg transition-colors ${
+                      className={`flex flex-col items-center gap-2 p-3 sm:p-4 border-2 rounded-lg transition-colors min-h-[44px] ${
                         userSettings?.theme === 'light'
                           ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
                           : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
                       }`}
                     >
-                      <SunIcon className="w-6 h-6" />
-                      <span className="text-sm font-medium">Light</span>
+                      <SunIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                      <span className="text-xs sm:text-sm font-medium">Light</span>
                     </button>
 
                     <button
                       onClick={() => handleThemeChange('dark')}
                       disabled={isLoading}
-                      className={`flex flex-col items-center gap-2 p-4 border-2 rounded-lg transition-colors ${
+                      className={`flex flex-col items-center gap-2 p-3 sm:p-4 border-2 rounded-lg transition-colors min-h-[44px] ${
                         userSettings?.theme === 'dark'
                           ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
                           : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
                       }`}
                     >
-                      <MoonIcon className="w-6 h-6" />
-                      <span className="text-sm font-medium">Dark</span>
+                      <MoonIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                      <span className="text-xs sm:text-sm font-medium">Dark</span>
                     </button>
 
                     <button
                       onClick={() => handleThemeChange('auto')}
                       disabled={isLoading}
-                      className={`flex flex-col items-center gap-2 p-4 border-2 rounded-lg transition-colors ${
+                      className={`flex flex-col items-center gap-2 p-3 sm:p-4 border-2 rounded-lg transition-colors min-h-[44px] ${
                         userSettings?.theme === 'auto'
                           ? 'border-blue-500 dark:border-blue-400 bg-blue-50 dark:bg-blue-900/20'
                           : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'
                       }`}
                     >
-                      <MonitorIcon className="w-6 h-6" />
-                      <span className="text-sm font-medium">Auto</span>
+                      <MonitorIcon className="w-5 h-5 sm:w-6 sm:h-6" />
+                      <span className="text-xs sm:text-sm font-medium">Auto</span>
                     </button>
                   </div>
                 </div>
 
                 <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <div className="flex items-center gap-2 text-sm text-green-600">
-                    <SmartphoneIcon className="w-4 h-4" />
+                  <div className="flex items-center gap-2 text-xs sm:text-sm text-green-600">
+                    <SmartphoneIcon className="w-3 h-3 sm:w-4 sm:h-4" />
                     <span>Settings automatically sync to the cloud</span>
                   </div>
                   <div className="mt-2 text-xs text-gray-500 dark:text-gray-400">
@@ -1307,19 +1307,19 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
           {/* Company Branding - Super Users Only */}
           {activeTab === 'branding' && user?.role === 'super_user' && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-              <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+              <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 Company Branding
               </h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+              <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-4">
                 As a super user, you can customize the company logos. Changes will be visible to all users across all profiles.
               </p>
 
-              <div className="space-y-6">
+              <div className="space-y-4 sm:space-y-6">
                 {/* Header Logo */}
-                <div className="border-b border-gray-200 dark:border-gray-700 pb-6">
-                  <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-4">Header Logo</h3>
-                  <div className="flex items-center gap-4">
+                <div className="border-b border-gray-200 dark:border-gray-700 pb-4 sm:pb-6">
+                  <h3 className="text-sm sm:text-base font-medium text-gray-900 dark:text-gray-100 mb-4">Header Logo</h3>
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                     {companyLogos.headerLogo && (
                       <img
                         src={companyLogos.headerLogo}
@@ -1327,8 +1327,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                         className="h-12 w-auto object-contain border border-gray-300 dark:border-gray-600 rounded p-2"
                       />
                     )}
-                    <div className="flex gap-2">
-                      <label className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 cursor-pointer">
+                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                      <label className="w-full sm:w-auto px-4 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 cursor-pointer text-center min-h-[44px] flex items-center justify-center text-sm">
                         <input
                           type="file"
                           accept="image/*"
@@ -1343,7 +1343,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                       {companyLogos.headerLogo && (
                         <button
                           onClick={() => handleLogoDelete('header')}
-                          className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                          className="w-full sm:w-auto px-4 py-3 bg-red-600 text-white rounded-md hover:bg-red-700 min-h-[44px] flex items-center justify-center text-sm"
                         >
                           Remove
                         </button>
@@ -1354,9 +1354,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
 
                 {/* Favicon */}
-                <div className="pb-6">
-                  <h3 className="font-medium text-gray-900 dark:text-gray-100 mb-4">Favicon</h3>
-                  <div className="flex items-center gap-4">
+                <div className="pb-4 sm:pb-6">
+                  <h3 className="text-sm sm:text-base font-medium text-gray-900 dark:text-gray-100 mb-4">Favicon</h3>
+                  <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
                     {companyLogos.favicon && (
                       <img
                         src={companyLogos.favicon}
@@ -1364,8 +1364,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                         className="h-8 w-8 object-contain border border-gray-300 dark:border-gray-600 rounded p-1"
                       />
                     )}
-                    <div className="flex gap-2">
-                      <label className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 cursor-pointer">
+                    <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+                      <label className="w-full sm:w-auto px-4 py-3 bg-blue-600 text-white rounded-md hover:bg-blue-700 cursor-pointer text-center min-h-[44px] flex items-center justify-center text-sm">
                         <input
                           type="file"
                           accept="image/*"
@@ -1380,21 +1380,21 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                       {companyLogos.favicon && (
                         <button
                           onClick={() => handleLogoDelete('favicon')}
-                          className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+                          className="w-full sm:w-auto px-4 py-3 bg-red-600 text-white rounded-md hover:bg-red-700 min-h-[44px] flex items-center justify-center text-sm"
                         >
                           Remove
                         </button>
                       )}
                     </div>
                   </div>
-                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+                  <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-2">
                     Recommended size: 32x32 or 64x64 pixels
                   </p>
                 </div>
 
                 {/* Upload Status */}
                 {logoUploadStatus !== 'idle' && (
-                  <div className={`p-3 rounded-lg ${
+                  <div className={`p-3 sm:p-4 rounded-lg text-sm ${
                     logoUploadStatus === 'uploading' ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400' :
                     logoUploadStatus === 'success' ? 'bg-green-50 dark:bg-green-900/20 text-green-600 dark:text-green-400' :
                     'bg-red-50 dark:bg-red-900/20 text-red-600 dark:text-red-400'
@@ -1406,11 +1406,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                 )}
 
                 {/* Info */}
-                <div className="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
-                  <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">
+                <div className="bg-blue-50 dark:bg-blue-900/20 p-3 sm:p-4 rounded-lg">
+                  <h4 className="text-sm sm:text-base font-medium text-blue-900 dark:text-blue-100 mb-2">
                     About Company Branding (Super User Only)
                   </h4>
-                  <div className="text-sm text-blue-700 dark:text-blue-300 space-y-1">
+                  <div className="text-xs sm:text-sm text-blue-700 dark:text-blue-300 space-y-1">
                     <p>• Only super users can upload or modify company logos</p>
                     <p>• Logos are visible to ALL users across ALL profiles</p>
                     <p>• Changes are synchronized across all devices instantly</p>
@@ -1425,15 +1425,15 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
           {/* Audit Logs */}
           {activeTab === 'audit' && (
-            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="text-lg font-semibold text-gray-900">
+            <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 mb-4">
+                <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
                   HIPAA Audit Logs
                 </h2>
                 <button
                   onClick={downloadAuditLogs}
                   disabled={isLoadingAudit}
-                  className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+                  className="w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 min-h-[44px] text-sm"
                 >
                   <DownloadIcon className="w-4 h-4" />
                   Download Logs
@@ -1441,7 +1441,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
               </div>
 
               <div className="mb-4">
-                <p className="text-sm text-gray-600">
+                <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300">
                   Complete audit trail of all system access and PHI data operations.
                   Required for HIPAA compliance and security monitoring.
                 </p>
@@ -1455,35 +1455,35 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
               ) : auditLogs.length > 0 ? (
                 <div className="space-y-4">
                   <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
+                    <table className="w-full text-xs sm:text-sm">
                       <thead>
                         <tr className="border-b border-gray-200 dark:border-gray-700">
-                          <th className="text-left py-2 px-3 font-medium text-gray-900 dark:text-gray-100">Timestamp</th>
-                          <th className="text-left py-2 px-3 font-medium text-gray-900 dark:text-gray-100">User</th>
-                          <th className="text-left py-2 px-3 font-medium text-gray-900 dark:text-gray-100">Action</th>
-                          <th className="text-left py-2 px-3 font-medium text-gray-900 dark:text-gray-100">Resource</th>
-                          <th className="text-left py-2 px-3 font-medium text-gray-900 dark:text-gray-100">PHI</th>
-                          <th className="text-left py-2 px-3 font-medium text-gray-900 dark:text-gray-100">Outcome</th>
+                          <th className="text-left py-2 px-2 sm:px-3 font-medium text-gray-900 dark:text-gray-100">Timestamp</th>
+                          <th className="text-left py-2 px-2 sm:px-3 font-medium text-gray-900 dark:text-gray-100">User</th>
+                          <th className="text-left py-2 px-2 sm:px-3 font-medium text-gray-900 dark:text-gray-100">Action</th>
+                          <th className="text-left py-2 px-2 sm:px-3 font-medium text-gray-900 dark:text-gray-100">Resource</th>
+                          <th className="text-left py-2 px-2 sm:px-3 font-medium text-gray-900 dark:text-gray-100">PHI</th>
+                          <th className="text-left py-2 px-2 sm:px-3 font-medium text-gray-900 dark:text-gray-100">Outcome</th>
                         </tr>
                       </thead>
                       <tbody>
                         {auditLogs.slice(0, 20).map((log, index) => (
                           <tr key={index} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
-                            <td className="py-2 px-3 text-gray-900 dark:text-gray-100">
+                            <td className="py-2 px-2 sm:px-3 text-gray-900 dark:text-gray-100">
                               {new Date(log.timestamp).toLocaleString()}
                             </td>
-                            <td className="py-2 px-3 text-gray-900 dark:text-gray-100">
+                            <td className="py-2 px-2 sm:px-3 text-gray-900 dark:text-gray-100">
                               {log.user_name}
                             </td>
-                            <td className="py-2 px-3">
+                            <td className="py-2 px-2 sm:px-3">
                               <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800">
                                 {log.action}
                               </span>
                             </td>
-                            <td className="py-2 px-3 text-gray-900 dark:text-gray-100">
+                            <td className="py-2 px-2 sm:px-3 text-gray-900 dark:text-gray-100">
                               {log.resource_type}
                             </td>
-                            <td className="py-2 px-3">
+                            <td className="py-2 px-2 sm:px-3">
                               {log.phi_accessed ? (
                                 <span className="flex items-center gap-1 text-orange-600">
                                   <AlertTriangleIcon className="w-3 h-3" />
@@ -1493,7 +1493,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                                 <span className="text-gray-500 dark:text-gray-400">No</span>
                               )}
                             </td>
-                            <td className="py-2 px-3">
+                            <td className="py-2 px-2 sm:px-3">
                               <span className={`px-2 py-1 text-xs rounded-full ${
                                 log.outcome === 'SUCCESS'
                                   ? 'bg-green-100 text-green-800'
@@ -1511,16 +1511,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                   </div>
 
                   {auditLogs.length > 20 && (
-                    <div className="text-center py-4 border-t border-gray-200">
-                      <p className="text-sm text-gray-600 dark:text-gray-300">
+                    <div className="text-center py-4 border-t border-gray-200 dark:border-gray-700">
+                      <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300">
                         Showing first 20 entries. Download complete logs for full history.
                       </p>
                     </div>
                   )}
 
-                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-4">
-                    <h4 className="font-medium text-blue-900 dark:text-blue-100 mb-2">Audit Log Information</h4>
-                    <ul className="text-sm text-blue-800 space-y-1">
+                  <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3 sm:p-4">
+                    <h4 className="text-sm sm:text-base font-medium text-blue-900 dark:text-blue-100 mb-2">Audit Log Information</h4>
+                    <ul className="text-xs sm:text-sm text-blue-800 dark:text-blue-300 space-y-1">
                       <li>• All PHI access is logged and encrypted</li>
                       <li>• Logs are retained for 6+ years per HIPAA requirements</li>
                       <li>• Failed access attempts are automatically flagged</li>
@@ -1530,9 +1530,9 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                 </div>
               ) : (
                 <div className="text-center py-8">
-                  <FileTextIcon className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                  <p className="text-gray-500">No audit logs available</p>
-                  <p className="text-sm text-gray-400 mt-1">
+                  <FileTextIcon className="w-10 h-10 sm:w-12 sm:h-12 text-gray-300 dark:text-gray-600 mx-auto mb-3" />
+                  <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400">No audit logs available</p>
+                  <p className="text-xs sm:text-sm text-gray-400 dark:text-gray-500 mt-1">
                     Audit logging will begin when users start accessing the system
                   </p>
                 </div>

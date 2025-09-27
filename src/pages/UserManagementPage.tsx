@@ -782,13 +782,13 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
 
   if (!canManageUsers) {
     return (
-      <div className="p-6">
-        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-600 rounded-lg p-4">
+      <div className="p-3 sm:p-4 lg:p-6">
+        <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-600 rounded-lg p-3 sm:p-4">
           <div className="flex items-center gap-2">
-            <ShieldIcon className="w-5 h-5 text-yellow-600" />
-            <h3 className="font-medium text-yellow-800 dark:text-yellow-200">Access Restricted</h3>
+            <ShieldIcon className="w-4 h-4 sm:w-5 sm:h-5 text-yellow-600" />
+            <h3 className="text-sm sm:text-base font-medium text-yellow-800 dark:text-yellow-200">Access Restricted</h3>
           </div>
-          <p className="text-yellow-700 dark:text-yellow-300 mt-2">
+          <p className="text-sm sm:text-base text-yellow-700 dark:text-yellow-300 mt-2">
             Only Super Users can manage user accounts. Regular users and healthcare providers cannot add, edit, or delete users.
           </p>
         </div>
@@ -797,27 +797,28 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
   }
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-3 sm:p-4 lg:p-6 space-y-3 sm:space-y-4 lg:space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-            <UserIcon className="w-7 h-7 text-blue-600" />
+          <h1 className="text-xl sm:text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
+            <UserIcon className="w-6 h-6 sm:w-7 sm:h-7 text-blue-600" />
             User Management
           </h1>
-          <p className="text-gray-600 dark:text-gray-400 mt-1">
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mt-1">
             Manage system users and their permissions
           </p>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           <button
             onClick={() => setIsAddingUser(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2"
+            className="px-3 py-2 sm:px-4 sm:py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 text-sm sm:text-base min-h-[44px]"
             disabled={isLoading}
           >
             <UserIcon className="w-4 h-4" />
-            Add User
+            <span className="hidden sm:inline">Add User</span>
+            <span className="sm:hidden">Add</span>
           </button>
 
         </div>
@@ -826,8 +827,8 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
 
       {/* Users List */}
       <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-        <div className="p-4 border-b border-gray-200">
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
+        <div className="p-3 sm:p-4 border-b border-gray-200">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100">
             System Users ({filteredUsers.length})
           </h2>
         </div>
@@ -836,10 +837,10 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
           {filteredUsers.map((userItem) => {
             const RoleIcon = getRoleIcon(userItem.role)
             return (
-              <div key={userItem.id} className="p-4 hover:bg-gray-50 dark:hover:bg-gray-700">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center overflow-hidden">
+              <div key={userItem.id} className="p-3 sm:p-4 hover:bg-gray-50 dark:hover:bg-gray-700">
+                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                  <div className="flex items-start sm:items-center gap-3 flex-1 min-w-0">
+                    <div className="w-8 h-8 sm:w-10 sm:h-10 bg-gray-200 dark:bg-gray-600 rounded-full flex items-center justify-center overflow-hidden flex-shrink-0">
                       {userItem.avatar ? (
                         <img
                           src={userItem.avatar}
@@ -847,46 +848,54 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
                           className="w-full h-full object-cover"
                         />
                       ) : (
-                        <UserIcon className="w-5 h-5 text-gray-600" />
+                        <UserIcon className="w-4 h-4 sm:w-5 sm:h-5 text-gray-600" />
                       )}
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-medium text-gray-900 dark:text-gray-100">{userItem.name}</h3>
-                        <div className="flex items-center gap-1">
-                          <RoleIcon className="w-4 h-4 text-blue-600" />
-                          <span className="text-xs text-blue-600 font-medium">
-                            {getRoleLabel(userItem.role)}
-                          </span>
-                        </div>
-                        <div className={`px-2 py-1 text-xs rounded-full ${
-                          !userItem.isLocked
-                            ? 'bg-green-100 text-green-800'
-                            : 'bg-red-100 text-red-800'
-                        }`}>
-                          {!userItem.isLocked ? 'Active' : 'Locked'}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2">
+                        <h3 className="font-medium text-sm sm:text-base text-gray-900 dark:text-gray-100 truncate">{userItem.name}</h3>
+                        <div className="flex items-center gap-1 sm:gap-2 flex-wrap">
+                          <div className="flex items-center gap-1">
+                            <RoleIcon className="w-3 h-3 sm:w-4 sm:h-4 text-blue-600" />
+                            <span className="text-xs text-blue-600 font-medium">
+                              {getRoleLabel(userItem.role)}
+                            </span>
+                          </div>
+                          <div className={`px-2 py-1 text-xs rounded-full ${
+                            !userItem.isLocked
+                              ? 'bg-green-100 text-green-800'
+                              : 'bg-red-100 text-red-800'
+                          }`}>
+                            {!userItem.isLocked ? 'Active' : 'Locked'}
+                          </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400 mt-1">
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-4 text-xs sm:text-sm text-gray-600 dark:text-gray-400 mt-1">
                         <div className="flex items-center gap-1">
                           <MailIcon className="w-3 h-3" />
-                          {userItem.email}
+                          <span className="truncate">{userItem.email}</span>
                         </div>
-                        <span>Created: {formatDate(userItem.created_at)}</span>
+                        <span className="hidden sm:inline">Created: {formatDate(userItem.created_at)}</span>
+                        <span className="sm:hidden">Created {formatDate(userItem.created_at)}</span>
                         {userItem.lastLogin ? (
-                          <span>Last login: {formatLastLogin(userItem.lastLogin)}</span>
+                          <span className="hidden sm:inline">Last login: {formatLastLogin(userItem.lastLogin)}</span>
                         ) : (
-                          <span className="text-gray-400">Last login: Never</span>
+                          <span className="text-gray-400 hidden sm:inline">Last login: Never</span>
+                        )}
+                        {userItem.lastLogin ? (
+                          <span className="sm:hidden text-xs">Last: {formatLastLogin(userItem.lastLogin)}</span>
+                        ) : (
+                          <span className="text-gray-400 sm:hidden text-xs">Never logged in</span>
                         )}
                       </div>
                     </div>
                   </div>
 
                   {/* Action buttons */}
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
                     <button
                       onClick={() => setEditingUser(userItem)}
-                      className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                      className="p-2 sm:p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                       title="Edit user"
                     >
                       <EditIcon className="w-4 h-4" />
@@ -895,7 +904,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
                     {userItem.isLocked && (
                       <button
                         onClick={() => handleClearLockout(userItem.id, userItem.name)}
-                        className="p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
+                        className="p-2 sm:p-2 text-gray-400 hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                         title="Clear lockout"
                         disabled={isLoading}
                       >
@@ -905,7 +914,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
 
                     <button
                       onClick={() => handleDeleteUser(userItem.id)}
-                      className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                      className="p-2 sm:p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                       title="Delete user permanently"
                       disabled={isLoading || userItem.id === user.id}
                     >
@@ -914,7 +923,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
 
                     <button
                       onClick={() => setIsChangingPassword(true) || setEditingUser(userItem)}
-                      className="p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors"
+                      className="p-2 sm:p-2 text-gray-400 hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded-lg transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                       title="Change password"
                       disabled={isLoading}
                     >
@@ -923,7 +932,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
 
                     <button
                       onClick={() => handleViewLoginHistory(userItem)}
-                      className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors"
+                      className="p-2 sm:p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/20 rounded-lg transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
                       title="View login history"
                       disabled={isLoading}
                     >
@@ -937,8 +946,8 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
           })}
 
           {filteredUsers.length === 0 && (
-            <div className="p-8 text-center text-gray-500 dark:text-gray-400">
-              No users found.
+            <div className="p-6 sm:p-8 text-center text-gray-500 dark:text-gray-400">
+              <span className="text-sm sm:text-base">No users found.</span>
             </div>
           )}
         </div>
@@ -946,11 +955,11 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
 
       {/* Add User Modal */}
       {isAddingUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Add New User</h3>
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">Add New User</h3>
 
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                   Full Name
@@ -959,7 +968,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
                   type="text"
                   value={newUser.name}
                   onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[44px]"
                   placeholder="Enter full name"
                 />
               </div>
@@ -972,7 +981,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
                   type="email"
                   value={newUser.email}
                   onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[44px]"
                   placeholder="Enter email address"
                 />
               </div>
@@ -985,7 +994,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
                   type="password"
                   value={newUser.password}
                   onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[44px]"
                   placeholder="Enter password"
                   minLength={6}
                 />
@@ -999,7 +1008,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
                 <select
                   value={newUser.role}
                   onChange={(e) => setNewUser({ ...newUser, role: e.target.value as 'super_user' | 'user' })}
-                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[44px]"
                 >
                   <option value="user">User</option>
                   <option value="super_user">Super User</option>
@@ -1008,10 +1017,10 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
             </div>
 
             {/* Modal Actions */}
-            <div className="flex justify-end gap-3 mt-6">
+            <div className="flex flex-col sm:flex-row justify-end gap-3 mt-6">
               <button
                 onClick={() => setIsAddingUser(false)}
-                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors min-h-[44px] order-2 sm:order-1"
                 disabled={isLoading}
               >
                 Cancel
@@ -1019,7 +1028,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
               <button
                 onClick={handleAddUser}
                 disabled={isLoading || !newUser.name.trim() || !newUser.email.trim() || !newUser.password.trim()}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px] order-1 sm:order-2"
               >
                 {isLoading ? 'Adding...' : 'Add User'}
               </button>
@@ -1030,13 +1039,13 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
 
       {/* Edit User Modal */}
       {editingUser && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md">
-            <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-4 sm:p-6 w-full max-w-md max-h-[90vh] overflow-y-auto">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
               {isChangingPassword ? 'Change User Password' : 'Edit User'}
             </h3>
 
-            <div className="space-y-4">
+            <div className="space-y-3 sm:space-y-4">
               {isChangingPassword ? (
                 // Password Change Form
                 <>
@@ -1116,14 +1125,14 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
             </div>
 
             {/* Modal Actions */}
-            <div className="flex justify-end gap-3 mt-6">
+            <div className="flex flex-col sm:flex-row justify-end gap-3 mt-6">
               <button
                 onClick={() => {
                   setEditingUser(null)
                   setNewPassword('')
                   setIsChangingPassword(false)
                 }}
-                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors"
+                className="px-4 py-2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200 transition-colors min-h-[44px] order-last sm:order-first"
                 disabled={isLoading}
               >
                 Cancel
@@ -1133,7 +1142,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
                 <button
                   onClick={handleChangePassword}
                   disabled={isLoading || !newPassword.trim()}
-                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px] order-first sm:order-last"
                 >
                   {isLoading ? 'Changing...' : 'Change Password'}
                 </button>
@@ -1141,7 +1150,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
                 <>
                   <button
                     onClick={() => setIsChangingPassword(true)}
-                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors"
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors min-h-[44px] order-2 sm:order-2"
                     disabled={isLoading}
                   >
                     Change Password
@@ -1149,7 +1158,7 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
                   <button
                     onClick={() => handleEditUser(editingUser)}
                     disabled={isLoading || !editingUser.name.trim() || !editingUser.email.trim()}
-                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors min-h-[44px] order-1 sm:order-3"
                   >
                     {isLoading ? 'Saving...' : 'Save Changes'}
                   </button>
@@ -1162,21 +1171,21 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
 
       {/* Login History Modal */}
       {showLoginHistory && selectedUserForHistory && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-4xl max-h-[90vh] overflow-auto">
-            <div className="flex items-center justify-between mb-6">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-2 sm:p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg p-3 sm:p-6 w-full max-w-4xl max-h-[90vh] overflow-auto">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 sm:mb-6">
               <div className="flex items-center gap-3">
-                <HistoryIcon className="w-6 h-6 text-indigo-600" />
+                <HistoryIcon className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600" />
                 <div>
-                  <h3 className="text-xl font-semibold text-gray-900 dark:text-gray-100">Login History</h3>
-                  <p className="text-sm text-gray-600 dark:text-gray-400">
+                  <h3 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-100">Login History</h3>
+                  <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">
                     {selectedUserForHistory.name} ({selectedUserForHistory.email})
                   </p>
                 </div>
               </div>
               <button
                 onClick={closeLoginHistoryModal}
-                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                className="p-2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors min-h-[44px] min-w-[44px] flex items-center justify-center"
               >
                 <XIcon className="w-5 h-5" />
               </button>
@@ -1192,25 +1201,25 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
             ) : loginHistory ? (
               <div>
                 {/* Summary */}
-                <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-4 mb-6">
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="bg-indigo-50 dark:bg-indigo-900/20 rounded-lg p-3 sm:p-4 mb-4 sm:mb-6">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 sm:gap-4">
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                      <div className="text-xl sm:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
                         {loginHistory.totalLogins}
                       </div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">Total Successful Logins</div>
+                      <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Total Successful Logins</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                      <div className="text-xl sm:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
                         {loginHistory.loginHistory.length}
                       </div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">Recent Login Attempts</div>
+                      <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Recent Login Attempts</div>
                     </div>
                     <div className="text-center">
-                      <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">
+                      <div className="text-xl sm:text-2xl font-bold text-indigo-600 dark:text-indigo-400">
                         {loginHistory.loginHistory.filter(h => h.outcome === 'FAILURE').length}
                       </div>
-                      <div className="text-sm text-gray-600 dark:text-gray-400">Failed Attempts</div>
+                      <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400">Failed Attempts</div>
                     </div>
                   </div>
                 </div>
@@ -1218,37 +1227,37 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
                 {/* Login History List */}
                 {loginHistory.loginHistory.length > 0 ? (
                   <div className="space-y-3">
-                    <h4 className="text-lg font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
-                      <ClockIcon className="w-5 h-5" />
+                    <h4 className="text-base sm:text-lg font-medium text-gray-900 dark:text-gray-100 flex items-center gap-2">
+                      <ClockIcon className="w-4 h-4 sm:w-5 sm:h-5" />
                       Last 10 Login Attempts
                     </h4>
                     <div className="space-y-2">
                       {loginHistory.loginHistory.map((entry, index) => (
                         <div
                           key={index}
-                          className={`p-4 rounded-lg border ${
+                          className={`p-3 sm:p-4 rounded-lg border ${
                             entry.outcome === 'SUCCESS'
                               ? 'bg-green-50 border-green-200 dark:bg-green-900/20 dark:border-green-700'
                               : 'bg-red-50 border-red-200 dark:bg-red-900/20 dark:border-red-700'
                           }`}
                         >
-                          <div className="flex items-start justify-between">
-                            <div className="flex items-start gap-3">
+                          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+                            <div className="flex items-start gap-3 flex-1">
                               {entry.outcome === 'SUCCESS' ? (
-                                <CheckIcon className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5" />
+                                <CheckIcon className="w-4 h-4 sm:w-5 sm:h-5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
                               ) : (
-                                <AlertTriangleIcon className="w-5 h-5 text-red-600 dark:text-red-400 mt-0.5" />
+                                <AlertTriangleIcon className="w-4 h-4 sm:w-5 sm:h-5 text-red-600 dark:text-red-400 mt-0.5 flex-shrink-0" />
                               )}
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-1">
-                                  <span className={`text-sm font-medium ${
+                              <div className="flex-1 min-w-0">
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-1 sm:gap-2 mb-1">
+                                  <span className={`text-xs sm:text-sm font-medium truncate ${
                                     entry.outcome === 'SUCCESS'
                                       ? 'text-green-800 dark:text-green-200'
                                       : 'text-red-800 dark:text-red-200'
                                   }`}>
                                     {entry.action}
                                   </span>
-                                  <span className={`px-2 py-1 text-xs rounded-full ${
+                                  <span className={`px-2 py-1 text-xs rounded-full self-start sm:self-auto ${
                                     entry.outcome === 'SUCCESS'
                                       ? 'bg-green-100 text-green-800 dark:bg-green-800 dark:text-green-100'
                                       : 'bg-red-100 text-red-800 dark:bg-red-800 dark:text-red-100'
@@ -1256,22 +1265,22 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
                                     {entry.outcome}
                                   </span>
                                 </div>
-                                <div className="text-sm text-gray-600 dark:text-gray-400 space-y-1">
+                                <div className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 space-y-1">
                                   <div className="flex items-center gap-1">
-                                    <CalendarIcon className="w-4 h-4" />
-                                    {formatLoginDate(entry.timestamp)}
+                                    <CalendarIcon className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                                    <span className="truncate">{formatLoginDate(entry.timestamp)}</span>
                                   </div>
                                   {entry.sourceIp && (
-                                    <div>IP: {entry.sourceIp}</div>
+                                    <div className="truncate">IP: {entry.sourceIp}</div>
                                   )}
                                   {entry.userAgent && (
                                     <div className="flex items-center gap-1">
-                                      <MonitorIcon className="w-4 h-4" />
-                                      {getDeviceInfo(entry.userAgent)}
+                                      <MonitorIcon className="w-3 h-3 sm:w-4 sm:h-4 flex-shrink-0" />
+                                      <span className="truncate">{getDeviceInfo(entry.userAgent)}</span>
                                     </div>
                                   )}
                                   {entry.failureReason && (
-                                    <div className="text-red-600 dark:text-red-400 font-medium">
+                                    <div className="text-red-600 dark:text-red-400 font-medium text-xs sm:text-sm">
                                       Reason: {entry.failureReason}
                                     </div>
                                   )}
@@ -1304,10 +1313,10 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
             )}
 
             {/* Modal Footer */}
-            <div className="flex justify-end mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+            <div className="flex justify-end mt-4 sm:mt-6 pt-4 border-t border-gray-200 dark:border-gray-700">
               <button
                 onClick={closeLoginHistoryModal}
-                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+                className="px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors min-h-[44px]"
               >
                 Close
               </button>

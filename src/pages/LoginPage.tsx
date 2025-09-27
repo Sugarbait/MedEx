@@ -855,8 +855,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6" style={{ fontFamily: 'Roboto, sans-serif' }}>
-      <div className="max-w-sm mx-auto pt-20">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-start justify-center pt-8 sm:pt-16 p-4 sm:p-6" style={{ fontFamily: 'Roboto, sans-serif' }}>
+      <div className="w-full max-w-sm mx-auto">
 
         <div className="text-center mb-8">
           <img
