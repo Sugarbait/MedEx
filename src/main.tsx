@@ -161,7 +161,7 @@ const MainApp: React.FC = () => {
   React.useEffect(() => {
     console.log('📱 Loading main App component...')
 
-    // Initialize critical Azure authentication fixes immediately
+    // Initialize critical authentication fixes immediately
     Promise.allSettled([
       import('./services/authFlowEnhancer').then(({ authFlowEnhancer }) => {
         authFlowEnhancer.initialize()
@@ -169,7 +169,10 @@ const MainApp: React.FC = () => {
       }).catch(() => console.log('Early auth flow enhancer init failed')),
       import('./utils/azureAuthFix').then(() => {
         console.log('🔧 Azure auth fix started early')
-      }).catch(() => console.log('Early Azure auth fix init failed'))
+      }).catch(() => console.log('Early Azure auth fix init failed')),
+      import('./utils/localhostAuthFix').then(() => {
+        console.log('🔧 Localhost auth fix started early')
+      }).catch(() => console.log('Early localhost auth fix init failed'))
     ]).then(() => {
       console.log('✅ Critical auth fixes initialized')
     })
@@ -221,13 +224,16 @@ setTimeout(() => {
     import('./services/bulletproofCredentialInitializer').then(({ bulletproofCredentialInitializer }) =>
       bulletproofCredentialInitializer.initialize()
     ).catch(() => console.log('Bulletproof credentials skipped')),
-    // Initialize Azure authentication fixes for login loop issues
+    // Initialize authentication fixes for login loop issues
     import('./services/authFlowEnhancer').then(({ authFlowEnhancer }) =>
       authFlowEnhancer.initialize()
     ).catch(() => console.log('Auth flow enhancer init skipped')),
     import('./utils/azureAuthFix').then(() =>
       console.log('✅ Azure auth fix initialized')
-    ).catch(() => console.log('Azure auth fix init skipped'))
+    ).catch(() => console.log('Azure auth fix init skipped')),
+    import('./utils/localhostAuthFix').then(() =>
+      console.log('✅ Localhost auth fix initialized')
+    ).catch(() => console.log('Localhost auth fix init skipped'))
   ]).then(() => {
     console.log('✅ Background initialization completed')
   })
