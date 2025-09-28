@@ -107,17 +107,29 @@ try {
       console.warn('Failed to restore preserved avatar:', avatarRestoreError)
     }
 
-    localStorage.setItem('currentUser', JSON.stringify(userToCreate))
-    console.log('✅ Created new user data with restored avatar')
+    // CRITICAL FIX: Check if user just logged out before auto-creating user
+    const justLoggedOut = localStorage.getItem('justLoggedOut')
+    if (justLoggedOut !== 'true') {
+      localStorage.setItem('currentUser', JSON.stringify(userToCreate))
+      console.log('✅ Created new user data with restored avatar')
+    } else {
+      console.log('🛑 User just logged out - not auto-creating user')
+    }
   }
 
   // Handle settings similarly - preserve existing settings
-  const existingSettings = localStorage.getItem(`settings_${defaultUser.id}`)
-  if (!existingSettings) {
-    localStorage.setItem(`settings_${defaultUser.id}`, JSON.stringify(defaultSettings))
-    console.log('✅ Created default settings')
+  // CRITICAL FIX: Don't create settings if user just logged out
+  const justLoggedOut = localStorage.getItem('justLoggedOut')
+  if (justLoggedOut !== 'true') {
+    const existingSettings = localStorage.getItem(`settings_${defaultUser.id}`)
+    if (!existingSettings) {
+      localStorage.setItem(`settings_${defaultUser.id}`, JSON.stringify(defaultSettings))
+      console.log('✅ Created default settings')
+    } else {
+      console.log('✅ Preserved existing settings')
+    }
   } else {
-    console.log('✅ Preserved existing settings')
+    console.log('🛑 User just logged out - not creating settings')
   }
 
   console.log('✅ Basic user setup completed')

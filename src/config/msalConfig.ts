@@ -18,7 +18,7 @@ const msalConfig: Configuration = {
     navigateToLoginRequestUrl: true
   },
   cache: {
-    cacheLocation: 'localStorage', // This configures where your cache will be stored
+    cacheLocation: 'sessionStorage', // Changed to sessionStorage for better logout behavior
     storeAuthStateInCookie: false, // Set this to "true" if you're having issues on IE11 or Edge
   },
   system: {

@@ -465,6 +465,45 @@ const App: React.FC = () => {
       try {
         console.log('🔄 App.tsx: Starting loadUser function...')
 
+        // CRITICAL FIX: Check if user just logged out to prevent auto-login
+        const justLoggedOut = localStorage.getItem('justLoggedOut')
+        if (justLoggedOut === 'true') {
+          console.log('🛑 User just logged out - preventing auto-login')
+
+          // CRITICAL FIX: Clear all credential storage immediately
+          try {
+            // Clear sessionStorage credential backups
+            sessionStorage.removeItem('retell_credentials_backup')
+
+            // Clear in-memory credential backups
+            if (typeof window !== 'undefined') {
+              delete (window as any).__retellCredentialsBackup
+            }
+
+            // Clear emergency recovery credentials
+            localStorage.removeItem('__emergencyRetellCredentials')
+            localStorage.removeItem('__fallbackRetellConfig')
+
+            console.log('🔐 App.tsx: Cleared all credential storage during logout check')
+          } catch (error) {
+            console.warn('⚠️ App.tsx: Error clearing credentials:', error)
+          }
+
+          // DON'T remove justLoggedOut flag yet - let background initialization see it
+          localStorage.removeItem('currentUser')
+          setUser(null)
+          setIsInitializing(false)
+          setMfaCheckInProgress(false)
+
+          // Remove the flag after a delay to ensure all background services see it
+          setTimeout(() => {
+            localStorage.removeItem('justLoggedOut')
+            console.log('🛑 App.tsx: Removed justLoggedOut flag after delay')
+          }, 10000) // 10 second delay
+
+          return // Exit early - don't try to load user
+        }
+
         // ANTI-FLASH FIX: Set MFA check in progress to prevent dashboard flash
         setMfaCheckInProgress(true)
 
@@ -1227,6 +1266,15 @@ const App: React.FC = () => {
           console.error('Error clearing MFA sessions:', mfaError)
         }
 
+        // CRITICAL FIX: Clear sessionStorage to ensure fresh login detection
+        try {
+          sessionStorage.removeItem('appInitialized')
+          sessionStorage.removeItem('spa-redirect-path')
+          console.log('✅ SessionStorage cleared for fresh login detection')
+        } catch (sessionError) {
+          console.error('Error clearing sessionStorage:', sessionError)
+        }
+
         // Clear user-specific data (but not avatar data)
         localStorage.removeItem(`settings_${user.id}`)
         localStorage.removeItem(`user_settings_${user.id}`)
@@ -1238,6 +1286,15 @@ const App: React.FC = () => {
           console.log('✅ Fresh MFA sessions cleared (no user ID)')
         } catch (mfaError) {
           console.error('Error clearing all MFA sessions:', mfaError)
+        }
+
+        // CRITICAL FIX: Also clear sessionStorage when no user ID available
+        try {
+          sessionStorage.removeItem('appInitialized')
+          sessionStorage.removeItem('spa-redirect-path')
+          console.log('✅ SessionStorage cleared for fresh login detection (no user ID)')
+        } catch (sessionError) {
+          console.error('Error clearing sessionStorage (no user ID):', sessionError)
         }
       }
 
@@ -1251,8 +1308,48 @@ const App: React.FC = () => {
       // Reset application state
       setUser(null)
       setMfaRequired(false)
+      setPendingMfaUser(null) // CRITICAL: Clear pending MFA user
+      setMfaCheckInProgress(false) // Clear MFA check state
 
       console.log('✅ Complete logout cleanup performed with avatar preservation')
+
+      // CRITICAL FIX: Set logout flag to prevent auto-login on reload
+      localStorage.setItem('justLoggedOut', 'true')
+
+      // CRITICAL: Also clear the currentUser to prevent detection on reload
+      localStorage.removeItem('currentUser')
+
+      // COMPREHENSIVE: Clear ALL authentication-related and user-specific localStorage items
+      const keysToRemove = Object.keys(localStorage).filter(key =>
+        key.startsWith('msal.') || // MSAL tokens
+        key.includes('login-hint') || // MSAL login hints
+        key.includes('account') || // MSAL accounts
+        key.startsWith('settings_') || // User settings (includes API keys)
+        key.startsWith('user_') || // User data
+        key.startsWith('profile_') || // Profile data
+        key.startsWith('browserSession') || // Browser sessions
+        key === 'currentUser' || // Current user data
+        key === 'freshMfaVerified' || // MFA verification
+        key === 'mfa_verified' || // MFA status
+        key === 'systemUsers' || // System users list
+        key === 'retell_credentials_backup' // Retell credentials backup
+      )
+
+      keysToRemove.forEach(key => {
+        localStorage.removeItem(key)
+        console.log(`🗑️ Removed localStorage key: ${key}`)
+      })
+
+      // Also clear sessionStorage completely
+      sessionStorage.clear()
+      console.log('🗑️ Cleared all sessionStorage')
+
+      // Force page reload to ensure complete session reset
+      // This prevents any lingering state that might cause MFA bypass
+      setTimeout(() => {
+        console.log('🔄 Performing hard page reload to ensure complete logout')
+        window.location.href = window.location.origin
+      }, 100) // Small delay to ensure cleanup completes
     } catch (error) {
       console.error('Error during logout cleanup:', error)
       // Still clear basic data even if advanced cleanup fails

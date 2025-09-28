@@ -93,6 +93,15 @@ export const CREDENTIAL_STORAGE_KEYS = {
  */
 export function storeCredentialsEverywhere(credentials: RetellCredentials): void {
   try {
+    // CRITICAL FIX: Don't store credentials if user just logged out
+    if (typeof localStorage !== 'undefined') {
+      const justLoggedOut = localStorage.getItem('justLoggedOut')
+      if (justLoggedOut === 'true') {
+        console.log('🛑 User just logged out - not storing credentials anywhere')
+        return
+      }
+    }
+
     // Store in sessionStorage
     if (typeof sessionStorage !== 'undefined') {
       sessionStorage.setItem(CREDENTIAL_STORAGE_KEYS.SESSION_BACKUP_KEY, JSON.stringify({
@@ -130,6 +139,15 @@ export function storeCredentialsEverywhere(credentials: RetellCredentials): void
  * Initialize hardcoded credential persistence on module load
  */
 export function initializeCredentialPersistence(): void {
+  // CRITICAL FIX: Don't initialize credentials if user just logged out
+  if (typeof localStorage !== 'undefined') {
+    const justLoggedOut = localStorage.getItem('justLoggedOut')
+    if (justLoggedOut === 'true') {
+      console.log('🛑 User just logged out - not initializing credential persistence')
+      return
+    }
+  }
+
   const credentials = getBulletproofCredentials()
   storeCredentialsEverywhere(credentials)
 

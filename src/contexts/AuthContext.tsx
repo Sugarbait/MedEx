@@ -468,6 +468,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
       // Clear all authentication data
       try {
+        // CRITICAL: Set logout flag FIRST before any clearing
+        localStorage.setItem('justLoggedOut', 'true')
+        console.log('🚪 Set justLoggedOut flag to prevent auto-login')
+
         localStorage.removeItem('freshMfaVerified')
         localStorage.removeItem('currentUser')
         localStorage.removeItem('mfa_verified')
@@ -479,18 +483,171 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
 
         await secureStorage.clear()
+
+        // CRITICAL FIX: Clear sessionStorage to ensure fresh login detection
+        sessionStorage.removeItem('appInitialized')
+        sessionStorage.removeItem('spa-redirect-path')
+        console.log('✅ SessionStorage cleared for fresh login detection')
+
+        // COMPREHENSIVE: Clear ALL authentication and user-related localStorage items
+        const keysToRemove = Object.keys(localStorage).filter(key =>
+          key.startsWith('msal.') || // MSAL tokens
+          key.includes('login-hint') || // MSAL login hints
+          key.includes('account') || // MSAL accounts
+          key.includes('token') || // Any token-related keys
+          key.includes('credential') || // Any credential-related keys
+          key.includes('session') || // Any session-related keys
+          key.startsWith('settings_') || // User settings (includes API keys)
+          key.startsWith('user_') || // User data
+          key.startsWith('profile_') || // Profile data
+          key.startsWith('browserSession') || // Browser sessions
+          key === 'systemUsers' || // System users list
+          key === 'retell_credentials_backup' || // Retell credentials backup
+          key === 'currentUser' // Current user data
+        )
+
+        keysToRemove.forEach(key => {
+          localStorage.removeItem(key)
+          console.log(`🗑️ Removed localStorage key: ${key}`)
+        })
+
+        // CRITICAL: Clear bulletproof credential storage completely
+        try {
+          // Clear all sessionStorage credential backups
+          sessionStorage.removeItem('retell_credentials_backup')
+
+          // Clear in-memory credential backups
+          if (typeof window !== 'undefined') {
+            delete (window as any).__retellCredentialsBackup
+          }
+
+          // Clear emergency recovery credentials
+          localStorage.removeItem('__emergencyRetellCredentials')
+          localStorage.removeItem('__fallbackRetellConfig')
+
+          console.log('🔐 Cleared all bulletproof credential storage')
+        } catch (credentialClearError) {
+          console.warn('Error clearing credential storage:', credentialClearError)
+        }
+
+        // Clear all sessionStorage
+        sessionStorage.clear()
+        console.log('🗑️ Cleared all sessionStorage')
       } catch (cleanupError) {
         console.error('Error during logout cleanup:', cleanupError)
       }
 
       if (!isDemoMode) {
         try {
-          await instance.logoutPopup({
-            postLogoutRedirectUri: window.location.origin,
-            mainWindowRedirectUri: window.location.origin
+          // CRITICAL: Clear MSAL cache BEFORE logout to ensure tokens are removed
+          console.log('🔐 Starting comprehensive MSAL cleanup...')
+
+          // Get all accounts first
+          const allAccounts = instance.getAllAccounts()
+
+          // Clear each account explicitly
+          for (const account of allAccounts) {
+            try {
+              // Set account to null
+              instance.setActiveAccount(null)
+
+              // Try to remove the account from cache if method is available
+              if (typeof (instance as any).removeAccount === 'function') {
+                await (instance as any).removeAccount(account)
+                console.log(`🗑️ Removed account: ${account.username}`)
+              }
+            } catch (accountError) {
+              console.warn('Error removing account:', accountError)
+            }
+          }
+
+          // Manual cleanup of all MSAL localStorage keys
+          const msalKeys = Object.keys(localStorage).filter(key =>
+            key.startsWith('msal.') ||
+            key.includes('.msal') ||
+            key.includes('clientId') ||
+            key.includes('authority')
+          )
+
+          msalKeys.forEach(key => {
+            localStorage.removeItem(key)
+            console.log(`🗑️ Manually removed MSAL key: ${key}`)
           })
+
+          // Clear MSAL session storage as well
+          const msalSessionKeys = Object.keys(sessionStorage).filter(key =>
+            key.startsWith('msal.') || key.includes('.msal')
+          )
+
+          msalSessionKeys.forEach(key => {
+            sessionStorage.removeItem(key)
+            console.log(`🗑️ Removed MSAL session key: ${key}`)
+          })
+
+          // Now perform the actual logout
+          // Use logoutRedirect with account for more reliable logout
+          try {
+            if (allAccounts.length > 0) {
+              console.log(`🔐 Logging out account: ${allAccounts[0].username}`)
+              await instance.logoutRedirect({
+                account: allAccounts[0],
+                postLogoutRedirectUri: window.location.origin,
+                onRedirectNavigate: () => {
+                  // Allow navigation this time to complete Microsoft logout
+                  console.log('🔄 Allowing Microsoft logout redirect')
+                  return true
+                }
+              })
+            } else {
+              // No accounts found, force general logout
+              await instance.logoutRedirect({
+                postLogoutRedirectUri: window.location.origin
+              })
+            }
+            console.log('✅ MSAL logout redirect initiated')
+          } catch (redirectError) {
+            console.warn('⚠️ Redirect logout failed, trying popup:', redirectError)
+            // Fallback to popup
+            try {
+              await instance.logoutPopup({
+                postLogoutRedirectUri: window.location.origin,
+                mainWindowRedirectUri: window.location.origin
+              })
+              console.log('✅ MSAL popup logout successful')
+            } catch (popupError) {
+              console.error('❌ Both logout methods failed:', popupError)
+              // Manual cleanup as last resort
+              allAccounts.forEach(account => {
+                try {
+                  instance.setActiveAccount(null)
+                  if (typeof (instance as any).removeAccount === 'function') {
+                    (instance as any).removeAccount(account)
+                  }
+                } catch (e) {
+                  console.warn('Manual account removal failed:', e)
+                }
+              })
+            }
+          }
         } catch (msalError) {
-          console.warn('MSAL logout failed, continuing with local cleanup:', msalError)
+          console.error('MSAL logout error:', msalError)
+          // Emergency cleanup - remove ALL possible auth-related keys
+          const authKeys = Object.keys(localStorage).filter(key =>
+            key.toLowerCase().includes('msal') ||
+            key.toLowerCase().includes('account') ||
+            key.toLowerCase().includes('token') ||
+            key.toLowerCase().includes('auth') ||
+            key.toLowerCase().includes('session')
+          )
+
+          authKeys.forEach(key => {
+            localStorage.removeItem(key)
+            console.log(`🗑️ Emergency removal of key: ${key}`)
+          })
+
+          // Clear sessionStorage completely as last resort
+          sessionStorage.clear()
+          console.log('🗑️ Emergency: Cleared all sessionStorage')
         }
       }
 
@@ -502,6 +659,29 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setMfaInitiated(false)
 
       logger.info('Logout completed')
+
+      // CRITICAL FIX: Set logout flag to prevent auto-login on reload
+      localStorage.setItem('justLoggedOut', 'true')
+
+      // Force page reload after logout to ensure complete session reset
+      // This prevents any lingering authentication state that might bypass fresh login
+      if (!isDemoMode) {
+        // Clear the logout flag after a longer delay to ensure all services see it
+        setTimeout(() => {
+          localStorage.removeItem('justLoggedOut')
+          console.log('🔄 Cleared justLoggedOut flag after 20 seconds')
+        }, 20000) // Extended to 20 seconds to account for Microsoft logout redirect
+
+        // Don't force reload immediately - let MSAL logout redirect handle navigation
+        // If MSAL redirect fails, reload after a longer delay
+        setTimeout(() => {
+          const currentLogoutFlag = localStorage.getItem('justLoggedOut')
+          if (currentLogoutFlag === 'true') {
+            console.log('🔄 MSAL redirect may have failed, performing manual page reload')
+            window.location.replace(window.location.origin)
+          }
+        }, 3000) // Give MSAL redirect 3 seconds to complete
+      }
     } catch (error) {
       logger.error('Logout error', undefined, undefined, {
         error: error instanceof Error ? error.message : 'Unknown error'

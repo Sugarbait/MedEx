@@ -18,6 +18,13 @@ export class BulletproofCredentialInitializer {
    * Initialize all bulletproof credential systems
    */
   public async initialize(): Promise<void> {
+    // CRITICAL FIX: Don't initialize if user just logged out
+    const justLoggedOut = localStorage.getItem('justLoggedOut')
+    if (justLoggedOut === 'true') {
+      console.log('🛑 BulletproofCredentialInitializer: User just logged out - skipping initialization')
+      return
+    }
+
     if (this.initialized) {
       console.log('🔐 BulletproofCredentialInitializer: Already initialized')
       return
@@ -34,6 +41,13 @@ export class BulletproofCredentialInitializer {
 
   private async performInitialization(): Promise<void> {
     try {
+      // CRITICAL FIX: Double-check logout status before any operations
+      const justLoggedOut = localStorage.getItem('justLoggedOut')
+      if (justLoggedOut === 'true') {
+        console.log('🛑 BulletproofCredentialInitializer: User just logged out - aborting initialization')
+        return
+      }
+
       console.log('🚀 BulletproofCredentialInitializer: Starting bulletproof credential initialization...')
       const startTime = Date.now()
 
@@ -123,6 +137,13 @@ export class BulletproofCredentialInitializer {
    */
   private async autoPopulateCurrentUser(): Promise<void> {
     try {
+      // CRITICAL FIX: Don't auto-populate if user just logged out
+      const justLoggedOut = localStorage.getItem('justLoggedOut')
+      if (justLoggedOut === 'true') {
+        console.log('🛑 BulletproofCredentialInitializer: User just logged out - skipping user auto-population')
+        return
+      }
+
       // Check if we have a current user
       const currentUserData = localStorage.getItem('currentUser')
       if (!currentUserData) {
@@ -198,6 +219,13 @@ export class BulletproofCredentialInitializer {
     try {
       // Monitor for navigation events
       const maintainCredentials = () => {
+        // CRITICAL FIX: Don't restore credentials if user just logged out
+        const justLoggedOut = localStorage.getItem('justLoggedOut')
+        if (justLoggedOut === 'true') {
+          console.log('🛑 Persistence monitor: User just logged out - not restoring credentials')
+          return
+        }
+
         if (!retellService.isConfigured() || !chatService.isConfigured()) {
           console.log('🔄 Persistence monitor: Credentials lost, restoring...')
           retellService.forceUpdateCredentials()
