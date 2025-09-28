@@ -130,11 +130,11 @@ export class AvatarStorageService {
   }
 
   /**
-   * Get avatar URL with localStorage fallback (Supabase-free mode)
+   * Get avatar URL with enhanced cross-device synchronization
    */
   static async getAvatarUrl(userId: string): Promise<string | null> {
     try {
-      console.log('AvatarStorageService: Getting avatar for userId:', userId)
+      console.log('AvatarStorageService: Getting avatar for userId with cross-device sync:', userId)
 
       // Check multiple storage locations in order of preference
 
@@ -181,12 +181,114 @@ export class AvatarStorageService {
         }
       }
 
-      console.log('AvatarStorageService: No avatar found for user')
+      // 5. ENHANCED: Try cross-device sync from cloud (similar to profile data)
+      console.log('AvatarStorageService: No local avatar found, trying cross-device sync from cloud...')
+      const cloudSyncResult = await this.loadAvatarFromCloud(userId)
+      if (cloudSyncResult.status === 'success' && cloudSyncResult.data) {
+        console.log('✅ AvatarStorageService: Found avatar in cloud, auto-syncing to localStorage')
+
+        // Auto-save to localStorage for immediate future access
+        await this.synchronizeAvatarData(userId, {
+          url: cloudSyncResult.data,
+          storagePath: this.extractStoragePathFromUrl(cloudSyncResult.data),
+          uploadedAt: new Date().toISOString(),
+          synchronized: true
+        })
+
+        return cloudSyncResult.data
+      }
+
+      // 6. ENHANCED: Try email-based fallback for cross-device compatibility
+      const currentUserForEmail = localStorage.getItem('currentUser')
+      if (currentUserForEmail) {
+        try {
+          const userData = JSON.parse(currentUserForEmail)
+          if (userData.email) {
+            console.log('AvatarStorageService: Trying email-based avatar lookup for:', userData.email)
+            const emailResult = await this.loadAvatarFromCloudByEmail(userData.email)
+            if (emailResult.status === 'success' && emailResult.data) {
+              console.log('✅ AvatarStorageService: Found avatar by email lookup, syncing locally')
+
+              // Auto-save with current user ID for future access
+              await this.synchronizeAvatarData(userId, {
+                url: emailResult.data,
+                storagePath: this.extractStoragePathFromUrl(emailResult.data),
+                uploadedAt: new Date().toISOString(),
+                synchronized: true
+              })
+
+              return emailResult.data
+            }
+          }
+        } catch (error) {
+          console.warn('AvatarStorageService: Email-based fallback failed:', error)
+        }
+      }
+
+      console.log('AvatarStorageService: No avatar found for user after all attempts')
       return null
 
     } catch (error) {
       console.warn('Error getting avatar URL:', error)
       return null
+    }
+  }
+
+  /**
+   * Load avatar from cloud by user ID (enhanced cross-device method)
+   */
+  private static async loadAvatarFromCloud(userId: string): Promise<ServiceResponse<string | null>> {
+    try {
+      console.log('AvatarStorageService: Loading avatar from cloud for user:', userId)
+
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('avatar_url')
+        .eq('id', userId)
+        .single()
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          return { status: 'error', error: 'User not found in cloud' }
+        }
+        return { status: 'error', error: `Cloud avatar load failed: ${error.message}` }
+      }
+
+      const avatarUrl = user?.avatar_url || null
+      return { status: 'success', data: avatarUrl }
+
+    } catch (error: any) {
+      console.error('AvatarStorageService: Cloud avatar load failed:', error)
+      return { status: 'error', error: error.message }
+    }
+  }
+
+  /**
+   * Load avatar from cloud by email (fallback for cross-device compatibility)
+   */
+  private static async loadAvatarFromCloudByEmail(email: string): Promise<ServiceResponse<string | null>> {
+    try {
+      console.log('AvatarStorageService: Loading avatar from cloud by email:', email)
+
+      const { data: user, error } = await supabase
+        .from('users')
+        .select('avatar_url')
+        .eq('email', email)
+        .single()
+
+      if (error) {
+        if (error.code === 'PGRST116') {
+          return { status: 'error', error: 'User not found in cloud by email' }
+        }
+        return { status: 'error', error: `Cloud avatar load by email failed: ${error.message}` }
+      }
+
+      const avatarUrl = user?.avatar_url || null
+      return { status: 'success', data: avatarUrl }
+
+    } catch (error: any) {
+      console.error('AvatarStorageService: Cloud avatar load by email failed:', error)
+      return { status: 'error', error: error.message }
     }
   }
 

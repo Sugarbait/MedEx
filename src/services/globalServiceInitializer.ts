@@ -8,6 +8,7 @@
 import { retellService } from './retellService'
 import { chatService } from './chatService'
 import { robustProfileSyncService } from './robustProfileSyncService'
+import { avatarStorageService } from './avatarStorageService'
 
 export class GlobalServiceInitializer {
   private static initialized = false
@@ -65,6 +66,10 @@ export class GlobalServiceInitializer {
       if (typeof window !== 'undefined') {
         (window as any).robustProfileSyncService = robustProfileSyncService
         console.log('✅ GLOBAL: robustProfileSyncService exposed globally')
+
+        // Make avatarStorageService available globally for testing
+        (window as any).avatarStorageService = avatarStorageService
+        console.log('✅ GLOBAL: avatarStorageService exposed globally')
       }
 
       this.initialized = true
@@ -102,6 +107,7 @@ export class GlobalServiceInitializer {
         retellConfigured: retellService.isConfigured(),
         chatConfigured: chatService.isConfigured(),
         profileSyncAvailable: !!(window as any).robustProfileSyncService,
+        avatarStorageAvailable: !!(window as any).avatarStorageService,
         credentials: {
           hasApiKey: !!retellService.getApiKey(),
           hasCallAgent: !!retellService.getCallAgentId(),

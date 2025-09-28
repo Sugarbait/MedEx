@@ -17,8 +17,9 @@ import {
 import { enhancedUserService } from '@/services/enhancedUserService'
 import { avatarStorageService } from '@/services/avatarStorageService'
 import { userProfileService } from '@/services/userProfileService'
-import { enhancedProfileSyncService, ProfileSyncEvent, ProfileSyncStatus } from '@/services/enhancedProfileSyncService'
-import { profileFieldsPersistenceService } from '@/services/profileFieldsPersistenceService'
+import { enhancedProfileSyncService, ProfileSyncEvent, ProfileSyncStatus as SyncStatus } from '@/services/enhancedProfileSyncService'
+import { robustProfileSyncService, ProfileData } from '@/services/robustProfileSyncService'
+// import { ProfileSyncStatus as ProfileSyncStatusComponent } from './ProfileSyncStatus'
 
 interface EnhancedProfileSettingsProps {
   user: {
@@ -55,13 +56,27 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({})
 
   // Enhanced sync states
-  const [syncStatus, setSyncStatus] = useState<ProfileSyncStatus | null>(null)
+  const [syncStatus, setSyncStatus] = useState<SyncStatus | null>(null)
   const [syncEvents, setSyncEvents] = useState<ProfileSyncEvent[]>([])
   const [isRealTimeEnabled, setIsRealTimeEnabled] = useState(false)
 
   useEffect(() => {
-    loadUserProfile()
-    initializeEnhancedSync()
+    console.log(`🔧 PROFILE COMPONENT: useEffect triggered`, {
+      userId: user?.id,
+      userObject: user
+    })
+
+    if (user?.id) {
+      // Debug localStorage before loading
+      const profileFieldsKey = `profileFields_${user.id}`
+      const profileFields = localStorage.getItem(profileFieldsKey)
+      console.log(`🔧 PROFILE COMPONENT: localStorage check for ${profileFieldsKey}:`, profileFields)
+
+      loadUserProfile()
+      initializeEnhancedSync()
+    } else {
+      console.warn(`⚠️ PROFILE LOAD: No user ID available, skipping profile load`)
+    }
   }, [user.id])
 
   // Cleanup enhanced sync on unmount
@@ -72,13 +87,39 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
   }, [])
 
   const loadUserProfile = async () => {
+    console.log(`🔧 LOADUSERPROFILE: Function called with user:`, user)
+
+    if (!user?.id) {
+      console.warn(`⚠️ PROFILE LOAD: Cannot load profile - user ID is missing`)
+      setIsLoading(false)
+      return
+    }
+
+    // Test direct localStorage access first
+    const directProfileFields = localStorage.getItem(`profileFields_${user.id}`)
+    console.log(`🔧 LOADUSERPROFILE: Direct localStorage check for profileFields_${user.id}:`, directProfileFields)
+
+    // AZURE FIX: Ensure global services are initialized before using them
+    try {
+      const { globalServiceInitializer } = await import('../../services/globalServiceInitializer')
+      await globalServiceInitializer.initialize()
+      console.log('✅ PROFILE LOAD: Global services initialized successfully')
+    } catch (initError) {
+      console.warn('⚠️ PROFILE LOAD: Global service initialization failed:', initError)
+    }
+
+    // Test if robustProfileSyncService is accessible
+    console.log(`🔧 LOADUSERPROFILE: robustProfileSyncService available:`, typeof robustProfileSyncService, robustProfileSyncService)
+
     setIsLoading(true)
     setError(null)
     try {
-      console.log(`🔧 PROFILE LOAD: Loading profile for user ${user.id}`)
+      console.log(`🔧 PROFILE LOAD: Loading profile for user ${user.id} using robust sync service`)
 
-      // Use the new profile fields persistence service for robust loading
-      const profileResult = await profileFieldsPersistenceService.loadProfileFieldsComplete(user.id)
+      // Use the robust profile sync service for loading with cloud sync
+      const profileResult = await robustProfileSyncService.loadProfileData(user.id)
+
+      console.log(`🔧 PROFILE LOAD: Robust sync result:`, profileResult)
 
       if (profileResult.status === 'success' && profileResult.data) {
         const profileData = {
@@ -91,14 +132,21 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
         }
 
         setProfile(profileData)
-        console.log(`✅ PROFILE LOAD: Loaded profile fields successfully:`, {
-          department: profileData.department,
-          phone: profileData.phone,
-          location: profileData.location
+        console.log(`✅ PROFILE LOAD: Loaded profile fields successfully using robust sync:`, {
+          department: profileData.department || 'EMPTY',
+          phone: profileData.phone || 'EMPTY',
+          location: profileData.location || 'EMPTY',
+          display_name: profileData.display_name || 'EMPTY',
+          bio: profileData.bio || 'EMPTY'
         })
+
+        // Update avatar preview if available
+        if (profileResult.data.avatar) {
+          setAvatarPreview(profileResult.data.avatar)
+        }
       } else {
         // Fallback to basic profile if loading fails
-        console.log(`⚠️ PROFILE LOAD: Using basic profile fallback`)
+        console.log(`⚠️ PROFILE LOAD: Using basic profile fallback, error:`, profileResult.error)
         setProfile({
           name: user.name || '',
           display_name: user.name || '',
@@ -109,10 +157,10 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
         })
       }
 
-      // Load avatar separately
+      // Load avatar separately as additional fallback
       try {
         const avatarUrl = await avatarStorageService.getAvatarUrl(user.id)
-        if (avatarUrl) {
+        if (avatarUrl && !avatarPreview) {
           setAvatarPreview(avatarUrl)
         }
       } catch (avatarError) {
@@ -195,6 +243,11 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
   }
 
   const handleSave = async () => {
+    if (!user?.id) {
+      setError('Cannot save profile - user ID is missing')
+      return
+    }
+
     if (!validateForm()) {
       setError('Please fix the validation errors before saving')
       return
@@ -207,9 +260,23 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
     try {
       console.log(`🔧 PROFILE UPDATE: Saving profile fields for user ${user.id}`)
 
-      // Prepare profile data with all fields
-      const profileUpdateData = {
+      // AZURE FIX: Ensure global services are initialized before saving
+      try {
+        const { globalServiceInitializer } = await import('../../services/globalServiceInitializer')
+        await globalServiceInitializer.initialize()
+        console.log('✅ PROFILE SAVE: Global services initialized successfully')
+      } catch (initError) {
+        console.warn('⚠️ PROFILE SAVE: Global service initialization failed:', initError)
+      }
+
+      // Prepare complete profile data for robust sync service
+      const profileData: ProfileData = {
+        id: user.id,
+        email: user.email,
         name: profile.name,
+        role: user.role,
+        avatar: user.avatar,
+        mfa_enabled: user.mfa_enabled,
         display_name: profile.display_name || profile.name,
         department: profile.department,
         phone: profile.phone,
@@ -217,19 +284,27 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
         location: profile.location
       }
 
-      console.log(`🔧 PROFILE UPDATE: Fields being saved:`, {
-        department: profileUpdateData.department,
-        phone: profileUpdateData.phone,
-        location: profileUpdateData.location
-      })
+      console.log(`🔧 PROFILE UPDATE: Using robust sync service for profile save`)
 
-      // Use the new profile fields persistence service for robust saving
-      const saveResult = await profileFieldsPersistenceService.saveProfileFieldsComplete(user.id, profileUpdateData)
+      // Use the robust profile sync service for reliable cloud saving
+      const saveResult = await robustProfileSyncService.saveProfileData(profileData)
 
       if (saveResult.status === 'success') {
-        setSuccessMessage('Profile updated and synced across devices!')
+        const syncResult = saveResult.data!
+
+        if (syncResult.cloudSaved) {
+          setSuccessMessage('Profile updated and synced to cloud successfully!')
+        } else if (syncResult.localSaved) {
+          setSuccessMessage('Profile updated locally (cloud sync will retry automatically)')
+        }
+
         setIsEditing(false)
-        console.log(`✅ PROFILE UPDATE: Profile fields saved successfully`)
+        console.log(`✅ PROFILE UPDATE: Profile saved using robust sync service`)
+        console.log(`📊 SYNC RESULT:`, {
+          cloudSaved: syncResult.cloudSaved,
+          localSaved: syncResult.localSaved,
+          warnings: syncResult.warnings
+        })
 
         // CRITICAL: ALWAYS preserve Super User role during profile updates
         if (user.email === 'elmfarrell@yahoo.com' || user.email === 'pierre@phaetonai.com') {
@@ -258,6 +333,9 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
         // Store hardwired credentials for this user
         localStorage.setItem(`settings_${user.id}`, JSON.stringify(hardwiredApiSettings))
         console.log(`✅ PROFILE SAVE: Re-applied hardwired credentials for ${user.email}`)
+
+        // Update last sync time
+        robustProfileSyncService.updateLastSyncTime()
 
         setTimeout(() => setSuccessMessage(null), 5000)
       } else {
@@ -857,6 +935,12 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
         </div>
 
 
+        {/* New Robust Profile Sync Status - Temporarily disabled for testing */}
+        {/* <ProfileSyncStatusComponent
+          userId={user.id}
+          onForceSync={loadUserProfile}
+        /> */}
+
         {/* Info Notice */}
         <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
           <div className="flex items-start gap-3">
@@ -870,6 +954,8 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
                 <p>✅ Offline support with automatic sync when reconnected</p>
                 <p>✅ Cross-device change notifications and status monitoring</p>
                 <p>✅ HIPAA-compliant encryption for all synchronized data</p>
+                <p>🔧 Robust fallback handling with local storage persistence</p>
+                <p>🔄 Automatic retry logic for failed cloud operations</p>
               </div>
             </div>
           </div>
