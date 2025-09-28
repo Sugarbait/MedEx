@@ -161,6 +161,19 @@ const MainApp: React.FC = () => {
   React.useEffect(() => {
     console.log('📱 Loading main App component...')
 
+    // Initialize critical Azure authentication fixes immediately
+    Promise.allSettled([
+      import('./services/authFlowEnhancer').then(({ authFlowEnhancer }) => {
+        authFlowEnhancer.initialize()
+        console.log('🔧 Auth flow enhancer started early')
+      }).catch(() => console.log('Early auth flow enhancer init failed')),
+      import('./utils/azureAuthFix').then(() => {
+        console.log('🔧 Azure auth fix started early')
+      }).catch(() => console.log('Early Azure auth fix init failed'))
+    ]).then(() => {
+      console.log('✅ Critical auth fixes initialized')
+    })
+
     // Load the App component dynamically
     import('./App.tsx')
       .then((module) => {
@@ -207,7 +220,14 @@ setTimeout(() => {
     ).catch(() => console.log('Global service init skipped')),
     import('./services/bulletproofCredentialInitializer').then(({ bulletproofCredentialInitializer }) =>
       bulletproofCredentialInitializer.initialize()
-    ).catch(() => console.log('Bulletproof credentials skipped'))
+    ).catch(() => console.log('Bulletproof credentials skipped')),
+    // Initialize Azure authentication fixes for login loop issues
+    import('./services/authFlowEnhancer').then(({ authFlowEnhancer }) =>
+      authFlowEnhancer.initialize()
+    ).catch(() => console.log('Auth flow enhancer init skipped')),
+    import('./utils/azureAuthFix').then(() =>
+      console.log('✅ Azure auth fix initialized')
+    ).catch(() => console.log('Azure auth fix init skipped'))
   ]).then(() => {
     console.log('✅ Background initialization completed')
   })
