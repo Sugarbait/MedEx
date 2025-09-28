@@ -61,8 +61,16 @@ class LocalhostAuthFix {
   private performImmediateCheck(): void {
     const logoutFlag = localStorage.getItem('justLoggedOut');
     const flagTimestamp = localStorage.getItem('justLoggedOutTimestamp');
+    const currentUser = localStorage.getItem('currentUser');
+    const freshMfaVerified = localStorage.getItem('freshMfaVerified');
 
-    console.log('🔍 LocalhostAuthFix: Immediate check - logout flag:', logoutFlag);
+    console.log('🔍 LocalhostAuthFix: Immediate check - logout flag:', logoutFlag, 'user:', !!currentUser, 'mfa:', !!freshMfaVerified);
+
+    // CRITICAL: Don't interfere if user is actively logged in or has valid MFA session
+    if (currentUser || freshMfaVerified) {
+      console.log('🚦 LocalhostAuthFix: Active user session detected - skipping all cleanup');
+      return;
+    }
 
     if (logoutFlag === 'true') {
       // Check if this is a fresh logout (within 10 seconds) - if so, don't interfere
@@ -187,6 +195,14 @@ class LocalhostAuthFix {
       if (forceLoginPage === 'true') {
         console.log('🚦 LocalhostAuthFix: Force login page detected - respecting logout flow');
         return; // Don't cleanup when user explicitly logged out
+      }
+
+      // CRITICAL: Don't cleanup if user has MFA session or is actively logging in
+      const freshMfaVerified = localStorage.getItem('freshMfaVerified');
+      const currentUser = localStorage.getItem('currentUser');
+      if (freshMfaVerified || currentUser) {
+        console.log('🚦 LocalhostAuthFix: Active MFA session or user detected - skipping cleanup to prevent login disruption');
+        return; // Don't cleanup during active sessions
       }
 
       // Clear the logout flags only if it's a stuck login situation
