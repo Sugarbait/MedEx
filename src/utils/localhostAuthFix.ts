@@ -182,7 +182,14 @@ class LocalhostAuthFix {
     console.log('🧹 LocalhostAuthFix: Starting localhost authentication cleanup...');
 
     try {
-      // Clear the logout flags
+      // Check if this is a forced logout to login page - don't cleanup if so
+      const forceLoginPage = localStorage.getItem('forceLoginPage');
+      if (forceLoginPage === 'true') {
+        console.log('🚦 LocalhostAuthFix: Force login page detected - respecting logout flow');
+        return; // Don't cleanup when user explicitly logged out
+      }
+
+      // Clear the logout flags only if it's a stuck login situation
       localStorage.removeItem('justLoggedOut');
       localStorage.removeItem('justLoggedOutTimestamp');
 

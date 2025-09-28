@@ -470,7 +470,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       try {
         // CRITICAL: Set logout flag FIRST before any clearing
         localStorage.setItem('justLoggedOut', 'true')
-        console.log('🚪 Set justLoggedOut flag to prevent auto-login')
+        localStorage.setItem('justLoggedOutTimestamp', Date.now().toString())
+        localStorage.setItem('forceLoginPage', 'true') // Force login page display
+        console.log('🚪 Set logout flags to force return to login page')
 
         localStorage.removeItem('freshMfaVerified')
         localStorage.removeItem('currentUser')

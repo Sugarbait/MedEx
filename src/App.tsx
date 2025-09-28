@@ -467,8 +467,9 @@ const App: React.FC = () => {
 
         // CRITICAL FIX: Check if user just logged out to prevent auto-login
         const justLoggedOut = localStorage.getItem('justLoggedOut')
-        if (justLoggedOut === 'true') {
-          console.log('🛑 User just logged out - preventing auto-login')
+        const forceLoginPage = localStorage.getItem('forceLoginPage')
+        if (justLoggedOut === 'true' || forceLoginPage === 'true') {
+          console.log('🛑 User just logged out - forcing return to login page')
 
           // CRITICAL FIX: Clear all credential storage immediately
           try {
@@ -495,10 +496,12 @@ const App: React.FC = () => {
           setIsInitializing(false)
           setMfaCheckInProgress(false)
 
-          // Remove the flag after a delay to ensure all background services see it
+          // Remove the flags after a delay to ensure all background services see it
           setTimeout(() => {
             localStorage.removeItem('justLoggedOut')
-            console.log('🛑 App.tsx: Removed justLoggedOut flag after delay')
+            localStorage.removeItem('forceLoginPage')
+            localStorage.removeItem('justLoggedOutTimestamp')
+            console.log('🛑 App.tsx: Removed logout flags after delay')
           }, 10000) // 10 second delay
 
           return // Exit early - don't try to load user
