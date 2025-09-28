@@ -1446,6 +1446,13 @@ const App: React.FC = () => {
   if (!user) {
     return <LoginPage onLogin={() => {
       console.log('🔄 Login completed - redirecting to dashboard')
+
+      // CRITICAL FIX: Clear logout flags when successful login occurs
+      localStorage.removeItem('justLoggedOut')
+      localStorage.removeItem('forceLoginPage')
+      localStorage.removeItem('justLoggedOutTimestamp')
+      console.log('✅ Logout flags cleared after successful login - MFA flow can now proceed')
+
       // In production, redirect to dashboard directly for better UX
       const isProduction = window.location.hostname.includes('azurestaticapps.net') ||
                           window.location.hostname.includes('nexasync.ca')
