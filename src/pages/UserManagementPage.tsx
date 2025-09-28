@@ -191,110 +191,119 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
   const loadUsers = async () => {
     setIsLoading(true)
     try {
-      console.log('UserManagement: Loading system users...')
-      const response = await userManagementService.loadSystemUsers()
-      console.log('UserManagement: Response received:', response)
+      console.log('🔄 UserManagement: Starting comprehensive user loading process...')
 
-      if (response.status === 'success' && response.data) {
-        console.log('UserManagement: Found users:', response.data.length)
+      // Try the primary user management service first
+      const response = await userManagementService.loadSystemUsers()
+      console.log('📊 UserManagement: Primary service response:', response.status, response.data?.length || 0, 'users')
+
+      if (response.status === 'success' && response.data && response.data.length > 0) {
+        console.log('✅ UserManagement: Successfully loaded users from primary service')
         setUsers(response.data)
-      } else {
-        console.error('Failed to load users:', response.error)
-        console.log('UserManagement: Falling back to localStorage...')
-        // Fallback to localStorage for backward compatibility
-        const storedUsers = localStorage.getItem('systemUsers')
-        if (storedUsers) {
-          try {
-            const parsedUsers = JSON.parse(storedUsers)
-            // Transform legacy format to new format
-            const transformedUsers = parsedUsers.map((u: any) => ({
-              ...u,
-              role: u.role, // Keep original role - don't transform super_user to admin
-              settings: u.settings || {},
-              credentials: undefined,
-              isLocked: false,
-              loginAttempts: 0
-            }))
-            setUsers(transformedUsers)
-          } catch (error) {
-            console.error('Failed to parse stored users:', error)
-            setUsers([])
-          }
-        } else {
-          console.log('UserManagement: No localStorage users, loading from userProfileService...')
-          // Try to load from userProfileService which handles demo users properly
-          try {
-            const profileResponse = await userProfileService.loadSystemUsers()
-            if (profileResponse.status === 'success' && profileResponse.data) {
-              const usersWithCredentials = profileResponse.data.map((u: any) => ({
-                ...u,
-                credentials: undefined,
-                isLocked: false,
-                loginAttempts: 0
-              }))
-              setUsers(usersWithCredentials)
-              console.log('UserManagement: Loaded users from userProfileService:', usersWithCredentials.length)
-            } else {
-              console.log('UserManagement: userProfileService failed, creating minimal demo users...')
-              // Only as last resort, create minimal demo users
-              const demoUsers = [
-                {
-                  id: 'super-user-456',
-                  email: 'elmfarrell@yahoo.com',
-                  name: 'Dr. Farrell',
-                  role: 'super_user',
-                  mfa_enabled: false,
-                  settings: { theme: 'dark', notifications: {} },
-                  credentials: undefined,
-                  isLocked: false,
-                  loginAttempts: 0
-                },
-                {
-                  id: 'guest-user-456',
-                  email: 'guest@email.com',
-                  name: 'Guest User',
-                  role: 'user',
-                  mfa_enabled: false,
-                  settings: { theme: 'light', notifications: {} },
-                  credentials: undefined,
-                  isLocked: false,
-                  loginAttempts: 0
-                }
-              ]
-              setUsers(demoUsers)
-            }
-          } catch (serviceError) {
-            console.error('UserManagement: userProfileService error:', serviceError)
-            // Fallback to hardcoded demo users only if everything fails
-            setUsers([])
-          }
-        }
+        return
       }
-    } catch (error) {
-      console.error('Error loading users:', error)
-      console.log('UserManagement: Error occurred, trying userProfileService as fallback...')
-      // Try userProfileService as fallback when there are errors
+
+      console.log('⚠️ UserManagement: Primary service failed, trying alternative sources...')
+
+      // Fallback 1: Try userProfileService (which has better Supabase integration)
       try {
+        console.log('🔄 Trying userProfileService...')
         const profileResponse = await userProfileService.loadSystemUsers()
-        if (profileResponse.status === 'success' && profileResponse.data) {
-          const usersWithCredentials = profileResponse.data.map((u: any) => ({
-            ...u,
+
+        if (profileResponse.status === 'success' && profileResponse.data && profileResponse.data.length > 0) {
+          console.log('✅ UserManagement: Loaded users from userProfileService:', profileResponse.data.length)
+
+          // Transform to the expected format for UserManagement
+          const transformedUsers = profileResponse.data.map((u: any) => ({
+            id: u.id,
+            email: u.email,
+            name: u.name,
+            role: u.role,
+            created: u.created_at || new Date().toISOString(),
+            lastLogin: u.lastLogin,
+            isLocked: u.isLocked || false,
+            // Include additional fields that might be needed
+            settings: u.settings || {},
             credentials: undefined,
-            isLocked: false,
             loginAttempts: 0
           }))
-          setUsers(usersWithCredentials)
-          console.log('UserManagement: Error fallback successful with userProfileService')
-        } else {
-          console.log('UserManagement: All methods failed, showing empty state')
-          setUsers([])
+
+          setUsers(transformedUsers)
+
+          // Update localStorage cache to sync data sources
+          localStorage.setItem('systemUsers', JSON.stringify(transformedUsers))
+          console.log('📦 Updated localStorage cache with userProfileService data')
+          return
         }
-      } catch (serviceError) {
-        console.error('UserManagement: Even userProfileService failed:', serviceError)
-        setUsers([])
+      } catch (profileError) {
+        console.log('⚠️ UserProfileService also failed:', profileError)
       }
+
+      // Fallback 2: Direct localStorage access
+      console.log('🔄 Fallback to direct localStorage access...')
+      const storedUsers = localStorage.getItem('systemUsers')
+      if (storedUsers) {
+        try {
+          const parsedUsers = JSON.parse(storedUsers)
+          console.log('📊 Found users in localStorage:', parsedUsers.length)
+
+          // Ensure users have the correct format
+          const validatedUsers = parsedUsers.map((u: any) => ({
+            id: u.id,
+            email: u.email,
+            name: u.name,
+            role: u.role,
+            created: u.created || u.created_at || new Date().toISOString(),
+            lastLogin: u.lastLogin,
+            isLocked: u.isLocked || false,
+            settings: u.settings || {},
+            credentials: undefined,
+            loginAttempts: 0
+          }))
+
+          setUsers(validatedUsers)
+          console.log('✅ Successfully loaded users from localStorage')
+          return
+        } catch (parseError) {
+          console.error('❌ Failed to parse localStorage users:', parseError)
+        }
+      }
+
+      // Fallback 3: Create minimal demo users as last resort
+      console.log('⚠️ All data sources failed, creating minimal demo users...')
+      const demoUsers = [
+        {
+          id: 'super-user-456',
+          email: 'elmfarrell@yahoo.com',
+          name: 'Dr. Farrell',
+          role: 'super_user',
+          created: new Date().toISOString(),
+          lastLogin: undefined,
+          isLocked: false
+        },
+        {
+          id: 'guest-user-456',
+          email: 'guest@email.com',
+          name: 'Guest User',
+          role: 'healthcare_provider',
+          created: new Date().toISOString(),
+          lastLogin: undefined,
+          isLocked: false
+        }
+      ]
+
+      setUsers(demoUsers)
+      // Cache the demo users for consistency
+      localStorage.setItem('systemUsers', JSON.stringify(demoUsers))
+      console.log('✅ Created and cached demo users as fallback')
+
+    } catch (error) {
+      console.error('❌ Critical error in loadUsers:', error)
+      // Final fallback - empty array to prevent crashes
+      setUsers([])
     } finally {
       setIsLoading(false)
+      console.log('✅ User loading process completed')
     }
   }
 
@@ -349,10 +358,14 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
         tempPassword: false
       }
 
+      console.log('🔄 Creating user with data:', { email: userData.email, name: userData.name, role: userData.role })
+
       // Create user in Supabase
       const response = await userManagementService.createSystemUser(userData, credentials)
 
       if (response.status === 'success' && response.data) {
+        console.log('✅ User creation successful:', response.data)
+
         // Format the new user data to match the User interface
         const newUserForList: User = {
           id: response.data.id,
@@ -364,23 +377,38 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
           isLocked: response.data.isLocked || false
         }
 
-        // Update local state immediately with the new user
-        setUsers(currentUsers => [...currentUsers, newUserForList])
+        // CRITICAL FIX: Update UI state immediately and force refresh
+        console.log('🔄 Updating UI state with new user')
+        setUsers(currentUsers => {
+          const updatedUsers = [...currentUsers, newUserForList]
+          console.log('📊 Updated users list:', updatedUsers.length, 'users')
+          return updatedUsers
+        })
 
         // Reset form and close modal
         setNewUser({ name: '', email: '', password: '', role: 'healthcare_provider' })
         setIsAddingUser(false)
 
-        // Trigger custom event to notify other components of user data changes
-        window.dispatchEvent(new Event('userDataUpdated'))
-
-        // Also reload the user list to ensure consistency
-        await loadUsers()
-
-        console.log('User added successfully:', response.data)
+        // Show success message immediately
         alert('✅ User created successfully!')
+
+        // Trigger multiple events for cross-component updates
+        window.dispatchEvent(new Event('userDataUpdated'))
+        window.dispatchEvent(new CustomEvent('userCreated', {
+          detail: { user: newUserForList, timestamp: new Date().toISOString() }
+        }))
+
+        // Force a fresh reload from all data sources after a brief delay
+        // This ensures the UI shows the most current data from all sources
+        setTimeout(async () => {
+          console.log('🔄 Force refreshing user list from all sources')
+          await loadUsers()
+          console.log('✅ User list refresh completed')
+        }, 500)
+
+        console.log('✅ User addition process completed successfully')
       } else {
-        console.error('Failed to create user:', response.error)
+        console.error('❌ Failed to create user:', response.error)
         const errorMessage = response.error || 'Unknown error occurred'
         if (errorMessage.includes('already exists')) {
           alert('❌ Cannot create user: A user with this email already exists in the system.')
@@ -389,8 +417,8 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
         }
       }
     } catch (error: any) {
-      console.error('Error adding user:', error)
-      alert(`Failed to add user: ${error.message}`)
+      console.error('❌ Error adding user:', error)
+      alert(`❌ Failed to add user: ${error.message}`)
     } finally {
       setIsLoading(false)
     }

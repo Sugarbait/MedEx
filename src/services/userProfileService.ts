@@ -403,17 +403,25 @@ export class UserProfileService {
       // Try to save to Supabase first if requested
       if (options?.syncToCloud !== false) {
         try {
+          // Map role for database compatibility
+          const dbRole = this.mapRoleForDatabase(userProfileData.role)
+
           const { error } = await supabase
             .from('users')
             .upsert({
               id: userProfileData.id,
               email: userProfileData.email,
               name: userProfileData.name,
-              role: userProfileData.role,
+              role: dbRole, // Use mapped role for database
               mfa_enabled: userProfileData.mfa_enabled || false,
               avatar_url: userProfileData.avatar,
+              azure_ad_id: `placeholder_${userProfileData.id}_${Date.now()}`, // Required by schema
               updated_at: currentTime,
-              is_active: true
+              is_active: true,
+              metadata: {
+                original_role: userProfileData.role,
+                updated_via: 'profile_service'
+              }
             }, { onConflict: 'id' })
 
           if (error) {
@@ -908,14 +916,14 @@ export class UserProfileService {
         // Map role to database schema (super_user -> admin for database, but keep super_user in application)
         const dbRole = this.mapRoleForDatabase(userData.role)
 
-        // Generate azure_ad_id placeholder for compatibility
+        // Generate azure_ad_id placeholder for compatibility with schema
         const azureAdId = `placeholder_${Date.now()}_${Math.random().toString(36).substring(2)}`
 
         const userToInsert = {
           email: userData.email,
           name: userData.name,
           role: dbRole, // Use mapped role for database
-          azure_ad_id: azureAdId,
+          azure_ad_id: azureAdId, // Required by schema
           mfa_enabled: userData.mfa_enabled || false,
           is_active: true,
           metadata: {
@@ -960,17 +968,46 @@ export class UserProfileService {
             })
           }
 
-          // Update localStorage for immediate UI refresh
-          const existingUsers = localStorage.getItem('systemUsers')
-          let usersList = []
+          // Update localStorage for immediate UI refresh with better error handling
           try {
-            usersList = existingUsers ? JSON.parse(existingUsers) : []
-          } catch (error) {
-            usersList = []
-          }
+            const existingUsers = localStorage.getItem('systemUsers')
+            let usersList = []
 
-          usersList.push(newUserProfileData)
-          localStorage.setItem('systemUsers', JSON.stringify(usersList))
+            if (existingUsers) {
+              try {
+                usersList = JSON.parse(existingUsers)
+              } catch (parseError) {
+                console.warn('Failed to parse existing users, starting with empty list:', parseError)
+                usersList = []
+              }
+            }
+
+            // Ensure the new user isn't already in the list (prevent duplicates)
+            const existingIndex = usersList.findIndex((u: any) => u.email === newUserProfileData.email)
+            if (existingIndex >= 0) {
+              // Update existing user instead of adding duplicate
+              usersList[existingIndex] = newUserProfileData
+              console.log('✅ Updated existing user in localStorage')
+            } else {
+              // Add new user
+              usersList.push(newUserProfileData)
+              console.log('✅ Added new user to localStorage')
+            }
+
+            localStorage.setItem('systemUsers', JSON.stringify(usersList))
+            console.log('📦 localStorage updated with', usersList.length, 'users')
+
+            // Trigger storage event manually for cross-tab sync
+            window.dispatchEvent(new StorageEvent('storage', {
+              key: 'systemUsers',
+              newValue: JSON.stringify(usersList),
+              oldValue: existingUsers
+            }))
+
+          } catch (storageError) {
+            console.error('Failed to update localStorage:', storageError)
+            // Continue anyway since Supabase creation was successful
+          }
 
           console.log('✅ UserProfileService: User created in Supabase successfully')
 
@@ -1019,9 +1056,27 @@ export class UserProfileService {
           }
         }
 
-        // Add the new user
-        users.push(newUserProfileData)
+        // Add the new user with duplicate prevention
+        const existingUserIndex = users.findIndex((u: any) => u.email === newUserProfileData.email)
+        if (existingUserIndex >= 0) {
+          // Update existing user instead of adding duplicate
+          users[existingUserIndex] = newUserProfileData
+          console.log('✅ Updated existing user in localStorage fallback')
+        } else {
+          // Add new user
+          users.push(newUserProfileData)
+          console.log('✅ Added new user to localStorage fallback')
+        }
+
         localStorage.setItem('systemUsers', JSON.stringify(users))
+        console.log('📦 localStorage fallback updated with', users.length, 'users')
+
+        // Trigger storage event for cross-tab sync
+        window.dispatchEvent(new StorageEvent('storage', {
+          key: 'systemUsers',
+          newValue: JSON.stringify(users),
+          oldValue: JSON.stringify(users.slice(0, -1)) // Previous state
+        }))
 
         console.log('UserProfileService: User created in localStorage fallback mode')
       }

@@ -53,6 +53,56 @@ export interface Database {
           metadata?: Json
         }
       }
+      user_profiles: {
+        Row: {
+          id: string
+          user_id: string
+          display_name: string | null
+          first_name: string | null
+          last_name: string | null
+          department: string | null
+          phone: string | null
+          bio: string | null
+          location: string | null
+          avatar_url: string | null
+          preferences: Json
+          metadata: Json
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          display_name?: string | null
+          first_name?: string | null
+          last_name?: string | null
+          department?: string | null
+          phone?: string | null
+          bio?: string | null
+          location?: string | null
+          avatar_url?: string | null
+          preferences?: Json
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string
+          display_name?: string | null
+          first_name?: string | null
+          last_name?: string | null
+          department?: string | null
+          phone?: string | null
+          bio?: string | null
+          location?: string | null
+          avatar_url?: string | null
+          preferences?: Json
+          metadata?: Json
+          created_at?: string
+          updated_at?: string
+        }
+      }
       user_permissions: {
         Row: {
           id: string

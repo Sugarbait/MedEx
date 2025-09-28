@@ -9,62 +9,69 @@ import React from 'react'
 
 /**
  * Filters and cleans user display names to prevent confusing patterns
- * Also handles encrypted data patterns
+ * Enhanced to better handle encrypted data while preserving valid names
  */
 export const cleanUserDisplayName = (displayName: string | null | undefined, userId?: string): string => {
   if (!displayName) {
-    return userId ? 'Admin User' : 'System'
+    return userId ? `User ${userId.substring(0, 8)}` : 'System'
   }
 
   // Handle case where displayName might be an object (encrypted data)
   let name: string
   if (typeof displayName === 'object' && displayName !== null) {
-    // If it's already an object, convert to JSON string for processing
+    // Check if it's an encrypted object first
+    if ('data' in displayName && 'iv' in displayName && 'tag' in displayName) {
+      console.log('🔐 Detected encrypted object, audit system should decrypt this')
+      return userId ? `User ${userId.substring(0, 8)}` : 'Encrypted User'
+    }
+    // If it's another type of object, convert to JSON string for processing
     name = JSON.stringify(displayName)
-    console.log('Detected object input, converting to string for processing')
+    console.log('📄 Converting object to string for processing')
   } else {
     name = displayName.toString().trim()
   }
 
-  // Check if this looks like encrypted data (JSON string format)
-  if (name.includes('"data":"') && name.includes('"iv":"') && name.includes('"tag":"')) {
-    console.log('Detected encrypted user data (JSON string), replacing with readable name')
-    return 'Admin User'
+  // Early return for valid, clean names
+  if (name && name.length > 0 && name.length < 100 &&
+      !name.includes('{') && !name.includes('"') &&
+      !name.includes('data') && !name.includes('iv') &&
+      name !== 'undefined' && name !== 'null' &&
+      name !== 'Anonymous User' && name !== '[ENCRYPTED_DATA]') {
+    // This looks like a valid user name, just clean it up
+    const cleanName = name.replace(/^user\s+user$/i, 'Admin User')
+    if (cleanName.toLowerCase() !== 'user user' && cleanName.toLowerCase() !== 'user') {
+      return cleanName
+    }
+  }
+
+  // Check for encrypted data patterns
+  const encryptionPatterns = [
+    () => name.includes('"data":"') && name.includes('"iv":"') && name.includes('"tag":"'),
+    () => name.includes('==","iv":"') || name.includes('==","tag":"'),
+    () => name.startsWith('{"') && name.includes('"data":"') && name.includes('"timestamp":'),
+    () => name.includes('{"data":"') && name.length > 50,
+    () => name.includes('"timestamp":') && (name.includes('"data":"') || name.includes('"iv":"')),
+    () => name === '[ENCRYPTED_DATA]' || name === '[Encrypted]'
+  ]
+
+  for (const pattern of encryptionPatterns) {
+    if (pattern()) {
+      console.log('🔐 Detected encrypted data pattern, should be handled by audit decryption')
+      return userId ? `User ${userId.substring(0, 8)}` : 'Encrypted User'
+    }
   }
 
   // Check if it's a JSON object with encrypted structure
   try {
     const parsed = JSON.parse(name)
-    if (parsed.data && parsed.iv && parsed.tag) {
-      console.log('Detected encrypted JSON object, replacing with readable name')
-      return 'Admin User'
+    if (parsed && typeof parsed === 'object') {
+      if (parsed.data && parsed.iv && parsed.tag) {
+        console.log('🔐 Detected encrypted JSON object, should be decrypted by audit system')
+        return userId ? `User ${userId.substring(0, 8)}` : 'Encrypted User'
+      }
     }
   } catch (e) {
     // Not JSON, continue with other checks
-  }
-
-  // Check if it contains timestamp field (another indicator of encrypted data)
-  if (name.includes('"timestamp":') && (name.includes('"data":"') || name.includes('"iv":"'))) {
-    console.log('Detected encrypted data with timestamp, replacing with readable name')
-    return 'Admin User'
-  }
-
-  // Check for base64-like patterns that indicate encrypted data
-  if (name.includes('==","iv":"') || name.includes('==","tag":"') || name.includes('"},"timestamp":')) {
-    console.log('Detected encrypted data with base64 patterns, replacing with readable name')
-    return 'Admin User'
-  }
-
-  // Check if the entire string looks like a JSON object with encryption fields
-  if (name.startsWith('{"') && name.includes('"data":"') && name.includes('"iv":"') && name.includes('"tag":"')) {
-    console.log('Detected full encrypted JSON object string, replacing with readable name')
-    return 'Admin User'
-  }
-
-  // Additional safety check: if it contains certain encryption indicators
-  if ((name.includes('{"data":"') || name.includes('"iv":"') || name.includes('"tag":"')) && name.length > 50) {
-    console.log('Detected likely encrypted data (length and patterns), replacing with readable name')
-    return 'Admin User'
   }
 
   // Filter out "User User" patterns
@@ -77,7 +84,8 @@ export const cleanUserDisplayName = (displayName: string | null | undefined, use
   // Filter out other unwanted patterns
   if (name.toLowerCase() === 'undefined' ||
       name.toLowerCase() === 'null' ||
-      name === '') {
+      name === '' ||
+      name === 'Anonymous User') {
     return userId ? `User ${userId.substring(0, 8)}` : 'System'
   }
 
@@ -86,6 +94,7 @@ export const cleanUserDisplayName = (displayName: string | null | undefined, use
     return 'Admin User'
   }
 
+  // If we get here, return the name as-is
   return name
 }
 
