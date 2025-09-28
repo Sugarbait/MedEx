@@ -19,6 +19,7 @@ import { avatarStorageService } from '@/services/avatarStorageService'
 import { userProfileService } from '@/services/userProfileService'
 import { enhancedProfileSyncService, ProfileSyncEvent, ProfileSyncStatus as SyncStatus } from '@/services/enhancedProfileSyncService'
 import { robustProfileSyncService, ProfileData } from '@/services/robustProfileSyncService'
+import { bulletproofProfileFieldsService, ProfileFields } from '@/services/bulletproofProfileFieldsService'
 // import { ProfileSyncStatus as ProfileSyncStatusComponent } from './ProfileSyncStatus'
 
 interface EnhancedProfileSettingsProps {
@@ -95,58 +96,35 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
       return
     }
 
-    // Test direct localStorage access first
-    const directProfileFields = localStorage.getItem(`profileFields_${user.id}`)
-    console.log(`🔧 LOADUSERPROFILE: Direct localStorage check for profileFields_${user.id}:`, directProfileFields)
-
-    // AZURE FIX: Ensure global services are initialized before using them
-    try {
-      const { globalServiceInitializer } = await import('../../services/globalServiceInitializer')
-      await globalServiceInitializer.initialize()
-      console.log('✅ PROFILE LOAD: Global services initialized successfully')
-    } catch (initError) {
-      console.warn('⚠️ PROFILE LOAD: Global service initialization failed:', initError)
-    }
-
-    // Test if robustProfileSyncService is accessible
-    console.log(`🔧 LOADUSERPROFILE: robustProfileSyncService available:`, typeof robustProfileSyncService, robustProfileSyncService)
-
     setIsLoading(true)
     setError(null)
+
     try {
-      console.log(`🔧 PROFILE LOAD: Loading profile for user ${user.id} using robust sync service`)
+      console.log(`🛡️ PROFILE LOAD: Using bulletproof profile fields service for ${user.id}`)
 
-      // Use the robust profile sync service for loading with cloud sync
-      const profileResult = await robustProfileSyncService.loadProfileData(user.id)
+      // Use the bulletproof profile fields service for cross-browser compatibility
+      const fieldsResult = await bulletproofProfileFieldsService.loadProfileFields(user.id)
 
-      console.log(`🔧 PROFILE LOAD: Robust sync result:`, profileResult)
-
-      if (profileResult.status === 'success' && profileResult.data) {
+      if (fieldsResult.status === 'success' && fieldsResult.data) {
         const profileData = {
-          name: profileResult.data.name || user.name || '',
-          display_name: profileResult.data.display_name || profileResult.data.name || user.name || '',
-          department: profileResult.data.department || '',
-          phone: profileResult.data.phone || '',
-          bio: profileResult.data.bio || '',
-          location: profileResult.data.location || ''
+          name: user.name || '',
+          display_name: fieldsResult.data.display_name || user.name || '',
+          department: fieldsResult.data.department || '',
+          phone: fieldsResult.data.phone || '',
+          bio: fieldsResult.data.bio || '',
+          location: fieldsResult.data.location || ''
         }
 
         setProfile(profileData)
-        console.log(`✅ PROFILE LOAD: Loaded profile fields successfully using robust sync:`, {
+        console.log(`✅ BULLETPROOF PROFILE LOAD: Loaded profile fields successfully:`, {
           department: profileData.department || 'EMPTY',
           phone: profileData.phone || 'EMPTY',
           location: profileData.location || 'EMPTY',
           display_name: profileData.display_name || 'EMPTY',
           bio: profileData.bio || 'EMPTY'
         })
-
-        // Update avatar preview if available
-        if (profileResult.data.avatar) {
-          setAvatarPreview(profileResult.data.avatar)
-        }
       } else {
-        // Fallback to basic profile if loading fails
-        console.log(`⚠️ PROFILE LOAD: Using basic profile fallback, error:`, profileResult.error)
+        console.log(`⚠️ BULLETPROOF PROFILE LOAD: Using basic profile fallback, error:`, fieldsResult.error)
         setProfile({
           name: user.name || '',
           display_name: user.name || '',
@@ -157,7 +135,7 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
         })
       }
 
-      // Load avatar separately as additional fallback
+      // Load avatar separately
       try {
         const avatarUrl = await avatarStorageService.getAvatarUrl(user.id)
         if (avatarUrl && !avatarPreview) {
@@ -168,7 +146,7 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
       }
 
     } catch (err: any) {
-      console.error('Profile load failed:', err)
+      console.error('Bulletproof profile load failed:', err)
       setError(err.message || 'Failed to load profile')
 
       // Fallback to basic profile
@@ -258,25 +236,10 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
     setSuccessMessage(null)
 
     try {
-      console.log(`🔧 PROFILE UPDATE: Saving profile fields for user ${user.id}`)
+      console.log(`🛡️ PROFILE UPDATE: Saving profile fields for user ${user.id}`)
 
-      // AZURE FIX: Ensure global services are initialized before saving
-      try {
-        const { globalServiceInitializer } = await import('../../services/globalServiceInitializer')
-        await globalServiceInitializer.initialize()
-        console.log('✅ PROFILE SAVE: Global services initialized successfully')
-      } catch (initError) {
-        console.warn('⚠️ PROFILE SAVE: Global service initialization failed:', initError)
-      }
-
-      // Prepare complete profile data for robust sync service
-      const profileData: ProfileData = {
-        id: user.id,
-        email: user.email,
-        name: profile.name,
-        role: user.role,
-        avatar: user.avatar,
-        mfa_enabled: user.mfa_enabled,
+      // Prepare profile fields for bulletproof service
+      const profileFields: ProfileFields = {
         display_name: profile.display_name || profile.name,
         department: profile.department,
         phone: profile.phone,
@@ -284,37 +247,42 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
         location: profile.location
       }
 
-      console.log(`🔧 PROFILE UPDATE: Using robust sync service for profile save`)
+      console.log(`🛡️ PROFILE UPDATE: Using bulletproof profile fields service`)
 
-      // Use the robust profile sync service for reliable cloud saving
-      const saveResult = await robustProfileSyncService.saveProfileData(profileData)
+      // Use the bulletproof profile fields service for cross-browser reliability
+      const saveResult = await bulletproofProfileFieldsService.saveProfileFields(user.id, profileFields)
 
       if (saveResult.status === 'success') {
         const syncResult = saveResult.data!
 
         if (syncResult.cloudSaved) {
           setSuccessMessage('Profile updated and synced to cloud successfully!')
-        } else if (syncResult.localSaved) {
+        } else if (syncResult.localSaved || syncResult.multipleStorageSaved) {
           setSuccessMessage('Profile updated locally (cloud sync will retry automatically)')
         }
 
         setIsEditing(false)
-        console.log(`✅ PROFILE UPDATE: Profile saved using robust sync service`)
-        console.log(`📊 SYNC RESULT:`, {
+        console.log(`✅ BULLETPROOF PROFILE UPDATE: Profile saved successfully`)
+        console.log(`📊 BULLETPROOF SYNC RESULT:`, {
           cloudSaved: syncResult.cloudSaved,
           localSaved: syncResult.localSaved,
+          multipleStorageSaved: syncResult.multipleStorageSaved,
           warnings: syncResult.warnings
         })
 
         // CRITICAL: ALWAYS preserve Super User role during profile updates
         if (user.email === 'elmfarrell@yahoo.com' || user.email === 'pierre@phaetonai.com') {
           // Re-apply super user role after profile update
-          const preserveRoleResponse = await userProfileService.updateUserProfile(user.id, { role: 'super_user' }, {
-            syncToCloud: true,
-            broadcastToOtherDevices: false
-          })
-          if (preserveRoleResponse.status === 'success') {
-            console.log(`✅ PROFILE SAVE: Preserved Super User role for ${user.email}`)
+          try {
+            const preserveRoleResponse = await userProfileService.updateUserProfile(user.id, { role: 'super_user' }, {
+              syncToCloud: true,
+              broadcastToOtherDevices: false
+            })
+            if (preserveRoleResponse.status === 'success') {
+              console.log(`✅ BULLETPROOF PROFILE SAVE: Preserved Super User role for ${user.email}`)
+            }
+          } catch (roleError) {
+            console.warn('Failed to preserve super user role:', roleError)
           }
         }
 
@@ -332,19 +300,19 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
 
         // Store hardwired credentials for this user
         localStorage.setItem(`settings_${user.id}`, JSON.stringify(hardwiredApiSettings))
-        console.log(`✅ PROFILE SAVE: Re-applied hardwired credentials for ${user.email}`)
+        console.log(`✅ BULLETPROOF PROFILE SAVE: Re-applied hardwired credentials for ${user.email}`)
 
         // Update last sync time
-        robustProfileSyncService.updateLastSyncTime()
+        bulletproofProfileFieldsService.updateLastSyncTime()
 
         setTimeout(() => setSuccessMessage(null), 5000)
       } else {
-        console.error('Profile save failed:', saveResult.error)
+        console.error('Bulletproof profile save failed:', saveResult.error)
         setError(saveResult.error || 'Failed to update profile')
       }
 
     } catch (err: any) {
-      console.error('Profile save failed:', err)
+      console.error('Bulletproof profile save failed:', err)
       setError(err.message || 'Failed to update profile')
     } finally {
       setIsSaving(false)
@@ -897,11 +865,24 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
             <button
               onClick={async () => {
                 setIsLoading(true)
-                const fullSync = await enhancedProfileSyncService.forceFullProfileSync()
-                if (fullSync.status === 'success') {
-                  setSyncStatus(fullSync.data!)
-                  setSuccessMessage('Full profile sync completed!')
+                console.log('🛡️ FORCE SYNC: Starting bulletproof profile sync')
+                const forceSync = await bulletproofProfileFieldsService.forceSyncFromCloud(user.id)
+                if (forceSync.status === 'success') {
+                  // Update the UI with the synced data
+                  const syncedFields = forceSync.data!
+                  setProfile({
+                    name: user.name || '',
+                    display_name: syncedFields.display_name || user.name || '',
+                    department: syncedFields.department || '',
+                    phone: syncedFields.phone || '',
+                    bio: syncedFields.bio || '',
+                    location: syncedFields.location || ''
+                  })
+                  setSuccessMessage('Profile fields synced from cloud successfully!')
                   setTimeout(() => setSuccessMessage(null), 3000)
+                } else {
+                  setError(forceSync.error || 'Force sync failed')
+                  setTimeout(() => setError(null), 3000)
                 }
                 setIsLoading(false)
               }}
@@ -941,21 +922,21 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
           onForceSync={loadUserProfile}
         /> */}
 
-        {/* Info Notice */}
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
+        {/* Bulletproof Profile Sync Status */}
+        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-4">
           <div className="flex items-start gap-3">
-            <Shield className="w-5 h-5 text-blue-600 dark:text-blue-400 flex-shrink-0 mt-0.5" />
+            <Shield className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
             <div>
-              <h4 className="font-medium text-blue-900 dark:text-blue-100">Enhanced Cloud Synchronization</h4>
-              <div className="text-sm text-blue-800 dark:text-blue-200 mt-1 space-y-1">
-                <p>✅ Real-time profile field synchronization across all devices</p>
-                <p>✅ Instant avatar sync with robust cloud storage (Supabase Storage)</p>
-                <p>✅ Automatic conflict resolution with last-write-wins strategy</p>
-                <p>✅ Offline support with automatic sync when reconnected</p>
-                <p>✅ Cross-device change notifications and status monitoring</p>
-                <p>✅ HIPAA-compliant encryption for all synchronized data</p>
-                <p>🔧 Robust fallback handling with local storage persistence</p>
-                <p>🔄 Automatic retry logic for failed cloud operations</p>
+              <h4 className="font-medium text-green-900 dark:text-green-100">Bulletproof Cross-Browser Profile Sync</h4>
+              <div className="text-sm text-green-800 dark:text-green-200 mt-1 space-y-1">
+                <p>🛡️ Multiple localStorage storage strategies for maximum browser compatibility</p>
+                <p>🌐 Works across Chrome, Edge, Firefox, Safari, and all modern browsers</p>
+                <p>☁️ Automatic cloud synchronization with Supabase for cross-device access</p>
+                <p>🔄 Real-time field persistence with immediate save to multiple storage locations</p>
+                <p>📧 Email-based cloud lookup for seamless device switching</p>
+                <p>🔧 Comprehensive fallback system ensures data is never lost</p>
+                <p>⚡ Force sync from cloud updates all local storage instantly</p>
+                <p>🔐 HIPAA-compliant security with audit trail for all profile changes</p>
               </div>
             </div>
           </div>
