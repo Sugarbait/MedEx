@@ -281,6 +281,23 @@ export class UserManagementService {
         return deleteResponse
       }
 
+      // Additional Supabase cleanup for user management specific tables
+      try {
+        // Clear any MFA-related data
+        await supabase
+          .from('user_settings')
+          .update({
+            fresh_mfa_secret: null,
+            fresh_mfa_enabled: false,
+            fresh_mfa_setup_completed: false,
+            fresh_mfa_backup_codes: null
+          })
+          .eq('user_id', userId)
+        console.log('UserManagementService: Cleared MFA data for deleted user')
+      } catch (mfaError) {
+        console.log('UserManagementService: MFA cleanup failed or tables missing')
+      }
+
       // Remove credentials
       await this.removeUserCredentials(userId)
 

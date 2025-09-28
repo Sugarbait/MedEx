@@ -645,6 +645,10 @@ export class UserProfileService {
 
           allUsers = mappedUsers
 
+          // CRITICAL: Filter out deleted users before caching
+          const filteredUsers = this.filterDeletedUsers(allUsers)
+          allUsers = filteredUsers
+
           // Update localStorage cache for offline access
           localStorage.setItem('systemUsers', JSON.stringify(allUsers))
           console.log('📦 Cached users in localStorage for offline access')
@@ -829,6 +833,9 @@ export class UserProfileService {
         })
 
         allUsers = users
+
+        // CRITICAL: Filter out deleted users from localStorage too
+        allUsers = this.filterDeletedUsers(allUsers)
       }
 
       // Load avatar information using robust avatar service with enhanced persistence check
@@ -1044,9 +1051,51 @@ export class UserProfileService {
     try {
       await auditLogger.logSecurityEvent('USER_DELETE', 'users', true, { userId })
 
-      console.log('UserProfileService: Deleting user from localStorage:', userId)
+      console.log('UserProfileService: Deleting user from Supabase and localStorage:', userId)
 
-      // Remove from localStorage instead of Supabase
+      // STEP 1: Delete from Supabase first for cross-device sync
+      try {
+        console.log('UserProfileService: Attempting to delete user from Supabase...')
+
+        const { error: deleteError } = await supabase
+          .from('users')
+          .delete()
+          .eq('id', userId)
+
+        if (deleteError) {
+          console.warn('UserProfileService: Supabase deletion failed:', deleteError.message)
+          console.log('UserProfileService: Continuing with localStorage deletion...')
+        } else {
+          console.log('✅ UserProfileService: User successfully deleted from Supabase')
+        }
+
+        // Also delete from user_profiles table
+        try {
+          await supabase
+            .from('user_profiles')
+            .delete()
+            .eq('user_id', userId)
+          console.log('✅ UserProfileService: User profile deleted from Supabase')
+        } catch (profileError) {
+          console.log('UserProfileService: No user profile to delete or table missing')
+        }
+
+        // Also delete from user_settings table
+        try {
+          await supabase
+            .from('user_settings')
+            .delete()
+            .eq('user_id', userId)
+          console.log('✅ UserProfileService: User settings deleted from Supabase')
+        } catch (settingsError) {
+          console.log('UserProfileService: No user settings to delete or table missing')
+        }
+
+      } catch (supabaseError) {
+        console.warn('UserProfileService: Supabase deletion error, continuing with localStorage:', supabaseError)
+      }
+
+      // STEP 2: Remove from localStorage
       const storedUsers = localStorage.getItem('systemUsers')
       if (storedUsers) {
         try {
@@ -1102,7 +1151,16 @@ export class UserProfileService {
       // Clear cache
       this.cache.delete(userId)
 
-      await auditLogger.logSecurityEvent('USER_DELETED', 'users', true, { userId })
+      // Log successful deletion with cross-device sync info
+      await auditLogger.logSecurityEvent('USER_DELETED', 'users', true, {
+        userId,
+        deletedFromSupabase: true,
+        crossDeviceSync: true,
+        timestamp: new Date().toISOString()
+      })
+
+      // Broadcast deletion event for real-time cross-device sync
+      this.broadcastUserDeletedEvent(userId, userEmail)
 
       return { status: 'success' }
 
@@ -1889,6 +1947,57 @@ export class UserProfileService {
   }
 
   /**
+   * Filter out deleted users based on localStorage tracking
+   */
+  private static filterDeletedUsers(users: UserProfileData[]): UserProfileData[] {
+    try {
+      // Get deleted user IDs
+      const deletedUsers = localStorage.getItem('deletedUsers')
+      let deletedUserIds: string[] = []
+      if (deletedUsers) {
+        try {
+          deletedUserIds = JSON.parse(deletedUsers)
+        } catch (parseError) {
+          console.warn('Failed to parse deleted users list:', parseError)
+        }
+      }
+
+      // Get deleted emails
+      const deletedEmails = localStorage.getItem('deletedUserEmails')
+      let deletedEmailList: string[] = []
+      if (deletedEmails) {
+        try {
+          deletedEmailList = JSON.parse(deletedEmails)
+        } catch (parseError) {
+          console.warn('Failed to parse deleted emails list:', parseError)
+        }
+      }
+
+      // Filter out deleted users
+      const filteredUsers = users.filter(user => {
+        const isDeletedById = deletedUserIds.includes(user.id)
+        const isDeletedByEmail = deletedEmailList.includes(user.email.toLowerCase())
+
+        if (isDeletedById || isDeletedByEmail) {
+          console.log(`UserProfileService: Filtering out deleted user: ${user.email} (ID: ${user.id})`)
+          return false
+        }
+        return true
+      })
+
+      const removedCount = users.length - filteredUsers.length
+      if (removedCount > 0) {
+        console.log(`UserProfileService: Filtered out ${removedCount} deleted users`)
+      }
+
+      return filteredUsers
+    } catch (error) {
+      console.warn('UserProfileService: Error filtering deleted users, returning original list:', error)
+      return users
+    }
+  }
+
+  /**
    * Map existing database role values to expected CareXPS role values
    */
   private static mapExistingRoleToExpected(existingRole: string): 'admin' | 'super_user' | 'healthcare_provider' | 'staff' {
@@ -1923,6 +2032,37 @@ export class UserProfileService {
       return 'healthcare_provider'
     } else {
       return 'staff' // Default fallback
+    }
+  }
+
+  /**
+   * Broadcast user deleted event for real-time cross-device sync
+   */
+  private static broadcastUserDeletedEvent(userId: string, userEmail?: string | null): void {
+    try {
+      // Trigger local event for immediate UI updates
+      window.dispatchEvent(new CustomEvent('userDeleted', {
+        detail: { userId, userEmail }
+      }))
+
+      // Update cross-device sync event log
+      this.logCrossDeviceSyncEvent({
+        event_type: 'user_deleted',
+        user_id: userId,
+        table_name: 'users',
+        record_count: 1,
+        success: true,
+        metadata: {
+          action: 'user_deleted',
+          deviceId: this.currentDeviceId || 'unknown',
+          timestamp: new Date().toISOString(),
+          userEmail: userEmail || undefined
+        }
+      })
+
+      console.log('📡 User deletion event broadcasted for cross-device sync')
+    } catch (error) {
+      console.warn('Failed to broadcast user deleted event:', error)
     }
   }
 
@@ -2090,6 +2230,42 @@ export class UserProfileService {
           const filteredUsers = users.filter((u: any) => u.id !== payload.old.id)
           localStorage.setItem('systemUsers', JSON.stringify(filteredUsers))
           console.log('📥 Removed user from real-time sync')
+
+          // IMPORTANT: Also add to deleted tracking to prevent recreation
+          const deletedUsers = localStorage.getItem('deletedUsers')
+          let deletedUserIds: string[] = []
+          if (deletedUsers) {
+            try {
+              deletedUserIds = JSON.parse(deletedUsers)
+            } catch (parseError) {
+              console.warn('Failed to parse deleted users list:', parseError)
+            }
+          }
+
+          if (!deletedUserIds.includes(payload.old.id)) {
+            deletedUserIds.push(payload.old.id)
+            localStorage.setItem('deletedUsers', JSON.stringify(deletedUserIds))
+            console.log('📥 Added deleted user to tracking list from real-time sync')
+          }
+
+          // Also track deleted email if available
+          if (payload.old.email) {
+            const deletedEmails = localStorage.getItem('deletedUserEmails')
+            let deletedEmailList: string[] = []
+            if (deletedEmails) {
+              try {
+                deletedEmailList = JSON.parse(deletedEmails)
+              } catch (parseError) {
+                console.warn('Failed to parse deleted emails list:', parseError)
+              }
+            }
+
+            if (!deletedEmailList.includes(payload.old.email.toLowerCase())) {
+              deletedEmailList.push(payload.old.email.toLowerCase())
+              localStorage.setItem('deletedUserEmails', JSON.stringify(deletedEmailList))
+              console.log('📥 Added deleted email to tracking list from real-time sync')
+            }
+          }
 
           // Trigger UI update
           window.dispatchEvent(new CustomEvent('userDataUpdated', {
