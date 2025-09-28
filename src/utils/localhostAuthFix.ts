@@ -15,8 +15,8 @@ class LocalhostAuthFix {
 
   constructor() {
     this.config = {
-      maxFlagDuration: 5000, // 5 seconds - much more aggressive for localhost
-      checkInterval: 2000,   // Check every 2 seconds
+      maxFlagDuration: 15000, // 15 seconds - allow proper logout flow
+      checkInterval: 5000,    // Check every 5 seconds - less aggressive
       aggressiveCleanup: true,
       isLocalhost: this.detectLocalhostEnvironment()
     };
@@ -60,16 +60,26 @@ class LocalhostAuthFix {
 
   private performImmediateCheck(): void {
     const logoutFlag = localStorage.getItem('justLoggedOut');
+    const flagTimestamp = localStorage.getItem('justLoggedOutTimestamp');
 
     console.log('🔍 LocalhostAuthFix: Immediate check - logout flag:', logoutFlag);
 
     if (logoutFlag === 'true') {
-      console.log('🚨 LocalhostAuthFix: Found logout flag on page load - immediate cleanup');
+      // Check if this is a fresh logout (within 10 seconds) - if so, don't interfere
+      if (flagTimestamp) {
+        const timeElapsed = Date.now() - parseInt(flagTimestamp);
+        if (timeElapsed < 10000) { // Less than 10 seconds - let normal logout flow complete
+          console.log('🚦 LocalhostAuthFix: Recent logout detected, allowing normal flow for', (10000 - timeElapsed), 'ms');
+          return;
+        }
+      }
 
-      // On localhost, be much more aggressive
+      console.log('🚨 LocalhostAuthFix: Found stuck logout flag - scheduling cleanup');
+
+      // Only cleanup if the logout has been stuck for a while
       setTimeout(() => {
         this.cleanupLocalhostAuth();
-      }, 1000); // Only wait 1 second on localhost
+      }, 8000); // Wait 8 seconds to allow normal logout flow
     }
 
     // Also check for any MSAL-related issues immediately
@@ -98,9 +108,12 @@ class LocalhostAuthFix {
 
         const timeElapsed = currentTime - parseInt(flagTimestamp);
 
-        if (timeElapsed > this.config.maxFlagDuration) {
+        // Only cleanup if logout has been stuck for more than 15 seconds (to allow normal logout flow)
+        if (timeElapsed > 15000) {
           console.log('🧹 LocalhostAuthFix: Cleaning up stuck logout flag after', timeElapsed, 'ms');
           this.cleanupLocalhostAuth();
+        } else if (timeElapsed > 10000) {
+          console.log('🚦 LocalhostAuthFix: Logout flag aged', timeElapsed, 'ms - monitoring...');
         }
       }
     }, this.config.checkInterval);
