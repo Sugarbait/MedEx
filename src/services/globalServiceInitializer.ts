@@ -7,6 +7,7 @@
 
 import { retellService } from './retellService'
 import { chatService } from './chatService'
+import { robustProfileSyncService } from './robustProfileSyncService'
 
 export class GlobalServiceInitializer {
   private static initialized = false
@@ -60,6 +61,12 @@ export class GlobalServiceInitializer {
       await chatService.syncWithRetellService()
       console.log('✅ GLOBAL: chatService synced with retellService')
 
+      // Make robustProfileSyncService available globally for testing
+      if (typeof window !== 'undefined') {
+        (window as any).robustProfileSyncService = robustProfileSyncService
+        console.log('✅ GLOBAL: robustProfileSyncService exposed globally')
+      }
+
       this.initialized = true
       console.log('🎉 GLOBAL: All services initialized successfully')
 
@@ -94,6 +101,7 @@ export class GlobalServiceInitializer {
         initialized: this.initialized,
         retellConfigured: retellService.isConfigured(),
         chatConfigured: chatService.isConfigured(),
+        profileSyncAvailable: !!(window as any).robustProfileSyncService,
         credentials: {
           hasApiKey: !!retellService.getApiKey(),
           hasCallAgent: !!retellService.getCallAgentId(),
