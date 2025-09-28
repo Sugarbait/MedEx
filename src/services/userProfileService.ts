@@ -41,6 +41,11 @@ export interface UserProfileData {
   lastSynced?: string
   deviceId?: string
   syncEnabled?: boolean
+  // Database fields
+  created_at?: string
+  updated_at?: string
+  // Local only flag
+  _localOnly?: boolean
 }
 
 interface ProfileSyncEvent {
@@ -308,7 +313,7 @@ export class UserProfileService {
           }
 
           // Cache the result
-          this.cache.set(userId, { data: userProfileData, timestamp: Date.now() })
+          this.cache.set(userId, { data: userProfileData as any, timestamp: Date.now() })
 
           // Update localStorage with fresh Supabase data
           localStorage.setItem(`userProfile_${userId}`, JSON.stringify(userProfileData))
@@ -602,56 +607,101 @@ export class UserProfileService {
   }
 
   /**
-   * Load all system users for user management (replaces localStorage.getItem('systemUsers'))
+   * Load all system users for user management with cross-device sync support
    */
   static async loadSystemUsers(): Promise<ServiceResponse<UserProfileData[]>> {
     try {
       await auditLogger.logSecurityEvent('SYSTEM_USERS_ACCESS', 'users', true)
 
-      console.log('UserProfileService: Loading system users from localStorage')
+      console.log('UserProfileService: Loading system users with cross-device sync support')
 
-      // Define demo users to always have available (but preserve any existing changes)
-      const defaultCreatedDate = new Date().toISOString() // Use today's date
-      const getDefaultDemoUsers = () => [
-        {
-          id: 'super-user-456',
-          email: 'elmfarrell@yahoo.com',
-          name: 'Dr. Farrell',
-          role: 'super_user',
-          mfa_enabled: false,
-          settings: { theme: 'dark', notifications: {} },
-          created_at: defaultCreatedDate,
-          updated_at: defaultCreatedDate
-        },
-        {
-          id: 'pierre-user-789',
-          email: 'pierre@phaetonai.com',
-          name: 'Pierre PhaetonAI',
-          role: 'super_user',
-          mfa_enabled: false,
-          settings: { theme: 'dark', notifications: {} },
-          created_at: defaultCreatedDate,
-          updated_at: defaultCreatedDate
-        },
-        {
-          id: 'guest-user-456',
-          email: 'guest@email.com',
-          name: 'Guest User',
-          role: 'staff',
-          mfa_enabled: false,
-          settings: { theme: 'light', notifications: {} },
-          created_at: defaultCreatedDate,
-          updated_at: defaultCreatedDate
+      let allUsers: UserProfileData[] = []
+
+      // Try to load from Supabase first for cross-device sync
+      try {
+        console.log('🔄 Loading users from Supabase for cross-device sync...')
+
+        const { data: supabaseUsers, error: usersError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('is_active', true)
+          .order('created_at', { ascending: false })
+
+        if (!usersError && supabaseUsers && supabaseUsers.length > 0) {
+          console.log(`✅ Found ${supabaseUsers.length} users in Supabase`)
+
+          // Map from database format to application format
+          const mappedUsers = supabaseUsers.map(user => ({
+            id: user.id,
+            email: user.email,
+            name: user.name,
+            role: user.metadata?.original_role || this.mapExistingRoleToExpected(user.role),
+            mfa_enabled: user.mfa_enabled,
+            avatar: user.avatar_url,
+            settings: {},
+            created_at: user.created_at,
+            updated_at: user.updated_at
+          }))
+
+          allUsers = mappedUsers
+
+          // Update localStorage cache for offline access
+          localStorage.setItem('systemUsers', JSON.stringify(allUsers))
+          console.log('📦 Cached users in localStorage for offline access')
+
+        } else {
+          console.log('📂 No users found in Supabase, checking localStorage...')
+          throw new Error('No users in Supabase, falling back to localStorage')
         }
-      ]
 
-      // Load from localStorage
-      const storedUsers = localStorage.getItem('systemUsers')
-      let users = []
+      } catch (supabaseError) {
+        console.log('UserProfileService: Supabase query failed, using localStorage fallback:', supabaseError)
 
-      if (storedUsers) {
-        try {
-          users = JSON.parse(storedUsers)
+        // Fallback to localStorage
+        console.log('UserProfileService: Loading system users from localStorage fallback')
+
+        // Define demo users to always have available (but preserve any existing changes)
+        const defaultCreatedDate = new Date().toISOString() // Use today's date
+        const getDefaultDemoUsers = () => [
+          {
+            id: 'super-user-456',
+            email: 'elmfarrell@yahoo.com',
+            name: 'Dr. Farrell',
+            role: 'super_user',
+            mfa_enabled: false,
+            settings: { theme: 'dark', notifications: {} },
+            created_at: defaultCreatedDate,
+            updated_at: defaultCreatedDate
+          },
+          {
+            id: 'pierre-user-789',
+            email: 'pierre@phaetonai.com',
+            name: 'Pierre PhaetonAI',
+            role: 'super_user',
+            mfa_enabled: false,
+            settings: { theme: 'dark', notifications: {} },
+            created_at: defaultCreatedDate,
+            updated_at: defaultCreatedDate
+          },
+          {
+            id: 'guest-user-456',
+            email: 'guest@email.com',
+            name: 'Guest User',
+            role: 'staff',
+            mfa_enabled: false,
+            settings: { theme: 'light', notifications: {} },
+            created_at: defaultCreatedDate,
+            updated_at: defaultCreatedDate
+          }
+        ]
+
+        // Load from localStorage
+        const storedUsers = localStorage.getItem('systemUsers')
+        let users = []
+
+        if (storedUsers) {
+          try {
+            users = JSON.parse(storedUsers)
           console.log('UserProfileService: Loaded users from localStorage:', users.length)
 
           // Data migration: Add missing date fields to existing users
@@ -702,84 +752,87 @@ export class UserProfileService {
             localStorage.setItem('systemUsers', JSON.stringify(users))
             console.log('UserProfileService: Migrated users with updated date fields')
           }
-        } catch (parseError) {
-          console.error('UserProfileService: Failed to parse stored users, using demo users:', parseError)
-          users = demoUsers
-        }
-      } else {
-        console.log('UserProfileService: No stored users found, seeding with demo users')
-        users = demoUsers
-        // Save demo users to localStorage
-        localStorage.setItem('systemUsers', JSON.stringify(demoUsers))
-      }
-
-      // Check which demo users have been explicitly deleted
-      const deletedUsers = localStorage.getItem('deletedUsers')
-      let deletedUserIds = []
-      if (deletedUsers) {
-        try {
-          deletedUserIds = JSON.parse(deletedUsers)
-        } catch (parseError) {
-          console.warn('Failed to parse deleted users list:', parseError)
-        }
-      }
-
-      // ENHANCED DELETION TRACKING: Only add demo users that haven't been explicitly deleted
-      // Check both individual user deletion AND email-based deletion tracking
-      const defaultDemoUsers = getDefaultDemoUsers()
-      const deletedEmails = localStorage.getItem('deletedUserEmails')
-      let deletedEmailList = []
-      if (deletedEmails) {
-        try {
-          deletedEmailList = JSON.parse(deletedEmails)
-        } catch (parseError) {
-          console.warn('Failed to parse deleted emails list:', parseError)
-        }
-      }
-
-      defaultDemoUsers.forEach(demoUser => {
-        const existingIndexById = users.findIndex((u: any) => u.id === demoUser.id)
-        const existingIndexByEmail = users.findIndex((u: any) => u.email.toLowerCase() === demoUser.email.toLowerCase())
-        const hasBeenDeletedById = deletedUserIds.includes(demoUser.id)
-        const hasBeenDeletedByEmail = deletedEmailList.includes(demoUser.email.toLowerCase())
-
-        // If user was explicitly deleted by ID or email, skip them permanently
-        if (hasBeenDeletedById || hasBeenDeletedByEmail) {
-          console.log('Skipping permanently deleted demo user:', 'Reason:', hasBeenDeletedById ? 'ID deleted' : 'Email deleted')
-          return
-        }
-
-        // Check for email duplicates (different ID, same email)
-        if (existingIndexByEmail >= 0 && existingIndexById !== existingIndexByEmail) {
-          console.warn(`Demo user [REDACTED] has email conflict with existing user. Skipping to prevent duplicate.`)
-          return
-        }
-
-        if (existingIndexById === -1) {
-          // Only add if no user exists with this ID or email
-          if (existingIndexByEmail === -1) {
-            console.log('Adding missing demo user')
-            users.push(demoUser)
-          } else {
-            console.log('Demo user email already exists, skipping')
+          } catch (parseError) {
+            console.error('UserProfileService: Failed to parse stored users, using demo users:', parseError)
+            users = getDefaultDemoUsers()
           }
         } else {
-          // User exists by ID - preserve their data but ensure required fields are present
-          const existingUser = users[existingIndexById]
-          users[existingIndexById] = {
-            ...demoUser, // Default values
-            ...existingUser, // Preserve existing changes
-            id: demoUser.id, // Ensure ID stays consistent
-            email: demoUser.email, // Ensure email stays consistent
-            created_at: existingUser.created_at || demoUser.created_at, // Preserve original creation date
-            updated_at: existingUser.updated_at || defaultCreatedDate // Update modification time
-          }
-          console.log('Preserving existing demo user changes')
+          console.log('UserProfileService: No stored users found, seeding with demo users')
+          users = getDefaultDemoUsers()
+          // Save demo users to localStorage
+          localStorage.setItem('systemUsers', JSON.stringify(getDefaultDemoUsers()))
         }
-      })
+
+        // Check which demo users have been explicitly deleted
+        const deletedUsers = localStorage.getItem('deletedUsers')
+        let deletedUserIds = []
+        if (deletedUsers) {
+          try {
+            deletedUserIds = JSON.parse(deletedUsers)
+          } catch (parseError) {
+            console.warn('Failed to parse deleted users list:', parseError)
+          }
+        }
+
+        // ENHANCED DELETION TRACKING: Only add demo users that haven't been explicitly deleted
+        // Check both individual user deletion AND email-based deletion tracking
+        const defaultDemoUsers = getDefaultDemoUsers()
+        const deletedEmails = localStorage.getItem('deletedUserEmails')
+        let deletedEmailList = []
+        if (deletedEmails) {
+          try {
+            deletedEmailList = JSON.parse(deletedEmails)
+          } catch (parseError) {
+            console.warn('Failed to parse deleted emails list:', parseError)
+          }
+        }
+
+        defaultDemoUsers.forEach(demoUser => {
+          const existingIndexById = users.findIndex((u: any) => u.id === demoUser.id)
+          const existingIndexByEmail = users.findIndex((u: any) => u.email.toLowerCase() === demoUser.email.toLowerCase())
+          const hasBeenDeletedById = deletedUserIds.includes(demoUser.id)
+          const hasBeenDeletedByEmail = deletedEmailList.includes(demoUser.email.toLowerCase())
+
+          // If user was explicitly deleted by ID or email, skip them permanently
+          if (hasBeenDeletedById || hasBeenDeletedByEmail) {
+            console.log('Skipping permanently deleted demo user:', 'Reason:', hasBeenDeletedById ? 'ID deleted' : 'Email deleted')
+            return
+          }
+
+          // Check for email duplicates (different ID, same email)
+          if (existingIndexByEmail >= 0 && existingIndexById !== existingIndexByEmail) {
+            console.warn(`Demo user [REDACTED] has email conflict with existing user. Skipping to prevent duplicate.`)
+            return
+          }
+
+          if (existingIndexById === -1) {
+            // Only add if no user exists with this ID or email
+            if (existingIndexByEmail === -1) {
+              console.log('Adding missing demo user')
+              users.push(demoUser)
+            } else {
+              console.log('Demo user email already exists, skipping')
+            }
+          } else {
+            // User exists by ID - preserve their data but ensure required fields are present
+            const existingUser = users[existingIndexById]
+            users[existingIndexById] = {
+              ...demoUser, // Default values
+              ...existingUser, // Preserve existing changes
+              id: demoUser.id, // Ensure ID stays consistent
+              email: demoUser.email, // Ensure email stays consistent
+              created_at: existingUser.created_at || demoUser.created_at, // Preserve original creation date
+              updated_at: existingUser.updated_at || defaultCreatedDate // Update modification time
+            }
+            console.log('Preserving existing demo user changes')
+          }
+        })
+
+        allUsers = users
+      }
 
       // Load avatar information using robust avatar service with enhanced persistence check
-      const usersWithAvatars = await Promise.all(users.map(async (user: any) => {
+      const usersWithAvatars = await Promise.all(allUsers.map(async (user: any) => {
         try {
           const avatarUrl = await avatarStorageService.getAvatarUrl(user.id)
           if (avatarUrl) {
@@ -794,8 +847,8 @@ export class UserProfileService {
         return user
       }))
 
-      // Save back to localStorage to ensure demo users persist
-      localStorage.setItem('systemUsers', JSON.stringify(usersWithAvatars))
+      // Set up real-time subscription for cross-device sync
+      await this.setupUsersRealTimeSync()
 
       console.log('UserProfileService: Final user count:', usersWithAvatars.length)
       return { status: 'success', data: usersWithAvatars }
@@ -823,7 +876,7 @@ export class UserProfileService {
   }
 
   /**
-   * Create a new user (for user management)
+   * Create a new user (for user management) with proper Supabase integration and real-time sync
    */
   static async createUser(userData: Omit<UserProfileData, 'id'>): Promise<ServiceResponse<UserProfileData>> {
     try {
@@ -841,45 +894,91 @@ export class UserProfileService {
 
       let newUserProfileData: UserProfileData
 
-      // Try Supabase first, fallback to localStorage if it fails
+      // Try Supabase first with proper schema mapping
       try {
+        console.log('UserProfileService: Creating user in Supabase with proper schema mapping')
+
+        // Map role to database schema (super_user -> admin for database, but keep super_user in application)
+        const dbRole = this.mapRoleForDatabase(userData.role)
+
+        // Generate azure_ad_id placeholder for compatibility
+        const azureAdId = `placeholder_${Date.now()}_${Math.random().toString(36).substring(2)}`
+
+        const userToInsert = {
+          email: userData.email,
+          name: userData.name,
+          role: dbRole, // Use mapped role for database
+          azure_ad_id: azureAdId,
+          mfa_enabled: userData.mfa_enabled || false,
+          is_active: true,
+          metadata: {
+            created_via: 'user_management',
+            original_role: userData.role, // Store original role in metadata
+            device_id: this.currentDeviceId || 'unknown'
+          }
+        }
+
         const { data: newUser, error: userError } = await supabase
           .from('users')
-          .insert({
-            email: userData.email,
-            name: userData.name,
-            role: userData.role,
-            mfa_enabled: userData.mfa_enabled || false,
-            is_active: true
-          })
+          .insert(userToInsert)
           .select()
           .single()
 
         if (!userError && newUser) {
-          // Supabase success
+          // Supabase success - map back to application format
           newUserProfileData = {
             id: newUser.id,
             email: newUser.email,
             name: newUser.name,
-            role: newUser.role,
+            role: userData.role, // Use original role in application (super_user)
             mfa_enabled: newUser.mfa_enabled,
-            settings: userData.settings || {}
+            settings: userData.settings || {},
+            created_at: newUser.created_at,
+            updated_at: newUser.updated_at
           }
 
-          // Update settings if provided
+          // Create user settings record for cross-device sync
           if (userData.settings && Object.keys(userData.settings).length > 0) {
             await this.syncUserSettings(newUser.id, userData.settings)
+          } else {
+            // Create default settings
+            await this.syncUserSettings(newUser.id, {
+              theme: 'light',
+              notifications: {
+                email: true,
+                sms: true,
+                push: true,
+                in_app: true
+              }
+            })
           }
 
-          console.log('UserProfileService: User created in Supabase')
+          // Update localStorage for immediate UI refresh
+          const existingUsers = localStorage.getItem('systemUsers')
+          let usersList = []
+          try {
+            usersList = existingUsers ? JSON.parse(existingUsers) : []
+          } catch (error) {
+            usersList = []
+          }
+
+          usersList.push(newUserProfileData)
+          localStorage.setItem('systemUsers', JSON.stringify(usersList))
+
+          console.log('✅ UserProfileService: User created in Supabase successfully')
+
+          // Broadcast sync event for real-time updates across devices
+          this.broadcastUserCreatedEvent(newUserProfileData)
+
         } else {
           throw new Error(userError?.message || 'Failed to create user in Supabase')
         }
+
       } catch (supabaseError: any) {
         console.log('UserProfileService: Supabase creation failed, using localStorage fallback:', supabaseError.message)
 
-        // Fallback to localStorage
-        const newUserId = `user_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+        // Enhanced localStorage fallback with better ID generation
+        const newUserId = `local_user_${Date.now()}_${crypto.randomUUID?.() || Math.random().toString(36).substring(2, 15)}`
 
         newUserProfileData = {
           id: newUserId,
@@ -888,7 +987,10 @@ export class UserProfileService {
           role: userData.role,
           mfa_enabled: userData.mfa_enabled || false,
           settings: userData.settings || {},
-          created_at: new Date().toISOString()
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+          // Mark as local-only for sync purposes
+          _localOnly: true
         }
 
         // Get existing users from localStorage
@@ -914,13 +1016,14 @@ export class UserProfileService {
         users.push(newUserProfileData)
         localStorage.setItem('systemUsers', JSON.stringify(users))
 
-        console.log('UserProfileService: User created in localStorage')
+        console.log('UserProfileService: User created in localStorage fallback mode')
       }
 
       await auditLogger.logSecurityEvent('USER_CREATED', 'users', true, {
         userId: newUserProfileData.id,
         email: userData.email,
-        role: userData.role
+        role: userData.role,
+        createdVia: newUserProfileData._localOnly ? 'localStorage' : 'supabase'
       })
 
       return { status: 'success', data: newUserProfileData }
@@ -1802,6 +1905,201 @@ export class UserProfileService {
       return 'healthcare_provider'
     } else {
       return 'staff' // Default fallback
+    }
+  }
+
+  /**
+   * Map CareXPS role values to database schema roles
+   */
+  private static mapRoleForDatabase(careXpsRole: string): 'admin' | 'healthcare_provider' | 'staff' {
+    const role = careXpsRole.toLowerCase()
+
+    // Map CareXPS roles to database schema roles
+    if (role === 'super_user' || role === 'superuser' || role === 'super user') {
+      return 'admin' // super_user maps to admin in database
+    } else if (role === 'admin' || role === 'administrator') {
+      return 'admin'
+    } else if (role === 'provider' || role === 'healthcare_provider' || role === 'doctor' || role === 'physician') {
+      return 'healthcare_provider'
+    } else {
+      return 'staff' // Default fallback
+    }
+  }
+
+  /**
+   * Broadcast user created event for real-time cross-device sync
+   */
+  private static broadcastUserCreatedEvent(userData: UserProfileData): void {
+    try {
+      // Notify other devices via Supabase real-time (if available)
+      if (supabase) {
+        // The insert operation will automatically trigger real-time notifications
+        // to subscribed clients through Supabase's built-in real-time system
+        console.log('📡 User creation event will be broadcasted via Supabase real-time')
+      }
+
+      // Also trigger a local event for immediate UI updates
+      window.dispatchEvent(new CustomEvent('userCreated', {
+        detail: userData
+      }))
+
+      // Update cross-device sync event log
+      this.logCrossDeviceSyncEvent({
+        event_type: 'device_connected',
+        user_id: userData.id,
+        table_name: 'users',
+        record_count: 1,
+        success: true,
+        metadata: {
+          action: 'user_created',
+          deviceId: this.currentDeviceId || 'unknown',
+          timestamp: new Date().toISOString()
+        }
+      })
+
+    } catch (error) {
+      console.warn('Failed to broadcast user created event:', error)
+    }
+  }
+
+  /**
+   * Log cross-device sync events for audit trail
+   */
+  private static async logCrossDeviceSyncEvent(eventData: any): Promise<void> {
+    try {
+      if (supabase) {
+        await supabase
+          .from('cross_device_sync_events')
+          .insert({
+            user_id: eventData.user_id,
+            source_device_id: this.currentDeviceId,
+            event_type: eventData.event_type,
+            table_name: eventData.table_name,
+            record_count: eventData.record_count,
+            success: eventData.success,
+            metadata: eventData.metadata,
+            created_at: new Date().toISOString()
+          })
+      }
+    } catch (error) {
+      console.warn('Failed to log cross-device sync event:', error)
+    }
+  }
+
+  /**
+   * Set up real-time sync for users table cross-device updates
+   */
+  private static async setupUsersRealTimeSync(): Promise<void> {
+    try {
+      if (!supabase || this.realtimeChannels.has('users_sync')) {
+        return // Already set up or Supabase not available
+      }
+
+      console.log('📡 Setting up real-time sync for users table...')
+
+      const channel = supabase
+        .channel('users_sync')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'users'
+          },
+          async (payload) => {
+            await this.handleUsersTableChange(payload)
+          }
+        )
+        .subscribe()
+
+      this.realtimeChannels.set('users_sync', channel)
+      console.log('✅ Real-time sync for users table is now active')
+
+    } catch (error) {
+      console.warn('Failed to set up users real-time sync:', error)
+    }
+  }
+
+  /**
+   * Handle real-time changes to users table
+   */
+  private static async handleUsersTableChange(payload: any): Promise<void> {
+    try {
+      console.log('📥 REAL-TIME SYNC: Received users table change:', payload.eventType)
+
+      // Update localStorage cache
+      const currentUsers = localStorage.getItem('systemUsers')
+      if (currentUsers) {
+        let users = JSON.parse(currentUsers)
+
+        if (payload.eventType === 'INSERT' && payload.new) {
+          // Map database format to application format
+          const newUser = {
+            id: payload.new.id,
+            email: payload.new.email,
+            name: payload.new.name,
+            role: payload.new.metadata?.original_role || this.mapExistingRoleToExpected(payload.new.role),
+            mfa_enabled: payload.new.mfa_enabled,
+            avatar: payload.new.avatar_url,
+            settings: {},
+            created_at: payload.new.created_at,
+            updated_at: payload.new.updated_at
+          }
+
+          // Add to local cache if not already present
+          const existingIndex = users.findIndex((u: any) => u.id === newUser.id)
+          if (existingIndex === -1) {
+            users.push(newUser)
+            localStorage.setItem('systemUsers', JSON.stringify(users))
+            console.log('📥 Added new user from real-time sync')
+
+            // Trigger UI update
+            window.dispatchEvent(new CustomEvent('userDataUpdated', {
+              detail: { action: 'user_added', user: newUser }
+            }))
+          }
+
+        } else if (payload.eventType === 'UPDATE' && payload.new) {
+          // Update existing user
+          const updatedUser = {
+            id: payload.new.id,
+            email: payload.new.email,
+            name: payload.new.name,
+            role: payload.new.metadata?.original_role || this.mapExistingRoleToExpected(payload.new.role),
+            mfa_enabled: payload.new.mfa_enabled,
+            avatar: payload.new.avatar_url,
+            settings: {},
+            created_at: payload.new.created_at,
+            updated_at: payload.new.updated_at
+          }
+
+          const existingIndex = users.findIndex((u: any) => u.id === updatedUser.id)
+          if (existingIndex >= 0) {
+            users[existingIndex] = { ...users[existingIndex], ...updatedUser }
+            localStorage.setItem('systemUsers', JSON.stringify(users))
+            console.log('📥 Updated user from real-time sync')
+
+            // Trigger UI update
+            window.dispatchEvent(new CustomEvent('userDataUpdated', {
+              detail: { action: 'user_updated', user: updatedUser }
+            }))
+          }
+
+        } else if (payload.eventType === 'DELETE' && payload.old) {
+          // Remove deleted user
+          const filteredUsers = users.filter((u: any) => u.id !== payload.old.id)
+          localStorage.setItem('systemUsers', JSON.stringify(filteredUsers))
+          console.log('📥 Removed user from real-time sync')
+
+          // Trigger UI update
+          window.dispatchEvent(new CustomEvent('userDataUpdated', {
+            detail: { action: 'user_deleted', userId: payload.old.id }
+          }))
+        }
+      }
+
+    } catch (error) {
+      console.error('Error handling users table change:', error)
     }
   }
 

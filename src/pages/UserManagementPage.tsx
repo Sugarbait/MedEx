@@ -153,6 +153,39 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
 
   useEffect(() => {
     loadUsers()
+
+    // Set up real-time sync listeners for cross-device updates
+    const handleUserDataUpdate = (event: CustomEvent) => {
+      console.log('📥 UserManagementPage: Received user data update:', event.detail)
+
+      if (event.detail?.action === 'user_added') {
+        // Refresh the user list when a new user is added on another device
+        loadUsers()
+      } else if (event.detail?.action === 'user_updated') {
+        // Refresh the user list when a user is updated on another device
+        loadUsers()
+      } else if (event.detail?.action === 'user_deleted') {
+        // Refresh the user list when a user is deleted on another device
+        loadUsers()
+      }
+    }
+
+    // Listen for user data updates from other devices
+    window.addEventListener('userDataUpdated', handleUserDataUpdate as EventListener)
+
+    // Listen for user creation events
+    const handleUserCreated = (event: CustomEvent) => {
+      console.log('📥 UserManagementPage: New user created on another device:', event.detail)
+      loadUsers() // Refresh to show the new user
+    }
+
+    window.addEventListener('userCreated', handleUserCreated as EventListener)
+
+    // Cleanup event listeners
+    return () => {
+      window.removeEventListener('userDataUpdated', handleUserDataUpdate as EventListener)
+      window.removeEventListener('userCreated', handleUserCreated as EventListener)
+    }
   }, [])
 
   const loadUsers = async () => {
