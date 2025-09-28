@@ -647,6 +647,15 @@ const App: React.FC = () => {
             // Note: This ensures consistent security behavior across all environments
             if (mfaEnabled && !hasValidMfaSession) {
               console.log('🔐 MANDATORY MFA required - showing MFA verification screen')
+
+              // CRITICAL LOGOUT CHECK: Don't show MFA if user just logged out
+              const justLoggedOut = localStorage.getItem('justLoggedOut')
+              const forceLoginPage = localStorage.getItem('forceLoginPage')
+              if (justLoggedOut === 'true' || forceLoginPage === 'true') {
+                console.log('🛑 User just logged out - bypassing MFA detection, forcing login page')
+                return // Exit early - don't set pending MFA user
+              }
+
               mfaRequiredDuringLoad = true // Mark MFA as required for this load
 
               // ANTI-FLASH FIX: Set pending user in state update function to ensure synchronization
@@ -670,6 +679,15 @@ const App: React.FC = () => {
             // ULTIMATE FAIL-SAFE: If entire MFA system fails, still enforce for known MFA users
             if (userData.mfaEnabled || userData.email === 'elmfarrell@yahoo.com' || userData.email === 'pierre@phaetonai.com') {
               console.log('🚨 CRITICAL FAIL-SAFE: Enforcing MFA due to system failure for known MFA user')
+
+              // CRITICAL LOGOUT CHECK: Don't show MFA if user just logged out
+              const justLoggedOut = localStorage.getItem('justLoggedOut')
+              const forceLoginPage = localStorage.getItem('forceLoginPage')
+              if (justLoggedOut === 'true' || forceLoginPage === 'true') {
+                console.log('🛑 User just logged out - bypassing fail-safe MFA detection, forcing login page')
+                return // Exit early - don't set pending MFA user
+              }
+
               mfaRequiredDuringLoad = true // Mark MFA as required for this load
 
               // ANTI-FLASH FIX: Set pending user with proper state management
@@ -1235,6 +1253,20 @@ const App: React.FC = () => {
 
   const handleLogout = async () => {
     console.log('🚪 Logging out user and clearing all authentication data')
+
+    // CRITICAL FIX: Set logout flags FIRST to prevent any MFA detection race conditions
+    localStorage.setItem('justLoggedOut', 'true')
+    localStorage.setItem('forceLoginPage', 'true')
+    localStorage.setItem('justLoggedOutTimestamp', Date.now().toString())
+    console.log('🛑 Logout flags set FIRST to prevent MFA detection')
+
+    // CRITICAL: Immediately clear MFA-related states to prevent MFA screen from showing
+    setPendingMfaUser(null)
+    setMfaRequired(false)
+    setMfaCheckInProgress(false)
+    setIsTransitioningFromMfa(false)
+    setIsInitializing(false)
+    console.log('🛑 MFA states cleared immediately during logout')
 
     try {
       // SECURITY ENHANCEMENT: Comprehensive logout cleanup with avatar preservation
