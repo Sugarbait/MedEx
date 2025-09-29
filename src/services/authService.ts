@@ -137,7 +137,7 @@ class AuthService {
             permissions: [
               { resource: '*', actions: ['*'] } // Full permissions for super users
             ],
-            lastLogin: new Date().toISOString(),
+            last_login: new Date().toISOString(), // Use correct database field name
             mfaEnabled: false, // Start with MFA disabled, user can enable later
             isActive: true,
             createdAt: new Date().toISOString(),
@@ -160,10 +160,10 @@ class AuthService {
           userProfile = newUser as User
         }
       } else {
-        // Update last login
+        // Update last login with correct field name
         await supabase
           .from('users')
-          .update({ lastLogin: new Date().toISOString() })
+          .update({ last_login: new Date().toISOString() })
           .eq('azure_ad_id', accountId)
 
         userProfile = user as User

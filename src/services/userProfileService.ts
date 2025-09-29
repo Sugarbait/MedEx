@@ -44,6 +44,7 @@ export interface UserProfileData {
   // Database fields
   created_at?: string
   updated_at?: string
+  lastLogin?: string // Add lastLogin field
   // Local only flag
   _localOnly?: boolean
 }
@@ -659,7 +660,8 @@ export class UserProfileService {
             avatar: user.avatar_url,
             settings: {},
             created_at: user.created_at,
-            updated_at: user.updated_at
+            updated_at: user.updated_at,
+            lastLogin: user.last_login // Include last_login field from database
           }))
 
           allUsers = mappedUsers
