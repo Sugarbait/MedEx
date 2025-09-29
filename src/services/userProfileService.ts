@@ -939,6 +939,7 @@ export class UserProfileService {
           azure_ad_id: azureAdId, // Required by schema
           mfa_enabled: userData.mfa_enabled || false,
           is_active: true,
+          last_login: null, // Initialize last_login as null for new users
           metadata: {
             created_via: 'user_management',
             original_role: userData.role, // Store original role in metadata
@@ -962,7 +963,8 @@ export class UserProfileService {
             mfa_enabled: newUser.mfa_enabled,
             settings: userData.settings || {},
             created_at: newUser.created_at,
-            updated_at: newUser.updated_at
+            updated_at: newUser.updated_at,
+            lastLogin: newUser.last_login // Include last_login field for new users
           }
 
           // Create user settings record for cross-device sync

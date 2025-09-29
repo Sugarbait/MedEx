@@ -24,6 +24,7 @@ import { userManagementService, SystemUserWithCredentials } from '@/services/use
 import { userProfileService } from '@/services/userProfileService'
 import { fixUserIssues } from '@/utils/fixUserIssues'
 import TestUserCleanup from '@/utils/testUserCleanup'
+import { ensureFreshUserData } from '@/utils/clearUserCache'
 
 // Use the SystemUserWithCredentials type from the service
 type User = SystemUserWithCredentials
@@ -192,6 +193,9 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
     setIsLoading(true)
     try {
       console.log('🔄 UserManagement: Starting comprehensive user loading process...')
+
+      // Clear outdated cache to ensure we get fresh data with last_login values
+      ensureFreshUserData();
 
       // Try the primary user management service first
       const response = await userManagementService.loadSystemUsers()
