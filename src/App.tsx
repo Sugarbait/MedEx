@@ -507,8 +507,32 @@ const App: React.FC = () => {
           return // Exit early - don't try to load user
         }
 
+        // ADDITIONAL FIX: Check if user should be forced to login page due to logout
+        // Even if logout flags expired, check if no current user exists
+        const storedUser = localStorage.getItem('currentUser')
+        if (!storedUser) {
+          console.log('🚪 No stored user found - user must login first')
+          setUser(null)
+          setIsInitializing(false)
+          setMfaCheckInProgress(false)
+          return // Exit early - force login
+        }
+
         // ANTI-FLASH FIX: Set MFA check in progress to prevent dashboard flash
         setMfaCheckInProgress(true)
+
+        // SECURITY CHECK: Ensure user has actively logged in and wasn't auto-restored
+        // Check if this appears to be a fresh browser session without explicit login
+        const hasActiveSession = sessionStorage.getItem('appInitialized')
+        const userLoginTimestamp = localStorage.getItem('userLoginTimestamp')
+
+        if (!hasActiveSession && !userLoginTimestamp) {
+          console.log('🚪 Fresh browser session detected - require explicit login')
+          setUser(null)
+          setIsInitializing(false)
+          setMfaCheckInProgress(false)
+          return // Force user to login page
+        }
 
         // Use localStorage directly for stability
         let storedUser = null
@@ -972,6 +996,11 @@ const App: React.FC = () => {
                 }
               }
 
+              // CRITICAL FIX: Validate user data before setting
+              if (!supabaseUser.id || supabaseUser.id === 'undefined') {
+                console.error('🚨 CRITICAL: Supabase user has invalid ID during refresh, aborting user set:', supabaseUser)
+                return
+              }
               setUser(supabaseUser)
               localStorage.setItem('currentUser', JSON.stringify(supabaseUser))
               console.log('User data refreshed from Supabase successfully')
@@ -1073,9 +1102,33 @@ const App: React.FC = () => {
     // Listen for user profile updates specifically
     const handleUserProfileUpdate = (e: CustomEvent) => {
       const updatedUserData = e.detail
-      if (updatedUserData && updatedUserData.id === user?.id) {
-        setUser(updatedUserData)
-        console.log('App: User profile updated from event')
+      // Handle different event data structures
+      const userId = updatedUserData?.userId || updatedUserData?.id
+      const profileData = updatedUserData?.profileData || updatedUserData
+
+      if (userId && userId === user?.id) {
+        // CRITICAL FIX: Validate user data before setting to prevent ID corruption
+        if (!userId || userId === 'undefined') {
+          console.error('🚨 CRITICAL: Received user update with invalid ID, ignoring:', updatedUserData)
+          return
+        }
+
+        // Preserve critical user fields to prevent corruption
+        const safeUserData = {
+          ...user, // Start with current user data to preserve all fields
+          ...profileData, // Apply profile updates
+          // Force preserve critical fields - never allow these to be corrupted
+          id: user?.id || userId,
+          email: user?.email,
+          name: user?.name
+        }
+
+        setUser(safeUserData)
+        console.log('✅ App: User profile updated safely from event:', {
+          id: safeUserData.id,
+          email: safeUserData.email,
+          name: safeUserData.name
+        })
       }
     }
 
@@ -1153,6 +1206,11 @@ const App: React.FC = () => {
 
             // ANTI-FLASH FIX: Set user state after a brief delay to ensure smooth transition
             setTimeout(() => {
+              // CRITICAL FIX: Validate user data before setting
+              if (!supabaseUser.id || supabaseUser.id === 'undefined') {
+                console.error('🚨 CRITICAL: Supabase user has invalid ID, aborting user set:', supabaseUser)
+                return
+              }
               setUser(supabaseUser)
               console.log('✅ User loaded from Supabase after mandatory MFA verification')
             }, 100)
@@ -1452,6 +1510,11 @@ const App: React.FC = () => {
       localStorage.removeItem('forceLoginPage')
       localStorage.removeItem('justLoggedOutTimestamp')
       console.log('✅ Logout flags cleared after successful login - MFA flow can now proceed')
+
+      // SECURITY FIX: Set login session markers to prevent bypass
+      sessionStorage.setItem('appInitialized', 'true')
+      localStorage.setItem('userLoginTimestamp', Date.now().toString())
+      console.log('🔐 Login session markers set - authenticated session established')
 
       // In production, redirect to dashboard directly for better UX
       const isProduction = window.location.hostname.includes('azurestaticapps.net') ||

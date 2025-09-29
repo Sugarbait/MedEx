@@ -63,6 +63,44 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [mfaInitiated, setMfaInitiated] = useState(false)
   const [authInitialized, setAuthInitialized] = useState(false)
 
+  // CRITICAL FIX: Safe user setter that preserves user ID integrity
+  const setUserSafely = (newUser: User | null) => {
+    if (newUser) {
+      // Validate that user has required properties before setting
+      if (!newUser.id || newUser.id === 'undefined') {
+        console.error('🚨 CRITICAL: Attempted to set user with invalid ID:', newUser)
+        // Try to recover user ID from localStorage
+        try {
+          const currentUser = localStorage.getItem('currentUser')
+          if (currentUser) {
+            const userData = JSON.parse(currentUser)
+            if (userData.id && userData.id !== 'undefined') {
+              newUser.id = userData.id
+              console.log('✅ RECOVERED: User ID restored from localStorage')
+            }
+          }
+        } catch (error) {
+          console.error('Failed to recover user ID:', error)
+          return // Don't set invalid user
+        }
+      }
+
+      // Additional validation for critical fields
+      if (!newUser.email && !newUser.name) {
+        console.error('🚨 CRITICAL: User missing email and name:', newUser)
+        return // Don't set invalid user
+      }
+
+      console.log('✅ Setting user safely:', {
+        id: newUser.id,
+        email: newUser.email,
+        name: newUser.name
+      })
+    }
+
+    setUser(newUser)
+  }
+
   useEffect(() => {
     const initializeAuth = async () => {
       // Prevent re-initialization if already initialized or have a user
@@ -120,7 +158,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             }
           }
 
-          setUser(demoUser)
+          setUserSafely(demoUser)
           // In demo mode, still respect user's MFA settings for testing
           // setMfaRequired(false) // Skip MFA in demo mode
           console.log('🔧 DEMO MODE: MFA will be checked based on user settings (not automatically skipped)')
@@ -131,7 +169,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             const avatarSyncResult = await AvatarStorageService.syncAvatarAcrossDevices(demoUser.id)
             if (avatarSyncResult.status === 'success' && avatarSyncResult.data) {
               demoUser.avatar = avatarSyncResult.data
-              setUser({ ...demoUser }) // Update with synced avatar
+              setUserSafely({ ...demoUser }) // Update with synced avatar
               console.log('✅ [DEMO] Avatar synced successfully')
             }
           } catch (avatarError) {
@@ -240,7 +278,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               console.log('✅ Valid MFA session found - user authenticated')
               userProfile.mfaVerified = true
             }
-            setUser(userProfile)
+            setUserSafely(userProfile)
 
             // Sync avatar across devices after successful authentication
             try {
@@ -251,7 +289,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
                 // Update user profile with synced avatar if available
                 if (avatarSyncResult.data) {
                   userProfile.avatar = avatarSyncResult.data
-                  setUser({ ...userProfile }) // Update with synced avatar
+                  setUserSafely({ ...userProfile }) // Update with synced avatar
                 }
               } else {
                 console.log('⚠️ [AUTH] Avatar sync failed, but continuing authentication:', avatarSyncResult.error)
@@ -420,7 +458,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     if (!isAuthenticated) {
       const cleanupSession = async () => {
-        setUser(null)
+        setUserSafely(null)
         setSessionInfo(null)
         setMfaRequired(false)
         setMfaChallenge(null)
@@ -535,6 +573,30 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         // Clear all sessionStorage
         sessionStorage.clear()
         console.log('🗑️ Cleared all sessionStorage')
+
+        // CRITICAL: Remove login session markers
+        sessionStorage.removeItem('appInitialized')
+        localStorage.removeItem('userLoginTimestamp')
+        console.log('🚪 Cleared login session markers')
+
+        // CRITICAL: Force MSAL to clear all accounts and cache
+        try {
+          const accounts = instance.getAllAccounts()
+          if (accounts.length > 0) {
+            console.log('🔐 Clearing MSAL accounts and cache')
+            await instance.logoutPopup({
+              account: accounts[0],
+              postLogoutRedirectUri: window.location.origin
+            })
+          }
+
+          // Force clear MSAL cache
+          instance.clearCache()
+          console.log('✅ MSAL cache cleared completely')
+        } catch (msalError) {
+          console.warn('Warning: MSAL logout error (non-critical):', msalError)
+          // Continue with logout even if MSAL fails
+        }
       } catch (cleanupError) {
         console.error('Error during logout cleanup:', cleanupError)
       }
@@ -653,7 +715,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         }
       }
 
-      setUser(null)
+      setUserSafely(null)
       setSessionInfo(null)
       setMfaRequired(false)
       setMfaChallenge(null)
@@ -709,7 +771,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         const mfaTimestamp = Date.now().toString()
         localStorage.setItem('freshMfaVerified', mfaTimestamp)
 
-        setUser(userProfile)
+        setUserSafely(userProfile)
 
         // Sync avatar across devices after successful MFA completion
         try {
@@ -720,7 +782,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
             // Update user profile with synced avatar if available
             if (avatarSyncResult.data) {
               userProfile.avatar = avatarSyncResult.data
-              setUser({ ...userProfile }) // Update with synced avatar
+              setUserSafely({ ...userProfile }) // Update with synced avatar
             }
           } else {
             console.log('⚠️ [MFA] Avatar sync failed, but continuing authentication:', avatarSyncResult.error)
@@ -840,7 +902,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         console.log('⚠️ [REFRESH] Avatar sync failed during refresh, but continuing:', avatarError)
       }
 
-      setUser(updatedUser)
+      setUserSafely(updatedUser)
     } catch (error) {
       console.error('Session refresh error:', error)
       await logout()
