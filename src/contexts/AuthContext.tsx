@@ -512,6 +512,15 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         localStorage.setItem('forceLoginPage', 'true') // Force login page display
         console.log('🚪 Set logout flags to force return to login page')
 
+        // ENHANCED: Record logout with browser session tracker
+        try {
+          const { browserSessionTracker } = await import('../utils/browserSessionTracker')
+          browserSessionTracker.recordLogout()
+          console.log('🔒 Browser session logout recorded with user agent tracking')
+        } catch (error) {
+          console.warn('Failed to record browser session logout:', error)
+        }
+
         localStorage.removeItem('freshMfaVerified')
         localStorage.removeItem('currentUser')
         localStorage.removeItem('mfa_verified')

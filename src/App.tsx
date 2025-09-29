@@ -496,13 +496,10 @@ const App: React.FC = () => {
           setIsInitializing(false)
           setMfaCheckInProgress(false)
 
-          // Remove the flags after a delay to ensure all background services see it
-          setTimeout(() => {
-            localStorage.removeItem('justLoggedOut')
-            localStorage.removeItem('forceLoginPage')
-            localStorage.removeItem('justLoggedOutTimestamp')
-            console.log('🛑 App.tsx: Removed logout flags after delay')
-          }, 10000) // 10 second delay
+          // PERMANENT LOGOUT FLAGS: Do NOT remove these flags automatically
+          // They will only be cleared when user successfully logs in again
+          // This prevents MFA bypass after logout regardless of time elapsed
+          console.log('🚪 Logout flags set and will persist until next successful login')
 
           return // Exit early - don't try to load user
         }
@@ -516,6 +513,37 @@ const App: React.FC = () => {
           setIsInitializing(false)
           setMfaCheckInProgress(false)
           return // Exit early - force login
+        }
+
+        // CRITICAL ADDITIONAL CHECK: Even with stored user, respect forceLoginPage flag
+        const shouldForceLogin = localStorage.getItem('forceLoginPage')
+        if (shouldForceLogin === 'true') {
+          console.log('🚪 FORCE LOGIN: forceLoginPage flag is set - redirecting to login despite stored user')
+          localStorage.removeItem('currentUser') // Clear the stored user to prevent loops
+          localStorage.removeItem('freshMfaVerified') // Clear MFA verification
+          localStorage.removeItem('mfa_verified') // Clear old MFA verification
+          setUser(null)
+          setIsInitializing(false)
+          setMfaCheckInProgress(false)
+          return // Force user to login page
+        }
+
+        // ENHANCED: Check browser session tracker for persistent logout state
+        try {
+          const { browserSessionTracker } = await import('./utils/browserSessionTracker')
+          if (browserSessionTracker.shouldForceLogin()) {
+            console.log('🚫 BROWSER SESSION: User agent indicates recent logout - forcing login page')
+            localStorage.removeItem('currentUser')
+            localStorage.removeItem('freshMfaVerified')
+            localStorage.removeItem('mfa_verified')
+            localStorage.setItem('forceLoginPage', 'true') // Set flag to maintain state
+            setUser(null)
+            setIsInitializing(false)
+            setMfaCheckInProgress(false)
+            return // Force user to login page
+          }
+        } catch (error) {
+          console.warn('Failed to check browser session tracker:', error)
         }
 
         // ANTI-FLASH FIX: Set MFA check in progress to prevent dashboard flash
@@ -535,19 +563,19 @@ const App: React.FC = () => {
         }
 
         // Use localStorage directly for stability
-        let storedUser = null
+        let fallbackUser = null
         try {
           const localStorageUser = localStorage.getItem('currentUser')
           if (localStorageUser) {
-            storedUser = JSON.parse(localStorageUser)
+            fallbackUser = JSON.parse(localStorageUser)
             console.log('Loaded user from localStorage')
           }
         } catch (fallbackError) {
           console.warn('localStorage failed:', fallbackError)
         }
 
-        if (storedUser) {
-          const userData = storedUser
+        if (fallbackUser) {
+          const userData = fallbackUser
 
           // CRITICAL SECURITY FIX: Check MFA lockout status before any user loading
           // This prevents app-level bypass of MFA lockout
@@ -1510,6 +1538,16 @@ const App: React.FC = () => {
       localStorage.removeItem('forceLoginPage')
       localStorage.removeItem('justLoggedOutTimestamp')
       console.log('✅ Logout flags cleared after successful login - MFA flow can now proceed')
+
+      // ENHANCED: Clear browser session logout state
+      try {
+        import('./utils/browserSessionTracker').then(({ browserSessionTracker }) => {
+          browserSessionTracker.clearLogoutState()
+          console.log('🔓 Browser session logout state cleared after successful login')
+        })
+      } catch (error) {
+        console.warn('Failed to clear browser session logout state:', error)
+      }
 
       // SECURITY FIX: Set login session markers to prevent bypass
       sessionStorage.setItem('appInitialized', 'true')
