@@ -102,16 +102,32 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
     try {
       console.log(`🛡️ PROFILE LOAD: Using bulletproof profile fields service for ${user.id}`)
 
-      // FIRST: Load the saved name from user profile service
+      // FIRST: Load the saved name from user profile service with Azure fix
       let savedName = user.name || ''
       try {
         const userProfileResult = await userProfileService.loadUserProfile(user.id)
-        if (userProfileResult.status === 'success' && userProfileResult.data) {
-          savedName = userProfileResult.data.name || user.name || ''
+        if (userProfileResult.status === 'success' && userProfileResult.data && userProfileResult.data.name) {
+          savedName = userProfileResult.data.name
           console.log(`🛡️ PROFILE LOAD: Loaded saved name from user profile: "${savedName}"`)
+        } else {
+          console.log(`🛡️ PROFILE LOAD: No saved name found, using fallback: "${savedName}"`)
         }
       } catch (nameError) {
-        console.warn('Could not load saved name from user profile:', nameError)
+        console.warn('Could not load saved name from user profile, using fallback:', nameError)
+        // In Azure, if user profile service fails, try to get from localStorage directly
+        try {
+          const storedUser = localStorage.getItem('currentUser')
+          if (storedUser) {
+            const userData = JSON.parse(storedUser)
+            if (userData.name && userData.name !== userData.email) {
+              savedName = userData.name
+              console.log(`🛡️ PROFILE LOAD: Using name from localStorage: "${savedName}"`)
+            }
+          }
+        } catch {
+          // Final fallback to user context
+          console.log(`🛡️ PROFILE LOAD: Using final fallback: "${savedName}"`)
+        }
       }
 
       // SECOND: Use the bulletproof profile fields service for cross-browser compatibility
@@ -161,15 +177,26 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
       console.error('Bulletproof profile load failed:', err)
       setError(err.message || 'Failed to load profile')
 
-      // Try to get saved name even in error case
+      // Try to get saved name even in error case with Azure fallback
       let fallbackName = user.name || 'Pierre Detre'
       try {
         const userProfileResult = await userProfileService.loadUserProfile(user.id)
-        if (userProfileResult.status === 'success' && userProfileResult.data) {
-          fallbackName = userProfileResult.data.name || user.name || 'Pierre Detre'
+        if (userProfileResult.status === 'success' && userProfileResult.data && userProfileResult.data.name) {
+          fallbackName = userProfileResult.data.name
         }
       } catch {
-        // Use default fallback
+        // Azure fallback: try localStorage directly
+        try {
+          const storedUser = localStorage.getItem('currentUser')
+          if (storedUser) {
+            const userData = JSON.parse(storedUser)
+            if (userData.name && userData.name !== userData.email) {
+              fallbackName = userData.name
+            }
+          }
+        } catch {
+          // Use default fallback
+        }
       }
 
       // Fallback to basic profile

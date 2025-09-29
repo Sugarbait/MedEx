@@ -242,10 +242,21 @@ export class UserProfileService {
       // Skip Supabase audit logging for now as it may also cause issues
       console.log('UserProfileService: Loading user profile')
 
-      // Check cache first
+      // Check cache first with Azure-compatible validation
       const cached = this.cache.get(userId)
       if (cached && Date.now() - cached.timestamp < this.CACHE_TTL) {
-        return { status: 'success', data: this.transformToUserProfileData(cached.data) }
+        try {
+          // Validate cached data before transformation
+          if (cached.data && (cached.data.id || cached.data.user?.id)) {
+            return { status: 'success', data: this.transformToUserProfileData(cached.data) }
+          } else {
+            console.warn('UserProfileService: Invalid cached data, clearing cache')
+            this.cache.delete(userId)
+          }
+        } catch (cacheError) {
+          console.warn('UserProfileService: Cache transformation failed, clearing cache:', cacheError)
+          this.cache.delete(userId)
+        }
       }
 
       // Try to load from Supabase first for cross-device sync
@@ -2339,6 +2350,11 @@ export class UserProfileService {
    */
   private static transformToUserProfileData(completeProfile: CompleteUserProfile): UserProfileData {
     const { user, profile, settings } = completeProfile
+
+    // CRITICAL FIX: Validate user data before transformation
+    if (!user || !user.id) {
+      throw new Error('Invalid user data provided to transformToUserProfileData')
+    }
 
     let decryptedSettings = {}
     if (settings?.retell_config) {
