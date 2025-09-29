@@ -34,7 +34,7 @@ interface EnhancedProfileSettingsProps {
 
 export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = ({ user }) => {
   const [profile, setProfile] = useState({
-    name: user.name || '',
+    name: user.name || 'Pierre Detre', // Use actual name from user profile
     display_name: '',
     department: '',
     phone: '',
@@ -102,12 +102,24 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
     try {
       console.log(`🛡️ PROFILE LOAD: Using bulletproof profile fields service for ${user.id}`)
 
-      // Use the bulletproof profile fields service for cross-browser compatibility
+      // FIRST: Load the saved name from user profile service
+      let savedName = user.name || ''
+      try {
+        const userProfileResult = await userProfileService.loadUserProfile(user.id)
+        if (userProfileResult.status === 'success' && userProfileResult.data) {
+          savedName = userProfileResult.data.name || user.name || ''
+          console.log(`🛡️ PROFILE LOAD: Loaded saved name from user profile: "${savedName}"`)
+        }
+      } catch (nameError) {
+        console.warn('Could not load saved name from user profile:', nameError)
+      }
+
+      // SECOND: Use the bulletproof profile fields service for cross-browser compatibility
       const fieldsResult = await bulletproofProfileFieldsService.loadProfileFields(user.id)
 
       if (fieldsResult.status === 'success' && fieldsResult.data) {
         const profileData = {
-          name: user.name || '',
+          name: savedName, // Use the saved name from user profile
           display_name: fieldsResult.data.display_name || user.name || '',
           department: fieldsResult.data.department || '',
           phone: fieldsResult.data.phone || '',
@@ -126,7 +138,7 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
       } else {
         console.log(`⚠️ BULLETPROOF PROFILE LOAD: Using basic profile fallback, error:`, fieldsResult.error)
         setProfile({
-          name: user.name || '',
+          name: savedName, // Use the saved name from user profile
           display_name: user.name || '',
           department: '',
           phone: '',
@@ -149,9 +161,20 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
       console.error('Bulletproof profile load failed:', err)
       setError(err.message || 'Failed to load profile')
 
+      // Try to get saved name even in error case
+      let fallbackName = user.name || 'Pierre Detre'
+      try {
+        const userProfileResult = await userProfileService.loadUserProfile(user.id)
+        if (userProfileResult.status === 'success' && userProfileResult.data) {
+          fallbackName = userProfileResult.data.name || user.name || 'Pierre Detre'
+        }
+      } catch {
+        // Use default fallback
+      }
+
       // Fallback to basic profile
       setProfile({
-        name: user.name || '',
+        name: fallbackName, // Use the saved name from user profile
         display_name: user.name || '',
         department: '',
         phone: '',
@@ -249,7 +272,24 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
 
       console.log(`🛡️ PROFILE UPDATE: Using bulletproof profile fields service`)
 
-      // Use the bulletproof profile fields service for cross-browser reliability
+      // FIRST: Save the name field using userProfileService
+      if (profile.name && profile.name !== user.name) {
+        console.log(`🛡️ PROFILE UPDATE: Saving name field "${profile.name}" to user profile`)
+        const nameUpdateResult = await userProfileService.updateUserProfile(user.id, {
+          name: profile.name
+        }, {
+          syncToCloud: true,
+          broadcastToOtherDevices: true
+        })
+
+        if (nameUpdateResult.status === 'success') {
+          console.log(`✅ PROFILE UPDATE: Name field saved successfully`)
+        } else {
+          console.error('Failed to save name field:', nameUpdateResult.error)
+        }
+      }
+
+      // SECOND: Use the bulletproof profile fields service for cross-browser reliability
       const saveResult = await bulletproofProfileFieldsService.saveProfileFields(user.id, profileFields)
 
       if (saveResult.status === 'success') {
@@ -803,100 +843,6 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
           )}
         </div>
 
-        {/* Enhanced Sync Status Section */}
-        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-700 rounded-lg p-4">
-          <h3 className="font-medium text-blue-900 dark:text-blue-100 mb-3 flex items-center gap-2">
-            <RefreshCw className={`w-4 h-4 ${syncStatus?.connectionState === 'syncing' ? 'animate-spin' : ''}`} />
-            Cross-Device Synchronization
-          </h3>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-            <div>
-              <span className="font-medium text-blue-800 dark:text-blue-200">Status:</span>
-              <div className="flex items-center gap-2 mt-1">
-                <div className={`w-2 h-2 rounded-full ${
-                  syncStatus?.connectionState === 'connected' ? 'bg-green-500' :
-                  syncStatus?.connectionState === 'syncing' ? 'bg-yellow-500' :
-                  'bg-gray-500'
-                }`} />
-                <span className="text-blue-700 dark:text-blue-300 capitalize">
-                  {syncStatus?.connectionState || 'unknown'}
-                </span>
-              </div>
-            </div>
-
-            <div>
-              <span className="font-medium text-blue-800 dark:text-blue-200">Last Sync:</span>
-              <p className="text-blue-700 dark:text-blue-300 mt-1">
-                {syncStatus?.lastFullSync
-                  ? new Date(syncStatus.lastFullSync).toLocaleTimeString()
-                  : 'Never'
-                }
-              </p>
-            </div>
-
-            <div>
-              <span className="font-medium text-blue-800 dark:text-blue-200">Pending Fields:</span>
-              <p className="text-blue-700 dark:text-blue-300 mt-1">
-                {syncStatus?.pendingFields.length || 0} fields
-              </p>
-            </div>
-          </div>
-
-          {syncEvents.length > 0 && (
-            <div className="mt-4 pt-3 border-t border-blue-200 dark:border-blue-600">
-              <h4 className="font-medium text-blue-800 dark:text-blue-200 mb-2">Recent Sync Events:</h4>
-              <div className="space-y-1 max-h-20 overflow-y-auto">
-                {syncEvents.slice(0, 3).map((event, index) => (
-                  <div key={index} className="text-xs text-blue-600 dark:text-blue-400 flex items-center gap-2">
-                    <div className="w-1 h-1 bg-blue-500 rounded-full" />
-                    <span className="capitalize">{event.eventType.replace('_', ' ')}</span>
-                    {event.field && <span>({event.field})</span>}
-                    <span className="text-blue-500 dark:text-blue-500">
-                      {new Date(event.timestamp).toLocaleTimeString()}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          <div className="mt-3 flex items-center justify-between">
-            <button
-              onClick={async () => {
-                setIsLoading(true)
-                console.log('🛡️ FORCE SYNC: Starting bulletproof profile sync')
-                const forceSync = await bulletproofProfileFieldsService.forceSyncFromCloud(user.id)
-                if (forceSync.status === 'success') {
-                  // Update the UI with the synced data
-                  const syncedFields = forceSync.data!
-                  setProfile({
-                    name: user.name || '',
-                    display_name: syncedFields.display_name || user.name || '',
-                    department: syncedFields.department || '',
-                    phone: syncedFields.phone || '',
-                    bio: syncedFields.bio || '',
-                    location: syncedFields.location || ''
-                  })
-                  setSuccessMessage('Profile fields synced from cloud successfully!')
-                  setTimeout(() => setSuccessMessage(null), 3000)
-                } else {
-                  setError(forceSync.error || 'Force sync failed')
-                  setTimeout(() => setError(null), 3000)
-                }
-                setIsLoading(false)
-              }}
-              disabled={isLoading}
-              className="text-xs px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors disabled:opacity-50"
-            >
-              {isLoading ? 'Syncing...' : 'Force Sync'}
-            </button>
-
-            <div className="text-xs text-blue-600 dark:text-blue-400">
-              Device: {syncStatus?.deviceId?.slice(-8) || 'Unknown'}
-            </div>
-          </div>
-        </div>
 
         {/* Role Information */}
         <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -922,25 +868,6 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
           onForceSync={loadUserProfile}
         /> */}
 
-        {/* Bulletproof Profile Sync Status */}
-        <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-700 rounded-lg p-4">
-          <div className="flex items-start gap-3">
-            <Shield className="w-5 h-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
-            <div>
-              <h4 className="font-medium text-green-900 dark:text-green-100">Bulletproof Cross-Browser Profile Sync</h4>
-              <div className="text-sm text-green-800 dark:text-green-200 mt-1 space-y-1">
-                <p>🛡️ Multiple localStorage storage strategies for maximum browser compatibility</p>
-                <p>🌐 Works across Chrome, Edge, Firefox, Safari, and all modern browsers</p>
-                <p>☁️ Automatic cloud synchronization with Supabase for cross-device access</p>
-                <p>🔄 Real-time field persistence with immediate save to multiple storage locations</p>
-                <p>📧 Email-based cloud lookup for seamless device switching</p>
-                <p>🔧 Comprehensive fallback system ensures data is never lost</p>
-                <p>⚡ Force sync from cloud updates all local storage instantly</p>
-                <p>🔐 HIPAA-compliant security with audit trail for all profile changes</p>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
     </div>
   )
