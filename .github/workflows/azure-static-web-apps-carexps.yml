@@ -40,6 +40,9 @@ jobs:
           VITE_PHI_ENCRYPTION_KEY: c5341118c7fd5ab06e1fd33ae7b97a7ce50c00eadf3dee40ec627008e89e8699
           VITE_AUDIT_ENCRYPTION_KEY: acb1433341752ac66fc222cbe4b62ea467daa896f2f3e3b523246dfc194983f8
           VITE_OPENAI_API_KEY: ${{ secrets.VITE_OPENAI_API_KEY }}
+          VITE_EMAILJS_SERVICE_ID: ${{ secrets.VITE_EMAILJS_SERVICE_ID }}
+          VITE_EMAILJS_TEMPLATE_ID: ${{ secrets.VITE_EMAILJS_TEMPLATE_ID }}
+          VITE_EMAILJS_PUBLIC_KEY: ${{ secrets.VITE_EMAILJS_PUBLIC_KEY }}
           
       - name: Build And Deploy
         id: builddeploy
