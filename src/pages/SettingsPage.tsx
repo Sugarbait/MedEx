@@ -1111,17 +1111,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                           Show popup notifications for new calls and SMS messages
                         </p>
                       </div>
-                      <button
-                        onClick={() => handleToastPreferenceChange('enabled', !toastPreferences.enabled)}
-                        disabled={isLoading}
-                        className={`relative inline-flex h-8 w-14 sm:h-6 sm:w-11 items-center rounded-full transition-colors min-h-[44px] sm:min-h-auto ${
-                          toastPreferences.enabled ? 'bg-blue-500' : 'bg-gray-300'
-                        }`}
-                      >
-                        <span className={`inline-block h-6 w-6 sm:h-4 sm:w-4 transform rounded-full bg-white transition-transform ${
-                          toastPreferences.enabled ? 'translate-x-7 sm:translate-x-6' : 'translate-x-1'
-                        }`} />
-                      </button>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={toastPreferences.enabled}
+                          onChange={(e) => handleToastPreferenceChange('enabled', e.target.checked)}
+                          disabled={isLoading}
+                          className="sr-only peer"
+                        />
+                        <div className={`w-11 h-6 ${toastPreferences.enabled ? 'bg-green-600' : 'bg-gray-200'} peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 dark:peer-focus:ring-green-800 rounded-full peer after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all ${toastPreferences.enabled ? 'after:translate-x-full after:border-white' : ''} dark:border-gray-600`}></div>
+                      </label>
                     </div>
 
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1131,17 +1130,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                           Play gentle sound with toast notifications
                         </p>
                       </div>
-                      <button
-                        onClick={() => handleToastPreferenceChange('soundEnabled', !toastPreferences.soundEnabled)}
-                        disabled={isLoading || !toastPreferences.enabled}
-                        className={`relative inline-flex h-8 w-14 sm:h-6 sm:w-11 items-center rounded-full transition-colors min-h-[44px] sm:min-h-auto ${
-                          toastPreferences.soundEnabled && toastPreferences.enabled ? 'bg-blue-500' : 'bg-gray-300'
-                        } ${!toastPreferences.enabled ? 'opacity-50' : ''}`}
-                      >
-                        <span className={`inline-block h-6 w-6 sm:h-4 sm:w-4 transform rounded-full bg-white transition-transform ${
-                          toastPreferences.soundEnabled && toastPreferences.enabled ? 'translate-x-7 sm:translate-x-6' : 'translate-x-1'
-                        }`} />
-                      </button>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={toastPreferences.soundEnabled && toastPreferences.enabled}
+                          onChange={(e) => handleToastPreferenceChange('soundEnabled', e.target.checked)}
+                          disabled={isLoading || !toastPreferences.enabled}
+                          className="sr-only peer"
+                        />
+                        <div className={`w-11 h-6 ${toastPreferences.soundEnabled && toastPreferences.enabled ? 'bg-green-600' : 'bg-gray-200'} ${!toastPreferences.enabled ? 'opacity-50' : ''} peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 dark:peer-focus:ring-green-800 rounded-full peer after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all ${toastPreferences.soundEnabled && toastPreferences.enabled ? 'after:translate-x-full after:border-white' : ''} dark:border-gray-600`}></div>
+                      </label>
                     </div>
 
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
@@ -1151,17 +1149,16 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                           Silence notifications during specific hours
                         </p>
                       </div>
-                      <button
-                        onClick={() => handleDoNotDisturbChange('enabled', !toastPreferences.doNotDisturb.enabled)}
-                        disabled={isLoading || !toastPreferences.enabled}
-                        className={`relative inline-flex h-8 w-14 sm:h-6 sm:w-11 items-center rounded-full transition-colors min-h-[44px] sm:min-h-auto ${
-                          toastPreferences.doNotDisturb.enabled && toastPreferences.enabled ? 'bg-blue-500' : 'bg-gray-300'
-                        } ${!toastPreferences.enabled ? 'opacity-50' : ''}`}
-                      >
-                        <span className={`inline-block h-6 w-6 sm:h-4 sm:w-4 transform rounded-full bg-white transition-transform ${
-                          toastPreferences.doNotDisturb.enabled && toastPreferences.enabled ? 'translate-x-7 sm:translate-x-6' : 'translate-x-1'
-                        }`} />
-                      </button>
+                      <label className="relative inline-flex items-center cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={toastPreferences.doNotDisturb.enabled && toastPreferences.enabled}
+                          onChange={(e) => handleDoNotDisturbChange('enabled', e.target.checked)}
+                          disabled={isLoading || !toastPreferences.enabled}
+                          className="sr-only peer"
+                        />
+                        <div className={`w-11 h-6 ${toastPreferences.doNotDisturb.enabled && toastPreferences.enabled ? 'bg-green-600' : 'bg-gray-200'} ${!toastPreferences.enabled ? 'opacity-50' : ''} peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-green-300 dark:peer-focus:ring-green-800 rounded-full peer after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all ${toastPreferences.doNotDisturb.enabled && toastPreferences.enabled ? 'after:translate-x-full after:border-white' : ''} dark:border-gray-600`}></div>
+                      </label>
                     </div>
 
                     {toastPreferences.doNotDisturb.enabled && toastPreferences.enabled && (

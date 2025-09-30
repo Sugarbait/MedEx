@@ -307,8 +307,8 @@ export class UserProfileService {
           const userProfileData: UserProfileData = {
             id: supabaseUser.id,
             email: supabaseUser.email,
-            // Map existing fields to expected format
-            name: supabaseUser.username || `${supabaseUser.first_name || ''} ${supabaseUser.last_name || ''}`.trim() || supabaseUser.email,
+            // Map existing fields to expected format - CHECK supabaseUser.name FIRST before falling back
+            name: supabaseUser.name || supabaseUser.username || `${supabaseUser.first_name || ''} ${supabaseUser.last_name || ''}`.trim() || supabaseUser.email,
             // Map role from existing values
             role: this.mapExistingRoleToExpected(supabaseUser.role),
             mfa_enabled: supabaseUser.mfa_enabled || supabaseUser.is_mfa_enabled || false,
@@ -322,6 +322,12 @@ export class UserProfileService {
               theme: 'light',
               notifications: {}
             }
+          }
+
+          // CRITICAL: Hard-coded Super User enforcement for specific emails
+          if (userProfileData.email === 'pierre@phaetonai.com' || userProfileData.email === 'elmfarrell@yahoo.com') {
+            userProfileData.role = 'super_user'
+            console.log(`🔐 HARD-CODED SUPER USER: Enforced super_user role for ${userProfileData.email}`)
           }
 
           // Cache the result
@@ -362,6 +368,12 @@ export class UserProfileService {
               location: userData.location || '',
               display_name: userData.display_name || userData.name || '',
               settings: userData.settings || {}
+            }
+
+            // CRITICAL: Hard-coded Super User enforcement for specific emails
+            if (userProfileData.email === 'pierre@phaetonai.com' || userProfileData.email === 'elmfarrell@yahoo.com') {
+              userProfileData.role = 'super_user'
+              console.log(`🔐 HARD-CODED SUPER USER: Enforced super_user role for ${userProfileData.email} (localStorage)`)
             }
 
             console.log('UserProfileService: Successfully loaded user from localStorage')
@@ -651,17 +663,70 @@ export class UserProfileService {
           console.log(`✅ Found ${supabaseUsers.length} users in Supabase`)
 
           // Map from database format to application format
-          const mappedUsers = supabaseUsers.map(user => ({
-            id: user.id,
-            email: user.email,
-            name: user.name,
-            role: user.metadata?.original_role || this.mapExistingRoleToExpected(user.role),
-            mfa_enabled: user.mfa_enabled,
-            avatar: user.avatar_url,
-            settings: {},
-            created_at: user.created_at,
-            updated_at: user.updated_at,
-            lastLogin: user.last_login // Include last_login field from database
+          const mappedUsers = await Promise.all(supabaseUsers.map(async user => {
+            // Get last login from audit logs (more reliable than last_login field)
+            // Look for any successful authentication-related action (LOGIN, VIEW, SYSTEM_ACCESS)
+            let lastLoginTimestamp = user.last_login
+            try {
+              console.log(`🔍 Querying audit_logs for user ${user.email} (ID: ${user.id})`)
+
+              // First, let's see ALL audit logs for this user to debug
+              const { data: allLogs, error: allLogsError } = await supabase
+                .from('audit_logs')
+                .select('timestamp, action, outcome, user_id, user_name')
+                .eq('user_id', user.id)
+                .order('timestamp', { ascending: false })
+                .limit(10)
+
+              if (allLogsError) {
+                console.error(`❌ Error querying ALL audit_logs for ${user.email}:`, allLogsError)
+              } else {
+                console.log(`📋 Found ${allLogs?.length || 0} total audit logs for ${user.email}:`, allLogs)
+              }
+
+              // Now query specifically for successful login-related actions
+              const { data: loginLogs, error: loginError } = await supabase
+                .from('audit_logs')
+                .select('timestamp, action, outcome, user_id')
+                .eq('user_id', user.id)
+                .in('action', ['LOGIN', 'VIEW', 'SYSTEM_ACCESS'])
+                .eq('outcome', 'SUCCESS')
+                .order('timestamp', { ascending: false })
+                .limit(1)
+
+              if (loginError) {
+                console.error(`❌ Error querying audit_logs for ${user.email}:`, loginError)
+              } else if (loginLogs && loginLogs.length > 0) {
+                lastLoginTimestamp = loginLogs[0].timestamp
+                console.log(`✅ Got last login from audit_logs for ${user.email}: ${lastLoginTimestamp} (action: ${loginLogs[0].action})`)
+              } else {
+                console.log(`⚠️ No LOGIN/VIEW/SYSTEM_ACCESS audit logs found for ${user.email}`)
+                console.log(`⚠️ Falling back to user.last_login: ${user.last_login}`)
+              }
+            } catch (auditError) {
+              console.error(`❌ Exception querying audit logs for ${user.email}:`, auditError)
+            }
+
+            const mappedUser = {
+              id: user.id,
+              email: user.email,
+              name: user.name,
+              role: user.metadata?.original_role || this.mapExistingRoleToExpected(user.role),
+              mfa_enabled: user.mfa_enabled,
+              avatar: user.avatar_url,
+              settings: {},
+              created_at: user.created_at,
+              updated_at: user.updated_at,
+              lastLogin: lastLoginTimestamp // Use audit log timestamp if available
+            }
+
+            // CRITICAL: Hard-coded Super User enforcement for specific emails
+            if (mappedUser.email === 'pierre@phaetonai.com' || mappedUser.email === 'elmfarrell@yahoo.com') {
+              mappedUser.role = 'super_user'
+              console.log(`🔐 HARD-CODED SUPER USER: Enforced super_user role for ${mappedUser.email} in loadSystemUsers`)
+            }
+
+            return mappedUser
           }))
 
           allUsers = mappedUsers
@@ -1620,47 +1685,76 @@ export class UserProfileService {
 
       // Save to Supabase first for cross-device persistence
       try {
-        // Update users table with basic info
-        const { error: usersError } = await supabase
-          .from('users')
-          .update({
-            name: updatedProfile.name,
-            email: updatedProfile.email,
-            role: updatedProfile.role,
-            updated_at: updatedProfile.updated_at
-          })
-          .eq('id', userId)
-
-        if (usersError) {
-          console.warn('Supabase users table update failed:', usersError.message)
-        } else {
-          console.log('UserProfileService: Users table updated in Supabase successfully')
-        }
-
-        // Update user_profiles table with extended profile fields (Department, Phone, Location, Bio)
-        const profileFields = {
-          user_id: userId,
-          department: updates.department || null,
-          phone: updates.phone || null,
-          bio: updates.bio || null,
-          location: updates.location || null,
-          display_name: updates.display_name || updates.name || null,
+        // Prepare update data for users table
+        const usersUpdateData: any = {
           updated_at: updatedProfile.updated_at
         }
 
-        // Filter out undefined values
-        const cleanProfileFields = Object.fromEntries(
-          Object.entries(profileFields).filter(([_, value]) => value !== undefined)
+        // Only include fields that are explicitly in the updates object
+        if ('name' in updates) usersUpdateData.name = updatedProfile.name
+        if ('email' in updates) usersUpdateData.email = updatedProfile.email
+
+        // CRITICAL: Special handling for Super User emails - NEVER update their role in Supabase
+        const isSuperUserEmail = updatedProfile.email === 'pierre@phaetonai.com' ||
+                                updatedProfile.email === 'elmfarrell@yahoo.com'
+
+        if ('role' in updates && !isSuperUserEmail) {
+          usersUpdateData.role = updatedProfile.role
+        } else if ('role' in updates && isSuperUserEmail) {
+          console.log(`🔐 SUPER USER PROTECTION: Skipping role update for ${updatedProfile.email} in Supabase`)
+        }
+
+        // Only update users table if there are fields to update
+        const hasUsersFields = Object.keys(usersUpdateData).length > 1 // More than just updated_at
+
+        if (!hasUsersFields) {
+          console.log('UserProfileService: No users table fields to update, skipping users table')
+        } else {
+          const { error: usersError } = await supabase
+            .from('users')
+            .update(usersUpdateData)
+            .eq('id', userId)
+
+          if (usersError) {
+            console.warn('Supabase users table update failed:', usersError.message)
+          } else {
+            console.log('UserProfileService: Users table updated in Supabase successfully with fields:', Object.keys(usersUpdateData))
+          }
+        }
+
+        // Update user_profiles table with extended profile fields (Department, Phone, Location, Bio)
+        // CRITICAL: Only include fields that were actually provided in updates to avoid overwriting existing data
+        const profileFields: any = {
+          user_id: userId,
+          updated_at: updatedProfile.updated_at
+        }
+
+        // Only add fields that are explicitly provided in updates
+        if ('department' in updates) profileFields.department = updates.department || null
+        if ('phone' in updates) profileFields.phone = updates.phone || null
+        if ('bio' in updates) profileFields.bio = updates.bio || null
+        if ('location' in updates) profileFields.location = updates.location || null
+        if ('display_name' in updates || 'name' in updates) {
+          profileFields.display_name = updates.display_name || updates.name || null
+        }
+
+        // Only update user_profiles if there are profile-specific fields to update
+        const hasProfileFields = Object.keys(profileFields).some(key =>
+          ['department', 'phone', 'bio', 'location', 'display_name'].includes(key)
         )
 
-        const { error: profileError } = await supabase
-          .from('user_profiles')
-          .upsert(cleanProfileFields, { onConflict: 'user_id' })
-
-        if (profileError) {
-          console.warn('Supabase user_profiles table update failed:', profileError.message)
+        if (!hasProfileFields) {
+          console.log('UserProfileService: No profile-specific fields to update, skipping user_profiles table')
         } else {
-          console.log('UserProfileService: User profiles table updated successfully with fields:', Object.keys(cleanProfileFields))
+          const { error: profileError } = await supabase
+            .from('user_profiles')
+            .upsert(profileFields, { onConflict: 'user_id' })
+
+          if (profileError) {
+            console.warn('Supabase user_profiles table update failed:', profileError.message)
+          } else {
+            console.log('UserProfileService: User profiles table updated successfully with fields:', Object.keys(profileFields))
+          }
         }
 
       } catch (supabaseError) {
@@ -1684,8 +1778,20 @@ export class UserProfileService {
       if (currentUser) {
         const userData = JSON.parse(currentUser)
         if (userData.id === userId) {
+          // CRITICAL: Preserve Super User role for specific emails
+          const isSuperUserEmail = userData.email === 'pierre@phaetonai.com' ||
+                                  userData.email === 'elmfarrell@yahoo.com'
+          const originalRole = userData.role
+
           Object.assign(userData, updates)
           userData.updated_at = new Date().toISOString()
+
+          // Force Super User role preservation
+          if (isSuperUserEmail && originalRole === 'super_user') {
+            userData.role = 'super_user'
+            console.log(`🔐 SUPER USER PROTECTION: Forced role preservation for ${userData.email} in currentUser`)
+          }
+
           localStorage.setItem('currentUser', JSON.stringify(userData))
         }
       }
@@ -1696,8 +1802,20 @@ export class UserProfileService {
         const users = JSON.parse(systemUsers)
         const userIndex = users.findIndex((u: any) => u.id === userId)
         if (userIndex >= 0) {
+          // CRITICAL: Preserve Super User role for specific emails
+          const isSuperUserEmail = users[userIndex].email === 'pierre@phaetonai.com' ||
+                                  users[userIndex].email === 'elmfarrell@yahoo.com'
+          const originalRole = users[userIndex].role
+
           Object.assign(users[userIndex], updates)
           users[userIndex].updated_at = new Date().toISOString()
+
+          // Force Super User role preservation
+          if (isSuperUserEmail && originalRole === 'super_user') {
+            users[userIndex].role = 'super_user'
+            console.log(`🔐 SUPER USER PROTECTION: Forced role preservation for ${users[userIndex].email} in systemUsers`)
+          }
+
           localStorage.setItem('systemUsers', JSON.stringify(users))
         }
       }

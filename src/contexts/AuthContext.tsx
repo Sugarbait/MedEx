@@ -98,6 +98,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       })
     }
 
+    // CRITICAL: Hard-coded Super User enforcement for specific emails
+    if (newUser.email === 'pierre@phaetonai.com' || newUser.email === 'elmfarrell@yahoo.com') {
+      newUser.role = 'super_user'
+      console.log(`🔐 HARD-CODED SUPER USER: Enforced super_user role for ${newUser.email} in AuthContext.setUser`)
+    }
+
     setUser(newUser)
   }
 
@@ -278,6 +284,26 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               console.log('✅ Valid MFA session found - user authenticated')
               userProfile.mfaVerified = true
             }
+
+            // Update last_login timestamp in Supabase for users with valid session
+            try {
+              const { error: lastLoginError } = await supabase
+                .from('users')
+                .update({ last_login: new Date().toISOString() })
+                .eq('id', userProfile.id)
+
+              if (lastLoginError) {
+                console.warn('⚠️ Failed to update last_login:', lastLoginError)
+              } else {
+                console.log('✅ Updated last_login timestamp for authenticated user:', userProfile.id)
+                // Clear cached systemUsers to force refresh on User Management page
+                localStorage.removeItem('systemUsers')
+                console.log('🧹 Cleared systemUsers cache to show updated last_login')
+              }
+            } catch (loginUpdateError) {
+              console.warn('⚠️ Error updating last_login:', loginUpdateError)
+            }
+
             setUserSafely(userProfile)
 
             // Sync avatar across devices after successful authentication
@@ -775,6 +801,25 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (isValid) {
         // SECURITY FIX: Clear MFA lockout attempts on successful verification
         await MfaLockoutService.clearMfaAttempts(userProfile.id, userProfile.email)
+
+        // Update last_login timestamp in Supabase
+        try {
+          const { error: lastLoginError } = await supabase
+            .from('users')
+            .update({ last_login: new Date().toISOString() })
+            .eq('id', userProfile.id)
+
+          if (lastLoginError) {
+            console.warn('⚠️ Failed to update last_login:', lastLoginError)
+          } else {
+            console.log('✅ Updated last_login timestamp after MFA:', userProfile.id)
+            // Clear cached systemUsers to force refresh on User Management page
+            localStorage.removeItem('systemUsers')
+            console.log('🧹 Cleared systemUsers cache to show updated last_login')
+          }
+        } catch (loginUpdateError) {
+          console.warn('⚠️ Error updating last_login:', loginUpdateError)
+        }
 
         userProfile.mfaVerified = true
         const mfaTimestamp = Date.now().toString()

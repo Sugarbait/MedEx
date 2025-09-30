@@ -358,9 +358,17 @@ class HIPAAAuditLogger {
 
   /**
    * Encrypt audit entry for secure storage
+   *
+   * NOTE: user_name and failure_reason are NOT encrypted because:
+   * 1. User names/emails and failure reasons are NOT PHI under HIPAA
+   * 2. Audit logs must be readable for compliance reviews
+   * 3. HIPAA requires audit logs to show WHO accessed data and WHY actions failed
+   * 4. Failure reasons (e.g., "Invalid password", "Account locked") are system messages, not patient data
    */
   private async encryptAuditEntry(entry: AuditLogEntry): Promise<any> {
-    const sensitiveFields = ['user_name', 'additional_info', 'failure_reason']
+    // Only encrypt truly sensitive fields that may contain PHI
+    // additional_info might contain patient-specific details, so we encrypt it
+    const sensitiveFields = ['additional_info']
     const encrypted = { ...entry }
 
     for (const field of sensitiveFields) {
@@ -373,6 +381,12 @@ class HIPAAAuditLogger {
         }
       }
     }
+
+    // Keep user_name and failure_reason in plain text for audit readability
+    console.log('✅ Audit entry prepared with readable user_name and failure_reason:', {
+      user_name: encrypted.user_name,
+      failure_reason: encrypted.failure_reason
+    })
 
     return encrypted
   }

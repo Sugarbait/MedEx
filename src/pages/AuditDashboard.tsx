@@ -414,30 +414,12 @@ export const AuditDashboard: React.FC<AuditDashboardProps> = ({ user }) => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       {formatTimestamp(entry.timestamp)}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-gray-900">
-                          {cleanUserDisplayName(
-                            entry.displayName || cleanUserDisplayName(entry.user_name, entry.user_id),
-                            entry.user_id
-                          )}
-                          {entry.displayName && !entry.displayName.startsWith('User ') && entry.displayName !== 'Admin User' && (
-                            <span className="ml-2 px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
-                              Resolved
-                            </span>
-                          )}
-                          {(entry.displayName && entry.displayName.startsWith('User ')) && entry.user_id && (
-                            <span className="ml-2 px-2 py-1 text-xs bg-yellow-100 text-yellow-800 rounded-full">
-                              ID-Based
-                            </span>
-                          )}
-                          {entry.displayName === 'Admin User' && (
-                            <span className="ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded-full">
-                              Admin
-                            </span>
-                          )}
+                    <td className="px-3 py-4">
+                      <div className="max-w-[150px]">
+                        <div className="text-sm font-medium text-gray-900 truncate">
+                          {entry.displayName || entry.user_id?.substring(0, 12) || 'Unknown User'}
                         </div>
-                        <div className="text-sm text-gray-500">{entry.user_role}</div>
+                        <div className="text-xs text-gray-500">{entry.user_role || 'user'}</div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

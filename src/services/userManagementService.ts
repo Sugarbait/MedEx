@@ -51,7 +51,9 @@ export class UserManagementService {
           return {
             ...user,
             credentials,
-            lastLogin: loginStats.lastLogin,
+            // CRITICAL: Keep user.lastLogin from userProfileService if it exists (from audit logs)
+            // Only use loginStats.lastLogin as fallback if user doesn't already have lastLogin
+            lastLogin: user.lastLogin || loginStats.lastLogin,
             loginAttempts: loginStats.loginAttempts,
             isLocked: loginStats.isLocked
           } as SystemUserWithCredentials
@@ -1735,14 +1737,33 @@ export class UserManagementService {
         })
         .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
         .slice(0, 10) // Last 10 login attempts
-        .map(entry => ({
-          timestamp: entry.timestamp,
-          action: entry.action === 'LOGIN' ? 'Login' : entry.action === 'LOGIN_FAILURE' ? 'Failed Login' : entry.action,
-          outcome: entry.outcome as 'SUCCESS' | 'FAILURE',
-          sourceIp: entry.source_ip,
-          userAgent: entry.user_agent,
-          failureReason: entry.failure_reason
-        }))
+        .map(entry => {
+          // Process failure_reason - check if it's encrypted (legacy format)
+          let processedFailureReason = entry.failure_reason
+
+          // Check if failure_reason looks like encrypted data
+          if (processedFailureReason && typeof processedFailureReason === 'string') {
+            // If it looks like a JSON encrypted object, show legacy message
+            if (processedFailureReason.includes('"data"') &&
+                processedFailureReason.includes('"iv"') &&
+                processedFailureReason.includes('"tag"')) {
+              processedFailureReason = '[Legacy audit entry - reason not available]'
+            }
+          } else if (processedFailureReason && typeof processedFailureReason === 'object' &&
+                     (processedFailureReason as any).data) {
+            // If it's already parsed as an encrypted object, show legacy message
+            processedFailureReason = '[Legacy audit entry - reason not available]'
+          }
+
+          return {
+            timestamp: entry.timestamp,
+            action: entry.action === 'LOGIN' ? 'Login' : entry.action === 'LOGIN_FAILURE' ? 'Failed Login' : entry.action,
+            outcome: entry.outcome as 'SUCCESS' | 'FAILURE',
+            sourceIp: entry.source_ip,
+            userAgent: entry.user_agent,
+            failureReason: processedFailureReason
+          }
+        })
 
       console.log(`Login history: Found ${loginEvents.length} login events after filtering`)
 

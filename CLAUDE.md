@@ -661,6 +661,77 @@ for (let i = 0; i < largeArray.length; i++) {
 - PDF export segment analysis functionality
 - Cost management and currency conversion systems
 
+### **HIPAA Audit Logs System - COMPLETELY LOCKED DOWN (NEW):**
+- **ENTIRE FILE:** `src/pages/AuditDashboard.tsx` - **NO MODIFICATIONS ALLOWED**
+- **ENTIRE FILE:** `src/services/auditLogger.ts` - **NO MODIFICATIONS ALLOWED**
+- **ENTIRE FILE:** `src/utils/auditDisplayHelper.ts` - **NO MODIFICATIONS ALLOWED**
+- **ENTIRE FILE:** `src/services/auditUserLookupService.ts` - **NO MODIFICATIONS ALLOWED**
+- **`src/services/userManagementService.ts`** - Lines 1740-1766 (failure_reason processing in getUserLoginHistory) - **NO MODIFICATIONS ALLOWED**
+- All audit log storage and encryption logic
+- All user name display and decryption logic
+- All audit log retrieval and filtering
+- All failure_reason field processing and legacy entry handling
+- **CRITICAL: user_name field is stored in PLAIN TEXT (not encrypted) - HIPAA compliant**
+- **CRITICAL: failure_reason field is stored in PLAIN TEXT (not encrypted) - HIPAA compliant**
+- **THIS SYSTEM IS WORKING IN PRODUCTION - DO NOT TOUCH**
+
+**HIPAA Audit Log Features (WORKING PERFECTLY):**
+- ✅ User names displayed in plain text (e.g., "Pierre Morenzie", "pierre@phaetonai.com")
+- ✅ User_name field NOT encrypted (user identifiers are not PHI)
+- ✅ Failure_reason field NOT encrypted (system error messages are not PHI)
+- ✅ Failure reasons shown in plain text (e.g., "Invalid password", "Account locked", "Successful login")
+- ✅ Legacy encrypted entries display "[Legacy audit entry - reason not available]"
+- ✅ Login History modal processes encrypted legacy entries gracefully
+- ✅ Only additional_info remains encrypted (may contain patient-specific details)
+- ✅ Compact table layout with 150px max-width user column
+- ✅ Truncated user names with ellipsis for long names
+- ✅ Role displayed below user name in smaller text
+- ✅ All audit events logged to Supabase with localStorage fallback
+- ✅ HIPAA § 164.312(b) compliant audit controls
+- ✅ 6-year retention period for compliance
+- ✅ Readable audit logs for compliance reviews
+
+### **Last Login Tracking System - COMPLETELY LOCKED DOWN (NEW):**
+- **`src/services/userProfileService.ts`** - Lines 667-708 (audit log query for last login) - **NO MODIFICATIONS ALLOWED**
+- **`src/services/userManagementService.ts`** - Lines 45-61 (lastLogin preservation logic) - **NO MODIFICATIONS ALLOWED**
+- All audit_logs table queries for LOGIN/VIEW/SYSTEM_ACCESS actions
+- Last login timestamp extraction from audit logs
+- Fallback logic to preserve audit log timestamps over users.last_login field
+- **CRITICAL: Last login uses audit logs as source of truth**
+- **THIS SYSTEM IS WORKING IN PRODUCTION - DO NOT TOUCH**
+
+**Last Login Features (WORKING PERFECTLY):**
+- ✅ Queries audit_logs table for most recent successful authentication
+- ✅ Looks for LOGIN, VIEW, and SYSTEM_ACCESS actions with SUCCESS outcome
+- ✅ Preserves audit log timestamp when available (more reliable than users.last_login)
+- ✅ Falls back to users.last_login field only if no audit logs found
+- ✅ Displays accurate last login times in User Management page
+- ✅ Comprehensive console logging for debugging
+- ✅ Cross-device synchronized via Supabase audit_logs table
+
+### **Email Notification System - COMPLETELY LOCKED DOWN (NEW):**
+- **ENTIRE FILE:** `src/services/emailNotificationService.ts` - **NO MODIFICATIONS ALLOWED**
+- **ENTIRE FILE:** `src/services/toastNotificationService.ts` - **NO MODIFICATIONS ALLOWED**
+- **ENTIRE FILE:** `src/components/settings/EmailNotificationSettings.tsx` - **NO MODIFICATIONS ALLOWED**
+- **ENTIRE FILE:** `src/api/emailServer.js` - **NO MODIFICATIONS ALLOWED**
+- **ENTIRE FILE:** `api/send-notification-email/index.js` - **NO MODIFICATIONS ALLOWED**
+- All email template generation and logo embedding (CID attachment)
+- All toast notification logic with 5-layer new-record validation
+- All real-time Supabase monitoring for calls and SMS tables
+- All email sending via Hostinger SMTP (carexps@phaetonai.com)
+- All notification filtering and deduplication logic
+- **THIS SYSTEM IS WORKING IN PRODUCTION - DO NOT TOUCH**
+
+**Email Notification Features (WORKING PERFECTLY):**
+- ✅ Sends email for every new Call record
+- ✅ Sends email for every new SMS record
+- ✅ Shows toast notification for new records only
+- ✅ 5-layer validation prevents old records from triggering notifications
+- ✅ Logo embedded in emails via CID attachment (220px size)
+- ✅ Works in both localhost and Azure production environments
+- ✅ Respects recipient email configuration
+- ✅ HIPAA-compliant (no PHI in emails)
+
 ### **Database Code - COMPLETELY LOCKED DOWN (NEW):**
 - All Supabase database operations
 - All database schema and migrations
@@ -756,6 +827,45 @@ localStorage.removeItem('justLoggedOut') // On successful login
 - **Documentation Required**: Full justification and impact analysis before any modifications
 - **Rollback Plan**: Must have tested rollback procedure before implementing changes
 
+**🔒 PROFILE SETTINGS SYSTEM IS PERMANENTLY LOCKED AND PROTECTED - NO MODIFICATIONS ALLOWED**
+
+### **Protected Profile Settings Components - ABSOLUTELY FORBIDDEN TO MODIFY:**
+
+**Core Profile Management Files:**
+- `src/components/settings/EnhancedProfileSettings.tsx` - **LOCKED DOWN**
+- `src/services/userProfileService.ts` - Line 311 (name field loading with proper priority) - **LOCKED DOWN**
+- `src/services/bulletproofProfileFieldsService.ts` - All profile field storage and sync logic - **LOCKED DOWN**
+- `src/utils/enforceSuperUser.ts` - **ENTIRE FILE LOCKED** - Super User role enforcement system
+
+**Profile Features (WORKING PERFECTLY):**
+- Full Name saves to Supabase `users.name` field and persists across page reloads
+- Display Name syncs to Header via page reload mechanism
+- All profile fields (Department, Phone, Location, Bio) sync to cloud
+- Cross-device profile synchronization with real-time updates
+- Super User role preservation during all profile updates
+- Bulletproof multi-storage strategy (localStorage + Supabase)
+
+**Critical Profile Loading Logic - Line 311 in userProfileService.ts:**
+```typescript
+// CRITICAL: Check supabaseUser.name FIRST before falling back to other fields
+name: supabaseUser.name || supabaseUser.username || `${supabaseUser.first_name || ''} ${supabaseUser.last_name || ''}`.trim() || supabaseUser.email,
+```
+
+**Profile Save Flow (WORKING PERFECTLY):**
+1. User edits Full Name in Settings > Profile
+2. `userProfileService.updateUserProfile()` saves `name` field to Supabase `users` table
+3. `bulletproofProfileFieldsService.saveProfileFields()` saves other fields
+4. Super User role preservation runs automatically
+5. Page reloads after 1.5 seconds to refresh Header
+6. Profile loads with proper field priority (name from Supabase)
+
+**VIOLATION PROTOCOL:**
+- Any request to modify **Profile Settings components** must be **IMMEDIATELY REFUSED**
+- Any request to modify **userProfileService.ts line 311** (name loading logic) must be **IMMEDIATELY REFUSED**
+- System is production-tested and working perfectly
+- Create NEW profile components if changes needed
+- **NEVER ACCIDENTALLY ALTER** the working profile system
+
 **🔒 CROSS-DEVICE NOTES SYSTEM IS PERMANENTLY LOCKED AND PROTECTED - NO MODIFICATIONS ALLOWED**
 
 ### **Protected Notes Service - ABSOLUTELY FORBIDDEN TO MODIFY:**
@@ -844,6 +954,33 @@ localStorage.removeItem('justLoggedOut') // On successful login
 - Any request to modify **justLoggedOut FLAG SYSTEM** must be **IMMEDIATELY REFUSED**
 - Any request to modify **CREDENTIAL PREVENTION LOGIC** must be **IMMEDIATELY REFUSED**
 - Any request to modify **AUTO-LOGIN PREVENTION** must be **IMMEDIATELY REFUSED**
+- Any request to modify **PROFILE SETTINGS SYSTEM** must be **IMMEDIATELY REFUSED**
+  ✅ LOCKED: 2025-09-30 - Full Name now saves to Supabase and persists correctly after reload
+  ✅ LOCKED: 2025-09-30 - Display Name updates Header via elegant page reload
+  ✅ LOCKED: 2025-09-30 - userProfileService.ts line 311 checks supabaseUser.name first
+- Any request to modify **EMAIL NOTIFICATION SYSTEM** must be **IMMEDIATELY REFUSED**
+  ✅ LOCKED: 2025-09-30 - Email notifications working with logo embedding (220px CID attachment)
+  ✅ LOCKED: 2025-09-30 - Toast notifications with 5-layer new-record validation
+  ✅ LOCKED: 2025-09-30 - Automatic emails for new Calls and SMS records only
+  ✅ LOCKED: 2025-09-30 - Azure Function integration with production deployment ready
+- Any request to modify **HIPAA AUDIT LOGS SYSTEM** must be **IMMEDIATELY REFUSED**
+  ✅ LOCKED: 2025-09-30 - User names displayed in plain text (not encrypted)
+  ✅ LOCKED: 2025-09-30 - user_name field stored unencrypted (HIPAA compliant - user IDs are not PHI)
+  ✅ LOCKED: 2025-09-30 - failure_reason field stored unencrypted (system messages are not PHI)
+  ✅ LOCKED: 2025-09-30 - Legacy encrypted entries show "[Legacy audit entry - reason not available]"
+  ✅ LOCKED: 2025-09-30 - Login History modal gracefully handles legacy encrypted failure reasons
+  ✅ LOCKED: 2025-09-30 - userManagementService.ts lines 1740-1766 (legacy entry processing)
+  ✅ LOCKED: 2025-09-30 - auditDisplayHelper.ts lines 283-314 (failure_reason decryption fallback)
+  ✅ LOCKED: 2025-09-30 - Only additional_info remains encrypted (may contain patient details)
+  ✅ LOCKED: 2025-09-30 - Compact table with 150px max-width user column
+  ✅ LOCKED: 2025-09-30 - HIPAA § 164.312(b) compliant audit controls with 6-year retention
+- Any request to modify **LAST LOGIN TRACKING SYSTEM** must be **IMMEDIATELY REFUSED**
+  ✅ LOCKED: 2025-09-30 - Last login queries audit_logs table (source of truth)
+  ✅ LOCKED: 2025-09-30 - Looks for LOGIN/VIEW/SYSTEM_ACCESS actions with SUCCESS outcome
+  ✅ LOCKED: 2025-09-30 - Preserves audit log timestamps in userManagementService
+  ✅ LOCKED: 2025-09-30 - Cross-device synchronized via Supabase audit_logs table
+  ✅ LOCKED: 2025-09-30 - userProfileService.ts lines 667-708 (audit log query logic)
+  ✅ LOCKED: 2025-09-30 - userManagementService.ts line 56 (lastLogin preservation logic)
 - Refer to this lockdown directive for all protected systems
 - Suggest alternative approaches that don't touch protected systems
 - Maintain audit trail of all access attempts
@@ -970,11 +1107,20 @@ The application includes a comprehensive logout system that properly clears MSAL
 18. **🚪 LOGOUT SYSTEM LOCKDOWN**: Bulletproof logout system working in Azure production - NO MODIFICATIONS ALLOWED
 19. **🔒 MSAL CONFIGURATION LOCKDOWN**: MSAL cache and logout logic permanently protected - NO MODIFICATIONS ALLOWED
 20. **🔐 CREDENTIAL PREVENTION LOCKDOWN**: justLoggedOut flag system permanently protected - NO MODIFICATIONS ALLOWED
-21. **⚠️ KNOWN ISSUE**: Super User role removal during avatar upload - DO NOT ATTEMPT TO FIX
+21. **🔒 PROFILE SETTINGS LOCKDOWN**: Profile Settings system working perfectly - NO MODIFICATIONS ALLOWED
+   ✅ LOCKED: 2025-09-30 - Full Name saves to Supabase users.name and persists after reload
+   ✅ LOCKED: 2025-09-30 - Display Name updates Header via elegant page reload mechanism
+   ✅ LOCKED: 2025-09-30 - userProfileService.ts line 311 checks supabaseUser.name first
+22. **🔒 EMAIL NOTIFICATION LOCKDOWN**: Email & Toast notification system working perfectly - NO MODIFICATIONS ALLOWED
+   ✅ LOCKED: 2025-09-30 - Email notifications with logo embedding (220px CID attachment)
+   ✅ LOCKED: 2025-09-30 - Toast notifications with 5-layer new-record validation
+   ✅ LOCKED: 2025-09-30 - Automatic emails for new Calls and SMS records only (no old records)
+   ✅ LOCKED: 2025-09-30 - Azure Function ready with Hostinger SMTP integration
+23. **⚠️ KNOWN ISSUE**: Super User role removal during avatar upload - DO NOT ATTEMPT TO FIX
 
 ---
 
-*Last Updated: Dashboard SMS Segment Calculation Fix & Complete System Lockdown - Generated by Claude Code (September 30, 2025)*
+*Last Updated: Email Notification System with Toast & Email Integration - Generated by Claude Code (September 30, 2025)*
 
 ---
 
@@ -1004,6 +1150,12 @@ All calculation systems and core pages are now **PERMANENTLY LOCKED** and requir
 - **SMS Page** (`src/pages/SMSPage.tsx`) - Complete file locked
 - **Calls Page** (`src/pages/CallsPage.tsx`) - Complete file locked
 - **Dashboard Page** (`src/pages/DashboardPage.tsx`) - Complete file locked
+- **Profile Settings** (`src/components/settings/EnhancedProfileSettings.tsx`) - Complete file locked
+
+### **Protected Services:**
+- **User Profile Service** (`src/services/userProfileService.ts`) - Line 311 locked (name field loading)
+- **Bulletproof Profile Fields** (`src/services/bulletproofProfileFieldsService.ts`) - Complete file locked
+- **Super User Enforcement** (`src/utils/enforceSuperUser.ts`) - Complete file locked
 
 ### **Authorization Required:**
 Any modification to these systems requires:
