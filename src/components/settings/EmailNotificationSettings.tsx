@@ -135,6 +135,19 @@ export const EmailNotificationSettings: React.FC<EmailNotificationSettingsProps>
       setIsTesting(true)
       setMessage({ type: 'info', text: 'Sending test email via Supabase...' })
 
+      // Debug: Log environment variable availability
+      const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+      console.log('🔍 Environment Debug:', {
+        hasAnonKey: !!anonKey,
+        keyLength: anonKey?.length || 0,
+        keyPreview: anonKey ? `${anonKey.substring(0, 20)}...` : 'undefined',
+        environment: import.meta.env.MODE
+      })
+
+      if (!anonKey) {
+        throw new Error('VITE_SUPABASE_ANON_KEY is not defined. Check build configuration.')
+      }
+
       // Add 30-second timeout
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 30000)
@@ -145,7 +158,7 @@ export const EmailNotificationSettings: React.FC<EmailNotificationSettingsProps>
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+            'Authorization': `Bearer ${anonKey}`
           },
           body: JSON.stringify({
             type: 'system_alert',
