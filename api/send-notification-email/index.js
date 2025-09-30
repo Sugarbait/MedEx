@@ -242,6 +242,44 @@ module.exports = async function (context, req) {
       text: getPlainTextVersion(notification)
     };
 
+    // Add logo attachment if template uses CID
+    if (template && template.includes('cid:logo')) {
+      try {
+        const fs = require('fs');
+        const path = require('path');
+
+        // Try to find logo in multiple possible locations in Azure
+        const possibleLogoPaths = [
+          path.join(__dirname, '../../public/images/Logo.png'),
+          path.join(__dirname, '../..', 'public', 'images', 'Logo.png'),
+          path.join(process.cwd(), 'public/images/Logo.png'),
+          path.join(process.cwd(), 'images/Logo.png')
+        ];
+
+        let logoPath = null;
+        for (const testPath of possibleLogoPaths) {
+          if (fs.existsSync(testPath)) {
+            logoPath = testPath;
+            context.log('✅ Found logo at:', logoPath);
+            break;
+          }
+        }
+
+        if (logoPath) {
+          mailOptions.attachments = [{
+            filename: 'logo.png',
+            path: logoPath,
+            cid: 'logo' // same cid value as in the html img src
+          }];
+          context.log('✅ Logo attachment added to email');
+        } else {
+          context.log.warn('⚠️ Logo file not found in any expected location, email will use fallback');
+        }
+      } catch (error) {
+        context.log.warn('⚠️ Failed to attach logo file:', error.message);
+      }
+    }
+
     context.log(`📧 Sending email to ${validRecipients.length} recipients:`, validRecipients);
 
     // Send email

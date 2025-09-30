@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Restore Super User Role - pierre@phaetonai.com</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        .success {
+            color: #10b981;
+            font-weight: bold;
+        }
+        .error {
+            color: #ef4444;
+            font-weight: bold;
+        }
+        .info {
+            background: #eff6ff;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+        pre {
+            background: #1f2937;
+            color: #f9fafb;
+            padding: 15px;
+            border-radius: 6px;
+            overflow-x: auto;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔐 Restore Super User Role</h1>
+        <p>This tool will restore the Super User role for <strong>pierre@phaetonai.com</strong></p>
+
+        <div class="info">
+            <strong>⚠️ Important:</strong> This will update your role in all storage locations (currentUser, systemUsers, userProfile)
+        </div>
+
+        <button onclick="restoreSuperUserRole()">Restore Super User Role</button>
+        <button onclick="checkCurrentRole()">Check Current Role</button>
+
+        <div id="output" style="margin-top: 20px;"></div>
+    </div>
+
+    <script>
+        function checkCurrentRole() {
+            const output = document.getElementById('output');
+            try {
+                const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+                output.innerHTML = `
+                    <h3>Current User Info:</h3>
+                    <pre>${JSON.stringify(currentUser, null, 2)}</pre>
+                `;
+            } catch (error) {
+                output.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+
+        function restoreSuperUserRole() {
+            const output = document.getElementById('output');
+            let results = [];
+
+            try {
+                // 1. Update currentUser
+                const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}');
+                if (currentUser.email === 'pierre@phaetonai.com') {
+                    currentUser.role = 'super_user';
+                    currentUser.updated_at = new Date().toISOString();
+                    localStorage.setItem('currentUser', JSON.stringify(currentUser));
+                    results.push('✅ Updated currentUser role to super_user');
+                } else {
+                    results.push(`⚠️ Current user is ${currentUser.email}, not pierre@phaetonai.com`);
+                }
+
+                // 2. Update systemUsers
+                const systemUsers = JSON.parse(localStorage.getItem('systemUsers') || '[]');
+                const pierreIndex = systemUsers.findIndex(u => u.email === 'pierre@phaetonai.com');
+                if (pierreIndex >= 0) {
+                    systemUsers[pierreIndex].role = 'super_user';
+                    systemUsers[pierreIndex].updated_at = new Date().toISOString();
+                    localStorage.setItem('systemUsers', JSON.stringify(systemUsers));
+                    results.push('✅ Updated systemUsers role to super_user');
+                } else {
+                    results.push('⚠️ pierre@phaetonai.com not found in systemUsers');
+                }
+
+                // 3. Update userProfile
+                const userId = currentUser.id;
+                if (userId) {
+                    const userProfile = JSON.parse(localStorage.getItem(`userProfile_${userId}`) || '{}');
+                    userProfile.role = 'super_user';
+                    userProfile.updated_at = new Date().toISOString();
+                    localStorage.setItem(`userProfile_${userId}`, JSON.stringify(userProfile));
+                    results.push('✅ Updated userProfile role to super_user');
+                }
+
+                // 4. Trigger page refresh
+                results.push('<br><strong class="success">🎉 Super User role restored successfully!</strong>');
+                results.push('<br><em>Refreshing page in 2 seconds...</em>');
+
+                output.innerHTML = results.join('<br>');
+
+                setTimeout(() => {
+                    window.location.reload();
+                }, 2000);
+
+            } catch (error) {
+                output.innerHTML = `<p class="error">Error: ${error.message}</p>`;
+            }
+        }
+
+        // Auto-check role on load
+        window.onload = checkCurrentRole;
+    </script>
+</body>
+</html>

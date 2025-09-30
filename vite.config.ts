@@ -2,7 +2,22 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { VitePWA } from 'vite-plugin-pwa'
 import path from 'path'
-import { copyFileSync, mkdirSync } from 'fs'
+import { copyFileSync, mkdirSync, readFileSync } from 'fs'
+import { execSync } from 'child_process'
+
+// Read package.json for version
+const packageJson = JSON.parse(readFileSync('./package.json', 'utf-8'))
+
+// Get git commit hash (first 7 characters)
+let gitCommitHash = 'dev'
+try {
+  gitCommitHash = execSync('git rev-parse HEAD').toString().trim().substring(0, 7)
+} catch (e) {
+  console.warn('⚠️ Could not get git commit hash, using "dev"')
+}
+
+// Get current build date
+const buildDate = new Date().toISOString().split('T')[0]
 
 export default defineConfig({
   // Define environment variables for Azure Static Web Apps
@@ -15,8 +30,23 @@ export default defineConfig({
     __VITE_AZURE_TENANT_ID__: JSON.stringify(process.env.VITE_AZURE_TENANT_ID),
     __VITE_HIPAA_MODE__: JSON.stringify(process.env.VITE_HIPAA_MODE)
   },
+  // Make version info available to app
+  envPrefix: 'VITE_',
   plugins: [
     react(),
+    // Plugin to inject version information
+    {
+      name: 'inject-version-info',
+      config() {
+        return {
+          define: {
+            'import.meta.env.VITE_APP_VERSION': JSON.stringify(packageJson.version),
+            'import.meta.env.VITE_GIT_COMMIT_HASH': JSON.stringify(gitCommitHash),
+            'import.meta.env.VITE_BUILD_DATE': JSON.stringify(buildDate)
+          }
+        }
+      }
+    },
     // Plugin to copy Azure Static Web Apps files
     {
       name: 'copy-azure-files',

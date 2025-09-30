@@ -260,6 +260,21 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, user }) => {
             <div className="w-2 h-2 bg-green-500 rounded-full"></div>
             <span>System healthy</span>
           </div>
+          <div className="mt-3 pt-3 border-t border-gray-200 dark:border-gray-700">
+            <div className="text-[10px] text-gray-400 dark:text-gray-500 space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="font-semibold">Version:</span>
+                <span className="font-mono">{import.meta.env.VITE_APP_VERSION || '1.1.0'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="font-semibold">Build:</span>
+                <span className="font-mono text-[9px]">{import.meta.env.VITE_GIT_COMMIT_HASH?.substring(0, 7) || 'dev'}</span>
+              </div>
+              <div className="text-center text-[9px] text-gray-400 dark:text-gray-600 mt-1">
+                Last updated: {import.meta.env.VITE_BUILD_DATE || new Date().toLocaleDateString()}
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </>

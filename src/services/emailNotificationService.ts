@@ -268,21 +268,20 @@ class EmailNotificationServiceClass {
 
       // Determine email API endpoint based on environment
       const emailApiEndpoint = (() => {
-        // Check if we have a production email API configured
+        // Check if we have a production email API configured via environment variable
         const prodEmailApi = import.meta.env.VITE_EMAIL_API_URL
         if (prodEmailApi) {
           return `${prodEmailApi}/api/send-notification-email`
         }
 
-        // TEMPORARY: Always use localhost while Azure Function is debugged
-        // if (window.location.hostname !== 'localhost' &&
-        //     window.location.hostname !== '127.0.0.1') {
-        //   // In production, try to use a relative API endpoint
-        //   // This assumes the email API is deployed on the same domain
-        //   return '/api/send-notification-email'
-        // }
+        // In production (Azure), use relative API endpoint for Azure Functions
+        if (window.location.hostname !== 'localhost' &&
+            window.location.hostname !== '127.0.0.1') {
+          // Azure Static Web Apps will route /api/* to Azure Functions
+          return '/api/send-notification-email'
+        }
 
-        // Development fallback to localhost
+        // Development fallback to localhost email server
         return 'http://localhost:4001/api/send-notification-email'
       })()
 
@@ -435,8 +434,12 @@ class EmailNotificationServiceClass {
             font-size: 14px;
         }
         .logo {
-            font-size: 28px;
+            text-align: center;
             margin-bottom: 10px;
+        }
+        .logo img {
+            max-width: 220px;
+            height: auto;
         }
         .disclaimer {
             font-size: 12px;
@@ -450,7 +453,9 @@ class EmailNotificationServiceClass {
 <body>
     <div class="container">
         <div class="header">
-            <div class="logo">🏥</div>
+            <div class="logo">
+                <img src="cid:logo" alt="CareXPS Logo" style="max-width: 220px; height: auto; margin-bottom: 10px;" />
+            </div>
             <h1>CareXPS Healthcare CRM</h1>
             <p style="margin: 10px 0 0 0; opacity: 0.9;">System Notification</p>
         </div>

@@ -1,0 +1,185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clear SMS Segment Cache</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #2563eb;
+      margin-bottom: 20px;
+    }
+    button {
+      background: #2563eb;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+      margin: 10px 5px;
+    }
+    button:hover {
+      background: #1d4ed8;
+    }
+    button.danger {
+      background: #dc2626;
+    }
+    button.danger:hover {
+      background: #b91c1c;
+    }
+    .info {
+      background: #eff6ff;
+      border-left: 4px solid #2563eb;
+      padding: 15px;
+      margin: 20px 0;
+    }
+    .success {
+      background: #f0fdf4;
+      border-left: 4px solid #16a34a;
+      padding: 15px;
+      margin: 20px 0;
+      display: none;
+    }
+    .status {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 6px;
+    }
+    code {
+      background: #f3f4f6;
+      padding: 2px 6px;
+      border-radius: 3px;
+      font-family: 'Courier New', monospace;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔧 SMS Segment Cache Manager</h1>
+
+    <div class="info">
+      <strong>ℹ️ Why clear the cache?</strong>
+      <p>The SMS segment calculation has been updated to use official Twilio toll-free limits:</p>
+      <ul>
+        <li><strong>GSM-7:</strong> 160 chars (single) / 152 chars (concatenated)</li>
+        <li><strong>UCS-2:</strong> 70 chars (single) / 66 chars (concatenated)</li>
+      </ul>
+      <p>Clearing the cache will force all SMS records to recalculate using the new, more accurate limits.</p>
+    </div>
+
+    <div class="status" id="status"></div>
+
+    <div class="success" id="successMsg">
+      <strong>✅ Cache cleared successfully!</strong>
+      <p>All SMS records will now be recalculated using the updated toll-free limits.</p>
+      <p><strong>Next step:</strong> Navigate to the SMS page to see updated calculations.</p>
+    </div>
+
+    <div style="margin-top: 30px;">
+      <button onclick="clearCache()">Clear SMS Segment Cache</button>
+      <button onclick="checkCache()">Check Cache Status</button>
+      <button class="danger" onclick="clearAllCaches()">Clear All CareXPS Caches</button>
+    </div>
+
+    <div style="margin-top: 30px;">
+      <button onclick="goToSMS()" style="background: #16a34a;">Go to SMS Page</button>
+    </div>
+  </div>
+
+  <script>
+    const CACHE_KEY = 'sms_segment_cache_v2';
+
+    function clearCache() {
+      const existingCache = localStorage.getItem(CACHE_KEY);
+      const status = document.getElementById('status');
+      const success = document.getElementById('successMsg');
+
+      if (existingCache) {
+        const cacheSize = new Blob([existingCache]).size;
+        localStorage.removeItem(CACHE_KEY);
+        status.innerHTML = `<strong>🗑️ Cleared cache:</strong> ${cacheSize} bytes removed`;
+        status.style.background = '#f0fdf4';
+        status.style.color = '#166534';
+        success.style.display = 'block';
+      } else {
+        status.innerHTML = '<strong>ℹ️ No cache found</strong>';
+        status.style.background = '#eff6ff';
+        status.style.color = '#1e40af';
+      }
+
+      console.log('✅ SMS segment cache cleared!');
+    }
+
+    function checkCache() {
+      const existingCache = localStorage.getItem(CACHE_KEY);
+      const status = document.getElementById('status');
+
+      if (existingCache) {
+        try {
+          const data = JSON.parse(existingCache);
+          const cacheSize = new Blob([existingCache]).size;
+          const entries = data.segments ? Object.keys(data.segments).length : 0;
+
+          status.innerHTML = `
+            <strong>📦 Cache Status:</strong><br>
+            Size: ${cacheSize} bytes<br>
+            Entries: ${entries} cached chats<br>
+            Last updated: ${data.lastUpdated ? new Date(data.lastUpdated).toLocaleString() : 'Unknown'}
+          `;
+          status.style.background = '#eff6ff';
+          status.style.color = '#1e40af';
+        } catch (e) {
+          status.innerHTML = '<strong>⚠️ Cache exists but format is invalid</strong>';
+          status.style.background = '#fef3c7';
+          status.style.color = '#92400e';
+        }
+      } else {
+        status.innerHTML = '<strong>ℹ️ No cache found</strong>';
+        status.style.background = '#f3f4f6';
+        status.style.color = '#374151';
+      }
+    }
+
+    function clearAllCaches() {
+      if (confirm('⚠️ This will clear ALL CareXPS caches including settings. Are you sure?')) {
+        const keys = Object.keys(localStorage);
+        let cleared = 0;
+        keys.forEach(key => {
+          if (key.includes('sms') || key.includes('segment') || key.includes('cost')) {
+            localStorage.removeItem(key);
+            cleared++;
+          }
+        });
+
+        const status = document.getElementById('status');
+        status.innerHTML = `<strong>🗑️ Cleared ${cleared} cache keys</strong>`;
+        status.style.background = '#f0fdf4';
+        status.style.color = '#166534';
+
+        console.log(`✅ Cleared ${cleared} cache entries`);
+      }
+    }
+
+    function goToSMS() {
+      window.location.href = '/sms';
+    }
+
+    // Auto-check cache on load
+    window.addEventListener('load', checkCache);
+  </script>
+</body>
+</html>

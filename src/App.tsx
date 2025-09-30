@@ -22,6 +22,8 @@ import './utils/bulletproofApiKeyTest'
 import './utils/finalUserCleanup'
 // Import automatic user fix to prevent "User User" profiles
 import './utils/autoUserFix'
+// Import hard-coded Super User enforcement utility
+import './utils/enforceSuperUser'
 import { secureUserDataService } from './services/secureUserDataService'
 import { authService } from './services/authService'
 // Removed old TOTP service - using fresh MFA service

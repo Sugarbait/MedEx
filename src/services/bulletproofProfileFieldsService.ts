@@ -453,6 +453,21 @@ export class BulletproofProfileFieldsService {
       }
 
       if (data) {
+        // Check if the cloud data actually has meaningful content
+        const hasContent = Boolean(
+          data.department ||
+          data.phone ||
+          data.location ||
+          data.display_name ||
+          data.bio
+        )
+
+        // If cloud data exists but is all empty, treat as "not found" so we fall back to localStorage
+        if (!hasContent) {
+          console.log('🛡️ BULLETPROOF PROFILE: Cloud data exists but is empty, will try localStorage fallback')
+          return { success: false, error: 'Cloud profile exists but has no content' }
+        }
+
         return {
           success: true,
           data: {

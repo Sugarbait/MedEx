@@ -165,7 +165,8 @@
       "Bash(start http://localhost:4174)",
       "Bash(start http://localhost:3002/dashboard)",
       "WebFetch(domain:carexps.nexasync.ca)",
-      "Bash(git log:*)"
+      "Bash(git log:*)",
+      "Bash(start \"I:\\Apps Back Up\\CareXPS CRM\\restore-pierre-super-user.html\")"
     ],
     "deny": [],
     "ask": []

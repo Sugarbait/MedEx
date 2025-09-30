@@ -372,7 +372,12 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
         // Update last sync time
         bulletproofProfileFieldsService.updateLastSyncTime()
 
-        setTimeout(() => setSuccessMessage(null), 5000)
+        // CRITICAL: Reload page to refresh Header with updated name
+        // All hard-coded Super User enforcement ensures role stays correct
+        console.log(`✅ PROFILE UPDATE: Reloading page to display updated name in Header`)
+        setTimeout(() => {
+          window.location.reload()
+        }, 1500) // Give user time to see success message
       } else {
         console.error('Bulletproof profile save failed:', saveResult.error)
         setError(saveResult.error || 'Failed to update profile')
