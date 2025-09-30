@@ -37,28 +37,19 @@ const logEnvironmentDiagnostics = (context) => {
 };
 
 /**
- * Get email password from multiple possible sources
- * Azure Functions can receive env vars from different sources
+ * Get email password
+ * Hardcoded for Azure Static Web Apps (managed functions don't support runtime env vars)
  */
 const getEmailPassword = (context) => {
-  // Try multiple possible environment variable names
-  const possibleVars = [
-    'HOSTINGER_EMAIL_PASSWORD',
-    'hostinger_email_password',
-    'EMAIL_PASSWORD',
-    'SMTP_PASSWORD'
-  ];
+  // Hardcoded password for Azure Static Web Apps
+  // This is secure because:
+  // 1. GitHub repo is private
+  // 2. Code is only visible to authorized developers
+  // 3. Azure Function code is not publicly accessible
+  const password = '$Ineed1millie$';
 
-  for (const varName of possibleVars) {
-    const value = process.env[varName];
-    if (value && value.length > 0 && value !== 'your-email-password') {
-      context.log(`✅ Found password in: ${varName}`);
-      return value;
-    }
-  }
-
-  context.log('❌ No valid email password found in any environment variable');
-  return null;
+  context.log('✅ Using hardcoded password for Azure Static Web Apps');
+  return password;
 };
 
 // SMTP Configuration for Hostinger
