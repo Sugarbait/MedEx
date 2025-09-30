@@ -1,9 +1,10 @@
 /**
  * Email Notification Service for CareXPS CRM
- * Handles PHI-safe email notifications via Hostinger SMTP
+ * Handles PHI-safe email notifications via EmailJS (client-side)
  */
 
 import { supabase } from '@/config/supabase'
+import { clientEmailService } from './clientEmailService'
 
 export interface EmailNotificationConfig {
   enabled: boolean
@@ -243,7 +244,7 @@ class EmailNotificationServiceClass {
   }
 
   /**
-   * Send email notification
+   * Send email notification (using client-side EmailJS)
    */
   async sendNotification(data: NotificationData): Promise<void> {
     try {
@@ -264,48 +265,27 @@ class EmailNotificationServiceClass {
         return
       }
 
-      console.log(`📧 Sending ${data.type} notification to ${this.config.recipientEmails.length} recipients`)
+      console.log(`📧 Sending ${data.type} notification to ${this.config.recipientEmails.length} recipients via EmailJS`)
 
-      // Determine email API endpoint based on environment
-      const emailApiEndpoint = (() => {
-        // Check if we have a production email API configured via environment variable
-        const prodEmailApi = import.meta.env.VITE_EMAIL_API_URL
-        if (prodEmailApi) {
-          return `${prodEmailApi}/api/send-notification-email`
+      // Map notification types to EmailJS format
+      const emailType = data.type.replace('_', '') as 'newSMS' | 'newCall' | 'securityAlert' | 'systemAlert'
+
+      // Send via client-side EmailJS service
+      const result = await clientEmailService.sendNotification(
+        this.config.recipientEmails,
+        {
+          type: emailType,
+          title: data.title,
+          message: data.message,
+          timestamp: data.timestamp
         }
+      )
 
-        // In production (Azure), use relative API endpoint for Azure Functions
-        if (window.location.hostname !== 'localhost' &&
-            window.location.hostname !== '127.0.0.1') {
-          // Azure Static Web Apps will route /api/* to Azure Functions
-          return '/api/send-notification-email'
-        }
-
-        // Development fallback to localhost email server
-        return 'http://localhost:4001/api/send-notification-email'
-      })()
-
-      console.log(`📧 Using email API endpoint: ${emailApiEndpoint}`)
-
-      // Send email via API endpoint
-      const response = await fetch(emailApiEndpoint, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          recipients: this.config.recipientEmails,
-          notification: data,
-          template: this.getEmailTemplate(data)
-        })
-      })
-
-      if (!response.ok) {
-        throw new Error(`Email API responded with status: ${response.status}`)
+      if (result.success) {
+        console.log('✅ Email notification sent successfully via EmailJS')
+      } else {
+        throw new Error(result.error || 'Failed to send email')
       }
-
-      const result = await response.json()
-      console.log('✅ Email notification sent successfully:', result)
 
     } catch (error) {
       console.error('❌ Failed to send email notification:', error)
