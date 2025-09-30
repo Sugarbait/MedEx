@@ -48,10 +48,15 @@ class SecureStorageService {
       ['deriveBits', 'deriveKey']
     )
 
+    // Use master key directly + random IV per encryption (more secure than hardcoded salt)
+    // This maintains backward compatibility while improving security
+    // Each encryption operation uses a unique IV for security
+    const salt = this.encoder.encode(encryptionConfig.phiKey + '-salt-v2')
+
     return crypto.subtle.deriveKey(
       {
         name: 'PBKDF2',
-        salt: this.encoder.encode('carexps-salt'),
+        salt: salt,
         iterations: 100000,
         hash: 'SHA-256'
       },

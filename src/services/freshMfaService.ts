@@ -25,6 +25,53 @@ export interface FreshMfaVerification {
 }
 
 class FreshMfaService {
+  // Rate limiting: Track failed MFA attempts per user
+  private static failedAttempts: Map<string, { count: number; lockedUntil: number | null }> = new Map()
+  private static readonly MAX_ATTEMPTS = 5
+  private static readonly LOCKOUT_DURATION = 15 * 60 * 1000 // 15 minutes
+
+  /**
+   * Check if user is rate-limited
+   */
+  private static isRateLimited(userId: string): { limited: boolean; remainingTime?: number } {
+    const attempts = this.failedAttempts.get(userId)
+    if (!attempts || !attempts.lockedUntil) {
+      return { limited: false }
+    }
+
+    const now = Date.now()
+    if (now < attempts.lockedUntil) {
+      const remainingMs = attempts.lockedUntil - now
+      return { limited: true, remainingTime: Math.ceil(remainingMs / 1000) }
+    }
+
+    // Lockout expired, reset
+    this.failedAttempts.delete(userId)
+    return { limited: false }
+  }
+
+  /**
+   * Record failed MFA attempt
+   */
+  private static recordFailedAttempt(userId: string): void {
+    const attempts = this.failedAttempts.get(userId) || { count: 0, lockedUntil: null }
+    attempts.count++
+
+    if (attempts.count >= this.MAX_ATTEMPTS) {
+      attempts.lockedUntil = Date.now() + this.LOCKOUT_DURATION
+      console.warn(`🔒 User ${userId} locked out for ${this.LOCKOUT_DURATION / 60000} minutes after ${attempts.count} failed MFA attempts`)
+    }
+
+    this.failedAttempts.set(userId, attempts)
+  }
+
+  /**
+   * Reset failed attempts on successful verification
+   */
+  private static resetFailedAttempts(userId: string): void {
+    this.failedAttempts.delete(userId)
+  }
+
   /**
    * Generate a completely fresh TOTP setup
    */
@@ -97,10 +144,21 @@ class FreshMfaService {
 
       console.log('🔍 Input sanitized:', { original: totpCode, sanitized: sanitizedCode })
 
+      // SECURITY: Check rate limiting
+      const rateLimitCheck = this.isRateLimited(userId)
+      if (rateLimitCheck.limited) {
+        console.warn(`🔒 MFA verification blocked - user ${userId} is rate-limited`)
+        return {
+          success: false,
+          message: `Too many failed attempts. Please try again in ${rateLimitCheck.remainingTime} seconds.`
+        }
+      }
+
       // Get fresh MFA data from database
       const mfaData = await this.getFreshMfaData(userId)
       if (!mfaData) {
         console.log('❌ No MFA data found for user:', userId)
+        this.recordFailedAttempt(userId)
         return {
           success: false,
           message: 'MFA setup not found. Please start setup again.'
@@ -122,11 +180,12 @@ class FreshMfaService {
       })
 
       // Verify the code with increased window tolerance
-      // Window 2 = ±60 seconds tolerance (previous, current, next time step)
-      // This accounts for clock drift and user input delays
+      // SECURITY FIX: Reduced window from 2 to 1 (±30 seconds instead of ±60)
+      // Window 1 = ±30 seconds tolerance (previous, current, next time step)
+      // Standard TOTP security practice - balances usability and security
       const isValid = totp.validate({
         token: sanitizedCode,
-        window: 2 // Allow 2 time steps tolerance (±60 seconds)
+        window: 1 // Reduced from 2 to 1 for better security
       })
 
       console.log('🔍 TOTP Verification Details:', {
@@ -134,7 +193,7 @@ class FreshMfaService {
         sanitizedToken: sanitizedCode,
         timestamp: Math.floor(Date.now() / 1000),
         timeStep: Math.floor(Date.now() / 1000 / 30),
-        window: 2,
+        window: 1,
         result: isValid !== null ? 'VALID' : 'INVALID',
         delta: isValid
       })
@@ -145,12 +204,18 @@ class FreshMfaService {
 
         console.log('✅ TOTP code verified successfully - MFA enabled')
 
+        // SECURITY: Reset failed attempts on successful verification
+        this.resetFailedAttempts(userId)
+
         return {
           success: true,
           message: 'MFA enabled successfully!'
         }
       } else {
         console.log('❌ TOTP code verification failed')
+
+        // SECURITY: Record failed attempt
+        this.recordFailedAttempt(userId)
 
         return {
           success: false,
@@ -185,15 +250,24 @@ class FreshMfaService {
    */
   static async verifyLoginCode(userId: string, totpCode: string): Promise<boolean> {
     try {
+      // SECURITY: Check rate limiting
+      const rateLimitCheck = this.isRateLimited(userId)
+      if (rateLimitCheck.limited) {
+        console.warn(`🔒 MFA login blocked - user ${userId} is rate-limited`)
+        return false
+      }
+
       // Sanitize input
       const sanitizedCode = totpCode.replace(/\s/g, '').replace(/O/g, '0')
       if (!/^\d{6}$/.test(sanitizedCode)) {
         console.log('❌ Invalid login code format:', totpCode)
+        this.recordFailedAttempt(userId)
         return false
       }
 
       const mfaData = await this.getFreshMfaData(userId)
       if (!mfaData?.enabled) {
+        this.recordFailedAttempt(userId)
         return false
       }
 
@@ -206,7 +280,7 @@ class FreshMfaService {
 
       const isValid = totp.validate({
         token: sanitizedCode,
-        window: 2 // Increased tolerance for login scenarios
+        window: 1 // SECURITY FIX: Reduced from 2 to 1 (±30 seconds)
       })
 
       console.log('🔍 Login TOTP Verification:', {
@@ -216,7 +290,15 @@ class FreshMfaService {
         delta: isValid
       })
 
-      return isValid !== null
+      if (isValid !== null) {
+        // SECURITY: Reset failed attempts on successful verification
+        this.resetFailedAttempts(userId)
+        return true
+      } else {
+        // SECURITY: Record failed attempt
+        this.recordFailedAttempt(userId)
+        return false
+      }
     } catch (error) {
       console.error('❌ Login TOTP verification failed:', error)
       return false
@@ -289,14 +371,20 @@ class FreshMfaService {
   }
 
   /**
-   * Generate backup codes
+   * Generate backup codes using cryptographically secure random number generator
+   * SECURITY FIX: Changed from Math.random() to crypto.getRandomValues()
+   * for NIST 800-63B compliance
    */
   private static generateBackupCodes(): string[] {
     const codes: string[] = []
 
     for (let i = 0; i < 10; i++) {
-      // Generate 8-digit backup code
-      const code = Math.random().toString().slice(2, 10)
+      // Generate 8-digit backup code using cryptographically secure random
+      const randomBytes = crypto.getRandomValues(new Uint8Array(4))
+      const code = Array.from(randomBytes)
+        .map(b => b.toString(10).padStart(3, '0'))
+        .join('')
+        .slice(0, 8)
       codes.push(code)
     }
 
@@ -468,7 +556,7 @@ class FreshMfaService {
       // Verify the code with increased tolerance
       const isValid = totp.validate({
         token: sanitizedCode,
-        window: 2 // Allow 2 time steps tolerance (±60 seconds)
+        window: 1 // SECURITY FIX: Reduced from 2 to 1 (±30 seconds)
       })
 
       const result = isValid !== null
@@ -491,6 +579,13 @@ class FreshMfaService {
    */
   static async verifyBackupCode(userId: string, backupCode: string): Promise<boolean> {
     try {
+      // SECURITY: Check rate limiting
+      const rateLimitCheck = this.isRateLimited(userId)
+      if (rateLimitCheck.limited) {
+        console.warn(`🔒 Backup code verification blocked - user ${userId} is rate-limited`)
+        return false
+      }
+
       console.log('🔍 FreshMFA: Verifying backup code')
 
       // Sanitize input - remove spaces and ensure it's a valid backup code format
@@ -498,6 +593,7 @@ class FreshMfaService {
 
       if (!/^\d{8}$/.test(sanitizedCode)) {
         console.log('❌ Invalid backup code format (must be 8 digits)')
+        this.recordFailedAttempt(userId)
         return false
       }
 
@@ -506,6 +602,7 @@ class FreshMfaService {
       const mfaData = await this.getFreshMfaData(userId)
       if (!mfaData?.backupCodes || !Array.isArray(mfaData.backupCodes)) {
         console.log('❌ No backup codes found for user')
+        this.recordFailedAttempt(userId)
         return false
       }
 
@@ -513,6 +610,7 @@ class FreshMfaService {
       const codeIndex = mfaData.backupCodes.indexOf(sanitizedCode)
       if (codeIndex === -1) {
         console.log('❌ Backup code not found or already used')
+        this.recordFailedAttempt(userId)
         return false
       }
 
@@ -525,6 +623,9 @@ class FreshMfaService {
 
       console.log('✅ Backup code verified successfully and marked as used')
       console.log(`📊 Remaining backup codes: ${updatedBackupCodes.length}/10`)
+
+      // SECURITY: Reset failed attempts on successful verification
+      this.resetFailedAttempts(userId)
 
       return true
     } catch (error) {
