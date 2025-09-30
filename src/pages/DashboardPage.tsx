@@ -74,6 +74,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
   const [hasInitiallyLoaded, setHasInitiallyLoaded] = useState(false)
   const [lastDateRange, setLastDateRange] = useState<DateRange | null>(null)
 
+  // Progress tracking states (copied from SMS page for accurate segment loading)
+  const [isLoadingSegments, setIsLoadingSegments] = useState(false)
+  const [segmentLoadingProgress, setSegmentLoadingProgress] = useState({ completed: 0, total: 0 })
+  const [segmentLoadingComplete, setSegmentLoadingComplete] = useState(false)
+
   // Helper function to add Twilio costs to call metrics
   const addTwilioCostsToCallMetrics = (baseMetrics: any, calls: any[]) => {
     // Calculate total Twilio costs for all calls
@@ -574,7 +579,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
 
         // Trigger bulk load to get accurate data
         setTimeout(() => {
-          loadSegmentDataForChats(allFilteredChats)
+          loadAccurateSegmentsForAllChats()
         }, 500)
       }
 
@@ -632,75 +637,96 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
   // Status: PRODUCTION LOCKED - ABSOLUTELY NO MODIFICATIONS ALLOWED
   // ==================================================================================
 
-  // Proactively load segment data for all chats to ensure accurate totals (same as SMS page)
-  const loadSegmentDataForChats = useCallback(async (chats: any[]) => {
-    // Only load for chats that don't already have cached data
-    const chatsNeedingData = chats.filter(chat => !fullDataSegmentCache.has(chat.chat_id))
+  // Load accurate segments for all chats (copied from SMS page - WORKING VERSION)
+  const loadAccurateSegmentsForAllChats = useCallback(async () => {
+    if (!allFilteredChats || allFilteredChats.length === 0) return
 
-    if (chatsNeedingData.length === 0) {
-      console.log('📊 Dashboard: All chats already have cached segment data')
+    console.log(`🔍 Dashboard loadAccurateSegmentsForAllChats called for ${selectedDateRange} with ${allFilteredChats.length} chats`)
+
+    const chatsToProcess = allFilteredChats.filter(chat => !fullDataSegmentCache.has(chat.chat_id))
+    const cachedCount = allFilteredChats.length - chatsToProcess.length
+
+    if (chatsToProcess.length === 0) {
+      console.log(`💾 All ${allFilteredChats.length} chats already have cached segment data - no processing needed!`)
       return
     }
 
-    console.log(`📊 Dashboard: Loading segment data for ${chatsNeedingData.length}/${chats.length} chats in background`)
+    console.log(`🚀 Loading accurate segment data for ${chatsToProcess.length} chats (${cachedCount} already cached)...`)
 
-    // PERFORMANCE OPTIMIZATION: Increased batch size and removed delays for faster loading
-    const batchSize = 20 // Doubled from 10
-    const batches = []
-    for (let i = 0; i < chatsNeedingData.length; i += batchSize) {
-      batches.push(chatsNeedingData.slice(i, i + batchSize))
+    // Safety check for "today" - prevent server overload
+    if (selectedDateRange === 'today' && chatsToProcess.length > 50) {
+      console.error(`🚨 SAFETY ABORT: Attempting to process ${chatsToProcess.length} chats for "today" - this seems wrong!`)
+      return
     }
 
-    // Process batches in parallel (no delays)
-    const allBatchPromises = batches.map(async (batch, batchIndex) => {
+    // Start loading state
+    setIsLoadingSegments(true)
+    setSegmentLoadingProgress({ completed: 0, total: chatsToProcess.length })
+    setSegmentLoadingComplete(false)
+
+    let completed = 0
+    for (const chat of chatsToProcess) {
       try {
-        // Process batch in parallel
-        const batchPromises = batch.map(async (chat) => {
-          try {
-            const fullChatData = await chatService.getChat(chat.chat_id)
-            if (fullChatData?.message_with_tool_calls) {
-              // Use same calculation method as the main calculateChatSMSSegments function
-              const messagesWithContent = fullChatData.message_with_tool_calls.filter(m => m.content && m.content.trim().length > 0)
-              const breakdown = twilioCostService.getDetailedSMSBreakdown(messagesWithContent)
-              const segments = Math.max(breakdown.segmentCount, 1)
+        const fullChatDetails = await chatService.getChatById(chat.chat_id)
+        if (fullChatDetails) {
+          updateFullDataSegmentCache(chat.chat_id, fullChatDetails)
+        }
+        completed++
+        setSegmentLoadingProgress({ completed, total: chatsToProcess.length })
 
-              // Update the cache (batch updates for better performance)
-              return { chatId: chat.chat_id, segments }
-            }
-          } catch (error) {
-            console.warn(`Dashboard: Failed to load segment data for chat ${chat.chat_id}:`, error)
-          }
-          return null
-        })
-
-        const batchResults = await Promise.all(batchPromises)
-        const successCount = batchResults.filter(r => r !== null).length
-        console.log(`📊 Dashboard Batch ${batchIndex + 1}/${batches.length}: Loaded segment data for ${successCount}/${batch.length} chats`)
-
-        return batchResults.filter(r => r !== null)
+        // Small delay to prevent rate limiting
+        await new Promise(resolve => setTimeout(resolve, 100))
       } catch (error) {
-        console.error(`Dashboard: Error processing batch ${batchIndex + 1}:`, error)
-        return []
+        console.error(`Failed to load accurate segments for chat ${chat.chat_id}:`, error)
+        completed++
+        setSegmentLoadingProgress({ completed, total: chatsToProcess.length })
       }
-    })
-
-    // Wait for all batches to complete, then batch update the cache
-    const allResults = await Promise.all(allBatchPromises)
-    const flatResults = allResults.flat()
-
-    if (flatResults.length > 0) {
-      setFullDataSegmentCache(prev => {
-        const newCache = new Map(prev)
-        flatResults.forEach(result => {
-          newCache.set(result.chatId, result.segments)
-        })
-        saveSegmentCache(newCache)
-        return newCache
-      })
     }
 
-    console.log(`📊 ✅ Dashboard: Finished loading segment data for ${chatsNeedingData.length} chats`)
-  }, [fullDataSegmentCache, saveSegmentCache])
+    // Finish loading state
+    setIsLoadingSegments(false)
+    setSegmentLoadingComplete(true)
+    console.log(`✅ Finished loading accurate segment data`)
+
+    // Hide completion message after 3 seconds
+    setTimeout(() => {
+      setSegmentLoadingComplete(false)
+    }, 3000)
+  }, [allFilteredChats, fullDataSegmentCache, updateFullDataSegmentCache, selectedDateRange])
+
+  // Smart auto-load segments with proper cache synchronization (copied from SMS page)
+  useEffect(() => {
+    if (allFilteredChats.length === 0) return
+
+    // Wait for cache to be properly initialized on mount
+    if (!hasInitiallyLoaded) {
+      console.log(`⏳ Dashboard: Waiting for initial cache load to complete before processing ${allFilteredChats.length} chats`)
+      return
+    }
+
+    // Check how many chats need processing after cache is ready
+    const chatsToProcess = allFilteredChats.filter(chat => !fullDataSegmentCache.has(chat.chat_id))
+    const cachedCount = allFilteredChats.length - chatsToProcess.length
+
+    console.log(`📊 Dashboard: Chats loaded: ${allFilteredChats.length} total, ${cachedCount} already cached, ${chatsToProcess.length} need processing`)
+
+    // Only trigger bulk loading if there are uncached chats AND it's worth processing
+    if (chatsToProcess.length > 0) {
+      const cacheHitRate = cachedCount / allFilteredChats.length
+      console.log(`💾 Dashboard Cache hit rate: ${(cacheHitRate * 100).toFixed(1)}% (${cachedCount}/${allFilteredChats.length})`)
+
+      // For full date range coverage, always auto-load if there are uncached chats
+      if (chatsToProcess.length >= 2) {
+        console.log(`🚀 Dashboard: Auto-triggering bulk load for ${chatsToProcess.length} uncached chats`)
+        const timer = setTimeout(() => {
+          loadAccurateSegmentsForAllChats()
+        }, 1000)
+        return () => clearTimeout(timer)
+      }
+    } else {
+      console.log(`💾 All ${allFilteredChats.length} chats already cached - no bulk loading needed!`)
+    }
+  }, [allFilteredChats, fullDataSegmentCache, hasInitiallyLoaded, loadAccurateSegmentsForAllChats])
 
   // ==================================================================================
   // 🔒 END LOCKED CODE: DASHBOARD SEGMENT LOADING - PRODUCTION READY
@@ -996,9 +1022,8 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
       setFilteredChatsForCosts(filteredChats)
       setAllFilteredChats(filteredChats)
 
-      // 🔒 LOCKED: Proactively load segment data for accurate totals (async, don't block UI)
-      // This call provides amazing speed - DO NOT MODIFY
-      loadSegmentDataForChats(filteredChats)
+      // Segment loading is now handled by auto-loading useEffect
+      // Manual call removed - auto-loading triggers after allFilteredChats updates
 
       // Load SMS costs for visible chats using smsCostManager (exact copy from SMS page)
       if (filteredChats.length > 0) {
@@ -1389,6 +1414,43 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
               `Total segments for date range`
             )}
           </div>
+
+          {/* Progress bar for segment calculation (copied from SMS page) */}
+          {isLoadingSegments && (
+            <div className="mt-2">
+              <div className="flex items-center gap-2 text-xs text-blue-600">
+                <div className="w-3 h-3 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                <span>Calculating accurate segments... ({segmentLoadingProgress.completed}/{segmentLoadingProgress.total})</span>
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-1.5 mt-1">
+                <div
+                  className="bg-blue-600 h-1.5 rounded-full transition-all duration-300"
+                  style={{
+                    width: segmentLoadingProgress.total > 0
+                      ? `${(segmentLoadingProgress.completed / segmentLoadingProgress.total) * 100}%`
+                      : '0%'
+                  }}
+                ></div>
+              </div>
+              <div className="text-[10px] text-gray-500 mt-1">
+                💾 {fullDataSegmentCache.size} chats cached • Only processing uncached chats
+              </div>
+            </div>
+          )}
+
+          {segmentLoadingComplete && !isLoadingSegments && fullDataSegmentCache.size > 0 && (
+            <div className="mt-2 transition-opacity duration-500">
+              <div className="flex items-center gap-2 text-xs text-green-600">
+                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>Calculation complete</span>
+              </div>
+              <div className="text-[10px] text-gray-500 mt-1">
+                {fullDataSegmentCache.size} chats cached
+              </div>
+            </div>
+          )}
         </div>
       </div>
 

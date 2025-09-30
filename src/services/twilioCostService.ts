@@ -132,12 +132,62 @@ class TwilioCostService {
    * Calculate SMS message segment count based on message length
    * Fixed: 160 characters per segment (no Unicode special handling)
    */
+  /**
+   * Calculate SMS segments using Twilio toll-free (800) rules for US/Canada
+   * - GSM-7: Single segment ≤160 chars, multi-segment uses 152 chars/segment
+   * - UCS-2: Single segment ≤70 chars, multi-segment uses 66 chars/segment
+   * - Encoding detection: GSM-7 unless non-GSM character found (then UCS-2)
+   */
   private calculateSMSSegments(messageContent: string): number {
     if (!messageContent) return 0
 
-    // Fixed segmentation: 160 characters per segment
-    const maxCharsPerSegment = 160
-    return Math.ceil(messageContent.length / maxCharsPerSegment)
+    const contentLength = messageContent.length
+
+    // Detect encoding: Check if content requires UCS-2 (Unicode)
+    const requiresUCS2 = this.requiresUCS2Encoding(messageContent)
+
+    if (requiresUCS2) {
+      // UCS-2/Unicode encoding (emojis, smart quotes, non-GSM chars)
+      if (contentLength <= 70) {
+        return 1 // Single segment: up to 70 UCS-2 characters
+      } else {
+        // Multi-segment: 66 characters per segment for toll-free US/Canada
+        return Math.ceil(contentLength / 66)
+      }
+    } else {
+      // GSM-7 encoding (standard ASCII + GSM special chars)
+      if (contentLength <= 160) {
+        return 1 // Single segment: up to 160 GSM-7 characters
+      } else {
+        // Multi-segment: 152 characters per segment for toll-free US/Canada
+        return Math.ceil(contentLength / 152)
+      }
+    }
+  }
+
+  /**
+   * Check if message content requires UCS-2 encoding
+   * Returns true if content contains non-GSM-7 characters
+   */
+  private requiresUCS2Encoding(content: string): boolean {
+    // GSM-7 basic character set
+    // Includes: A-Z, a-z, 0-9, and GSM special chars
+    const gsm7BasicChars = /^[@£$¥èéùìòÇ\n\fØø\rÅåΔ_ΦΓΛΩΠΨΣΘΞ\x1BÆæßÉ !"#¤%&'()*+,\-.\/0-9:;<=>?¡A-ZÄÖÑÜ§¿a-zäöñüà\[\\\]\^\{\|\}\~]*$/
+
+    // GSM-7 extended characters (each counts as 2 bytes)
+    // For simplicity, if extended chars present, treat as needing special handling
+    const hasExtendedChars = /[\f\^{}\\\[\]|~€]/.test(content)
+
+    // If content doesn't match GSM-7 basic pattern, it requires UCS-2
+    if (!gsm7BasicChars.test(content)) {
+      return true
+    }
+
+    // If extended chars present, they reduce capacity but don't force UCS-2
+    // For toll-free US/Canada billing, extended chars are still GSM-7
+    // (each extended char uses 2 bytes but stays in GSM-7 encoding)
+
+    return false
   }
 
   /**
@@ -202,7 +252,8 @@ class TwilioCostService {
    * Calculate Twilio SMS cost for messages in a chat
    * @param messages Array of chat messages
    * @returns SMS cost breakdown
-   * Fixed: Now uses combined content approach for more accurate segment calculation
+   * TWILIO METHOD: Calculate segments per individual message, then sum
+   * This matches Twilio's actual billing where each SMS is calculated separately
    */
   public calculateSMSCost(messages: any[]): TwilioSMSCostBreakdown {
     if (!messages || messages.length === 0) {
@@ -216,14 +267,23 @@ class TwilioCostService {
       }
     }
 
-    // Fixed: Combine all clean content first, then calculate segments
-    // This provides more accurate segment calculation for conversations
-    const allCleanContent = messages
-      .map(message => this.parseMessageContent(message.content || ''))
-      .filter(content => content.trim().length > 0) // Remove empty messages
-      .join(' ') // Join with space to ensure proper separation
+    // TWILIO METHOD: Calculate segments for each message individually, then sum
+    // This matches how Twilio actually bills - each SMS message is segmented separately
+    // IMPORTANT: Use RAW content as Twilio bills for actual SMS body (no stripping)
+    let totalSegments = 0
+    for (const message of messages) {
+      const rawContent = message.content || ''
+      if (rawContent.trim().length > 0) {
+        const messageSegments = this.calculateSMSSegments(rawContent)
+        totalSegments += messageSegments
+      }
+    }
 
-    const totalSegments = this.calculateSMSSegments(allCleanContent)
+    // CRITICAL: Add 4 segments for initial SMS prompt that's always sent but not captured
+    // Initial prompt: "Hi from CareXPS. Please reply with: • Full name • Date of birth..."
+    // This message is sent to every caller but not stored in chat history
+    const INITIAL_PROMPT_SEGMENTS = 4
+    totalSegments += INITIAL_PROMPT_SEGMENTS
 
     // Calculate cost in USD first
     const costUSD = totalSegments * this.SMS_RATE_USD_PER_SEGMENT
@@ -257,13 +317,16 @@ class TwilioCostService {
       return result.costCAD
     } catch (error) {
       this.handleCurrencyServiceError(error, 'getSMSCostCAD')
-      // Return fallback cost calculation (excluding role indicators)
-      // Fixed: Use combined approach for consistency
-      const allCleanContent = messages
-        .map(message => this.parseMessageContent(message.content || ''))
-        .filter(content => content.trim().length > 0)
-        .join(' ')
-      const totalSegments = this.calculateSMSSegments(allCleanContent)
+      // Return fallback cost calculation using per-message method with raw content
+      let totalSegments = 0
+      for (const message of messages) {
+        const rawContent = message.content || ''
+        if (rawContent.trim().length > 0) {
+          totalSegments += this.calculateSMSSegments(rawContent)
+        }
+      }
+      // Add initial prompt segments
+      totalSegments += 4
       const costUSD = totalSegments * this.SMS_RATE_USD_PER_SEGMENT
       return costUSD * 1.35 // Fallback rate
     }
