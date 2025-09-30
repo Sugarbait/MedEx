@@ -268,20 +268,8 @@ class EmailNotificationServiceClass {
 
       // Determine email API endpoint based on environment
       const emailApiEndpoint = (() => {
-        // Check if we have a production email API configured via environment variable
-        const prodEmailApi = import.meta.env.VITE_EMAIL_API_URL
-        if (prodEmailApi) {
-          return `${prodEmailApi}/api/send-notification-email`
-        }
-
-        // In production (Azure), use relative API endpoint for Azure Functions
-        if (window.location.hostname !== 'localhost' &&
-            window.location.hostname !== '127.0.0.1') {
-          // Azure Static Web Apps will route /api/* to Azure Functions
-          return '/api/send-notification-email'
-        }
-
-        // Development fallback to localhost email server
+        // ALWAYS use localhost email server (port 4001) - it's the only one that works
+        // Azure Function has configuration issues, so we use the local email server for now
         return 'http://localhost:4001/api/send-notification-email'
       })()
 
