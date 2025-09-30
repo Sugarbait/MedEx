@@ -106,14 +106,23 @@ export const EmailNotificationSettings: React.FC<EmailNotificationSettingsProps>
     setMessage({ type: 'success', text: 'Email address added' })
   }
 
-  const handleRemoveEmail = (emailToRemove: string) => {
+  const handleRemoveEmail = async (emailToRemove: string) => {
     if (!config) return
 
-    setConfig({
+    const updatedConfig = {
       ...config,
       recipientEmails: config.recipientEmails.filter(email => email !== emailToRemove)
-    })
-    setMessage({ type: 'success', text: 'Email address removed' })
+    }
+
+    setConfig(updatedConfig)
+
+    try {
+      await emailNotificationService.updateConfiguration(updatedConfig)
+      setMessage({ type: 'success', text: 'Email address removed and saved' })
+    } catch (error) {
+      console.error('Failed to save after removing email:', error)
+      setMessage({ type: 'error', text: 'Email removed but failed to save. Click Save Settings.' })
+    }
   }
 
   const handleTestEmail = async () => {
@@ -124,14 +133,60 @@ export const EmailNotificationSettings: React.FC<EmailNotificationSettingsProps>
 
     try {
       setIsTesting(true)
-      setMessage({ type: 'info', text: 'Sending test email...' })
+      setMessage({ type: 'info', text: 'Sending test email via Supabase...' })
 
-      await emailNotificationService.testNotification()
+      // Add 30-second timeout
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 30000)
 
-      setMessage({ type: 'success', text: 'Test email sent successfully! Check your inbox.' })
+      try {
+        // Call Supabase Edge Function directly
+        const response = await fetch('https://cpkslvmydfdevdftieck.supabase.co/functions/v1/send-email-notification', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify({
+            type: 'system_alert',
+            record: {
+              id: 'test-email',
+              created_at: new Date().toISOString()
+            },
+            recipients: config.recipientEmails
+          }),
+          signal: controller.signal
+        })
+
+        clearTimeout(timeoutId)
+
+        if (!response.ok) {
+          const errorText = await response.text()
+          throw new Error(`HTTP ${response.status}: ${errorText}`)
+        }
+
+        const result = await response.json()
+        console.log('📧 Supabase Edge Function result:', result)
+
+        if (result.success) {
+          const successCount = result.results?.filter((r: any) => r.success).length || config.recipientEmails.length
+          setMessage({ type: 'success', text: `Test email sent successfully to ${successCount} recipient(s)! Check your inbox.` })
+        } else {
+          setMessage({ type: 'error', text: `Email failed: ${result.results?.[0]?.error || 'Unknown error'}` })
+        }
+      } catch (fetchError) {
+        clearTimeout(timeoutId)
+        if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+          throw new Error('Request timed out after 30 seconds. Check Supabase logs for details.')
+        }
+        throw fetchError
+      }
     } catch (error) {
       console.error('Test email failed:', error)
-      setMessage({ type: 'error', text: 'Failed to send test email. Please check your configuration.' })
+      setMessage({
+        type: 'error',
+        text: error instanceof Error ? error.message : 'Failed to send test email. Please check your configuration.'
+      })
     } finally {
       setIsTesting(false)
     }
