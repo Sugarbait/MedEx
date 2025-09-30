@@ -55,6 +55,7 @@ jobs:
           skip_api_build: false
         env:
           OPENAI_API_KEY: ${{ secrets.VITE_OPENAI_API_KEY }}
+          HOSTINGER_EMAIL_PASSWORD: ${{ secrets.HOSTINGER_EMAIL_PASSWORD }}
 
   close_pull_request_job:
     if: github.event_name == 'pull_request' && github.event.action == 'closed'
