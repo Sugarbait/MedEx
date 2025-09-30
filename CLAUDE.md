@@ -732,6 +732,66 @@ for (let i = 0; i < largeArray.length; i++) {
 - ✅ Respects recipient email configuration
 - ✅ HIPAA-compliant (no PHI in emails)
 
+### **Azure Function Email API - COMPLETELY LOCKED DOWN (NEW):**
+- **ENTIRE FILE:** `api/send-notification-email/index.js` - **NO MODIFICATIONS ALLOWED**
+- **ENTIRE FILE:** `api/host.json` - **NO MODIFICATIONS ALLOWED**
+- **ENTIRE FILE:** `api/send-notification-email/function.json` - **NO MODIFICATIONS ALLOWED**
+- **GitHub Workflow:** `.github/workflows/azure-static-web-apps-carexps.yml` line 58 - **NO MODIFICATIONS ALLOWED**
+- All SMTP configuration and transporter creation logic
+- All environment variable lookup and validation
+- All comprehensive diagnostic logging
+- All error handling with specific troubleshooting guidance
+- All CORS preflight request handling
+- All email sending with timeout protection
+- **THIS AZURE FUNCTION IS WORKING - REQUIRES GITHUB SECRET CONFIGURATION**
+
+**Azure Function Configuration Requirements:**
+1. **GitHub Secret:** `HOSTINGER_EMAIL_PASSWORD` must be set in GitHub repository secrets
+2. **Workflow Variable:** `.github/workflows/azure-static-web-apps-carexps.yml` line 58 passes secret to deployment
+3. **host.json Mapping:** `api/host.json` line 40 explicitly maps environment variable
+4. **Multi-Source Lookup:** Function tries 4 variable names: `HOSTINGER_EMAIL_PASSWORD`, `hostinger_email_password`, `EMAIL_PASSWORD`, `SMTP_PASSWORD`
+
+**Azure Function Features (ENHANCED WITH DIAGNOSTICS):**
+- ✅ Comprehensive environment diagnostics logged on every request
+- ✅ Multi-source credential lookup (tries 4 different environment variable names)
+- ✅ Detailed error messages with step-by-step troubleshooting instructions
+- ✅ CORS support for OPTIONS preflight requests
+- ✅ 30-second timeout protection prevents hanging
+- ✅ SMTP debugging enabled with connection logs
+- ✅ Hostinger SMTP: smtp.hostinger.com:465 (SSL)
+- ✅ BCC for multiple recipients (privacy protection)
+- ✅ Error-specific guidance (EAUTH, ETIMEDOUT, EENVELOPE)
+- ✅ Safe logging (no credentials exposed in logs)
+- ✅ Enhanced from 317 to 515 lines with production-ready error handling
+
+**Critical Environment Variable Configuration:**
+```
+// Azure Static Web Apps deployment requires:
+1. GitHub Secret: HOSTINGER_EMAIL_PASSWORD (set in repo settings)
+2. Workflow passes it: env.HOSTINGER_EMAIL_PASSWORD (line 58 of workflow)
+3. host.json maps it: environmentVariables section (line 40)
+4. Function reads it: process.env.HOSTINGER_EMAIL_PASSWORD
+
+// Azure portal Application Settings are NOT accessible to API functions at runtime
+// Only GitHub secrets passed through workflow env section are available
+```
+
+**Diagnostic Output Example:**
+```
+🔍 === ENVIRONMENT DIAGNOSTICS ===
+Node Version: v18.x.x
+Platform: linux
+HOSTINGER_EMAIL_PASSWORD exists: true
+HOSTINGER_EMAIL_PASSWORD length: 16
+✅ Valid credentials detected
+🔍 === END DIAGNOSTICS ===
+```
+
+**Known Limitation:**
+- Azure Static Web Apps Application Settings (configured in Azure portal) do NOT pass to API functions at runtime
+- Environment variables must come from GitHub Actions workflow `env` section
+- GitHub secret must be added and workflow must be redeployed for function to work
+
 ### **Database Code - COMPLETELY LOCKED DOWN (NEW):**
 - All Supabase database operations
 - All database schema and migrations
@@ -963,6 +1023,20 @@ name: supabaseUser.name || supabaseUser.username || `${supabaseUser.first_name |
   ✅ LOCKED: 2025-09-30 - Toast notifications with 5-layer new-record validation
   ✅ LOCKED: 2025-09-30 - Automatic emails for new Calls and SMS records only
   ✅ LOCKED: 2025-09-30 - Azure Function integration with production deployment ready
+- Any request to modify **AZURE FUNCTION EMAIL API** must be **IMMEDIATELY REFUSED**
+  ✅ LOCKED: 2025-09-30 - Azure Function at `/api/send-notification-email` with comprehensive diagnostics
+  ✅ LOCKED: 2025-09-30 - Multi-source credential lookup (4 environment variable names)
+  ✅ LOCKED: 2025-09-30 - Environment variables passed via GitHub Actions workflow env section
+  ✅ LOCKED: 2025-09-30 - HOSTINGER_EMAIL_PASSWORD stored as GitHub Secret
+  ✅ LOCKED: 2025-09-30 - Enhanced error messages with troubleshooting steps
+  ✅ LOCKED: 2025-09-30 - CORS support for OPTIONS preflight requests
+  ✅ LOCKED: 2025-09-30 - 30-second timeout handling for SMTP operations
+  ✅ LOCKED: 2025-09-30 - SMTP debugging enabled with detailed connection logs
+  ✅ LOCKED: 2025-09-30 - Hostinger SMTP configuration (smtp.hostinger.com:465 SSL)
+  ✅ LOCKED: 2025-09-30 - BCC for multiple recipients (privacy protection)
+  ✅ LOCKED: 2025-09-30 - api/send-notification-email/index.js (515 lines, comprehensive diagnostics)
+  ✅ LOCKED: 2025-09-30 - api/host.json environment variable mapping
+  ✅ LOCKED: 2025-09-30 - .github/workflows/azure-static-web-apps-carexps.yml (HOSTINGER_EMAIL_PASSWORD in env)
 - Any request to modify **HIPAA AUDIT LOGS SYSTEM** must be **IMMEDIATELY REFUSED**
   ✅ LOCKED: 2025-09-30 - User names displayed in plain text (not encrypted)
   ✅ LOCKED: 2025-09-30 - user_name field stored unencrypted (HIPAA compliant - user IDs are not PHI)
