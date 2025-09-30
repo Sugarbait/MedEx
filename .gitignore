@@ -99,6 +99,7 @@ temp/
 *.PublishSettings
 ServiceConfiguration.*.cscfg
 *.azurePubxml
+local.settings.json
 
 # Security - CRITICAL
 *.key

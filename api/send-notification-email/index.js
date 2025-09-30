@@ -1,35 +1,140 @@
 const nodemailer = require('nodemailer');
 
-// SMTP Configuration for Hostinger
-const SMTP_CONFIG = {
-  host: 'smtp.hostinger.com',
-  port: 465,
-  secure: true, // SSL
-  auth: {
-    user: 'carexps@phaetonai.com',
-    pass: process.env.HOSTINGER_EMAIL_PASSWORD || null
+/**
+ * Comprehensive diagnostic logging for environment variables
+ * Helps diagnose Azure Function configuration issues
+ */
+const logEnvironmentDiagnostics = (context) => {
+  context.log('🔍 === ENVIRONMENT DIAGNOSTICS ===');
+  context.log('Node Version:', process.version);
+  context.log('Platform:', process.platform);
+  context.log('Architecture:', process.arch);
+  context.log('Working Directory:', process.cwd());
+
+  // Check for environment variable (without logging the actual password)
+  const envVarExists = !!process.env.HOSTINGER_EMAIL_PASSWORD;
+  const envVarLength = process.env.HOSTINGER_EMAIL_PASSWORD?.length || 0;
+
+  context.log('HOSTINGER_EMAIL_PASSWORD exists:', envVarExists);
+  context.log('HOSTINGER_EMAIL_PASSWORD length:', envVarLength);
+  context.log('HOSTINGER_EMAIL_PASSWORD type:', typeof process.env.HOSTINGER_EMAIL_PASSWORD);
+
+  // Check all environment variables (keys only, no values)
+  const envKeys = Object.keys(process.env).filter(key =>
+    key.includes('HOSTINGER') ||
+    key.includes('EMAIL') ||
+    key.includes('SMTP') ||
+    key.includes('AZURE')
+  );
+  context.log('Relevant environment variable keys found:', envKeys);
+
+  // Check Azure-specific variables
+  context.log('WEBSITE_SITE_NAME:', process.env.WEBSITE_SITE_NAME || 'not set');
+  context.log('FUNCTIONS_WORKER_RUNTIME:', process.env.FUNCTIONS_WORKER_RUNTIME || 'not set');
+  context.log('AZURE_FUNCTIONS_ENVIRONMENT:', process.env.AZURE_FUNCTIONS_ENVIRONMENT || 'not set');
+
+  context.log('🔍 === END DIAGNOSTICS ===');
+};
+
+/**
+ * Get email password from multiple possible sources
+ * Azure Functions can receive env vars from different sources
+ */
+const getEmailPassword = (context) => {
+  // Try multiple possible environment variable names
+  const possibleVars = [
+    'HOSTINGER_EMAIL_PASSWORD',
+    'hostinger_email_password',
+    'EMAIL_PASSWORD',
+    'SMTP_PASSWORD'
+  ];
+
+  for (const varName of possibleVars) {
+    const value = process.env[varName];
+    if (value && value.length > 0 && value !== 'your-email-password') {
+      context.log(`✅ Found password in: ${varName}`);
+      return value;
+    }
   }
+
+  context.log('❌ No valid email password found in any environment variable');
+  return null;
+};
+
+// SMTP Configuration for Hostinger
+const getSMTPConfig = (context) => {
+  const password = getEmailPassword(context);
+
+  return {
+    host: 'smtp.hostinger.com',
+    port: 465,
+    secure: true, // SSL
+    auth: {
+      user: 'carexps@phaetonai.com',
+      pass: password
+    },
+    // Add connection timeout and debugging
+    connectionTimeout: 10000, // 10 seconds
+    greetingTimeout: 10000,
+    socketTimeout: 10000,
+    debug: true, // Enable SMTP debugging
+    logger: context ? {
+      debug: (msg) => context.log('SMTP DEBUG:', msg),
+      info: (msg) => context.log('SMTP INFO:', msg),
+      warn: (msg) => context.log('SMTP WARN:', msg),
+      error: (msg) => context.log('SMTP ERROR:', msg)
+    } : undefined
+  };
 };
 
 // Check if email credentials are configured
-const hasValidCredentials = () => {
-  return SMTP_CONFIG.auth.pass && SMTP_CONFIG.auth.pass !== 'your-email-password' && SMTP_CONFIG.auth.pass !== null;
+const hasValidCredentials = (context) => {
+  const password = getEmailPassword(context);
+  const isValid = password && password.length > 0 && password !== 'your-email-password';
+
+  if (!isValid) {
+    context.log('❌ Invalid credentials detected');
+    context.log('Password exists:', !!password);
+    context.log('Password length:', password?.length || 0);
+  } else {
+    context.log('✅ Valid credentials detected');
+  }
+
+  return isValid;
 };
 
 // Create reusable transporter
 let transporter = null;
 
-const createTransporter = () => {
+const createTransporter = (context) => {
   try {
-    if (!hasValidCredentials()) {
-      console.warn('⚠️ Email credentials not configured. Set HOSTINGER_EMAIL_PASSWORD environment variable.');
+    if (!hasValidCredentials(context)) {
+      context.log.error('⚠️ Email credentials not configured. Set HOSTINGER_EMAIL_PASSWORD in Azure Function Application Settings.');
+      context.log.error('📝 Instructions:');
+      context.log.error('1. Go to Azure Portal > Your Static Web App');
+      context.log.error('2. Navigate to Configuration > Application Settings');
+      context.log.error('3. Add new setting: Name=HOSTINGER_EMAIL_PASSWORD, Value=<your-password>');
+      context.log.error('4. Save and restart the application');
       return null;
     }
-    transporter = nodemailer.createTransporter(SMTP_CONFIG);
-    console.log('✅ Email transporter created successfully');
+
+    const config = getSMTPConfig(context);
+    transporter = nodemailer.createTransporter(config);
+
+    context.log('✅ Email transporter created successfully');
+    context.log('SMTP Host:', config.host);
+    context.log('SMTP Port:', config.port);
+    context.log('SMTP Secure:', config.secure);
+    context.log('SMTP User:', config.auth.user);
+
     return transporter;
   } catch (error) {
-    console.error('❌ Failed to create email transporter:', error);
+    context.log.error('❌ Failed to create email transporter:', error);
+    context.log.error('Error details:', {
+      message: error.message,
+      stack: error.stack,
+      code: error.code
+    });
     return null;
   }
 };
@@ -170,17 +275,59 @@ PRIVACY NOTICE: This notification contains no Protected Health Information (PHI)
 // Azure Function entry point
 module.exports = async function (context, req) {
   context.log('📧 Azure Function: Received email notification request');
+  context.log('Request method:', req.method);
+  context.log('Request headers:', JSON.stringify(req.headers));
+
+  // Handle CORS preflight requests
+  if (req.method === 'OPTIONS') {
+    context.log('Handling CORS preflight request');
+    context.res = {
+      status: 200,
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Access-Control-Max-Age': '86400'
+      },
+      body: ''
+    };
+    return;
+  }
+
+  // Log environment diagnostics on every request (helps diagnose Azure issues)
+  logEnvironmentDiagnostics(context);
 
   try {
     // Check if credentials are configured
-    if (!hasValidCredentials()) {
+    if (!hasValidCredentials(context)) {
       context.log.error('❌ Email credentials not configured');
+
+      const errorResponse = {
+        error: 'Email service unavailable',
+        details: 'SMTP credentials not configured.',
+        instructions: [
+          '1. Go to Azure Portal (portal.azure.com)',
+          '2. Navigate to your Static Web App resource',
+          '3. Go to Configuration > Application Settings',
+          '4. Add new setting: Name=HOSTINGER_EMAIL_PASSWORD, Value=<your-password>',
+          '5. Click Save and wait for deployment to complete',
+          '6. Restart the application if needed'
+        ],
+        troubleshooting: {
+          checkEnvironmentVariable: 'Ensure HOSTINGER_EMAIL_PASSWORD is set in Azure Application Settings, not just GitHub secrets',
+          verifyDeployment: 'Check if the latest deployment has completed successfully',
+          checkLogs: 'Review Azure Function logs for detailed diagnostics'
+        },
+        timestamp: new Date().toISOString()
+      };
+
       context.res = {
         status: 503,
-        body: {
-          error: 'Email service unavailable',
-          details: 'SMTP credentials not configured. Please set HOSTINGER_EMAIL_PASSWORD environment variable in Azure Function settings.'
-        }
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Content-Type': 'application/json'
+        },
+        body: errorResponse
       };
       return;
     }
@@ -217,17 +364,25 @@ module.exports = async function (context, req) {
     }
 
     // Create transporter
-    const emailTransporter = createTransporter();
+    context.log('Creating email transporter...');
+    const emailTransporter = createTransporter(context);
     if (!emailTransporter) {
+      context.log.error('Failed to create email transporter');
       context.res = {
         status: 503,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Content-Type': 'application/json'
+        },
         body: {
           error: 'Failed to initialize email service',
-          details: 'Could not create email transporter'
+          details: 'Could not create email transporter. Check Azure Function logs for details.',
+          timestamp: new Date().toISOString()
         }
       };
       return;
     }
+    context.log('Email transporter created successfully');
 
     // Prepare email options with BCC for privacy
     const mailOptions = {
@@ -282,36 +437,80 @@ module.exports = async function (context, req) {
 
     context.log(`📧 Sending email to ${validRecipients.length} recipients:`, validRecipients);
 
-    // Send email
-    const result = await emailTransporter.sendMail(mailOptions);
+    // Send email with timeout handling
+    let result;
+    try {
+      context.log('Attempting to send email via SMTP...');
+      result = await Promise.race([
+        emailTransporter.sendMail(mailOptions),
+        new Promise((_, reject) =>
+          setTimeout(() => reject(new Error('Email send timeout after 30 seconds')), 30000)
+        )
+      ]);
 
-    context.log('✅ Email sent successfully:', {
-      messageId: result.messageId,
-      recipients: validRecipients.length,
-      type: notification.type
-    });
-
-    context.res = {
-      status: 200,
-      body: {
-        success: true,
+      context.log('✅ Email sent successfully:', {
         messageId: result.messageId,
         recipients: validRecipients.length,
         type: notification.type,
-        timestamp: new Date().toISOString()
-      }
-    };
+        response: result.response
+      });
+
+      context.res = {
+        status: 200,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Content-Type': 'application/json'
+        },
+        body: {
+          success: true,
+          messageId: result.messageId,
+          recipients: validRecipients.length,
+          type: notification.type,
+          timestamp: new Date().toISOString()
+        }
+      };
+    } catch (smtpError) {
+      context.log.error('❌ SMTP error during send:', smtpError);
+      throw smtpError;
+    }
 
   } catch (error) {
     context.log.error('❌ Email sending failed:', error);
+    context.log.error('Error stack:', error.stack);
+    context.log.error('Error code:', error.code);
+    context.log.error('Error command:', error.command);
+
+    // Provide detailed error information
+    const errorDetails = {
+      error: 'Failed to send email',
+      message: error.message,
+      code: error.code,
+      command: error.command,
+      responseCode: error.responseCode,
+      response: error.response,
+      timestamp: new Date().toISOString(),
+      troubleshooting: []
+    };
+
+    // Add specific troubleshooting based on error type
+    if (error.code === 'EAUTH') {
+      errorDetails.troubleshooting.push('Authentication failed - check HOSTINGER_EMAIL_PASSWORD');
+      errorDetails.troubleshooting.push('Verify credentials in Azure Application Settings');
+    } else if (error.code === 'ETIMEDOUT' || error.code === 'ECONNECTION') {
+      errorDetails.troubleshooting.push('Connection timeout - check network/firewall settings');
+      errorDetails.troubleshooting.push('Verify SMTP server is accessible from Azure');
+    } else if (error.code === 'EENVELOPE') {
+      errorDetails.troubleshooting.push('Email address validation failed');
+      errorDetails.troubleshooting.push('Check recipient email addresses');
+    }
 
     context.res = {
       status: 500,
-      body: {
-        error: 'Failed to send email',
-        details: error.message,
-        timestamp: new Date().toISOString()
-      }
+      headers: {
+        'Access-Control-Allow-Origin': '*',
+        'Content-Type': 'application/json'
+      },
+      body: errorDetails
     };
   }
 };
