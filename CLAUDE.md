@@ -715,11 +715,14 @@ for (let i = 0; i < largeArray.length; i++) {
 - **ENTIRE FILE:** `src/components/settings/EmailNotificationSettings.tsx` - **NO MODIFICATIONS ALLOWED**
 - **ENTIRE FILE:** `src/api/emailServer.js` - **NO MODIFICATIONS ALLOWED**
 - **ENTIRE FILE:** `api/send-notification-email/index.js` - **NO MODIFICATIONS ALLOWED**
+- **ENTIRE FILE:** `supabase/functions/send-email-notification/index.ts` - **NO MODIFICATIONS ALLOWED**
+- **GitHub Workflow:** `.github/workflows/azure-static-web-apps-carexps.yml` line 43 (VITE_SUPABASE_ANON_KEY) - **NO MODIFICATIONS ALLOWED**
 - All email template generation and logo embedding (CID attachment)
 - All toast notification logic with 5-layer new-record validation
 - All real-time Supabase monitoring for calls and SMS tables
-- All email sending via Hostinger SMTP (carexps@phaetonai.com)
+- All email sending via Resend API (aibot@phaetonai.com)
 - All notification filtering and deduplication logic
+- All Supabase anon key injection in build process
 - **THIS SYSTEM IS WORKING IN PRODUCTION - DO NOT TOUCH**
 
 **Email Notification Features (WORKING PERFECTLY):**
@@ -727,10 +730,13 @@ for (let i = 0; i < largeArray.length; i++) {
 - ✅ Sends email for every new SMS record
 - ✅ Shows toast notification for new records only
 - ✅ 5-layer validation prevents old records from triggering notifications
-- ✅ Logo embedded in emails via CID attachment (220px size)
+- ✅ Email sent via Supabase Edge Function with Resend API
+- ✅ Verified domain: phaetonai.com (aibot@phaetonai.com)
 - ✅ Works in both localhost and Azure production environments
 - ✅ Respects recipient email configuration
 - ✅ HIPAA-compliant (no PHI in emails)
+- ✅ Environment variables properly injected during Azure build
+- ✅ Test email functionality with environment diagnostics
 
 ### **Azure Function Email API - COMPLETELY LOCKED DOWN (NEW):**
 - **ENTIRE FILE:** `api/send-notification-email/index.js` - **NO MODIFICATIONS ALLOWED**
@@ -1019,10 +1025,14 @@ name: supabaseUser.name || supabaseUser.username || `${supabaseUser.first_name |
   ✅ LOCKED: 2025-09-30 - Display Name updates Header via elegant page reload
   ✅ LOCKED: 2025-09-30 - userProfileService.ts line 311 checks supabaseUser.name first
 - Any request to modify **EMAIL NOTIFICATION SYSTEM** must be **IMMEDIATELY REFUSED**
-  ✅ LOCKED: 2025-09-30 - Email notifications working with logo embedding (220px CID attachment)
+  ✅ LOCKED: 2025-09-30 - Email notifications working with Resend API integration
+  ✅ LOCKED: 2025-09-30 - Supabase Edge Function for email delivery (24/7 operation)
+  ✅ LOCKED: 2025-09-30 - Verified domain: phaetonai.com (aibot@phaetonai.com)
   ✅ LOCKED: 2025-09-30 - Toast notifications with 5-layer new-record validation
   ✅ LOCKED: 2025-09-30 - Automatic emails for new Calls and SMS records only
-  ✅ LOCKED: 2025-09-30 - Azure Function integration with production deployment ready
+  ✅ LOCKED: 2025-09-30 - Environment variables properly injected in Azure build
+  ✅ LOCKED: 2025-09-30 - VITE_SUPABASE_ANON_KEY hardcoded in workflow (line 43)
+  ✅ LOCKED: 2025-09-30 - Test email functionality with environment diagnostics
 - Any request to modify **AZURE FUNCTION EMAIL API** must be **IMMEDIATELY REFUSED**
   ✅ LOCKED: 2025-09-30 - Azure Function at `/api/send-notification-email` with comprehensive diagnostics
   ✅ LOCKED: 2025-09-30 - Multi-source credential lookup (4 environment variable names)
