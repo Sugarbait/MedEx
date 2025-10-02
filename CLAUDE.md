@@ -1110,12 +1110,13 @@ name: supabaseUser.name || supabaseUser.username || `${supabaseUser.first_name |
   ✅ LOCKED: 2025-10-02 - Production verified: $15.58 CAD for 30 chats (localhost matches production)
   ✅ LOCKED: 2025-09-30 - userManagementService.ts line 56 (lastLogin preservation logic)
 - Any request to modify **CURRENCY DISPLAY SYSTEM** must be **IMMEDIATELY REFUSED**
-  ✅ LOCKED: 2025-10-02 - Dashboard Combined Service Cost permanently shows CAD (× 1.45 conversion)
-  ✅ LOCKED: 2025-10-02 - All individual cost metrics display as plain $ (USD)
-  ✅ LOCKED: 2025-10-02 - DashboardPage.tsx line 1298: Combined Service Cost CAD calculation
-  ✅ LOCKED: 2025-10-02 - CallsPage.tsx: All CAD labels removed (plain $ only)
-  ✅ LOCKED: 2025-10-02 - No currency toggle - Combined Service Cost always CAD
-  ✅ LOCKED: 2025-10-02 - Currency conversion rate: 1.45 CAD per USD (hardcoded)
+  ✅ LOCKED: 2025-10-02 - ALL cost displays across entire site show CAD (× 1.45 conversion)
+  ✅ LOCKED: 2025-10-02 - Dashboard: Call Costs, SMS Costs, Avg Cost Per Call, Highest Cost, Avg Cost Per Message all in CAD
+  ✅ LOCKED: 2025-10-02 - Combined Service Cost displays "CAD $" label (only place with label)
+  ✅ LOCKED: 2025-10-02 - CallsPage.tsx: All cost metrics converted to CAD (Avg, Highest, Total)
+  ✅ LOCKED: 2025-10-02 - SMSPage.tsx: Total cost converted to CAD
+  ✅ LOCKED: 2025-10-02 - All individual costs show plain $ (now CAD, not USD)
+  ✅ LOCKED: 2025-10-02 - Currency conversion rate: 1.45 CAD per USD (hardcoded, includes buffer for fees)
 - Refer to this lockdown directive for all protected systems
 - Suggest alternative approaches that don't touch protected systems
 - Maintain audit trail of all access attempts
