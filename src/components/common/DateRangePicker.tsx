@@ -6,7 +6,7 @@ const formatDateForInput = (date: Date) => {
   return date.toISOString().split('T')[0]
 }
 
-export type DateRange = 'today' | 'thisWeek' | 'lastWeek' | 'thisMonth' | 'thisYear' | 'custom'
+export type DateRange = 'today' | 'yesterday' | 'thisWeek' | 'lastWeek' | 'thisMonth' | 'lastMonth' | 'thisYear' | 'custom'
 
 interface DateRangePickerProps {
   selectedRange: DateRange
@@ -44,9 +44,11 @@ export const DateRangePicker: React.FC<DateRangePickerProps> = ({
 
   const dateRangeOptions = [
     { value: 'today' as DateRange, label: 'Today' },
+    { value: 'yesterday' as DateRange, label: 'Yesterday' },
     { value: 'thisWeek' as DateRange, label: 'This Week' },
     { value: 'lastWeek' as DateRange, label: 'Last Week' },
     { value: 'thisMonth' as DateRange, label: 'This Month' },
+    { value: 'lastMonth' as DateRange, label: 'Last Month' },
     { value: 'thisYear' as DateRange, label: 'This Year' },
     { value: 'custom' as DateRange, label: 'Custom' }
   ]
@@ -208,6 +210,14 @@ export const getDateRangeFromSelection = (range: DateRange, customStart?: Date, 
         end: new Date(today.getTime() + 24 * 60 * 60 * 1000 - 1)
       }
 
+    case 'yesterday':
+      const yesterday = new Date(today)
+      yesterday.setDate(today.getDate() - 1)
+      yesterday.setHours(0, 0, 0, 0)
+      const endOfYesterday = new Date(yesterday)
+      endOfYesterday.setHours(23, 59, 59, 999)
+      return { start: yesterday, end: endOfYesterday }
+
     case 'thisWeek':
       const startOfWeek = new Date(today)
       startOfWeek.setDate(today.getDate() - today.getDay())
@@ -230,6 +240,12 @@ export const getDateRangeFromSelection = (range: DateRange, customStart?: Date, 
       const endOfMonth = new Date(today.getFullYear(), today.getMonth() + 1, 0)
       endOfMonth.setHours(23, 59, 59, 999)
       return { start: startOfMonth, end: endOfMonth }
+
+    case 'lastMonth':
+      const startOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1)
+      const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0)
+      endOfLastMonth.setHours(23, 59, 59, 999)
+      return { start: startOfLastMonth, end: endOfLastMonth }
 
     case 'thisYear':
       const startOfYear = new Date(today.getFullYear(), 0, 1)
