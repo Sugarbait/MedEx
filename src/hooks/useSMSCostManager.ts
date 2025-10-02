@@ -58,6 +58,8 @@ export function useSMSCostManager(options: UseSMSCostManagerOptions = {}) {
 
   // Subscribe to cost cache updates
   useEffect(() => {
+    // CRITICAL FIX: Set mounted flag to true on every mount (handles React StrictMode remount)
+    mountedRef.current = true
     console.log(`[useSMSCostManager] Initializing instance: ${instanceIdRef.current}`)
 
     const unsubscribe = smsCostCacheService.subscribe((chatId: string, cost: number, loading: boolean) => {

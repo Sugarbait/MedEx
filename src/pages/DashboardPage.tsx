@@ -600,11 +600,11 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
         }
       })
 
-      // Use segments-based calculation as primary, fallback to individual costs if no segments
-      const finalTotalCost = calculatedTotalSegments > 0 ? totalCostFromSegments : totalCostFromFilteredChats
+      // Use combined costs from smsCostManager (includes Twilio SMS + Retell AI), fallback to segments if no costs loaded
+      const finalTotalCost = costsCalculated > 0 ? totalCostFromFilteredChats : totalCostFromSegments
       const avgCostPerChat = allFilteredChats.length > 0 ? finalTotalCost / allFilteredChats.length : 0
 
-      console.log(`💰 Dashboard Cost comparison - Segments: $${totalCostFromSegments.toFixed(4)} CAD, Individual: $${totalCostFromFilteredChats.toFixed(4)}, Using: $${finalTotalCost.toFixed(4)} CAD`)
+      console.log(`💰 Dashboard Cost comparison - Segments (Twilio only): $${totalCostFromSegments.toFixed(4)} CAD, Combined (Twilio+Retell): $${totalCostFromFilteredChats.toFixed(4)}, Using: $${finalTotalCost.toFixed(4)} CAD`)
 
       // Update metrics with calculated SMS segments (prioritizing accurate modal data)
       console.log(`💰 Dashboard Updating metrics with totalSegments: ${calculatedTotalSegments} (${chatsWithAccurateData}/${allFilteredChats.length} from accurate modal data)`)

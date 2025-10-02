@@ -494,30 +494,8 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
 
   // Component to handle async cost calculation and display
   const CostDisplay = memo(({ chat }: { chat: Chat }) => {
-    const [cost, setCost] = useState<number>(0)
-    const [loading, setLoading] = useState(true)
-
-    useEffect(() => {
-      let mounted = true
-      setLoading(true)
-
-      calculateChatSMSCost(chat).then(calculatedCost => {
-        if (mounted) {
-          setCost(calculatedCost)
-          setLoading(false)
-        }
-      }).catch(error => {
-        console.error('Error in CostDisplay:', error)
-        if (mounted) {
-          setCost(0)
-          setLoading(false)
-        }
-      })
-
-      return () => {
-        mounted = false
-      }
-    }, [chat.chat_id])
+    // Use combined cost from smsCostManager (Twilio SMS + Retell AI)
+    const { cost, loading } = smsCostManager.getChatCost(chat.chat_id)
 
     if (loading) {
       return <span className="text-gray-400">...</span>
@@ -699,12 +677,22 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   // Fetch when debounced filters change
   // Note: useEffect for search filter changes moved after debouncedFetchChats definition (around line 1175)
 
-  // Load SMS costs for visible chats
+  // Load SMS costs for visible chats - use ref to track loaded chats
+  const loadedChatsRef = useRef<string>('')
   useEffect(() => {
     if (chats.length > 0) {
-      smsCostManager.loadCostsForChats(chats)
+      const chatIds = chats.map(c => c.chat_id).sort().join(',')
+      if (loadedChatsRef.current !== chatIds) {
+        console.log(`[SMSPage] Triggering cost load for ${chats.length} chats`)
+        loadedChatsRef.current = chatIds
+        smsCostManager.loadCostsForChats(chats)
+      }
+    } else {
+      console.log('[SMSPage] No chats to load costs for')
+      loadedChatsRef.current = ''
     }
-  }, [chats, smsCostManager.loadCostsForChats])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [chats])
 
   // Initialize fuzzy search engine when chats are loaded
   useEffect(() => {
@@ -919,11 +907,11 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         }
       })
 
-      // Use segments-based calculation as primary, fallback to individual costs if no segments
-      const finalTotalCost = calculatedTotalSegments > 0 ? totalCostFromSegments : totalCostFromFilteredChats
+      // Use combined costs from smsCostManager (includes Twilio SMS + Retell AI), fallback to segments if no costs loaded
+      const finalTotalCost = costsCalculated > 0 ? totalCostFromFilteredChats : totalCostFromSegments
       const avgCostPerChat = allFilteredChats.length > 0 ? finalTotalCost / allFilteredChats.length : 0
 
-      safeLog(`💰 Cost comparison - Segments: $${totalCostFromSegments.toFixed(4)} CAD, Individual: $${totalCostFromFilteredChats.toFixed(4)}, Using: $${finalTotalCost.toFixed(4)} CAD`)
+      safeLog(`💰 Cost comparison - Segments (Twilio only): $${totalCostFromSegments.toFixed(4)} CAD, Combined (Twilio+Retell): $${totalCostFromFilteredChats.toFixed(4)}, Using: $${finalTotalCost.toFixed(4)} CAD`)
 
       // Calculate positive sentiment count from filtered chats
       const positiveSentimentCount = allFilteredChats.filter(chat =>
