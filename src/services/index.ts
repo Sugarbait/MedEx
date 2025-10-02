@@ -8,6 +8,8 @@ import { chatService } from './chatService'
 import { avatarStorageService } from './avatarStorageService'
 import { currencyService } from './currencyService'
 import { twilioCostService } from './twilioCostService'
+import { twilioApiService } from './twilioApiService'
+import { enhancedCostService } from './enhancedCostService'
 import { pdfExportService } from './pdfExportService'
 import { patientIdService } from './patientIdService'
 import { fuzzySearchService } from './fuzzySearchService'
@@ -27,6 +29,8 @@ export {
   avatarStorageService,
   currencyService,
   twilioCostService,
+  twilioApiService,
+  enhancedCostService,
   pdfExportService,
   patientIdService,
   fuzzySearchService
