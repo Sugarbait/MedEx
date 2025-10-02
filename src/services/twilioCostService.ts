@@ -29,6 +29,15 @@ interface TwilioSMSCostBreakdown {
   ratePerSegmentCAD: number
 }
 
+interface CombinedSMSCostBreakdown extends TwilioSMSCostBreakdown {
+  retellChatCostUSD: number
+  retellChatCostCAD: number
+  twilioSMSCostUSD: number
+  twilioSMSCostCAD: number
+  totalCombinedCostUSD: number
+  totalCombinedCostCAD: number
+}
+
 class TwilioCostService {
   private currencyServiceErrors: number = 0
   private lastCurrencyErrorTime: Date | null = null
@@ -96,7 +105,7 @@ class TwilioCostService {
       // Return fallback cost calculation (USD amount * fallback rate)
       const billedMinutes = Math.ceil(callLengthSeconds / 60)
       const costUSD = billedMinutes * this.INBOUND_RATE_USD_PER_MINUTE
-      return costUSD * 1.35 // Fallback rate
+      return costUSD * 1.45 // Fallback rate
     }
   }
 
@@ -328,7 +337,7 @@ class TwilioCostService {
       // Add initial prompt segments
       totalSegments += 4
       const costUSD = totalSegments * this.SMS_RATE_USD_PER_SEGMENT
-      return costUSD * 1.35 // Fallback rate
+      return costUSD * 1.45 // Fallback rate
     }
   }
 
@@ -358,6 +367,89 @@ class TwilioCostService {
    */
   public getDetailedSMSBreakdown(messages: any[]): TwilioSMSCostBreakdown {
     return this.calculateSMSCost(messages)
+  }
+
+  /**
+   * Calculate combined cost: Twilio SMS + Retell AI Chat
+   * @param messages Array of chat messages
+   * @param retellChatCostCents Retell AI chat cost in cents (from chat_cost.combined_cost)
+   * @returns Combined cost breakdown
+   */
+  public calculateCombinedSMSCost(messages: any[], retellChatCostCents: number = 0): CombinedSMSCostBreakdown {
+    // Get Twilio SMS cost breakdown
+    const twilioBreakdown = this.calculateSMSCost(messages)
+
+    // Convert Retell AI chat cost from cents to USD
+    const retellChatCostUSD = retellChatCostCents / 100
+
+    // Convert Retell AI cost to CAD
+    const retellChatCostCAD = currencyService.convertUSDToCAD(retellChatCostUSD)
+
+    // Calculate total combined cost
+    const totalCombinedCostUSD = twilioBreakdown.costUSD + retellChatCostUSD
+    const totalCombinedCostCAD = twilioBreakdown.costCAD + retellChatCostCAD
+
+    return {
+      // Twilio breakdown
+      messageCount: twilioBreakdown.messageCount,
+      segmentCount: twilioBreakdown.segmentCount,
+      costUSD: twilioBreakdown.costUSD,
+      costCAD: twilioBreakdown.costCAD,
+      ratePerSegmentUSD: twilioBreakdown.ratePerSegmentUSD,
+      ratePerSegmentCAD: twilioBreakdown.ratePerSegmentCAD,
+
+      // Retell AI breakdown
+      retellChatCostUSD: parseFloat(retellChatCostUSD.toFixed(6)),
+      retellChatCostCAD: parseFloat(retellChatCostCAD.toFixed(6)),
+
+      // Twilio costs (for clarity)
+      twilioSMSCostUSD: twilioBreakdown.costUSD,
+      twilioSMSCostCAD: twilioBreakdown.costCAD,
+
+      // Combined total
+      totalCombinedCostUSD: parseFloat(totalCombinedCostUSD.toFixed(6)),
+      totalCombinedCostCAD: parseFloat(totalCombinedCostCAD.toFixed(6))
+    }
+  }
+
+  /**
+   * Get combined SMS + Retell AI cost (CAD amount only)
+   * @param messages Array of chat messages
+   * @param retellChatCostCents Retell AI chat cost in cents
+   * @returns Total combined cost in CAD
+   */
+  public getCombinedSMSCostCAD(messages: any[], retellChatCostCents: number = 0): number {
+    try {
+      const result = this.calculateCombinedSMSCost(messages, retellChatCostCents)
+      return result.totalCombinedCostCAD
+    } catch (error) {
+      this.handleCurrencyServiceError(error, 'getCombinedSMSCostCAD')
+      // Fallback calculation
+      const twilioSMS = this.getSMSCostCAD(messages)
+      const retellCAD = (retellChatCostCents / 100) * 1.45 // Fallback rate
+      return twilioSMS + retellCAD
+    }
+  }
+
+  /**
+   * Format combined SMS + Retell AI cost for display
+   * @param messages Array of chat messages
+   * @param retellChatCostCents Retell AI chat cost in cents
+   * @returns Formatted cost string
+   */
+  public formatCombinedSMSCost(messages: any[], retellChatCostCents: number = 0): string {
+    const cost = this.getCombinedSMSCostCAD(messages, retellChatCostCents)
+    return `CAD ${cost.toFixed(4)}`
+  }
+
+  /**
+   * Get detailed combined cost breakdown for debugging/admin use
+   * @param messages Array of chat messages
+   * @param retellChatCostCents Retell AI chat cost in cents
+   * @returns Detailed combined breakdown object
+   */
+  public getDetailedCombinedBreakdown(messages: any[], retellChatCostCents: number = 0): CombinedSMSCostBreakdown {
+    return this.calculateCombinedSMSCost(messages, retellChatCostCents)
   }
 
   /**
@@ -441,7 +533,7 @@ class TwilioCostService {
           context,
           error: error.message || 'Unknown currency service error',
           errorCount: this.currencyServiceErrors,
-          fallbackRateUsed: 1.35,
+          fallbackRateUsed: 1.45,
           timestamp: now.toISOString()
         },
         severity: this.shouldTriggerNotification() ? 'high' : 'medium'
@@ -484,9 +576,9 @@ class TwilioCostService {
         details: {
           errorCount: this.currencyServiceErrors,
           timeWindow: `${this.CURRENCY_ERROR_NOTIFICATION_THRESHOLD_HOURS} hours`,
-          impact: 'SMS costs are being calculated using fallback exchange rate (1.35 CAD/USD)',
+          impact: 'SMS costs are being calculated using fallback exchange rate (1.45 CAD/USD)',
           actionRequired: 'Check currency service API connectivity and exchange rate updates',
-          fallbackRateUsed: 1.35,
+          fallbackRateUsed: 1.45,
           lastErrorTime: this.lastCurrencyErrorTime?.toISOString()
         },
         severity: 'critical'
@@ -521,7 +613,7 @@ class TwilioCostService {
       errorCount: this.currencyServiceErrors,
       lastErrorTime: this.lastCurrencyErrorTime,
       usingFallbackRate: !isHealthy,
-      fallbackRate: 1.35
+      fallbackRate: 1.45
     }
   }
 }
@@ -531,4 +623,4 @@ export const twilioCostService = new TwilioCostService()
 export default twilioCostService
 
 // Export types
-export type { TwilioCostBreakdown, TwilioSMSCostBreakdown }
+export type { TwilioCostBreakdown, TwilioSMSCostBreakdown, CombinedSMSCostBreakdown }
