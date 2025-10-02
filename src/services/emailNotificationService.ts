@@ -452,7 +452,7 @@ class EmailNotificationServiceClass {
             <div class="metadata">
                 <div class="metadata-item">
                     <span><strong>Time:</strong></span>
-                    <span>${data.timestamp.toLocaleString()}</span>
+                    <span>${data.timestamp.toLocaleString('en-US', { timeZone: 'America/New_York', dateStyle: 'medium', timeStyle: 'long' })}</span>
                 </div>
                 <div class="metadata-item">
                     <span><strong>Type:</strong></span>

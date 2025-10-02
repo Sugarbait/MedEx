@@ -38,6 +38,7 @@ import { useSessionTimeout } from './hooks/useSessionTimeout'
 import { SessionTimeoutWarning } from './components/common/SessionTimeoutWarning'
 import { ToastManager } from './components/common/ToastManager'
 import { SecurityAlerts } from './components/security/SecurityAlerts'
+import { retellMonitoringService } from './services/retellMonitoringService'
 
 // Pages
 import { DashboardPage } from './pages/DashboardPage'
@@ -418,6 +419,11 @@ const App: React.FC = () => {
         console.log('🔧 App - Initializing bulletproof API system...')
         await retellService.ensureCredentialsLoaded()
         console.log('✅ App - Bulletproof API system initialized')
+
+        // Start Retell AI monitoring for email notifications
+        console.log('🔧 App - Starting Retell AI monitoring service...')
+        retellMonitoringService.start()
+        console.log('✅ App - Retell AI monitoring service started')
       } catch (error) {
         console.error('❌ App - Error initializing bulletproof API system:', error)
       }
@@ -429,6 +435,7 @@ const App: React.FC = () => {
     return () => {
       try {
         retellService.destroy()
+        retellMonitoringService.stop()
       } catch (error) {
         console.warn('Error cleaning up retell service:', error)
       }

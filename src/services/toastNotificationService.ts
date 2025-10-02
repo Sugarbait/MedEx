@@ -207,6 +207,82 @@ class ToastNotificationService {
   }
 
   /**
+   * Check for recent records on initialization
+   * This shows notifications for records created while user was away
+   */
+  private async checkForRecentRecords(): Promise<void> {
+    try {
+      console.log('🔔 Checking for recent records created in last 60 seconds...')
+
+      const cutoffTime = new Date(Date.now() - this.NEW_RECORD_WINDOW).toISOString()
+
+      // Check for recent calls
+      const { data: recentCalls, error: callsError } = await supabase
+        .from('calls')
+        .select('id, start_time, retell_ai_call_id')
+        .gte('start_time', cutoffTime)
+        .order('start_time', { ascending: false })
+        .limit(5)
+
+      if (callsError) {
+        console.log('🔔 Toast service: No calls table or error querying calls:', callsError.message)
+      }
+
+      if (!callsError && recentCalls && recentCalls.length > 0) {
+        console.log(`🔔 Found ${recentCalls.length} recent calls`)
+        // Show notifications for recent calls (newest first)
+        for (const call of recentCalls) {
+          const recordTime = new Date(call.start_time).getTime()
+          const age = Math.round((Date.now() - recordTime) / 1000)
+
+          if (age <= 60) { // Only show if within last 60 seconds
+            console.log(`🔔 Showing notification for recent call (${age}s ago)`)
+            // Map database fields to expected format
+            this.handleNewCall({
+              call_id: call.retell_ai_call_id || call.id,
+              start_timestamp: call.start_time,
+              created_at: call.start_time
+            }, true) // skipTimingChecks = true
+            // Small delay between notifications to avoid overwhelming
+            await new Promise(resolve => setTimeout(resolve, 300))
+          }
+        }
+      }
+
+      // Check for recent SMS
+      const { data: recentSMS, error: smsError } = await supabase
+        .from('sms_messages')
+        .select('id, created_at, content')
+        .gte('created_at', cutoffTime)
+        .order('created_at', { ascending: false })
+        .limit(5)
+
+      if (smsError) {
+        console.log('🔔 Toast service: No sms_messages table or error querying SMS:', smsError.message)
+      }
+
+      if (!smsError && recentSMS && recentSMS.length > 0) {
+        console.log(`🔔 Found ${recentSMS.length} recent SMS messages`)
+        // Show notifications for recent SMS (newest first)
+        for (const sms of recentSMS) {
+          const recordTime = new Date(sms.created_at).getTime()
+          const age = Math.round((Date.now() - recordTime) / 1000)
+
+          if (age <= 60) { // Only show if within last 60 seconds
+            console.log(`🔔 Showing notification for recent SMS (${age}s ago)`)
+            this.handleNewSMS(sms, true) // skipTimingChecks = true
+            // Small delay between notifications to avoid overwhelming
+            await new Promise(resolve => setTimeout(resolve, 300))
+          }
+        }
+      }
+
+    } catch (error) {
+      console.error('Failed to check for recent records:', error)
+    }
+  }
+
+  /**
    * Set up real-time monitoring for new records
    */
   private async setupRealtimeMonitoring(): Promise<void> {
@@ -217,6 +293,9 @@ class ToastNotificationService {
       console.log('🔔 Setting up real-time monitoring for new records...', {
         monitoringStartTime: new Date(this.monitoringStartTime).toISOString()
       })
+
+      // Check for recent records created before monitoring started
+      await this.checkForRecentRecords()
 
       // Monitor calls table for new records
       this.callsChannel = supabase
@@ -283,10 +362,32 @@ class ToastNotificationService {
   /**
    * Validate if a record is truly new and should trigger a notification
    */
-  private isRecordTrulyNew(recordTimestamp: string | Date, recordId: string): boolean {
+  private isRecordTrulyNew(recordTimestamp: string | Date, recordId: string, skipTimingChecks = false): boolean {
     const recordTime = new Date(recordTimestamp).getTime()
     const now = Date.now()
 
+    // If this is from the initial scan, skip timing checks but still validate age
+    if (skipTimingChecks) {
+      const age = now - recordTime
+
+      // Must still be within NEW_RECORD_WINDOW (60 seconds)
+      if (age > this.NEW_RECORD_WINDOW) {
+        console.log(`🔔 Rejecting initial scan notification: Record ${recordId} too old (age: ${Math.round(age/1000)}s)`)
+        return false
+      }
+
+      // Must not be from the future
+      const maxFutureSkew = 10000 // 10 seconds
+      if (recordTime > now + maxFutureSkew) {
+        console.log(`🔔 Rejecting initial scan notification: Record ${recordId} from future`)
+        return false
+      }
+
+      console.log(`✅ Accepting initial scan notification: Record ${recordId} (age: ${Math.round(age/1000)}s)`)
+      return true
+    }
+
+    // For realtime events, use strict validation
     // Check 1: Record must be created after service started monitoring (primary check)
     if (recordTime < this.monitoringStartTime) {
       console.log(`🔔 Rejecting notification: Record ${recordId} created before monitoring started (${new Date(recordTime).toISOString()} < ${new Date(this.monitoringStartTime).toISOString()})`)
@@ -326,49 +427,53 @@ class ToastNotificationService {
   /**
    * Handle new call record
    */
-  private handleNewCall(callRecord: any): void {
+  private handleNewCall(callRecord: any, skipTimingChecks = false): void {
     if (!this.shouldShowNotification()) return
 
-    // Use strict validation to ensure record is truly new
-    const recordTimestamp = callRecord.start_timestamp || callRecord.created_at
-    if (!recordTimestamp || !this.isRecordTrulyNew(recordTimestamp, callRecord.call_id)) {
+    // Support both database fields (start_time) and Retell API fields (start_timestamp)
+    const recordTimestamp = callRecord.start_time || callRecord.start_timestamp || callRecord.created_at
+    const recordId = callRecord.id || callRecord.call_id || callRecord.retell_ai_call_id
+
+    if (!recordTimestamp || !this.isRecordTrulyNew(recordTimestamp, recordId, skipTimingChecks)) {
       return
     }
 
     const recordTime = new Date(recordTimestamp)
 
-    const notificationId = `call_${callRecord.call_id}_${Date.now()}`
+    const notificationId = `call_${recordId}_${Date.now()}`
 
     // Check for recent duplicates
-    if (this.isDuplicate(notificationId, callRecord.call_id)) return
+    if (this.isDuplicate(notificationId, recordId)) return
 
     const notification: ToastNotificationData = {
       id: notificationId,
       type: 'call',
       title: 'New Call Record Received',
       timestamp: recordTime,
-      recordId: callRecord.call_id
+      recordId: recordId
     }
 
     this.processNotification(notification)
 
-    // Send email notification
-    try {
-      sendNewCallNotification(1)
-    } catch (error) {
-      console.error('Failed to send call email notification:', error)
+    // Send email notification (only for realtime events, not initial scan)
+    if (!skipTimingChecks) {
+      try {
+        sendNewCallNotification(1)
+      } catch (error) {
+        console.error('Failed to send call email notification:', error)
+      }
     }
   }
 
   /**
    * Handle new SMS record
    */
-  private handleNewSMS(smsRecord: any): void {
+  private handleNewSMS(smsRecord: any, skipTimingChecks = false): void {
     if (!this.shouldShowNotification()) return
 
     // Use strict validation to ensure record is truly new
     const recordTimestamp = smsRecord.created_at
-    if (!recordTimestamp || !this.isRecordTrulyNew(recordTimestamp, smsRecord.id)) {
+    if (!recordTimestamp || !this.isRecordTrulyNew(recordTimestamp, smsRecord.id, skipTimingChecks)) {
       return
     }
 
@@ -389,11 +494,13 @@ class ToastNotificationService {
 
     this.processNotification(notification)
 
-    // Send email notification
-    try {
-      sendNewSMSNotification(1)
-    } catch (error) {
-      console.error('Failed to send SMS email notification:', error)
+    // Send email notification (only for realtime events, not initial scan)
+    if (!skipTimingChecks) {
+      try {
+        sendNewSMSNotification(1)
+      } catch (error) {
+        console.error('Failed to send SMS email notification:', error)
+      }
     }
   }
 
