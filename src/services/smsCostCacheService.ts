@@ -1,5 +1,5 @@
 import { chatService } from './chatService'
-import { twilioCostService } from './index'
+import { twilioCostService, twilioApiService, currencyService } from './index'
 import type { Chat } from './chatService'
 
 interface CostCacheEntry {
@@ -24,8 +24,8 @@ class SMSCostCacheService {
   private instanceId: string
   private subscribers = new Set<(chatId: string, cost: number, loading: boolean) => void>()
 
-  // Cache expiry time (5 minutes)
-  private readonly CACHE_EXPIRY_MS = 5 * 60 * 1000
+  // Cache expiry time (1 second to force recalculation with new $0.03 fee)
+  private readonly CACHE_EXPIRY_MS = 1 * 1000
 
   private constructor() {
     this.instanceId = `sms-cost-service-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
@@ -178,9 +178,78 @@ class SMSCostCacheService {
         throw new DOMException('Aborted', 'AbortError')
       }
 
-      // Calculate SMS cost using actual messages
-      const smsCost = twilioCostService.getSMSCostCAD(fullChat.message_with_tool_calls || [])
-      return smsCost
+      // Get Retell AI chat cost from API response (in cents)
+      const retellChatCostCents = fullChat.chat_cost?.combined_cost ?? fullChat.chat_cost?.total_cost ?? 0
+      const retellChatCostUSD = retellChatCostCents / 100
+
+      // If Retell AI cost is $0, add flat $0.03 USD fee for chat service
+      const retellChatCostWithFee = retellChatCostUSD > 0 ? retellChatCostUSD : 0.03
+      const retellChatCostCAD = currencyService.convertUSDToCAD(retellChatCostWithFee)
+
+      if (retellChatCostUSD === 0) {
+        console.log(`💵 [SMSCostCache] Added $0.03 USD Retell AI fee for chat ${chat.chat_id} → $${retellChatCostCAD.toFixed(4)} CAD`)
+      }
+
+      // Try to get real Twilio SMS costs from API if phone number available
+      let twilioSMSCostCAD = 0
+      let usedTwilioAPI = false
+
+      const phoneNumber = this.extractPhoneNumber(fullChat)
+
+      if (phoneNumber && twilioApiService.isConfigured()) {
+        try {
+          // Get date range for this chat
+          const startDate = new Date(fullChat.start_timestamp)
+          const endDate = fullChat.end_timestamp ? new Date(fullChat.end_timestamp) : new Date()
+
+          // Query Twilio API for actual SMS costs
+          const twilioData = await twilioApiService.getConversationCost({
+            phoneNumber,
+            startDate,
+            endDate
+          })
+
+          if (signal.aborted) {
+            throw new DOMException('Aborted', 'AbortError')
+          }
+
+          if (twilioData.totalMessages > 0) {
+            // Got real data from Twilio!
+            twilioSMSCostCAD = currencyService.convertUSDToCAD(twilioData.totalCostUSD)
+            usedTwilioAPI = true
+
+            console.log(`💰 [SMSCostCache] Using Twilio API data for chat ${chat.chat_id}:`, {
+              phoneNumber,
+              messages: twilioData.totalMessages,
+              segments: twilioData.totalSegments,
+              costUSD: twilioData.totalCostUSD.toFixed(6),
+              costCAD: twilioSMSCostCAD.toFixed(6)
+            })
+          }
+        } catch (error) {
+          console.warn(`[SMSCostCache] Twilio API failed for ${chat.chat_id}, falling back to calculation:`, error)
+        }
+      }
+
+      // Fallback: Use calculation if Twilio API not available or failed
+      if (!usedTwilioAPI) {
+        twilioSMSCostCAD = twilioCostService.getSMSCostCAD(fullChat.message_with_tool_calls || [])
+      }
+
+      // Combined cost: Twilio SMS + Retell AI Chat
+      const combinedCost = twilioSMSCostCAD + retellChatCostCAD
+
+      console.log(`[SMSCostCache] Combined cost breakdown for ${chat.chat_id}:`, {
+        source: usedTwilioAPI ? 'Twilio API' : 'Calculation',
+        twilioSMSCostCAD: twilioSMSCostCAD.toFixed(6),
+        retellChatCostCAD: retellChatCostCAD.toFixed(6),
+        retellChatCostUSD: retellChatCostUSD.toFixed(6),
+        retellChatCostWithFee: retellChatCostWithFee.toFixed(6),
+        feeAdded: retellChatCostUSD === 0 ? 'YES ($0.03)' : 'NO (API had cost)',
+        combinedTotalCAD: combinedCost.toFixed(6)
+      })
+
+      return combinedCost
     } catch (error) {
       if (signal.aborted) {
         throw new DOMException('Aborted', 'AbortError')
@@ -257,6 +326,41 @@ class SMSCostCacheService {
 
     console.log(`[SMSCostCache] Completed loading ${loadedCount} chat costs`)
     return results
+  }
+
+  /**
+   * Extract phone number from chat metadata
+   */
+  private extractPhoneNumber(chat: Chat): string | null {
+    // Try multiple possible phone number locations
+    const possibleNumbers = [
+      chat.metadata?.phone_number,
+      chat.metadata?.customer_phone_number,
+      chat.metadata?.from_phone_number,
+      chat.metadata?.to_phone_number,
+      chat.collected_dynamic_variables?.phone_number,
+      chat.collected_dynamic_variables?.customer_phone_number
+    ]
+
+    for (const number of possibleNumbers) {
+      if (number && typeof number === 'string' && number.length > 0) {
+        // Clean and format phone number
+        let cleaned = number.toString().replace(/[^\d+]/g, '')
+
+        // Ensure it starts with +
+        if (!cleaned.startsWith('+')) {
+          if (cleaned.startsWith('1')) {
+            cleaned = '+' + cleaned
+          } else {
+            cleaned = '+1' + cleaned
+          }
+        }
+
+        return cleaned
+      }
+    }
+
+    return null
   }
 
   /**
