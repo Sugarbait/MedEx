@@ -1278,7 +1278,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Call Costs</span>
               </div>
               <div className="text-2xl font-bold text-blue-600 dark:text-blue-400 numeric-data">
-                ${isLoading ? '...' : (metrics.totalCost || 0).toFixed(2)}
+                ${isLoading ? '...' : ((metrics.totalCost || 0) * 1.45).toFixed(2)}
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 <span className="numeric-data">{metrics.totalCalls}</span> calls
@@ -1306,7 +1306,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400">SMS Costs</span>
               </div>
               <div className="text-2xl font-bold text-purple-600 dark:text-purple-400 numeric-data">
-                ${isLoading ? '...' : (metrics.totalSMSCost || 0).toFixed(2)}
+                ${isLoading ? '...' : ((metrics.totalSMSCost || 0) * 1.45).toFixed(2)}
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 <span className="numeric-data">{metrics.totalMessages}</span> conversations
@@ -1357,10 +1357,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
             <DollarSignIcon className="w-4 h-4 text-gray-400" />
           </div>
           <div className="text-3xl font-black text-blue-600 mb-1 numeric-data">
-            ${isLoading ? '...' : (metrics.avgCostPerCall || 0).toFixed(3)}
+            ${isLoading ? '...' : ((metrics.avgCostPerCall || 0) * 1.45).toFixed(3)}
           </div>
           <div className="text-xs text-gray-500">
-            Total: $<span className="numeric-data">{(metrics.totalCost || 0).toFixed(2)}</span>
+            Total: $<span className="numeric-data">{((metrics.totalCost || 0) * 1.45).toFixed(2)}</span>
           </div>
         </div>
 
@@ -1371,10 +1371,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
             <TrendingUpIcon className="w-4 h-4 text-gray-400" />
           </div>
           <div className="text-3xl font-black text-blue-600 mb-1 numeric-data">
-            ${isLoading ? '...' : (metrics.highestCostCall || 0).toFixed(3)}
+            ${isLoading ? '...' : ((metrics.highestCostCall || 0) * 1.45).toFixed(3)}
           </div>
           <div className="text-xs text-gray-500">
-            Lowest: $<span className="numeric-data">{(metrics.lowestCostCall || 0).toFixed(3)}</span>
+            Lowest: $<span className="numeric-data">{((metrics.lowestCostCall || 0) * 1.45).toFixed(3)}</span>
           </div>
         </div>
 
@@ -1444,10 +1444,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
             <DollarSignIcon className="w-4 h-4 text-gray-400" />
           </div>
           <div className="text-3xl font-black text-blue-600 mb-1 numeric-data">
-            ${isLoading ? '...' : (metrics.avgCostPerMessage || 0).toFixed(3)}
+            ${isLoading ? '...' : ((metrics.avgCostPerMessage || 0) * 1.45).toFixed(3)}
           </div>
           <div className="text-xs text-gray-500">
-            Total cost: $<span className="numeric-data">{((metrics.avgCostPerMessage || 0) * metrics.totalMessages).toFixed(2)}</span>
+            Total cost: $<span className="numeric-data">{((metrics.avgCostPerMessage || 0) * metrics.totalMessages * 1.45).toFixed(2)}</span>
           </div>
         </div>
 

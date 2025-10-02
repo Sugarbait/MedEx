@@ -2198,7 +2198,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
             <p className="text-sm sm:text-base text-gray-500">Complete cost breakdown for selected date range</p>
           </div>
           <div className="text-left sm:text-right w-full sm:w-auto">
-            <div className="text-2xl sm:text-3xl font-black text-green-600 numeric-data">${metrics.totalCost.toFixed(2)}</div>
+            <div className="text-2xl sm:text-3xl font-black text-green-600 numeric-data">${(metrics.totalCost * 1.45).toFixed(2)}</div>
             <div className="text-sm sm:text-base text-gray-500">{metrics.totalChats} chats</div>
           </div>
         </div>

@@ -1008,10 +1008,10 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
             <DollarSignIcon className="w-4 h-4 text-gray-400" />
           </div>
           <div className="text-xl sm:text-2xl lg:text-3xl font-black text-blue-600 dark:text-blue-400 mb-1 numeric-data">
-            ${loading ? '...' : (metrics.avgCostPerCall || 0).toFixed(3)}
+            ${loading ? '...' : ((metrics.avgCostPerCall || 0) * 1.45).toFixed(3)}
           </div>
           <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
-            Total cost: $<span className="numeric-data">{(metrics.totalCost || 0).toFixed(2)}</span>
+            Total cost: $<span className="numeric-data">{((metrics.totalCost || 0) * 1.45).toFixed(2)}</span>
           </div>
         </div>
 
@@ -1066,7 +1066,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
             <TrendingUpIcon className="w-4 h-4 text-gray-400" />
           </div>
           <div className="text-xl sm:text-2xl lg:text-3xl font-black text-blue-600 dark:text-blue-400 mb-1 numeric-data">
-            ${loading ? '...' : (metrics.highestCostCall || 0).toFixed(3)}
+            ${loading ? '...' : ((metrics.highestCostCall || 0) * 1.45).toFixed(3)}
           </div>
           <div className="text-xs sm:text-sm text-gray-500 dark:text-gray-400">
             Per-call range with Retell + Twilio costs
@@ -1099,7 +1099,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
             <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400">Complete cost breakdown for selected date range</p>
           </div>
           <div className="text-left sm:text-right w-full sm:w-auto">
-            <div className="text-2xl sm:text-3xl font-black text-green-600 dark:text-green-400">${loading ? '...' : (metrics.totalCost || 0).toFixed(2)}</div>
+            <div className="text-2xl sm:text-3xl font-black text-green-600 dark:text-green-400">${loading ? '...' : ((metrics.totalCost || 0) * 1.45).toFixed(2)}</div>
             <div className="text-sm sm:text-base text-gray-500 dark:text-gray-400">{metrics.totalCalls} calls</div>
           </div>
         </div>
