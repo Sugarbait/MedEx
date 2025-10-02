@@ -65,6 +65,9 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
   const [error, setError] = useState('')
   const [isExporting, setIsExporting] = useState(false)
 
+  // Currency toggle state (USD/CAD) - defaults to CAD
+  const [showCAD, setShowCAD] = useState(true)
+
   // SMS Segment caching state (exact copy from SMS page)
   const [fullDataSegmentCache, setFullDataSegmentCache] = useState<Map<string, number>>(new Map())
   const [segmentCache, setSegmentCache] = useState<Map<string, number>>(new Map())
@@ -81,6 +84,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
 
   // Helper function to add Twilio costs to call metrics
   const addTwilioCostsToCallMetrics = (baseMetrics: any, calls: any[]) => {
+    // 🚨 AGGRESSIVE LOGGING - VERSION CHECK
+    console.log('🚨🚨🚨 DASHBOARD CODE VERSION 2.1 - FIX LOADED 🚨🚨🚨')
+    console.log('🔧 Currency conversion fix is active!')
+
     // Calculate total Twilio costs for all calls
     const totalTwilioCostCAD = calls.reduce((sum, call) => {
       return sum + twilioCostService.getTwilioCostCAD(call.call_length_seconds || 0)
@@ -91,6 +98,14 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
     const baseAvgCostCAD = currencyService.convertUSDToCAD(baseMetrics.avgCostPerCall)
     const baseHighestCostCAD = currencyService.convertUSDToCAD(baseMetrics.highestCostCall)
     const baseLowestCostCAD = currencyService.convertUSDToCAD(baseMetrics.lowestCostCall)
+
+    console.log('🚨 CRITICAL: CAD CONVERSION CHECK:', {
+      'INPUT (USD)': baseMetrics.totalCost,
+      'OUTPUT (CAD)': baseTotalCostCAD,
+      'CONVERSION RATE': 1.45,
+      'EXPECTED': baseMetrics.totalCost * 1.45,
+      'CORRECT?': Math.abs(baseTotalCostCAD - (baseMetrics.totalCost * 1.45)) < 0.01
+    })
 
     // Calculate new totals
     const newTotalCostCAD = baseTotalCostCAD + totalTwilioCostCAD
@@ -108,13 +123,33 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
     const newHighestCostCAD = callCostsWithTwilio.length > 0 ? Math.max(...callCostsWithTwilio) : 0
     const newLowestCostCAD = callCostsWithTwilio.length > 0 ? Math.min(...callCostsWithTwilio) : 0
 
-    return {
-      ...baseMetrics,
+    // BUGFIX: Explicitly construct return object instead of spreading
+    // to ensure CAD values are not accidentally overwritten by USD values
+    const result = {
+      totalCalls: baseMetrics.totalCalls,
+      avgDuration: baseMetrics.avgDuration,
+      successRate: baseMetrics.successRate,
+      totalDuration: baseMetrics.totalDuration,
+      positiveSentiment: baseMetrics.positiveSentiment,
+      failedCalls: baseMetrics.failedCalls,
+      totalMinutes: baseMetrics.totalMinutes,
+      // CAD-converted values
       totalCost: newTotalCostCAD,
       avgCostPerCall: newAvgCostCAD,
       highestCostCall: newHighestCostCAD,
       lowestCostCall: newLowestCostCAD
     }
+
+    console.log('📊 addTwilioCostsToCallMetrics RETURN VALUE:', {
+      'totalCost (should be CAD)': result.totalCost,
+      'avgCostPerCall (should be CAD)': result.avgCostPerCall,
+      'originalUSD': baseMetrics.totalCost,
+      'convertedCAD': baseTotalCostCAD,
+      'twilioCAD': totalTwilioCostCAD,
+      'finalCAD': newTotalCostCAD
+    })
+
+    return result
   }
 
   // SMS cost management using cache service (exact copy from SMS page)
@@ -733,6 +768,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
   // ==================================================================================
 
   const fetchDashboardData = async () => {
+    console.log('🚀 fetchDashboardData CALLED - Starting dashboard data fetch...')
     setIsLoading(true)
     setError('')
 
@@ -1013,7 +1049,20 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
       }
 
       const baseCallMetrics = retellService.calculateCallMetrics(callsResponse.calls)
+      console.log('🔍 DEBUG: baseCallMetrics (USD):', {
+        totalCost: baseCallMetrics.totalCost,
+        avgCostPerCall: baseCallMetrics.avgCostPerCall,
+        highestCostCall: baseCallMetrics.highestCostCall,
+        lowestCostCall: baseCallMetrics.lowestCostCall
+      })
+
       const enhancedCallMetrics = addTwilioCostsToCallMetrics(baseCallMetrics, callsResponse.calls)
+      console.log('🔍 DEBUG: enhancedCallMetrics (should be CAD):', {
+        totalCost: enhancedCallMetrics.totalCost,
+        avgCostPerCall: enhancedCallMetrics.avgCostPerCall,
+        highestCostCall: enhancedCallMetrics.highestCostCall,
+        lowestCostCall: enhancedCallMetrics.lowestCostCall
+      })
 
       // Calculate SMS costs using exact same logic as SMS page with caching
       const filteredChats = chatsResponse.chats
@@ -1052,20 +1101,34 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
       console.log('- Enhanced call metrics:', enhancedCallMetrics)
       console.log('- Basic chat metrics:', baseChatMetrics)
 
-      setMetrics(prevMetrics => ({
-        ...prevMetrics,
-        totalCalls: enhancedCallMetrics.totalCalls,
-        avgCallDuration: enhancedCallMetrics.avgDuration,
-        avgCostPerCall: enhancedCallMetrics.avgCostPerCall,
-        callSuccessRate: enhancedCallMetrics.successRate,
-        totalCost: enhancedCallMetrics.totalCost,
-        highestCostCall: enhancedCallMetrics.highestCostCall,
-        lowestCostCall: enhancedCallMetrics.lowestCostCall,
-        totalCallDuration: enhancedCallMetrics.totalDuration,
-        totalMessages: baseChatMetrics.totalChats,
-        avgMessagesPerChat: baseChatMetrics.avgMessagesPerChat > 0 ? baseChatMetrics.avgMessagesPerChat : estimatedMessagesPerChat,
-        messageDeliveryRate: baseChatMetrics.successRate
-      }))
+      console.log('🚨🚨🚨 ABOUT TO SET METRICS - FINAL VALUES 🚨🚨🚨')
+      console.log('totalCost (CAD):', enhancedCallMetrics.totalCost)
+      console.log('avgCostPerCall (CAD):', enhancedCallMetrics.avgCostPerCall)
+
+      setMetrics(prevMetrics => {
+        const newMetrics = {
+          ...prevMetrics,
+          totalCalls: enhancedCallMetrics.totalCalls,
+          avgCallDuration: enhancedCallMetrics.avgDuration,
+          avgCostPerCall: enhancedCallMetrics.avgCostPerCall,
+          callSuccessRate: enhancedCallMetrics.successRate,
+          totalCost: enhancedCallMetrics.totalCost,
+          highestCostCall: enhancedCallMetrics.highestCostCall,
+          lowestCostCall: enhancedCallMetrics.lowestCostCall,
+          totalCallDuration: enhancedCallMetrics.totalDuration,
+          totalMessages: baseChatMetrics.totalChats,
+          avgMessagesPerChat: baseChatMetrics.avgMessagesPerChat > 0 ? baseChatMetrics.avgMessagesPerChat : estimatedMessagesPerChat,
+          messageDeliveryRate: baseChatMetrics.successRate
+        }
+
+        console.log('🚨 NEW METRICS STATE:', {
+          'totalCost': newMetrics.totalCost,
+          'avgCostPerCall': newMetrics.avgCostPerCall,
+          'Should be CAD (1.45x USD)': true
+        })
+
+        return newMetrics
+      })
 
     } catch (error) {
       console.error('Failed to fetch dashboard data:', error)
@@ -1218,7 +1281,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400">Call Costs</span>
               </div>
               <div className="text-2xl font-bold text-blue-600 dark:text-blue-400 numeric-data">
-                CAD ${isLoading ? '...' : (metrics.totalCost || 0).toFixed(2)}
+                ${isLoading ? '...' : (metrics.totalCost || 0).toFixed(2)}
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 <span className="numeric-data">{metrics.totalCalls}</span> calls
@@ -1232,10 +1295,33 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
                 <span className="text-lg font-semibold text-gray-900 dark:text-gray-100">Combined Service Cost</span>
               </div>
               <div className="text-5xl font-black text-green-600 dark:text-green-400 mb-2 numeric-data">
-                CAD ${isLoading ? '...' : ((metrics.totalCost || 0) + (metrics.totalSMSCost || 0)).toFixed(2)}
+                {showCAD ? 'CAD' : 'USD'} ${isLoading ? '...' : (
+                  showCAD
+                    ? (((metrics.totalCost || 0) + (metrics.totalSMSCost || 0)) * 1.45).toFixed(2)
+                    : ((metrics.totalCost || 0) + (metrics.totalSMSCost || 0)).toFixed(2)
+                )}
               </div>
-              <div className="text-sm text-gray-500 dark:text-gray-400">
+              <div className="text-sm text-gray-500 dark:text-gray-400 mb-3">
                 Total for selected date range
+              </div>
+
+              {/* Currency Toggle */}
+              <div className="flex items-center justify-center gap-3">
+                <span className={`text-sm font-medium ${!showCAD ? 'text-green-600' : 'text-gray-400'}`}>USD</span>
+                <button
+                  onClick={() => setShowCAD(!showCAD)}
+                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${
+                    showCAD ? 'bg-green-600' : 'bg-gray-300'
+                  }`}
+                  aria-label="Toggle currency display"
+                >
+                  <span
+                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      showCAD ? 'translate-x-6' : 'translate-x-1'
+                    }`}
+                  />
+                </button>
+                <span className={`text-sm font-medium ${showCAD ? 'text-green-600' : 'text-gray-400'}`}>CAD</span>
               </div>
             </div>
 
@@ -1246,7 +1332,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
                 <span className="text-sm font-medium text-gray-600 dark:text-gray-400">SMS Costs</span>
               </div>
               <div className="text-2xl font-bold text-purple-600 dark:text-purple-400 numeric-data">
-                CAD ${isLoading ? '...' : (metrics.totalSMSCost || 0).toFixed(2)}
+                ${isLoading ? '...' : (metrics.totalSMSCost || 0).toFixed(2)}
               </div>
               <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 <span className="numeric-data">{metrics.totalMessages}</span> conversations
@@ -1297,10 +1383,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
             <DollarSignIcon className="w-4 h-4 text-gray-400" />
           </div>
           <div className="text-3xl font-black text-blue-600 mb-1 numeric-data">
-            CAD ${isLoading ? '...' : (metrics.avgCostPerCall || 0).toFixed(3)}
+            ${isLoading ? '...' : (metrics.avgCostPerCall || 0).toFixed(3)}
           </div>
           <div className="text-xs text-gray-500">
-            Total: CAD $<span className="numeric-data">{(metrics.totalCost || 0).toFixed(2)}</span>
+            Total: $<span className="numeric-data">{(metrics.totalCost || 0).toFixed(2)}</span>
           </div>
         </div>
 
@@ -1311,10 +1397,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
             <TrendingUpIcon className="w-4 h-4 text-gray-400" />
           </div>
           <div className="text-3xl font-black text-blue-600 mb-1 numeric-data">
-            CAD ${isLoading ? '...' : (metrics.highestCostCall || 0).toFixed(3)}
+            ${isLoading ? '...' : (metrics.highestCostCall || 0).toFixed(3)}
           </div>
           <div className="text-xs text-gray-500">
-            Lowest: CAD $<span className="numeric-data">{(metrics.lowestCostCall || 0).toFixed(3)}</span>
+            Lowest: $<span className="numeric-data">{(metrics.lowestCostCall || 0).toFixed(3)}</span>
           </div>
         </div>
 
@@ -1384,7 +1470,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
             <DollarSignIcon className="w-4 h-4 text-gray-400" />
           </div>
           <div className="text-3xl font-black text-blue-600 mb-1 numeric-data">
-            CAD ${isLoading ? '...' : (metrics.avgCostPerMessage || 0).toFixed(3)}
+            ${isLoading ? '...' : (metrics.avgCostPerMessage || 0).toFixed(3)}
           </div>
           <div className="text-xs text-gray-500">
             Total cost: $<span className="numeric-data">{((metrics.avgCostPerMessage || 0) * metrics.totalMessages).toFixed(2)}</span>
