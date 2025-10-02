@@ -65,9 +65,6 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
   const [error, setError] = useState('')
   const [isExporting, setIsExporting] = useState(false)
 
-  // Currency toggle state (USD/CAD) - defaults to CAD
-  const [showCAD, setShowCAD] = useState(true)
-
   // SMS Segment caching state (exact copy from SMS page)
   const [fullDataSegmentCache, setFullDataSegmentCache] = useState<Map<string, number>>(new Map())
   const [segmentCache, setSegmentCache] = useState<Map<string, number>>(new Map())
@@ -1295,33 +1292,10 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
                 <span className="text-lg font-semibold text-gray-900 dark:text-gray-100">Combined Service Cost</span>
               </div>
               <div className="text-5xl font-black text-green-600 dark:text-green-400 mb-2 numeric-data">
-                {showCAD ? 'CAD' : 'USD'} ${isLoading ? '...' : (
-                  showCAD
-                    ? (((metrics.totalCost || 0) + (metrics.totalSMSCost || 0)) * 1.45).toFixed(2)
-                    : ((metrics.totalCost || 0) + (metrics.totalSMSCost || 0)).toFixed(2)
-                )}
+                CAD ${isLoading ? '...' : (((metrics.totalCost || 0) + (metrics.totalSMSCost || 0)) * 1.45).toFixed(2)}
               </div>
-              <div className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+              <div className="text-sm text-gray-500 dark:text-gray-400">
                 Total for selected date range
-              </div>
-
-              {/* Currency Toggle */}
-              <div className="flex items-center justify-center gap-3">
-                <span className={`text-sm font-medium ${!showCAD ? 'text-green-600' : 'text-gray-400'}`}>USD</span>
-                <button
-                  onClick={() => setShowCAD(!showCAD)}
-                  className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 ${
-                    showCAD ? 'bg-green-600' : 'bg-gray-300'
-                  }`}
-                  aria-label="Toggle currency display"
-                >
-                  <span
-                    className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
-                      showCAD ? 'translate-x-6' : 'translate-x-1'
-                    }`}
-                  />
-                </button>
-                <span className={`text-sm font-medium ${showCAD ? 'text-green-600' : 'text-gray-400'}`}>CAD</span>
               </div>
             </div>
 
