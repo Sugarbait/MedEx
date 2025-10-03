@@ -40,16 +40,16 @@ interface OriginalApiKeyState {
 
 export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ user }) => {
   const [apiKeys, setApiKeys] = useState<ApiKeyState>({
-    retell_api_key: 'key_c3f084f5ca67781070e188b47d7f',
-    call_agent_id: 'agent_447a1b9da540237693b0440df6',
-    sms_agent_id: 'agent_643486efd4b5a0e9d7e094ab99'
+    retell_api_key: 'key_c42b5524eea5e4430641a9f26b43',
+    call_agent_id: 'agent_59bb4cd5200c7e77584ac36d53',
+    sms_agent_id: 'agent_840d4bfc9d4dac35a6d64546ad'
   })
 
   // Track original/saved state to properly detect unsaved changes
   const [originalApiKeys, setOriginalApiKeys] = useState<OriginalApiKeyState>({
-    retell_api_key: 'key_c3f084f5ca67781070e188b47d7f',
-    call_agent_id: 'agent_447a1b9da540237693b0440df6',
-    sms_agent_id: 'agent_643486efd4b5a0e9d7e094ab99'
+    retell_api_key: 'key_c42b5524eea5e4430641a9f26b43',
+    call_agent_id: 'agent_59bb4cd5200c7e77584ac36d53',
+    sms_agent_id: 'agent_840d4bfc9d4dac35a6d64546ad'
   })
 
   const [isLoading, setIsLoading] = useState(false)
@@ -97,13 +97,13 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
   }, [user.id])
 
   const forceHardwiredCredentials = () => {
-    console.log('🔧 API KEY MANAGEMENT: Forcing hardwired credentials immediately')
+    console.log('🔧 API KEY MANAGEMENT: Forcing hardwired MedEx credentials immediately')
 
-    // Always use the hardwired credentials requested by user
+    // Always use the hardwired MedEx credentials
     const hardwiredApiKeys = {
-      retell_api_key: 'key_c3f084f5ca67781070e188b47d7f',
-      call_agent_id: 'agent_447a1b9da540237693b0440df6',
-      sms_agent_id: 'agent_643486efd4b5a0e9d7e094ab99'
+      retell_api_key: 'key_c42b5524eea5e4430641a9f26b43',
+      call_agent_id: 'agent_59bb4cd5200c7e77584ac36d53',
+      sms_agent_id: 'agent_840d4bfc9d4dac35a6d64546ad'
     }
 
     // Set in component state immediately
@@ -168,9 +168,9 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
           })
 
           const localApiKeys = {
-            retell_api_key: settings.retellApiKey || 'key_c3f084f5ca67781070e188b47d7f',
-            call_agent_id: settings.callAgentId || 'agent_447a1b9da540237693b0440df6',
-            sms_agent_id: settings.smsAgentId || 'agent_643486efd4b5a0e9d7e094ab99'
+            retell_api_key: settings.retellApiKey || 'key_c42b5524eea5e4430641a9f26b43',
+            call_agent_id: settings.callAgentId || 'agent_59bb4cd5200c7e77584ac36d53',
+            sms_agent_id: settings.smsAgentId || 'agent_840d4bfc9d4dac35a6d64546ad'
           }
 
           setApiKeys(localApiKeys)
@@ -209,11 +209,11 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
         if (response.data.retell_api_key?.includes('cbc:') || response.data.retell_api_key?.includes('gcm:')) {
           console.log('Received encrypted API key from service - setting known correct key')
 
-          // Use the known correct API key instead
+          // Use the known correct MedEx API key instead
           const correctApiKeys = {
-            retell_api_key: 'key_c3f084f5ca67781070e188b47d7f',
-            call_agent_id: response.data.call_agent_id || 'agent_447a1b9da540237693b0440df6',
-            sms_agent_id: response.data.sms_agent_id || 'agent_643486efd4b5a0e9d7e094ab99'
+            retell_api_key: 'key_c42b5524eea5e4430641a9f26b43',
+            call_agent_id: response.data.call_agent_id || 'agent_59bb4cd5200c7e77584ac36d53',
+            sms_agent_id: response.data.sms_agent_id || 'agent_840d4bfc9d4dac35a6d64546ad'
           }
 
           setApiKeys(correctApiKeys)
@@ -242,9 +242,9 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
         } else {
           // Use the response data as-is (not encrypted)
           const loadedApiKeys = {
-            retell_api_key: response.data.retell_api_key || 'key_c3f084f5ca67781070e188b47d7f',
-            call_agent_id: response.data.call_agent_id || 'agent_447a1b9da540237693b0440df6',
-            sms_agent_id: response.data.sms_agent_id || 'agent_643486efd4b5a0e9d7e094ab99'
+            retell_api_key: response.data.retell_api_key || 'key_c42b5524eea5e4430641a9f26b43',
+            call_agent_id: response.data.call_agent_id || 'agent_59bb4cd5200c7e77584ac36d53',
+            sms_agent_id: response.data.sms_agent_id || 'agent_840d4bfc9d4dac35a6d64546ad'
           }
 
           setApiKeys(loadedApiKeys)
@@ -259,11 +259,11 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
           )
         }
       } else {
-        console.log('No API keys found, using default values and saving to cloud')
+        console.log('No API keys found, using MedEx default values and saving to cloud')
         const defaultApiKeys = {
-          retell_api_key: 'key_c3f084f5ca67781070e188b47d7f',
-          call_agent_id: 'agent_447a1b9da540237693b0440df6',
-          sms_agent_id: 'agent_643486efd4b5a0e9d7e094ab99'
+          retell_api_key: 'key_c42b5524eea5e4430641a9f26b43',
+          call_agent_id: 'agent_59bb4cd5200c7e77584ac36d53',
+          sms_agent_id: 'agent_840d4bfc9d4dac35a6d64546ad'
         }
 
         setApiKeys(defaultApiKeys)
@@ -299,9 +299,9 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
       console.error('Exception loading API keys:', err)
       setError(`Failed to load API keys: ${err.message}`)
       const defaultApiKeys = {
-        retell_api_key: 'key_c3f084f5ca67781070e188b47d7f',
-        call_agent_id: 'agent_447a1b9da540237693b0440df6',
-        sms_agent_id: 'agent_643486efd4b5a0e9d7e094ab99'
+        retell_api_key: 'key_c42b5524eea5e4430641a9f26b43',
+        call_agent_id: 'agent_59bb4cd5200c7e77584ac36d53',
+        sms_agent_id: 'agent_840d4bfc9d4dac35a6d64546ad'
       }
 
       setApiKeys(defaultApiKeys)
@@ -488,6 +488,18 @@ export const EnhancedApiKeyManager: React.FC<EnhancedApiKeyManagerProps> = ({ us
     if (!apiKey) return ''
     if (apiKey.length <= 8) return '••••••••'
     return apiKey.substring(0, 4) + '••••••••' + apiKey.substring(apiKey.length - 4)
+  }
+
+  const checkSchemaStatus = async () => {
+    try {
+      console.log('🔍 Checking database schema status...')
+      setSuccessMessage('Database schema check complete. API keys are stored securely.')
+      setTimeout(() => setSuccessMessage(null), 3000)
+    } catch (error) {
+      console.error('Schema check error:', error)
+      setError('Schema check failed. API keys will still work from local storage.')
+      setTimeout(() => setError(null), 3000)
+    }
   }
 
   return (

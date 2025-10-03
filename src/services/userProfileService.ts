@@ -657,6 +657,7 @@ export class UserProfileService {
           .from('users')
           .select('*')
           .eq('is_active', true)
+          .eq('tenant_id', 'medex') // 🎯 Filter by MedEx tenant only
           .order('created_at', { ascending: false })
 
         if (!usersError && supabaseUsers && supabaseUsers.length > 0) {
@@ -843,17 +844,18 @@ export class UserProfileService {
             console.log('UserProfileService: Migrated users with updated date fields')
           }
           } catch (parseError) {
-            console.error('UserProfileService: Failed to parse stored users, using demo users:', parseError)
-            users = getDefaultDemoUsers()
+            console.error('UserProfileService: Failed to parse stored users - returning empty array for MedEx:', parseError)
+            users = []
           }
         } else {
-          console.log('UserProfileService: No stored users found, seeding with demo users')
-          users = getDefaultDemoUsers()
-          // Save demo users to localStorage
-          localStorage.setItem('systemUsers', JSON.stringify(getDefaultDemoUsers()))
+          console.log('UserProfileService: No stored users found - returning empty array for MedEx')
+          users = []
+          // Don't seed demo users for MedEx - keep it clean
         }
 
-        // Check which demo users have been explicitly deleted
+        // MedEx: Skip demo user restoration logic - keep user list clean
+        // (No demo user seeding for MedEx)
+        if (false) { // Disabled for MedEx
         const deletedUsers = localStorage.getItem('deletedUsers')
         let deletedUserIds = []
         if (deletedUsers) {
@@ -917,6 +919,7 @@ export class UserProfileService {
             console.log('Preserving existing demo user changes')
           }
         })
+        } // End of disabled demo user logic for MedEx
 
         allUsers = users
 

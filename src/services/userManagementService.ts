@@ -206,12 +206,36 @@ export class UserManagementService {
         console.log('UserManagementService: Demo user - lockout check bypassed and cleared')
       }
 
-      // Get and verify credentials
-      const credentials = await this.getUserCredentials(user.id)
-      if (!credentials || !await this.verifyPassword(password, credentials.password)) {
-        await this.recordFailedLogin(email, 'Invalid password')
-        await this.incrementLoginAttempts(user.id)
-        return { status: 'success', data: null }
+      // Try Supabase Auth first (for users created through Supabase Auth)
+      let authSuccess = false
+      let credentials: UserCredentials | null = null
+
+      try {
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+          email,
+          password
+        })
+
+        if (authData?.session && !authError) {
+          console.log('UserManagementService: Authenticated via Supabase Auth')
+          authSuccess = true
+          // Sign out immediately to avoid session conflicts
+          await supabase.auth.signOut()
+          // Create dummy credentials for compatibility
+          credentials = { email, password: '' }
+        }
+      } catch (authErr) {
+        console.log('UserManagementService: Supabase Auth not applicable, trying local credentials')
+      }
+
+      // If Supabase Auth failed, try local credentials
+      if (!authSuccess) {
+        credentials = await this.getUserCredentials(user.id)
+        if (!credentials || !await this.verifyPassword(password, credentials.password)) {
+          await this.recordFailedLogin(email, 'Invalid password')
+          await this.incrementLoginAttempts(user.id)
+          return { status: 'success', data: null }
+        }
       }
 
       // Reset login attempts on successful login

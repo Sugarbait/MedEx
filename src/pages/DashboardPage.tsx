@@ -765,58 +765,25 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
   // ==================================================================================
 
   const fetchDashboardData = async () => {
-    console.log('🚀 fetchDashboardData CALLED - Starting dashboard data fetch...')
+    console.log('🚀 📊 PRODUCTION MODE: fetchDashboardData CALLED - Fetching real data from Retell AI')
     setIsLoading(true)
     setError('')
 
     try {
-      // Reload credentials (localStorage + Supabase sync) with error handling
+      // CRITICAL: Clear all cached data to ensure fresh data from YOUR Retell AI account
+      console.log('🗑️ Dashboard: Clearing all service caches')
+      chatService.clearAllCache()
+
+      // CRITICAL: Clear SMS segment cache from localStorage
       try {
-        await retellService.loadCredentialsAsync()
-        console.log('Reloaded credentials with cross-device sync:', {
-          hasApiKey: !!retellService.isConfigured(),
-          configured: retellService.isConfigured()
-        })
-      } catch (error) {
-        console.log('Supabase credential sync failed, using localStorage fallback:', error)
-        // Continue with localStorage-only credentials
+        localStorage.removeItem('sms_segment_cache_v2')
+        console.log('🗑️ Dashboard: Cleared SMS segment cache from localStorage')
+      } catch (e) {
+        console.warn('Failed to clear SMS segment cache:', e)
       }
 
-      // Check if Retell API has at minimum an API key configured
-      // More flexible check - only require API key, agent IDs are optional
-      let apiKey = retellService.getApiKey()
-      let hasApiKey = !!apiKey
-
-      // CRITICAL FIX: If no API key found, force reload credentials to handle timing issues
-      if (!hasApiKey) {
-        console.log('🔄 Dashboard: No API key found on first check, forcing credential reload...')
-        retellService.loadCredentials() // Force synchronous reload
-        apiKey = retellService.getApiKey()
-        hasApiKey = !!apiKey
-        console.log('🔍 Dashboard: After forced reload:', {
-          apiKey: apiKey ? `${apiKey.substring(0, 8)}...` : 'null',
-          hasApiKey,
-          retellServiceConfigured: retellService.isConfigured()
-        })
-      }
-      console.log('🔍 Dashboard API Key Check:', {
-        apiKey: apiKey ? `${apiKey.substring(0, 8)}...` : 'null',
-        hasApiKey,
-        retellServiceConfigured: retellService.isConfigured()
-      })
-
-      if (!hasApiKey) {
-        console.log('❌ Dashboard: No API key found, showing not-configured warning')
-        setRetellStatus('not-configured')
-        setIsLoading(false)
-        return
-      } else {
-        console.log('✅ Dashboard: API key found, proceeding with data load')
-      }
-
-      // PERFORMANCE OPTIMIZATION: Skip connection test for faster loading
-      // Set status to connected since we already validated configuration
-      setRetellStatus('connected')
+      // PRODUCTION MODE: Load API credentials
+      console.log('📊 Production Mode - Loading API credentials')
 
       // Get date range
       const { start, end } = getDateRangeFromSelection(selectedDateRange, customStartDate, customEndDate)
@@ -831,218 +798,111 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
         dateRangeSpanDays: Math.ceil((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000))
       })
 
-      // PERFORMANCE OPTIMIZATION: Fetch call and chat data in parallel
+      // PRODUCTION MODE: Fetch real data from Retell AI API
       let callsResponse, chatsResponse
 
-      // Start both API calls in parallel for faster loading
-      const [callsResult, chatsResult] = await Promise.allSettled([
-        // Calls API Promise
-        (async () => {
-          try {
-            // First get ALL calls to understand the data
-            const allCalls = await retellService.getAllCalls()
-            console.log(`Total calls in system: ${allCalls.length}`)
+      console.log('🚀 Production Mode: Fetching real data from Retell AI API')
 
-            // Debug: Check timestamp format of first few calls
-            if (allCalls.length > 0) {
-              console.log('Sample call timestamps:', allCalls.slice(0, 3).map(call => ({
-                call_id: call.call_id,
-                start_timestamp: call.start_timestamp,
-                timestamp_length: call.start_timestamp.toString().length,
-                as_seconds: new Date(call.start_timestamp * 1000).toISOString(),
-                as_milliseconds: new Date(call.start_timestamp).toISOString()
-              })))
-            }
+      // Reload credentials to ensure we have the latest
+      try {
+        await retellService.loadCredentialsAsync()
+        console.log('✅ Credentials loaded successfully')
+      } catch (error) {
+        console.log('⚠️ Supabase credential sync failed, using localStorage fallback:', error)
+      }
 
-            // Now filter by the selected date range
-            const startMs = start.getTime()
-            const endMs = end.getTime()
+      // Check if API key is configured
+      let apiKey = retellService.getApiKey()
+      let hasApiKey = !!apiKey
 
-            const filteredCalls = allCalls.filter(call => {
-              // Check if timestamp is in seconds (10 digits) or milliseconds (13+ digits)
-              let callTimeMs: number
-              const timestampStr = call.start_timestamp.toString()
+      if (!hasApiKey) {
+        console.log('🔄 No API key found on first check, forcing credential reload...')
+        retellService.loadCredentials()
+        apiKey = retellService.getApiKey()
+        hasApiKey = !!apiKey
+      }
 
-              if (timestampStr.length <= 10) {
-                // Timestamp is in seconds, convert to milliseconds
-                callTimeMs = call.start_timestamp * 1000
-              } else {
-                // Timestamp is already in milliseconds
-                callTimeMs = call.start_timestamp
-              }
+      if (!hasApiKey) {
+        console.log('❌ No API key found, showing not-configured warning')
+        setRetellStatus('not-configured')
+        setIsLoading(false)
+        return
+      }
 
-              const isInRange = callTimeMs >= startMs && callTimeMs <= endMs
+      setRetellStatus('connected')
 
-              // Debug logging for high-cost calls that might be filtered out
-              const callCostCents = call.call_cost?.combined_cost || 0
-              const callCostDollars = callCostCents / 100
-              if (callCostCents >= 40) { // 40 cents or more
-                console.log(`High-cost call (${callCostCents} cents = $${callCostDollars.toFixed(4)}):`, {
-                  call_id: call.call_id,
-                  timestamp: call.start_timestamp,
-                  date: new Date(callTimeMs).toLocaleDateString(),
-                  time: new Date(callTimeMs).toLocaleTimeString(),
-                  isInRange,
-                  selectedRange: selectedDateRange
-                })
-              }
+      // Fetch real calls from Retell AI
+      console.log('📞 PRODUCTION MODE: Fetching calls from Retell AI...')
+      console.log('📞 Using API Key:', apiKey.substring(0, 15) + '...')
+      const allCalls = await retellService.getAllCalls()
+      console.log(`📞 PRODUCTION MODE: Total calls in system: ${allCalls.length}`)
+      console.log('📞 Sample call data:', allCalls.length > 0 ? allCalls[0] : 'No calls')
 
-              // Filter calls within the selected date range
-              return isInRange
-            })
-
-            console.log(`Filtered calls for ${selectedDateRange}:`, {
-              dateRange: `${start.toLocaleDateString()} to ${end.toLocaleDateString()}`,
-              startMs,
-              endMs,
-              totalCalls: allCalls.length,
-              filteredCalls: filteredCalls.length,
-              today: new Date().toLocaleDateString()
-            })
-
-            return {
-              calls: filteredCalls,
-              pagination_key: undefined,
-              has_more: false
-            }
-          } catch (error) {
-            console.error('Failed to fetch calls:', error)
-            return { calls: [], pagination_key: undefined, has_more: false }
-          }
-        })(),
-
-        // Chats API Promise
-        (async () => {
-          try {
-            // Synchronize credentials with retellService for chatService too
-            await chatService.syncWithRetellService()
-
-            const allChatsResponse = await chatService.getChatHistory({
-              limit: 500
-            })
-            console.log(`Total chats fetched: ${allChatsResponse.chats.length}`)
-            return allChatsResponse
-          } catch (error) {
-            console.error('Failed to fetch chats:', error)
-            return { chats: [] }
-          }
-        })()
-      ])
-
-      // Extract results from parallel execution
-      callsResponse = callsResult.status === 'fulfilled' ? callsResult.value : { calls: [], pagination_key: undefined, has_more: false }
-      const allChatsResponse = chatsResult.status === 'fulfilled' ? chatsResult.value : { chats: [] }
-
-      // Define date range variables in outer scope for debugging
+      // Filter calls by date range
       const startMs = start.getTime()
       const endMs = end.getTime()
 
-      try {
-        // Get SMS agent ID from settings
+      const filteredCalls = allCalls.filter(call => {
+        let callTimeMs: number
+        const timestampStr = call.start_timestamp.toString()
 
-        // Get SMS agent ID from settings with fallback handling
-        const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
-        let SMS_AGENT_ID = null
-
-        if (currentUser.id) {
-          try {
-            const settingsData = await userSettingsService.getUserSettings(currentUser.id)
-            if (settingsData?.retell_config) {
-              SMS_AGENT_ID = settingsData.retell_config.sms_agent_id || null
-            }
-          } catch (error) {
-            console.log('Supabase connection failed, falling back to localStorage settings')
-            // Fallback to localStorage settings when Supabase is not available
-            try {
-              const localSettings = JSON.parse(localStorage.getItem(`settings_${currentUser.id}`) || '{}')
-              SMS_AGENT_ID = localSettings.smsAgentId || null
-            } catch (localError) {
-              console.log('localStorage fallback also failed, continuing without SMS agent filter')
-              SMS_AGENT_ID = null
-            }
-          }
+        if (timestampStr.length <= 10) {
+          callTimeMs = call.start_timestamp * 1000
+        } else {
+          callTimeMs = call.start_timestamp
         }
 
-        // Filter chats by date range AND SMS agent like SMS page does
-        const filteredChats = allChatsResponse.chats.filter(chat => {
-          // If SMS_AGENT_ID is configured, filter by it; otherwise show all chats
-          if (SMS_AGENT_ID && chat.agent_id !== SMS_AGENT_ID) return false
+        return callTimeMs >= startMs && callTimeMs <= endMs
+      })
 
-          // Check if timestamp is in seconds (10 digits) or milliseconds (13+ digits)
-          let chatTimeMs: number
-          const timestampStr = chat.start_timestamp.toString()
+      console.log(`📞 Filtered calls for ${selectedDateRange}: ${filteredCalls.length} out of ${allCalls.length}`)
 
-          if (timestampStr.length <= 10) {
-            // Timestamp is in seconds, convert to milliseconds
-            chatTimeMs = chat.start_timestamp * 1000
-          } else {
-            // Timestamp is already in milliseconds
-            chatTimeMs = chat.start_timestamp
-          }
-
-          const isInRange = chatTimeMs >= startMs && chatTimeMs <= endMs
-
-          // Debug logging for chat filtering - show both included and excluded chats
-          console.log(`🔍 Chat ${chat.chat_id}: ${isInRange ? 'INCLUDED' : 'EXCLUDED'}`, {
-            date: new Date(chatTimeMs).toLocaleDateString(),
-            time: new Date(chatTimeMs).toLocaleTimeString(),
-            timestamp: chat.start_timestamp,
-            timestampMs: chatTimeMs,
-            agent: chat.agent_id,
-            isInRange,
-            rangeStart: new Date(startMs).toLocaleString(),
-            rangeEnd: new Date(endMs).toLocaleString()
-          })
-
-          return isInRange
-        })
-
-        console.log(`🔍 Dashboard Filtered SMS chats for ${selectedDateRange}: ${filteredChats.length} out of ${allChatsResponse.chats.length}`, {
-          dateRange: selectedDateRange,
-          startMs,
-          endMs,
-          customStartDate: customStartDate?.toISOString(),
-          customEndDate: customEndDate?.toISOString()
-        })
-
-        chatsResponse = {
-          chats: filteredChats,
-          pagination_key: undefined,
-          has_more: false
-        }
-      } catch (error) {
-        console.error('Failed to fetch chats (continuing without chat data):', error)
-        chatsResponse = { chats: [], pagination_key: undefined, has_more: false }
+      callsResponse = {
+        calls: filteredCalls,
+        pagination_key: undefined,
+        has_more: false
       }
 
-      // Calculate metrics
-      console.log('🔍 Dashboard calculating metrics:')
-      console.log('- Call data for metrics:', { count: callsResponse.calls.length })
-      console.log('- Chat data for metrics:', { count: chatsResponse.chats.length, sample: chatsResponse.chats.slice(0, 2) })
+      // Fetch real SMS chats from Retell AI
+      console.log('💬 PRODUCTION MODE: Fetching chats from Retell AI...')
+      await chatService.syncWithRetellService()
 
-      // Debug chat costs specifically for filtered chats
-      if (chatsResponse.chats.length > 0) {
-        console.log('🔍 Dashboard Chat cost analysis for filtered chats:')
-        chatsResponse.chats.slice(0, 5).forEach((chat, index) => {
-          // Use consistent timestamp handling
-          const timestampStr = chat.start_timestamp.toString()
-          const chatTimeMs = timestampStr.length <= 10 ? chat.start_timestamp * 1000 : chat.start_timestamp
+      const allChatsResponse = await chatService.getChatHistory({
+        limit: 500
+      })
+      console.log(`💬 PRODUCTION MODE: Total chats fetched: ${allChatsResponse.chats.length}`)
+      console.log('💬 Sample chat data:', allChatsResponse.chats.length > 0 ? allChatsResponse.chats[0] : 'No chats')
 
-          console.log(`💰 Chat ${index + 1}:`, {
-            chat_id: chat.chat_id,
-            chat_cost: chat.chat_cost,
-            combined_cost: chat.chat_cost?.combined_cost,
-            total_cost: chat.chat_cost?.total_cost,
-            start_timestamp: chat.start_timestamp,
-            date: new Date(chatTimeMs).toLocaleDateString(),
-            time: new Date(chatTimeMs).toLocaleTimeString()
-          })
-        })
-        if (chatsResponse.chats.length > 5) {
-          console.log(`💰 ... and ${chatsResponse.chats.length - 5} more chats`)
+      // Filter chats by date range
+      const filteredChats = allChatsResponse.chats.filter(chat => {
+        let chatTimeMs: number
+        const timestampStr = chat.start_timestamp.toString()
+
+        if (timestampStr.length <= 10) {
+          chatTimeMs = chat.start_timestamp * 1000
+        } else {
+          chatTimeMs = chat.start_timestamp
         }
-      } else {
-        console.log('⚠️ Dashboard: No chats found in filtered results - this will result in $0 SMS costs')
+
+        return chatTimeMs >= startMs && chatTimeMs <= endMs
+      })
+
+      console.log(`💬 Filtered chats for ${selectedDateRange}: ${filteredChats.length} out of ${allChatsResponse.chats.length}`)
+
+      chatsResponse = {
+        chats: filteredChats,
+        pagination_key: undefined,
+        has_more: false
+      }
+
+      console.log('✅ Production Mode: Data fetching complete (real API data)')
+      console.log('- Real calls loaded:', filteredCalls.length)
+      console.log('- Real chats loaded:', filteredChats.length)
+
+      // Show warning if no real data available
+      if (allCalls.length === 0 && allChatsResponse.chats.length === 0) {
+        console.warn('⚠️ No data available in your Retell AI account. Dashboard will show empty metrics.')
+        console.warn('⚠️ Make some test calls/SMS using your Retell AI agents to see real data.')
       }
 
       const baseCallMetrics = retellService.calculateCallMetrics(callsResponse.calls)
@@ -1062,7 +922,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
       })
 
       // Calculate SMS costs using exact same logic as SMS page with caching
-      const filteredChats = chatsResponse.chats
+      // Note: filteredChats is already declared above in the production mode API fetching section
 
       // Store filtered chats for cost recalculation and metrics
       setFilteredChatsForCosts(filteredChats)
@@ -1145,7 +1005,7 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
         dateRange: selectedDateRange,
         startDate: start,
         endDate: end,
-        companyName: 'CareXPS Healthcare CRM',
+        companyName: 'MedEx Healthcare CRM',
         reportTitle: 'Dashboard Analytics Report'
       })
     } catch (error) {

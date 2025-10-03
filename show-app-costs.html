@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>CareXPS - Service Costs Report</title>
+  <style>
+    body {
+      font-family: 'Courier New', monospace;
+      background: #1a1a1a;
+      color: #00ff00;
+      padding: 20px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    h1 { color: #00ff00; border-bottom: 2px solid #00ff00; padding-bottom: 10px; }
+    h2 { color: #00aaff; margin-top: 30px; }
+    .cost-box {
+      background: #2a2a2a;
+      border: 1px solid #444;
+      padding: 15px;
+      margin: 10px 0;
+      border-radius: 5px;
+    }
+    .cost-row { display: flex; justify-content: space-between; margin: 5px 0; }
+    .label { color: #888; }
+    .value { color: #00ff00; font-weight: bold; }
+    .total { font-size: 1.2em; color: #ffaa00; border-top: 1px solid #444; padding-top: 10px; margin-top: 10px; }
+    .note { color: #ff6600; font-style: italic; margin-top: 10px; }
+    button {
+      background: #00aa00;
+      color: white;
+      border: none;
+      padding: 10px 20px;
+      cursor: pointer;
+      border-radius: 5px;
+      margin: 10px 5px 10px 0;
+    }
+    button:hover { background: #00cc00; }
+  </style>
+</head>
+<body>
+  <h1>🔍 CareXPS Service Costs Report</h1>
+  <p>Exchange Rate: <span class="value">1 USD = 1.45 CAD (FIXED)</span></p>
+
+  <button onclick="loadCalls()">Load Recent Calls</button>
+  <button onclick="loadChats()">Load Recent Chats</button>
+  <button onclick="loadBoth()">Load Both</button>
+
+  <div id="output"></div>
+
+  <script>
+    const USD_TO_CAD = 1.45
+    const TWILIO_VOICE_RATE = 0.022
+    const TWILIO_SMS_RATE = 0.0083
+
+    async function loadCalls() {
+      const output = document.getElementById('output')
+      output.innerHTML = '<h2>📞 Loading Calls from localStorage...</h2>'
+
+      try {
+        // Check localStorage for calls
+        const keys = Object.keys(localStorage)
+        const callKeys = keys.filter(k => k.startsWith('call_') || k.includes('calls'))
+
+        output.innerHTML += `<p>Found ${callKeys.length} call-related keys in localStorage</p>`
+
+        if (callKeys.length > 0) {
+          callKeys.slice(0, 5).forEach(key => {
+            try {
+              const data = JSON.parse(localStorage.getItem(key))
+              if (data.call_id || data.calls) {
+                const calls = data.calls || [data]
+                calls.slice(0, 5).forEach(call => {
+                  const duration = call.duration_ms ? call.duration_ms / 1000 : 0
+                  const minutes = Math.ceil(duration / 60)
+                  const retellUSD = (call.call_cost?.combined_cost || 0) / 100
+                  const retellCAD = retellUSD * USD_TO_CAD
+                  const twilioUSD = minutes * TWILIO_VOICE_RATE
+                  const twilioCAD = twilioUSD * USD_TO_CAD
+                  const totalCAD = retellCAD + twilioCAD
+
+                  output.innerHTML += `
+                    <div class="cost-box">
+                      <div class="cost-row"><span class="label">Call ID:</span> <span>${call.call_id}</span></div>
+                      <div class="cost-row"><span class="label">Duration:</span> <span>${Math.floor(duration)}s (${minutes} min)</span></div>
+                      <div class="cost-row"><span class="label">Retell AI Voice:</span> <span class="value">$${retellCAD.toFixed(4)} CAD</span></div>
+                      <div class="cost-row"><span class="label">Twilio Voice:</span> <span class="value">$${twilioCAD.toFixed(4)} CAD</span></div>
+                      <div class="cost-row total"><span class="label">TOTAL:</span> <span class="value">$${totalCAD.toFixed(4)} CAD</span></div>
+                    </div>
+                  `
+                })
+              }
+            } catch (e) {
+              // Skip invalid JSON
+            }
+          })
+        } else {
+          output.innerHTML += '<p class="note">No calls found in localStorage. They may be in Supabase.</p>'
+        }
+      } catch (error) {
+        output.innerHTML += `<p class="note">Error: ${error.message}</p>`
+      }
+    }
+
+    async function loadChats() {
+      const output = document.getElementById('output')
+      output.innerHTML = '<h2>💬 Loading Chats from localStorage...</h2>'
+
+      try {
+        const keys = Object.keys(localStorage)
+        const chatKeys = keys.filter(k => k.startsWith('chat_') || k.includes('chats'))
+
+        output.innerHTML += `<p>Found ${chatKeys.length} chat-related keys in localStorage</p>`
+
+        if (chatKeys.length > 0) {
+          chatKeys.slice(0, 5).forEach(key => {
+            try {
+              const data = JSON.parse(localStorage.getItem(key))
+              if (data.chat_id || data.chats) {
+                const chats = data.chats || [data]
+                chats.slice(0, 5).forEach(chat => {
+                  const messageCount = chat.message_with_tool_calls?.length || 0
+                  const retellUSD = (chat.chat_cost?.combined_cost || 0) / 100
+                  const retellWithFee = retellUSD > 0 ? retellUSD : 0.03
+                  const retellCAD = retellWithFee * USD_TO_CAD
+
+                  let totalChars = 0
+                  if (chat.message_with_tool_calls) {
+                    chat.message_with_tool_calls.forEach(msg => {
+                      totalChars += (msg.content || '').length
+                    })
+                  }
+                  const segments = Math.ceil(totalChars / 160) + 4
+                  const twilioUSD = segments * TWILIO_SMS_RATE
+                  const twilioCAD = twilioUSD * USD_TO_CAD
+                  const totalCAD = retellCAD + twilioCAD
+
+                  output.innerHTML += `
+                    <div class="cost-box">
+                      <div class="cost-row"><span class="label">Chat ID:</span> <span>${chat.chat_id}</span></div>
+                      <div class="cost-row"><span class="label">Messages:</span> <span>${messageCount}</span></div>
+                      <div class="cost-row"><span class="label">SMS Segments:</span> <span>${segments}</span></div>
+                      <div class="cost-row"><span class="label">Retell AI Chat:</span> <span class="value">$${retellCAD.toFixed(4)} CAD</span></div>
+                      <div class="cost-row"><span class="label">Twilio SMS:</span> <span class="value">$${twilioCAD.toFixed(4)} CAD</span></div>
+                      <div class="cost-row total"><span class="label">TOTAL:</span> <span class="value">$${totalCAD.toFixed(4)} CAD</span></div>
+                      ${retellUSD === 0 ? '<div class="note">Added $0.03 Retell AI fee (API returned $0)</div>' : ''}
+                    </div>
+                  `
+                })
+              }
+            } catch (e) {
+              // Skip invalid JSON
+            }
+          })
+        } else {
+          output.innerHTML += '<p class="note">No chats found in localStorage. They may be in Supabase.</p>'
+        }
+      } catch (error) {
+        output.innerHTML += `<p class="note">Error: ${error.message}</p>`
+      }
+    }
+
+    function loadBoth() {
+      loadCalls()
+      setTimeout(() => {
+        const currentHTML = document.getElementById('output').innerHTML
+        document.getElementById('output').innerHTML = currentHTML + '<hr style="border-color: #444; margin: 30px 0;">'
+        loadChats()
+      }, 500)
+    }
+  </script>
+</body>
+</html>

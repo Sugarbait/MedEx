@@ -36,24 +36,7 @@ class AuthService {
           // Load all system users to find a match
           const usersResponse = await userProfileService.loadSystemUsers()
           if (usersResponse.status === 'success' && usersResponse.data) {
-            // Look for known users like pierre@phaetonai.com, elmfarrell@yahoo.com, etc.
-            const knownEmails = ['pierre@phaetonai.com', 'elmfarrell@yahoo.com', 'demo@carexps.com']
-
-            // Try to find a user that matches one of the known emails
-            for (const email of knownEmails) {
-              const emailLookup = await userProfileService.getUserByEmail(email)
-              if (emailLookup.status === 'success' && emailLookup.data) {
-                existingUser = emailLookup.data
-                logger.info('Found existing user by email lookup', accountId, undefined, {
-                  email: email,
-                  userId: existingUser.id,
-                  mappedFromAccountId: accountId
-                })
-                break
-              }
-            }
-
-            // If no match by known emails, try to find the first admin/super_user
+            // Try to find the first admin/super_user
             if (!existingUser) {
               const adminUser = usersResponse.data.find(user =>
                 user.role === 'admin' || user.role === 'super_user'

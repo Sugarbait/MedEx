@@ -273,33 +273,11 @@ export const UserManagementPage: React.FC<UserManagementPageProps> = ({ user }) 
         }
       }
 
-      // Fallback 3: Create minimal demo users as last resort
-      console.log('⚠️ All data sources failed, creating minimal demo users...')
-      const demoUsers = [
-        {
-          id: 'super-user-456',
-          email: 'elmfarrell@yahoo.com',
-          name: 'Dr. Farrell',
-          role: 'super_user',
-          created: new Date().toISOString(),
-          lastLogin: undefined,
-          isLocked: false
-        },
-        {
-          id: 'guest-user-456',
-          email: 'guest@email.com',
-          name: 'Guest User',
-          role: 'healthcare_provider',
-          created: new Date().toISOString(),
-          lastLogin: undefined,
-          isLocked: false
-        }
-      ]
-
-      setUsers(demoUsers)
-      // Cache the demo users for consistency
-      localStorage.setItem('systemUsers', JSON.stringify(demoUsers))
-      console.log('✅ Created and cached demo users as fallback')
+      // MedEx: No demo users - keep system clean
+      console.log('✅ MedEx: All data sources returned 0 users - this is correct for a clean system')
+      setUsers([])
+      // Clear any cached demo users
+      localStorage.removeItem('systemUsers')
 
     } catch (error) {
       console.error('❌ Critical error in loadUsers:', error)

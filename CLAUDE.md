@@ -2,11 +2,85 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-# **CareXPS Healthcare CRM - Claude Development Guide**
+# **MedEx Healthcare CRM - Claude Development Guide**
+
+## **🔴 CRITICAL: MedEx vs CareXPS - Separate Tenant Systems**
+
+**IMPORTANT:** This is **MedEx Healthcare CRM**, a separate tenant-isolated system that shares the same Supabase database with CareXPS but maintains complete data separation through `tenant_id` filtering.
+
+### **Tenant Isolation Architecture:**
+- **MedEx Tenant ID**: `'medex'` - All MedEx users have `tenant_id = 'medex'`
+- **CareXPS Tenant ID**: `'carexps'` - All CareXPS users have `tenant_id = 'carexps'`
+- **Database**: Shared Supabase PostgreSQL database (`cpkslvmydfdevdftieck`)
+- **RLS Policies**: Row Level Security ensures data isolation at database level
+- **Application Filtering**: All queries include `.eq('tenant_id', 'medex')` filter
+
+### **Authentication Differences:**
+- **MedEx**: Uses **Supabase Auth** with real authentication (email/password via Supabase Auth API)
+- **CareXPS**: Uses **demo users** with localStorage-based authentication
+- **Hybrid Support**: `userManagementService.authenticateUser()` (lines 209-239) tries Supabase Auth first, then falls back to local credentials
+
+### **Key Implementation - Dual Authentication:**
+```typescript
+// userManagementService.ts - Lines 209-239
+// Try Supabase Auth first (for MedEx users created through Supabase Auth)
+const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+  email,
+  password
+})
+
+if (authData?.session && !authError) {
+  console.log('UserManagementService: Authenticated via Supabase Auth')
+  authSuccess = true
+  await supabase.auth.signOut() // Sign out immediately to avoid session conflicts
+}
+
+// If Supabase Auth failed, try local credentials (for CareXPS demo users)
+if (!authSuccess) {
+  credentials = await this.getUserCredentials(user.id)
+  if (!credentials || !await this.verifyPassword(password, credentials.password)) {
+    return { status: 'success', data: null }
+  }
+}
+```
+
+### **Critical Tenant Filtering Pattern:**
+**ALL database queries MUST include tenant filter:**
+```typescript
+// ✅ CORRECT: Filter by tenant_id
+const { data: users } = await supabase
+  .from('users')
+  .select('*')
+  .eq('tenant_id', 'medex')  // CRITICAL: Ensures MedEx only sees MedEx users
+
+// ❌ INCORRECT: Missing tenant filter - will return ALL users from both systems
+const { data: users } = await supabase
+  .from('users')
+  .select('*')
+```
+
+### **Tenant Isolation Migration:**
+- **Migration File**: `supabase/migrations/20251003000005_tenant_isolation.sql`
+- **Changes**: Added `tenant_id` column to all tables
+- **Existing Data**: All pre-migration data marked as `tenant_id = 'carexps'`
+- **New Users**: MedEx users created with `tenant_id = 'medex'`
+
+### **User Roles:**
+- **Super User**: Full admin access, can manage all users and settings
+- **User**: Regular user with limited access
+- **No "admin" role**: Only `'super_user'` and `'user'` are valid roles
+
+### **VIOLATION PROTOCOL:**
+- Any database query without `tenant_id` filter must be **IMMEDIATELY FIXED**
+- Never modify authentication logic to remove Supabase Auth support
+- Always preserve tenant isolation in all data operations
+- When creating new users, ALWAYS set `tenant_id = 'medex'`
+
+---
 
 ## **Project Overview**
 
-CareXPS is a HIPAA-compliant healthcare CRM built with React/TypeScript and Vite. It integrates with Retell AI for voice calls, Supabase for data persistence, Azure AD for authentication, and includes comprehensive security features for healthcare compliance.
+MedEx is a HIPAA-compliant healthcare CRM built with React/TypeScript and Vite. It integrates with Retell AI for voice calls, Supabase for data persistence, Supabase Auth for authentication, and includes comprehensive security features for healthcare compliance.
 
 **Key Features:**
 - AI-powered voice calling via Retell AI
@@ -116,8 +190,10 @@ The codebase features an extensive service layer with 40+ specialized services o
 ### **Communication Services**
 - **chatService / optimizedChatService / simpleChatService**: Chat management variants
 - **retellSMSService**: SMS integration with Retell AI
+- **retellMonitoringService**: Polls Retell AI for new records and triggers email notifications
 - **notesService**: Cross-device synchronized notes
 - **toastNotificationService**: Real-time toast notifications for new records
+- **emailNotificationService**: HIPAA-compliant email notifications for calls and SMS
 
 ### **Cost & Analytics Services**
 - **twilioCostService**: SMS cost tracking and optimization
@@ -744,22 +820,27 @@ for (let i = 0; i < largeArray.length; i++) {
 ### **Email Notification System - COMPLETELY LOCKED DOWN (NEW):**
 - **ENTIRE FILE:** `src/services/emailNotificationService.ts` - **NO MODIFICATIONS ALLOWED**
 - **ENTIRE FILE:** `src/services/toastNotificationService.ts` - **NO MODIFICATIONS ALLOWED**
+- **ENTIRE FILE:** `src/services/retellMonitoringService.ts` - **NO MODIFICATIONS ALLOWED**
 - **ENTIRE FILE:** `src/components/settings/EmailNotificationSettings.tsx` - **NO MODIFICATIONS ALLOWED**
 - **ENTIRE FILE:** `src/api/emailServer.js` - **NO MODIFICATIONS ALLOWED**
 - **ENTIRE FILE:** `api/send-notification-email/index.js` - **NO MODIFICATIONS ALLOWED**
 - **ENTIRE FILE:** `supabase/functions/send-email-notification/index.ts` - **NO MODIFICATIONS ALLOWED**
 - **GitHub Workflow:** `.github/workflows/azure-static-web-apps-carexps.yml` line 43 (VITE_SUPABASE_ANON_KEY) - **NO MODIFICATIONS ALLOWED**
+- **`src/App.tsx`** - Lines 423-426, 438 (Retell monitoring service integration) - **NO MODIFICATIONS ALLOWED**
 - All email template generation and logo embedding (CID attachment)
 - All toast notification logic with 5-layer new-record validation
 - All real-time Supabase monitoring for calls and SMS tables
+- All Retell AI polling logic (2-minute intervals for new records)
 - All email sending via Resend API (aibot@phaetonai.com)
 - All notification filtering and deduplication logic
 - All Supabase anon key injection in build process
+- All schema compatibility layer between Supabase and Retell AI
+- All Eastern Time timezone formatting for email timestamps
 - **THIS SYSTEM IS WORKING IN PRODUCTION - DO NOT TOUCH**
 
 **Email Notification Features (WORKING PERFECTLY):**
-- ✅ Sends email for every new Call record
-- ✅ Sends email for every new SMS record
+- ✅ Sends email for every new Call record (via Retell AI polling)
+- ✅ Sends email for every new SMS record (via Retell AI polling)
 - ✅ Shows toast notification for new records only
 - ✅ 5-layer validation prevents old records from triggering notifications
 - ✅ Email sent via Supabase Edge Function with Resend API
@@ -769,6 +850,26 @@ for (let i = 0; i < largeArray.length; i++) {
 - ✅ HIPAA-compliant (no PHI in emails)
 - ✅ Environment variables properly injected during Azure build
 - ✅ Test email functionality with environment diagnostics
+- ✅ Retell AI Monitoring Service polls every 2 minutes for new records
+- ✅ Email timestamps display in Eastern Standard Time (America/New_York)
+- ✅ Schema compatibility supports both Supabase (id, start_time) and Retell AI (call_id, start_timestamp) fields
+- ✅ Duplicate prevention with ID tracking (last 500 calls/chats)
+- ✅ Automatic startup when app initializes
+- ✅ Memory-efficient with automatic ID cleanup
+
+**Retell AI Monitoring Architecture:**
+- **Polling Interval**: 2 minutes (configurable via POLL_INTERVAL constant)
+- **Maximum Email Delay**: 2-4 minutes from when record arrives at Retell AI
+- **ID Tracking**: Set-based deduplication for last 500 calls + 500 chats
+- **Auto-start**: Initializes in App.tsx useEffect on mount
+- **Cleanup**: Automatically stops when app unmounts
+
+**Why Polling is Necessary:**
+- Retell AI data stays in Retell AI cloud (NOT synced to Supabase)
+- Supabase realtime subscriptions only trigger on Supabase INSERT events
+- Real-world calls/SMS never hit Supabase tables automatically
+- Polling solution checks Retell AI API directly every 2 minutes
+- Sends email notifications when new record IDs are detected
 
 ### **Azure Function Email API - COMPLETELY LOCKED DOWN (NEW):**
 - **ENTIRE FILE:** `api/send-notification-email/index.js` - **NO MODIFICATIONS ALLOWED**
@@ -1252,11 +1353,59 @@ The application includes a comprehensive logout system that properly clears MSAL
    ✅ LOCKED: 2025-09-30 - Toast notifications with 5-layer new-record validation
    ✅ LOCKED: 2025-09-30 - Automatic emails for new Calls and SMS records only (no old records)
    ✅ LOCKED: 2025-09-30 - Azure Function ready with Hostinger SMTP integration
+   ✅ LOCKED: 2025-10-02 - Retell AI Monitoring Service polls every 2 minutes for real calls/SMS
+   ✅ LOCKED: 2025-10-02 - Email timestamps display in Eastern Standard Time (America/New_York)
+   ✅ LOCKED: 2025-10-02 - Schema compatibility layer supports both Supabase and Retell AI fields
 23. **⚠️ KNOWN ISSUE**: Super User role removal during avatar upload - DO NOT ATTEMPT TO FIX
 
 ---
 
-*Last Updated: Combined SMS Cost System (Twilio + Retell AI) Production Deployment - Generated by Claude Code (October 2, 2025)*
+## **🔴 CRITICAL: Retell AI API Filtering Pattern (2025-10-03)**
+
+### **Retell AI `/list-chat` Endpoint Limitation**
+
+**IMPORTANT:** The Retell AI `/list-chat` endpoint **DOES NOT support server-side agent_id filtering**. The API ignores `agent_id` query parameters and returns **ALL chats from the entire Retell AI account**.
+
+**Problem:**
+```typescript
+// ❌ THIS DOES NOT WORK - API ignores agent_id parameter
+const response = await fetch(`https://api.retellai.com/list-chat?agent_id=${smsAgentId}&limit=1000`)
+// Returns ALL chats from entire account, not just the specified agent
+```
+
+**Solution - Client-Side Filtering:**
+```typescript
+// ✅ CORRECT: Fetch all chats, then filter client-side
+const allChats = await fetch(`https://api.retellai.com/list-chat?limit=1000`)
+const filteredChats = allChats.filter(chat => chat.agent_id === this.smsAgentId)
+```
+
+**Implementation Location:**
+- File: `src/services/retellService.ts` - Lines 583-679
+- Function: `getChatHistory()`
+- Pattern: Fetch all → Filter by agent_id → Return filtered results
+
+**Key Features:**
+- ✅ Client-side filtering by agent_id ensures only relevant chats are returned
+- ✅ Comprehensive logging shows total vs filtered counts
+- ✅ Warning messages when no chats match configured agent
+- ✅ Backward compatible with all existing code
+- ✅ Works across multiple Retell AI accounts in same database
+
+**Console Output:**
+```
+Fresh RetellService - Total chats received from API: 281
+Fresh RetellService - Filtered chats for agent agent_840d4bfc9d4dac35a6d64546ad: 3 of 281 total
+⚠️ No chats match the configured SMS agent ID!
+Sample agent IDs in response: ['agent_643486efd4b5a0e9d7e094ab99', ...]
+Configured SMS agent ID: agent_840d4bfc9d4dac35a6d64546ad
+```
+
+**CRITICAL:** This filtering pattern is **LOCKED DOWN** and must not be modified. It ensures data isolation between different Retell AI agents in multi-tenant scenarios.
+
+---
+
+*Last Updated: Retell AI Client-Side Filtering Pattern - Generated by Claude Code (October 3, 2025)*
 
 ---
 

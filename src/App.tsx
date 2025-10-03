@@ -417,13 +417,10 @@ const App: React.FC = () => {
     const initializeBulletproofApi = async () => {
       try {
         console.log('🔧 App - Initializing bulletproof API system...')
+        // PRODUCTION MODE: Enable Retell AI monitoring
+        console.log('🚀 Production Mode - Initializing Retell AI services')
         await retellService.ensureCredentialsLoaded()
-        console.log('✅ App - Bulletproof API system initialized')
-
-        // Start Retell AI monitoring for email notifications
-        console.log('🔧 App - Starting Retell AI monitoring service...')
         retellMonitoringService.start()
-        console.log('✅ App - Retell AI monitoring service started')
       } catch (error) {
         console.error('❌ App - Error initializing bulletproof API system:', error)
       }

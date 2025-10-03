@@ -20,7 +20,7 @@ import {
 } from 'lucide-react'
 import { Chat, chatService } from '@/services/chatService'
 import { ChatNotes } from './ChatNotes'
-import { twilioCostService } from '@/services/twilioCostService'
+import { twilioCostService, twilioApiService, currencyService } from '@/services'
 import { patientIdService } from '@/services/patientIdService'
 import jsPDF from 'jspdf'
 
@@ -38,6 +38,7 @@ export const ChatDetailModal: React.FC<ChatDetailModalProps> = ({ chat, isOpen, 
   const [transcriptError, setTranscriptError] = useState<string | null>(null)
   const [generatedPatientId, setGeneratedPatientId] = useState<string>('')
   const [patientRecord, setPatientRecord] = useState<any>(null)
+
 
   // Load full chat details when modal opens
   useEffect(() => {
@@ -112,6 +113,7 @@ export const ChatDetailModal: React.FC<ChatDetailModalProps> = ({ chat, isOpen, 
         const accurateSegments = (window as any).updateSMSSegments(chat.chat_id, fullChatDetails)
         console.log(`✅ SMS segments synchronized: ${accurateSegments} segments for chat ${chat.chat_id}`)
       }
+
     } catch (error) {
       console.error('Failed to load full chat details:', error)
       setTranscriptError('Failed to load full transcript. Using available data.')
@@ -121,6 +123,7 @@ export const ChatDetailModal: React.FC<ChatDetailModalProps> = ({ chat, isOpen, 
       setLoadingFullTranscript(false)
     }
   }
+
 
   const exportToPDF = () => {
     const doc = new jsPDF()
@@ -706,10 +709,11 @@ export const ChatDetailModal: React.FC<ChatDetailModalProps> = ({ chat, isOpen, 
               </div>
             )}
 
-            {/* Message Thread */}
+            {/* Message Thread with Tabs */}
             {displayChat.message_with_tool_calls && displayChat.message_with_tool_calls.length > 0 && (
               <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Message Thread</h3>
+                <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3">Messages</h3>
+
                 <div className="bg-white dark:bg-gray-800 rounded border p-4 max-h-96 overflow-y-auto">
                   {(() => {
                     // Enhanced SMS message parsing for timestamped format

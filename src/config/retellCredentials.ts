@@ -16,22 +16,35 @@ export interface RetellCredentials {
 /**
  * Production Retell AI Credentials - HARDCODED FOR BULLETPROOF PERSISTENCE
  *
+ * MedEx Healthcare CRM - Replace these placeholder values with your actual Retell AI credentials
+ *
  * These values are permanently embedded and will ALWAYS be available regardless of:
  * - localStorage clearing
  * - User account changes
  * - Cross-device sync issues
  * - Cloud service outages
  * - Browser session resets
+ *
+ * TODO: Replace with actual MedEx Retell AI credentials:
+ * 1. API Key (format: key_xxxxxxxxxxxxxxxxxxxxx)
+ * 2. Call Agent ID (format: agent_xxxxxxxxxxxxxxxxxxxxx)
+ * 3. SMS Agent ID (format: agent_xxxxxxxxxxxxxxxxxxxxx)
+ */
+/**
+ * MedEx Healthcare CRM - Production Credentials
+ * Last Updated: 2025-10-03
+ *
+ * IMPORTANT: These are YOUR MedEx credentials that will be used across all devices
  */
 export const HARDCODED_RETELL_CREDENTIALS: RetellCredentials = {
-  // Retell AI API Key - Production Ready
-  apiKey: 'key_c3f084f5ca67781070e188b47d7f',
+  // Retell AI API Key - MedEx Healthcare CRM
+  apiKey: 'key_c42b5524eea5e4430641a9f26b43',
 
-  // Call Agent ID for voice interactions
-  callAgentId: 'agent_447a1b9da540237693b0440df6',
+  // Call Agent ID for voice interactions - MedEx Voice Agent
+  callAgentId: 'agent_59bb4cd5200c7e77584ac36d53',
 
-  // SMS/Chat Agent ID for text-based interactions
-  smsAgentId: 'agent_643486efd4b5a0e9d7e094ab99'
+  // SMS/Chat Agent ID for text-based interactions - MedEx Chat Agent
+  smsAgentId: 'agent_840d4bfc9d4dac35a6d64546ad'
 }
 
 /**

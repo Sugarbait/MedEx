@@ -98,6 +98,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
   const tabs = [
     { id: 'profile', name: 'Profile', icon: UserIcon },
     { id: 'security', name: 'Security', icon: ShieldIcon },
+    { id: 'api', name: 'API Configuration', icon: KeyIcon },
     { id: 'appearance', name: 'Appearance', icon: PaletteIcon },
     { id: 'notifications', name: 'Notifications', icon: BellIcon },
     { id: 'audit', name: 'Audit Logs', icon: FileTextIcon },
@@ -1024,6 +1025,13 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
           {/* Profile Settings */}
           {activeTab === 'profile' && (
             <EnhancedProfileSettings user={user} />
+          )}
+
+          {/* API Configuration */}
+          {activeTab === 'api' && (
+            <ApiKeyErrorBoundary>
+              <EnhancedApiKeyManager user={user} />
+            </ApiKeyErrorBoundary>
           )}
 
           {/* Security Settings */}

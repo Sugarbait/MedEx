@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Clear MedEx Cache</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 600px;
+      margin: 50px auto;
+      padding: 20px;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #2563eb;
+      margin-top: 0;
+    }
+    button {
+      background: #2563eb;
+      color: white;
+      padding: 12px 24px;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      cursor: pointer;
+      width: 100%;
+      margin-top: 20px;
+    }
+    button:hover {
+      background: #1d4ed8;
+    }
+    .status {
+      margin-top: 20px;
+      padding: 15px;
+      border-radius: 6px;
+      display: none;
+    }
+    .status.success {
+      background: #dcfce7;
+      color: #166534;
+      display: block;
+    }
+    .status.info {
+      background: #dbeafe;
+      color: #1e40af;
+      display: block;
+    }
+    ul {
+      margin: 10px 0;
+      padding-left: 20px;
+    }
+    li {
+      margin: 8px 0;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧹 Clear MedEx Cache</h1>
+    <p>This will clear all cached data and show you the clean MedEx system with 0 users.</p>
+
+    <div class="status info">
+      <strong>What will be cleared:</strong>
+      <ul>
+        <li>localStorage (all cached users and settings)</li>
+        <li>sessionStorage (temporary session data)</li>
+        <li>IndexedDB (offline data)</li>
+      </ul>
+      <strong>What will happen next:</strong>
+      <ul>
+        <li>MedEx will query Supabase with tenant_id = 'medex'</li>
+        <li>You'll see 0 users (clean slate)</li>
+        <li>CareXPS users are safe with tenant_id = 'carexps'</li>
+      </ul>
+    </div>
+
+    <button onclick="clearAll()">Clear Cache & Reload</button>
+
+    <div id="status" class="status"></div>
+  </div>
+
+  <script>
+    function clearAll() {
+      const statusDiv = document.getElementById('status');
+
+      try {
+        // Clear localStorage
+        localStorage.clear();
+        console.log('✅ Cleared localStorage');
+
+        // Clear sessionStorage
+        sessionStorage.clear();
+        console.log('✅ Cleared sessionStorage');
+
+        // Clear IndexedDB
+        if (window.indexedDB) {
+          indexedDB.databases().then(databases => {
+            databases.forEach(db => {
+              if (db.name) {
+                indexedDB.deleteDatabase(db.name);
+                console.log('✅ Cleared IndexedDB:', db.name);
+              }
+            });
+          });
+        }
+
+        // Show success message
+        statusDiv.className = 'status success';
+        statusDiv.innerHTML = `
+          <strong>✅ Cache cleared successfully!</strong>
+          <p>Reloading MedEx in 2 seconds...</p>
+        `;
+
+        // Reload after 2 seconds
+        setTimeout(() => {
+          window.location.href = 'http://localhost:3000';
+        }, 2000);
+
+      } catch (error) {
+        statusDiv.className = 'status error';
+        statusDiv.innerHTML = `
+          <strong>❌ Error:</strong> ${error.message}
+        `;
+      }
+    }
+  </script>
+</body>
+</html>

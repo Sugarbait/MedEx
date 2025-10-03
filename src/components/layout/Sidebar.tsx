@@ -166,11 +166,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, user }) => {
       >
         {/* Header */}
         <div className="flex items-center justify-between h-16 px-4 sm:px-6 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-3">
+          <div className="flex items-center justify-center gap-3 flex-1">
             <NavLink to="/dashboard" className="hover:opacity-80 transition-opacity">
               <img
                 src={logos.headerLogo || "https://nexasync.ca/images/Logo.png"}
-                alt="CareXPS Logo"
+                alt="MedEx Logo"
                 className="h-8 sm:h-10 w-auto object-contain cursor-pointer"
                 referrerPolicy="no-referrer"
               />

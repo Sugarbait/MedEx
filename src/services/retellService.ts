@@ -35,6 +35,9 @@ export interface RetellCall {
     }>
     combined_cost: number
   }
+  telephony_identifier?: {
+    twilio_call_sid?: string
+  }
   metadata?: any
   disconnection_reason?: string
   from_number?: string
@@ -145,43 +148,46 @@ class RetellService {
     try {
       console.log('🔄 RetellService - Loading credentials with bulletproof persistence...')
 
-      let credentials = this.loadFromCurrentUser()
+      // PRIORITY 1: ALWAYS use hardcoded credentials for MedEx
+      console.log('🔐 RetellService - Using hardcoded MedEx credentials (Priority 1)...')
+      let credentials = this.loadHardcodedCredentials()
 
+      // Only check other sources if hardcoded credentials are somehow invalid
       if (!credentials.apiKey) {
-        credentials = this.scanAllUserSettings()
-      }
+        console.warn('⚠️ Hardcoded credentials not available, checking fallbacks...')
 
-      if (!credentials.apiKey) {
-        credentials = this.loadFromSessionStorage()
-      }
+        credentials = this.loadFromCurrentUser()
 
-      if (!credentials.apiKey) {
-        credentials = this.loadFromMemoryBackup()
-      }
-
-      // CLOUD FALLBACK: Try cloud storage before hardcoded credentials
-      if (!credentials.apiKey) {
-        try {
-          const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
-          const cloudCreds = await cloudCredentialService.getCredentialsWithFallback(currentUser.id)
-          if (validateCredentials(cloudCreds)) {
-            console.log('☁️ RetellService - Found credentials in cloud storage')
-            credentials = {
-              apiKey: cloudCreds.apiKey,
-              callAgentId: cloudCreds.callAgentId,
-              smsAgentId: cloudCreds.smsAgentId
-            }
-            storeCredentialsEverywhere(cloudCreds)
-          }
-        } catch (cloudError) {
-          console.warn('⚠️ RetellService - Cloud credential loading failed:', cloudError)
+        if (!credentials.apiKey) {
+          credentials = this.scanAllUserSettings()
         }
-      }
 
-      // ULTIMATE FALLBACK: Use hardcoded credentials if nothing else worked
-      if (!credentials.apiKey) {
-        console.log('🔐 RetellService - All storage methods failed, using hardcoded credentials...')
-        credentials = this.loadHardcodedCredentials()
+        if (!credentials.apiKey) {
+          credentials = this.loadFromSessionStorage()
+        }
+
+        if (!credentials.apiKey) {
+          credentials = this.loadFromMemoryBackup()
+        }
+
+        // CLOUD FALLBACK: Try cloud storage as last resort
+        if (!credentials.apiKey) {
+          try {
+            const currentUser = JSON.parse(localStorage.getItem('currentUser') || '{}')
+            const cloudCreds = await cloudCredentialService.getCredentialsWithFallback(currentUser.id)
+            if (validateCredentials(cloudCreds)) {
+              console.log('☁️ RetellService - Found credentials in cloud storage')
+              credentials = {
+                apiKey: cloudCreds.apiKey,
+                callAgentId: cloudCreds.callAgentId,
+                smsAgentId: cloudCreds.smsAgentId
+              }
+              storeCredentialsEverywhere(cloudCreds)
+            }
+          } catch (cloudError) {
+            console.warn('⚠️ RetellService - Cloud credential loading failed:', cloudError)
+          }
+        }
       }
 
       // Apply loaded credentials
@@ -576,6 +582,10 @@ class RetellService {
 
   /**
    * Fetch chat history using correct GET endpoint
+   *
+   * IMPORTANT: The /list-chat endpoint does NOT support agent_id filtering via query parameters.
+   * The API ignores the agent_id parameter and returns ALL chats from the entire account.
+   * We must filter client-side after receiving the response.
    */
   public async getChatHistory(): Promise<ChatListResponse> {
     try {
@@ -586,15 +596,11 @@ class RetellService {
       }
 
       // Use the correct GET /list-chat endpoint
+      // NOTE: The API does NOT support agent_id filtering - we'll filter client-side
       let url = `${this.baseUrl}/list-chat`
 
-      // Add SMS agent filter as query parameter if configured
+      // Add limit parameter only
       const params = new URLSearchParams()
-      if (this.smsAgentId && this.smsAgentId.trim()) {
-        params.append('agent_id', this.smsAgentId)
-      }
-
-      // Add other optional filters
       params.append('limit', '1000')
 
       if (params.toString()) {
@@ -603,7 +609,8 @@ class RetellService {
 
       console.log('Fresh RetellService - Chat request:', {
         url: url,
-        method: 'GET'
+        method: 'GET',
+        note: 'API does not support agent_id filtering - will filter client-side'
       })
 
       const headers = await this.getHeaders()
@@ -621,7 +628,7 @@ class RetellService {
       }
 
       const data = await response.json()
-      console.log('Fresh RetellService - Received chat data:', {
+      console.log('Fresh RetellService - Received chat data (BEFORE filtering):', {
         type: typeof data,
         isArray: Array.isArray(data),
         keys: data ? Object.keys(data) : 'null',
@@ -629,23 +636,39 @@ class RetellService {
       })
 
       // Parse response - the API returns an array of chat objects directly
-      let chats: RetellChat[] = []
+      let allChats: RetellChat[] = []
       let pagination_key: string | undefined = undefined
       let has_more = false
 
       if (Array.isArray(data)) {
-        chats = data
+        allChats = data
         has_more = data.length >= 1000
       } else if (data && typeof data === 'object') {
-        chats = data.chats || data.data || []
+        allChats = data.chats || data.data || []
         pagination_key = data.pagination_key
         has_more = data.has_more || !!pagination_key
       }
 
-      console.log('Fresh RetellService - Parsed chats:', chats.length)
+      console.log('Fresh RetellService - Total chats received from API:', allChats.length)
+
+      // CLIENT-SIDE FILTERING: Filter chats by SMS agent ID if configured
+      let filteredChats = allChats
+      if (this.smsAgentId && this.smsAgentId.trim()) {
+        filteredChats = allChats.filter(chat => chat.agent_id === this.smsAgentId)
+        console.log(`Fresh RetellService - Filtered chats for agent ${this.smsAgentId}: ${filteredChats.length} of ${allChats.length} total`)
+
+        // Log sample of filtered vs unfiltered for debugging
+        if (allChats.length > 0 && filteredChats.length === 0) {
+          console.warn('⚠️ No chats match the configured SMS agent ID!')
+          console.log('Sample agent IDs in response:', allChats.slice(0, 5).map(c => c.agent_id))
+          console.log('Configured SMS agent ID:', this.smsAgentId)
+        }
+      } else {
+        console.warn('⚠️ No SMS agent ID configured - returning all chats unfiltered')
+      }
 
       return {
-        chats,
+        chats: filteredChats,
         pagination_key,
         has_more
       }

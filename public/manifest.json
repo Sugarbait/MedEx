@@ -1,6 +1,6 @@
 {
-  "name": "CareXPS Healthcare CRM",
-  "short_name": "CareXPS",
+  "name": "MedEx Healthcare CRM",
+  "short_name": "MedEx",
   "description": "HIPAA-compliant healthcare CRM",
   "start_url": "/",
   "display": "standalone",

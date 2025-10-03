@@ -166,7 +166,15 @@
       "Bash(start http://localhost:3002/dashboard)",
       "WebFetch(domain:carexps.nexasync.ca)",
       "Bash(git log:*)",
-      "Bash(start \"I:\\Apps Back Up\\CareXPS CRM\\restore-pierre-super-user.html\")"
+      "Bash(start \"I:\\Apps Back Up\\CareXPS CRM\\restore-pierre-super-user.html\")",
+      "Bash(timeout 30 npm run dev)",
+      "Bash(start http://localhost:3001/calls)",
+      "Bash(timeout:*)",
+      "Bash(start \"I:\\Apps Back Up\\CareXPS CRM\\show-app-costs.html\")",
+      "WebFetch(domain:www.retellai.com)",
+      "Bash(start \"I:\\Apps Back Up\\CareXPS CRM\\test-toast-notifications.html\")",
+      "WebFetch(domain:medex.nexasync.ca)",
+      "Bash(start clear-cache.html)"
     ],
     "deny": [],
     "ask": []

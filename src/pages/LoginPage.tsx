@@ -39,25 +39,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     try {
       let userIdToCheck = null
 
-      // Check for known system users
-      if (emailToCheck === 'elmfarrell@yahoo.com') {
-        userIdToCheck = 'super-user-456'
-      } else if (emailToCheck === 'pierre@phaetonai.com') {
-        userIdToCheck = 'pierre-user-789'
-      } else if (emailToCheck === 'guest@email.com') {
-        userIdToCheck = 'guest-user-456'
-      } else {
-        // For other users, try to lookup their ID
-        try {
-          const userLookup = await userProfileService.getUserByEmail(emailToCheck)
-          if (userLookup.status === 'success' && userLookup.data) {
-            userIdToCheck = userLookup.data.id
-          }
-        } catch (lookupError) {
-          // Ignore lookup errors - user might not exist yet
-          setLockoutStatus(null)
-          return
+      // Try to lookup user ID by email
+      try {
+        const userLookup = await userProfileService.getUserByEmail(emailToCheck)
+        if (userLookup.status === 'success' && userLookup.data) {
+          userIdToCheck = userLookup.data.id
         }
+      } catch (lookupError) {
+        // Ignore lookup errors - user might not exist yet
+        setLockoutStatus(null)
+        return
       }
 
       if (userIdToCheck) {
@@ -102,16 +93,12 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         e.preventDefault()
         console.log('Emergency unlock triggered')
 
-        // Force clear all demo user lockouts
+        // MedEx: Emergency lockout clear (no demo users)
         try {
-          await userManagementService.forceClearLockout('super-user-456', 'system@carexps.com')
-          await userManagementService.forceClearLockout('pierre-user-789', 'admin@carexps.com')
-          await userManagementService.forceClearLockout('guest-user-456', 'guest@carexps.com')
-
-          // Also clear any global lockout data
+          // Clear any global lockout data
           LoginAttemptTracker.emergencyClearAll()
 
-          alert('Emergency unlock completed for all demo accounts')
+          alert('Emergency unlock completed - all lockouts cleared')
         } catch (error) {
           console.error('Emergency unlock failed:', error)
           alert('Emergency unlock failed - check console for details')
@@ -904,9 +891,13 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
     }
   }
 
-  // Helper method for demo account handling
+  // Helper method for demo account handling - DISABLED FOR MEDEX
   const handleDemoAccountLogin = async (email: string, password: string): Promise<boolean> => {
-    let demoUserData = null
+    // MedEx: Demo accounts disabled - production users only
+    return false
+
+    // OLD DEMO LOGIC DISABLED:
+    /* let demoUserData = null
 
     // Clear any lockouts for system users to prevent getting stuck
     if (email === 'elmfarrell@yahoo.com' || email === 'pierre@phaetonai.com' || email === 'guest@email.com') {
@@ -1050,7 +1041,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       return true
     }
 
-    return false
+    return false */
   }
 
   return (
@@ -1059,8 +1050,8 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
         <div className="text-center mb-8">
           <img
-            src={logos.headerLogo || "https://nexasync.ca/images/Logo.png"}
-            alt="CareXPS Logo"
+            src={logos.headerLogo || "/images/medex-logo.png"}
+            alt="MedEx Logo"
             className="max-h-20 w-auto mx-auto mb-4 object-contain"
             referrerPolicy="no-referrer"
           />

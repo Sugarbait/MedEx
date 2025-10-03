@@ -100,7 +100,7 @@ const createSupabaseClient = () => {
         detectSessionInUrl: false,
         persistSession: false,
         autoRefreshToken: false,
-        storageKey: 'carexps-auth'
+        storageKey: 'medex-auth'
       },
       realtime: {
         params: {
@@ -144,7 +144,7 @@ const createSupabaseClient = () => {
       },
       global: {
         headers: {
-          'X-Client-Info': 'carexps-healthcare-crm/1.0.0',
+          'X-Client-Info': 'medex-healthcare-crm/1.0.0',
           'Authorization': `Bearer ${supabaseAnonKey}`
         }
       }

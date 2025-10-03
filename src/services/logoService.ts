@@ -208,20 +208,20 @@ class LogoService {
 
       // Return default logos
       return {
-        headerLogo: '/images/Logo.png',
-        footerLogoLight: '/images/nexasync-logo-light.png',
-        footerLogoDark: '/images/nexasync-logo-dark.png',
-        favicon: '/images/favixps.png'
+        headerLogo: '/images/medex-logo.png',
+        footerLogoLight: '/images/medex-logo.png',
+        footerLogoDark: '/images/medex-logo.png',
+        favicon: '/images/medex-favicon.png'
       }
     } catch (error) {
       console.error('Failed to get logos:', error)
 
       // Return default logos
       return {
-        headerLogo: '/images/Logo.png',
-        footerLogoLight: '/images/nexasync-logo-light.png',
-        footerLogoDark: '/images/nexasync-logo-dark.png',
-        favicon: '/images/favixps.png'
+        headerLogo: '/images/medex-logo.png',
+        footerLogoLight: '/images/medex-logo.png',
+        footerLogoDark: '/images/medex-logo.png',
+        favicon: '/images/medex-favicon.png'
       }
     }
   }

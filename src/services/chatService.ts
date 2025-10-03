@@ -29,8 +29,13 @@ export interface Chat {
     custom_analysis_data: Record<string, any>
   }
   chat_cost: {
-    product_costs: Record<string, number>
-    total_cost: number
+    product_costs: Array<{      // Array of product costs (per Retell API docs)
+      product: string
+      unit_price: number
+      cost: number
+    }>
+    combined_cost: number       // Combined cost in cents (per Retell API docs)
+    total_cost?: number         // Legacy field for backward compatibility
   }
   metadata?: Record<string, any>
 }
@@ -163,6 +168,14 @@ export class ChatService {
   }
 
   /**
+   * Clear all cached data
+   */
+  public clearAllCache(): void {
+    console.log(`🗑️ ChatService: Clearing ${this.chatCache.size} cached entries`)
+    this.chatCache.clear()
+  }
+
+  /**
    * Reload credentials (public method for external calls)
    */
   public reloadCredentials(): void {
@@ -194,8 +207,17 @@ export class ChatService {
       const isRetellReady = await Promise.race([credentialsLoadedPromise, timeoutPromise])
 
       if (isRetellReady) {
-        console.log('✅ [ChatService] RetellService is ready, loading chatService credentials...')
-        this.loadCredentials()
+        console.log('✅ [ChatService] RetellService is ready, copying credentials directly from retellService...')
+
+        // CRITICAL FIX: Copy credentials directly from retellService instead of loading from localStorage
+        this.apiKey = retellService.apiKey || ''
+        this.smsAgentId = retellService.smsAgentId || ''
+
+        console.log('🔄 [ChatService] Credentials copied from retellService:', {
+          hasApiKey: !!this.apiKey,
+          apiKeyPrefix: this.apiKey.substring(0, 15) + '...',
+          smsAgentId: this.smsAgentId
+        })
 
         // Verify chatService loaded credentials successfully
         if (this.isConfigured()) {
@@ -583,8 +605,8 @@ export class ChatService {
             custom_analysis_data: {}
           },
           chat_cost: chat.chat_cost || {
-            product_costs: {},
-            total_cost: 0
+            product_costs: [],
+            combined_cost: 0
           }
         })),
         pagination_key: retellResponse.pagination_key,
