@@ -29,7 +29,8 @@ Add these secrets at: https://github.com/Sugarbait/MedEx/settings/secrets/action
 
 ### 6. VITE_OPENAI_API_KEY
 **Purpose**: For help chatbot feature
-**Can Skip**: Yes, feature will be disabled without it
+**Status**: ✅ Added to GitHub Secrets
+**Note**: Chatbot will now work in production
 
 ### 7. HOSTINGER_EMAIL_PASSWORD
 **Purpose**: For email notifications
