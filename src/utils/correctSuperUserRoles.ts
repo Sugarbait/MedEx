@@ -12,8 +12,7 @@ export interface User {
 }
 
 const SUPER_USER_EMAILS = [
-  'elmfarrell@yahoo.com',
-  'pierre@phaetonai.com'
+  'elmfarrell@yahoo.com'
 ]
 
 /**

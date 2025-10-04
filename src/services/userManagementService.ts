@@ -174,8 +174,9 @@ export class UserManagementService {
         timestamp: new Date().toISOString()
       })
 
-      // Get user by email
-      const userResponse = await userProfileService.getUserByEmail(email)
+      // 🔒 SECURITY: Get user by email, disabling cache fallback for authentication
+      // This ensures deleted users cannot log in using cached credentials
+      const userResponse = await userProfileService.getUserByEmail(email, false)
       if (userResponse.status === 'error') {
         return userResponse as ServiceResponse<SystemUserWithCredentials | null>
       }

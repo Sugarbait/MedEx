@@ -575,6 +575,19 @@ const App: React.FC = () => {
           if (localStorageUser) {
             fallbackUser = JSON.parse(localStorageUser)
             console.log('Loaded user from localStorage')
+
+            // 🔒 CRITICAL SECURITY: Verify user still exists in database
+            // This prevents deleted users from accessing via cached localStorage data
+            console.log('🔒 SECURITY: Verifying user exists in database before allowing access...')
+            const verifyResponse = await userProfileService.getUserByEmail(fallbackUser.email, false)
+            if (!verifyResponse.data) {
+              console.error('🚫 SECURITY: User no longer exists in database - clearing cache and blocking access')
+              localStorage.removeItem('currentUser')
+              localStorage.removeItem('pendingMfaUser')
+              fallbackUser = null // Block access
+            } else {
+              console.log('✅ SECURITY: User verified in database')
+            }
           }
         } catch (fallbackError) {
           console.warn('localStorage failed:', fallbackError)

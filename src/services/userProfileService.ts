@@ -1439,7 +1439,7 @@ export class UserProfileService {
   /**
    * Get user by email (for login scenarios)
    */
-  static async getUserByEmail(email: string): Promise<ServiceResponse<UserProfileData | null>> {
+  static async getUserByEmail(email: string, allowCacheFallback: boolean = true): Promise<ServiceResponse<UserProfileData | null>> {
     try {
       // Try Supabase first
       try {
@@ -1487,12 +1487,27 @@ export class UserProfileService {
           console.log('UserProfileService: User found in Supabase')
           return { status: 'success', data: this.transformToUserProfileData(completeProfile) }
         } else if (userError.code === 'PGRST116') {
-          // User not found in Supabase, try localStorage
+          // User not found in Supabase
+          if (!allowCacheFallback) {
+            console.log('UserProfileService: User not found in Supabase, cache fallback disabled for security')
+            return { status: 'success', data: null }
+          }
+          // Try localStorage if fallback is allowed
         } else {
           throw new Error(`Failed to get user by email: ${userError.message}`)
         }
       } catch (supabaseError) {
+        if (!allowCacheFallback) {
+          console.log('UserProfileService: Supabase query failed, cache fallback disabled for security')
+          return { status: 'success', data: null }
+        }
         console.log('UserProfileService: Supabase query failed, trying localStorage fallback')
+      }
+
+      // 🔒 SECURITY: localStorage fallback only allowed for non-authentication scenarios
+      if (!allowCacheFallback) {
+        console.log('UserProfileService: Cache fallback disabled - user not found')
+        return { status: 'success', data: null }
       }
 
       // Fallback to localStorage-based user storage
