@@ -167,7 +167,7 @@ export const StripeInvoiceSettings: React.FC<StripeInvoiceSettingsProps> = ({ us
         customerInfo: {
           email: customerEmail,
           name: customerName,
-          description: 'CareXPS Healthcare CRM Customer'
+          description: 'MedEx Healthcare CRM Customer'
         },
         dateRange: {
           start,
@@ -256,7 +256,7 @@ export const StripeInvoiceSettings: React.FC<StripeInvoiceSettingsProps> = ({ us
       const result = await stripeInvoiceService.generateMonthlyInvoice({
         email: customerEmail,
         name: customerName,
-        description: 'CareXPS Healthcare CRM Customer'
+        description: 'MedEx Healthcare CRM Customer'
       })
 
       if (result.success) {

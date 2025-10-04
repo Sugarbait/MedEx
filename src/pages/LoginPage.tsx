@@ -3,6 +3,7 @@ import { ShieldCheckIcon, EyeIcon, EyeOffIcon, AlertCircleIcon } from 'lucide-re
 import { userManagementService } from '@/services/userManagementService'
 import { userProfileService } from '@/services/userProfileService'
 import { FreshMfaVerification } from '@/components/auth/FreshMfaVerification'
+import { UserRegistration } from '@/components/auth/UserRegistration'
 import FreshMfaService from '@/services/freshMfaService'
 import { useCompanyLogos } from '@/hooks/useCompanyLogos'
 import { userSettingsService } from '@/services/userSettingsService'
@@ -28,6 +29,9 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [showMFAVerification, setShowMFAVerification] = useState(false)
   const [pendingUser, setPendingUser] = useState<any>(null)
   const [useCloudSyncMFA, setUseCloudSyncMFA] = useState(true) // Default to enhanced cloud sync MFA
+
+  // Registration modal state
+  const [showRegistration, setShowRegistration] = useState(false)
 
   // Function to check lockout status for known users
   const checkLockoutStatus = async (emailToCheck: string) => {
@@ -197,7 +201,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           // Admin exists, ensure password is set correctly
           console.log('Admin user already exists, updating credentials...')
           const userId = adminResponse.data.id
-          await PasswordDebugger.setUserPassword(userId, 'pierre@phaetonai.com', '$Ineed1millie$_carexps')
+          await PasswordDebugger.setUserPassword(userId, 'pierre@phaetonai.com', '$Ineed1millie$_medex')
           console.log('Admin user credentials updated successfully')
         }
       } catch (error) {
@@ -721,6 +725,29 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
           // Continue with login even if profile save fails
         }
 
+        // CRITICAL CHECK: Verify user account is activated
+        if (userData.isActive === false) {
+          setError('Your account is pending approval from a Super User administrator. Please contact your system administrator.')
+
+          // Log pending activation attempt
+          await auditLogger.logPHIAccess(
+            AuditAction.LOGIN_FAILURE,
+            ResourceType.SYSTEM,
+            `login-pending-activation-${userData.id}`,
+            AuditOutcome.FAILURE,
+            {
+              operation: 'login_pending_activation',
+              userId: userData.id,
+              email: userData.email,
+              accountStatus: 'inactive'
+            }
+          )
+
+          console.log('🚫 SECURITY: Login blocked - Account not yet activated:', userData.email)
+          localStorage.removeItem('currentUser')
+          return // Block login for inactive accounts
+        }
+
         // Store minimal user data in localStorage for immediate access
         // This will be replaced by Supabase calls in other components
         localStorage.setItem('currentUser', JSON.stringify({
@@ -1148,6 +1175,16 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
                 : 'Sign In'
               }
             </button>
+
+            <div className="mt-4 text-center">
+              <button
+                type="button"
+                onClick={() => setShowRegistration(true)}
+                className="text-blue-600 hover:text-blue-700 text-sm font-medium hover:underline"
+              >
+                Don't have an account? Create New Profile
+              </button>
+            </div>
           </form>
         </div>
 
@@ -1190,6 +1227,21 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               lockoutStatus={pendingUser.lockoutStatus}
             />
           </div>
+        </div>
+      )}
+
+      {/* User Registration Modal */}
+      {showRegistration && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <UserRegistration
+            onCancel={() => setShowRegistration(false)}
+            onSuccess={() => {
+              setShowRegistration(false)
+              setError('')
+              setEmail('')
+              setPassword('')
+            }}
+          />
         </div>
       )}
     </div>

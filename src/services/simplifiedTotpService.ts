@@ -22,8 +22,8 @@ interface TOTPVerificationResult {
 
 class SimplifiedTOTPService {
   private config = {
-    issuer: 'CareXPS Healthcare CRM',
-    label: 'CareXPS',
+    issuer: 'MedEx Healthcare CRM',
+    label: 'MedEx',
     algorithm: 'SHA1' as const,
     digits: 6,
     period: 30

@@ -57,13 +57,6 @@ const getNavigationItems = (user: any, mfaStatus: MfaStatus) => {
       requiresMFA: true,
       mfaEnabled: hasMFA
     },
-    // Admin-only pages
-    ...(user?.role === 'super_user' ? [{
-      name: 'User Management',
-      href: '/users',
-      icon: UserIcon,
-      description: 'Manage system users'
-    }] : []),
     {
       name: 'Settings',
       href: '/settings',

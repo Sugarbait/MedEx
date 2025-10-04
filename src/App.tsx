@@ -45,7 +45,6 @@ import { DashboardPage } from './pages/DashboardPage'
 import { CallsPage } from './pages/CallsPage'
 import { SMSPage } from './pages/SMSPage'
 import { SettingsPage } from './pages/SettingsPage'
-import { UserManagementPage } from './pages/UserManagementPage'
 import { LoginPage } from './pages/LoginPage'
 import { MandatoryMfaLogin } from './components/auth/MandatoryMfaLogin'
 import { MfaProtectedRoute } from './components/auth/MfaProtectedRoute'
@@ -335,10 +334,6 @@ const AppContent: React.FC<{
                 }
               />
 
-              <Route
-                path="/users"
-                element={<UserManagementPage user={user} />}
-              />
               <Route
                 path="/settings"
                 element={<SettingsPage user={user} />}

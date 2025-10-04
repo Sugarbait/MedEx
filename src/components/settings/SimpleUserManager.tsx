@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { UserPlus, Trash2, Key, Lock, Unlock } from 'lucide-react'
+import { UserPlus, Trash2, Key, Lock, Unlock, UserCheck, UserX, Clock } from 'lucide-react'
 import { userManagementService } from '@/services/userManagementService'
 import { userProfileService } from '@/services/userProfileService'
 import { PasswordDebugger } from '@/utils/passwordDebug'
@@ -10,6 +10,7 @@ interface User {
   email: string
   role: string
   isLocked?: boolean
+  isActive?: boolean
   lastLogin?: string
 }
 
@@ -51,20 +52,33 @@ export const SimpleUserManager: React.FC = () => {
 
   const loadUsers = async () => {
     try {
+      console.log('🔍 DEBUG: Loading users from userManagementService...')
       const response = await userManagementService.loadSystemUsers()
+      console.log('📊 DEBUG: userManagementService response:', response)
+
       if (response.status === 'success' && response.data) {
-        setUsers(response.data.map(u => ({
-          id: u.id,
-          name: u.name,
-          email: u.email,
-          role: u.role,
-          // Ensure demo/admin users are never shown as locked
-          isLocked: (u.email?.toLowerCase() === 'elmfarrell@yahoo.com' ||
-                     u.email?.toLowerCase() === 'pierre@phaetonai.com' ||
-                     u.email?.toLowerCase() === 'demo@carexps.com' ||
-                     u.email?.toLowerCase() === 'guest@email.com') ? false : (u.isLocked || false),
-          lastLogin: u.lastLogin
-        })))
+        console.log(`✅ DEBUG: Loaded ${response.data.length} users from service`)
+
+        const mappedUsers = response.data.map(u => {
+          const mapped = {
+            id: u.id,
+            name: u.name,
+            email: u.email,
+            role: u.role,
+            // Ensure demo/admin users are never shown as locked
+            isLocked: (u.email?.toLowerCase() === 'elmfarrell@yahoo.com' ||
+                       u.email?.toLowerCase() === 'pierre@phaetonai.com' ||
+                       u.email?.toLowerCase() === 'demo@medex.com' ||
+                       u.email?.toLowerCase() === 'guest@email.com') ? false : (u.isLocked || false),
+            isActive: u.isActive !== undefined ? u.isActive : true, // Default to true for existing users
+            lastLogin: u.lastLogin
+          }
+          console.log(`👤 DEBUG: User ${u.email} - isActive: ${mapped.isActive} (original: ${u.isActive})`)
+          return mapped
+        })
+
+        setUsers(mappedUsers)
+        console.log('✅ DEBUG: Set users state with', mappedUsers.length, 'users')
       }
     } catch (error) {
       console.error('Failed to load users:', error)
@@ -170,7 +184,7 @@ export const SimpleUserManager: React.FC = () => {
     // Prevent disabling super users and demo users
     if (email.toLowerCase() === 'elmfarrell@yahoo.com' ||
         email.toLowerCase() === 'pierre@phaetonai.com' ||
-        email.toLowerCase() === 'demo@carexps.com' ||
+        email.toLowerCase() === 'demo@medex.com' ||
         email.toLowerCase() === 'guest@email.com') {
       alert('Cannot disable super users or demo accounts')
       return
@@ -205,6 +219,13 @@ export const SimpleUserManager: React.FC = () => {
     }
   }
 
+  const pendingUsers = users.filter(u => !u.isActive)
+  const activeUsers = users.filter(u => u.isActive)
+
+  console.log('📊 DEBUG: Total users:', users.length)
+  console.log('📊 DEBUG: Pending users:', pendingUsers.length, pendingUsers.map(u => u.email))
+  console.log('📊 DEBUG: Active users:', activeUsers.length, activeUsers.map(u => u.email))
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
@@ -218,6 +239,52 @@ export const SimpleUserManager: React.FC = () => {
           Add User
         </button>
       </div>
+
+      {/* Pending Approvals Section */}
+      {pendingUsers.length > 0 && (
+        <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-3">
+            <Clock className="w-5 h-5 text-amber-600 dark:text-amber-400" />
+            <h4 className="font-semibold text-amber-900 dark:text-amber-100">
+              Pending Approvals ({pendingUsers.length})
+            </h4>
+          </div>
+          <p className="text-sm text-amber-800 dark:text-amber-200 mb-3">
+            The following users are awaiting activation. Click "Approve" to activate their accounts.
+          </p>
+          <div className="space-y-2">
+            {pendingUsers.map(user => (
+              <div key={user.id} className="bg-white dark:bg-gray-800 p-3 rounded-lg flex items-center justify-between">
+                <div className="flex-1">
+                  <div className="font-medium text-gray-900 dark:text-white">{user.name}</div>
+                  <div className="text-sm text-gray-600 dark:text-gray-400">{user.email}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
+                    Role: <span className="font-medium">{user.role === 'user' ? 'User' : user.role.replace('_', ' ')}</span>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => handleEnableUser(user.id, user.email)}
+                    className="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1 text-sm"
+                    disabled={isLoading}
+                  >
+                    <UserCheck className="w-4 h-4" />
+                    Approve
+                  </button>
+                  <button
+                    onClick={() => handleDeleteUser(user.id, user.email)}
+                    className="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 flex items-center gap-1 text-sm"
+                    disabled={isLoading}
+                  >
+                    <UserX className="w-4 h-4" />
+                    Reject
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Add User Form */}
       {showAddUser && (
@@ -277,8 +344,13 @@ export const SimpleUserManager: React.FC = () => {
         </div>
       )}
 
-      {/* Users List */}
+      {/* Active Users List */}
       <div className="bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+        <div className="px-4 py-3 bg-gray-50 dark:bg-gray-700 border-b">
+          <h4 className="font-semibold text-gray-900 dark:text-gray-100">
+            Active Users ({activeUsers.length})
+          </h4>
+        </div>
         <table className="w-full">
           <thead className="bg-gray-50 dark:bg-gray-700 border-b">
             <tr>
@@ -291,7 +363,7 @@ export const SimpleUserManager: React.FC = () => {
             </tr>
           </thead>
           <tbody>
-            {users.map((user) => (
+            {activeUsers.map((user) => (
               <React.Fragment key={user.id}>
                 <tr className="border-b hover:bg-gray-50 dark:bg-gray-700">
                   <td className="px-4 py-3 text-sm">{user.name}</td>
@@ -342,7 +414,7 @@ export const SimpleUserManager: React.FC = () => {
                         // Only show disable button for non-super users and non-demo users
                         !(user.email.toLowerCase() === 'elmfarrell@yahoo.com' ||
                           user.email.toLowerCase() === 'pierre@phaetonai.com' ||
-                          user.email.toLowerCase() === 'demo@carexps.com' ||
+                          user.email.toLowerCase() === 'demo@medex.com' ||
                           user.email.toLowerCase() === 'guest@email.com') && (
                           <button
                             onClick={() => handleDisableUser(user.id, user.email)}
@@ -400,9 +472,9 @@ export const SimpleUserManager: React.FC = () => {
             ))}
           </tbody>
         </table>
-        {users.length === 0 && (
+        {activeUsers.length === 0 && (
           <div className="p-8 text-center text-gray-500">
-            No users found
+            No active users found
           </div>
         )}
       </div>

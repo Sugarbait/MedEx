@@ -6,7 +6,7 @@
 export type Theme = 'light' | 'dark' | 'auto'
 
 export class ThemeManager {
-  private static readonly STORAGE_KEY = 'carexps_theme'
+  private static readonly STORAGE_KEY = 'medex_theme'
 
   /**
    * Apply theme to the HTML element

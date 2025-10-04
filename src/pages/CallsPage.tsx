@@ -836,7 +836,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
       // Footer on last page
       doc.setFontSize(8)
       doc.setFont('helvetica', 'italic')
-      doc.text('🤖 Generated with CareXPS Healthcare CRM', margin, pageHeight - 20)
+      doc.text('🤖 Generated with MedEx Healthcare CRM', margin, pageHeight - 20)
       doc.text(`Exported by: ${user?.email || 'System'}`, margin, pageHeight - 12)
       doc.text(`Total Pages: ${doc.getNumberOfPages()}`, pageWidth - margin - 40, pageHeight - 12)
 

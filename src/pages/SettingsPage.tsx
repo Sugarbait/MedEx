@@ -1047,7 +1047,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
                 {/* Enhanced MFA Settings */}
                 <FreshMfaSettings
                   userId={user.id}
-                  userEmail={user.email || user.user_metadata?.email || 'user@carexps.com'}
+                  userEmail={user.email || user.user_metadata?.email || 'user@medex.com'}
                   onSetupMfa={() => {
                     // FreshMfaSettings handles MFA setup internally via modal
                     console.log('🔒 MFA setup requested via FreshMfaSettings modal')

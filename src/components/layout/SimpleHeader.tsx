@@ -8,7 +8,7 @@ export const Header: React.FC = () => {
     <header className="bg-white px-6 py-4 flex-shrink-0">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <h1 className="text-xl font-semibold text-neutral-900">CareXPS</h1>
+          <h1 className="text-xl font-semibold text-neutral-900">MedEx</h1>
         </div>
 
         <div className="flex items-center gap-4">

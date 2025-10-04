@@ -20,9 +20,10 @@ export interface UserProfileData {
   id: string
   email: string
   name: string
-  role: 'admin' | 'super_user' | 'healthcare_provider' | 'staff'
+  role: 'admin' | 'super_user' | 'healthcare_provider' | 'staff' | 'user'
   avatar?: string
   mfa_enabled?: boolean
+  isActive?: boolean // User activation status (for pending approvals)
   // Extended profile fields
   department?: string
   phone?: string
@@ -211,11 +212,17 @@ export class UserProfileService {
    */
   private static transformDatabaseUserToProfile(dbUser: any): UserProfileData | null {
     try {
+      // CRITICAL FIX: Use original_role from metadata if available (super_user stored as admin in DB)
+      // Otherwise, map the database role back to application format
+      const applicationRole = dbUser.metadata?.original_role || this.mapExistingRoleToExpected(dbUser.role)
+
+      console.log(`🔄 ROLE MAPPING: DB role="${dbUser.role}", metadata.original_role="${dbUser.metadata?.original_role}", final="${applicationRole}"`)
+
       return {
         id: dbUser.id,
         email: dbUser.email,
         name: dbUser.name,
-        role: dbUser.role,
+        role: applicationRole,
         avatar: dbUser.avatar_url,
         mfa_enabled: dbUser.mfa_enabled,
         settings: {
@@ -660,7 +667,6 @@ export class UserProfileService {
         const { data: supabaseUsers, error: usersError } = await supabase
           .from('users')
           .select('*')
-          .eq('is_active', true)
           .eq('tenant_id', 'medex') // 🎯 Filter by MedEx tenant only
           .order('created_at', { ascending: false })
 
@@ -718,12 +724,15 @@ export class UserProfileService {
               name: user.name,
               role: user.metadata?.original_role || this.mapExistingRoleToExpected(user.role),
               mfa_enabled: user.mfa_enabled,
+              isActive: user.is_active !== undefined ? user.is_active : true, // Include activation status
               avatar: user.avatar_url,
               settings: {},
               created_at: user.created_at,
               updated_at: user.updated_at,
               lastLogin: lastLoginTimestamp // Use audit log timestamp if available
             }
+
+            console.log(`🔍 DEBUG loadSystemUsers: User ${user.email} - is_active (DB): ${user.is_active}, isActive (mapped): ${mappedUser.isActive}`)
 
             // CRITICAL: Hard-coded Super User enforcement for specific emails
             if (mappedUser.email === 'pierre@phaetonai.com' ||
@@ -741,6 +750,11 @@ export class UserProfileService {
           // CRITICAL: Filter out deleted users before caching
           const filteredUsers = this.filterDeletedUsers(allUsers)
           allUsers = filteredUsers
+
+          console.log(`📊 DEBUG: After filtering, ${allUsers.length} users remain`)
+          allUsers.forEach(u => {
+            console.log(`   - ${u.email}: isActive=${u.isActive}, role=${u.role}`)
+          })
 
           // Update localStorage cache for offline access
           localStorage.setItem('systemUsers', JSON.stringify(allUsers))
@@ -982,6 +996,13 @@ export class UserProfileService {
    */
   static async createUser(userData: Omit<UserProfileData, 'id'>): Promise<ServiceResponse<UserProfileData>> {
     try {
+      console.log('🔍 createUser() ENTRY POINT - Received userData:', JSON.stringify(userData, null, 2))
+      console.log('🔍 createUser() - Role verification:', {
+        role: userData.role,
+        isActive: userData.isActive,
+        email: userData.email
+      })
+
       await auditLogger.logSecurityEvent('USER_CREATE', 'users', true)
 
       // Check for existing user by email first to prevent duplicates
@@ -1003,6 +1024,8 @@ export class UserProfileService {
         // Map role to database schema (super_user -> admin for database, but keep super_user in application)
         const dbRole = this.mapRoleForDatabase(userData.role)
 
+        console.log(`🔄 ROLE TRANSFORMATION: Input role="${userData.role}" → Database role="${dbRole}"`)
+
         // Generate azure_ad_id placeholder for compatibility with schema
         const azureAdId = `placeholder_${Date.now()}_${Math.random().toString(36).substring(2)}`
 
@@ -1012,14 +1035,25 @@ export class UserProfileService {
           role: dbRole, // Use mapped role for database
           azure_ad_id: azureAdId, // Required by schema
           mfa_enabled: userData.mfa_enabled || false,
-          is_active: true,
+          is_active: userData.isActive !== undefined ? userData.isActive : true, // Respect isActive from userData, default to true
           last_login: null, // Initialize last_login as null for new users
           metadata: {
             created_via: 'user_management',
             original_role: userData.role, // Store original role in metadata
             device_id: this.currentDeviceId || 'unknown'
-          }
+          },
+          tenant_id: 'medex' // Ensure tenant_id is set
         }
+
+        console.log('🔍 DEBUG: Creating user with is_active =', userToInsert.is_active, 'for email:', userData.email)
+        console.log(`📦 METADATA: Storing original_role="${userData.role}" in metadata for future role restoration`)
+        console.log('🔍 DETAILED INSERT DATA:', JSON.stringify(userToInsert, null, 2))
+        console.log('🔍 METADATA VERIFICATION BEFORE INSERT:', {
+          metadata: userToInsert.metadata,
+          original_role_in_metadata: userToInsert.metadata?.original_role,
+          expected_original_role: userData.role,
+          db_role: userToInsert.role
+        })
 
         const { data: newUser, error: userError } = await supabase
           .from('users')
@@ -1035,11 +1069,21 @@ export class UserProfileService {
             name: newUser.name,
             role: userData.role, // Use original role in application (super_user)
             mfa_enabled: newUser.mfa_enabled,
+            isActive: newUser.is_active, // Include activation status
             settings: userData.settings || {},
             created_at: newUser.created_at,
             updated_at: newUser.updated_at,
             lastLogin: newUser.last_login // Include last_login field for new users
           }
+
+          console.log('✅ DEBUG: User created successfully with isActive =', newUserProfileData.isActive)
+          console.log(`✅ ROLE VERIFICATION: User created with application role="${newUserProfileData.role}" (DB has "${newUser.role}", metadata has "${newUser.metadata?.original_role}")`)
+          console.log('🔍 SUPABASE RESPONSE METADATA:', JSON.stringify(newUser.metadata, null, 2))
+          console.log('🔍 METADATA COMPARISON:', {
+            sent_original_role: userData.role,
+            received_original_role: newUser.metadata?.original_role,
+            match: userData.role === newUser.metadata?.original_role
+          })
 
           // Create user settings record for cross-device sync
           if (userData.settings && Object.keys(userData.settings).length > 0) {
@@ -1104,6 +1148,13 @@ export class UserProfileService {
           this.broadcastUserCreatedEvent(newUserProfileData)
 
         } else {
+          console.error('❌ SUPABASE INSERT ERROR:', JSON.stringify(userError, null, 2))
+          console.error('❌ ERROR DETAILS:', {
+            message: userError?.message,
+            details: userError?.details,
+            hint: userError?.hint,
+            code: userError?.code
+          })
           throw new Error(userError?.message || 'Failed to create user in Supabase')
         }
 
@@ -1385,9 +1436,9 @@ export class UserProfileService {
         const { data: user, error: userError } = await supabase
           .from('users')
           .select('*')
+          .eq('tenant_id', 'medex')
           .eq('email', email)
-          .eq('is_active', true)
-          .single()
+          .maybeSingle()
 
         if (!userError && user) {
           // Get user profile separately (if tables exist)
@@ -2219,13 +2270,15 @@ export class UserProfileService {
 
   /**
    * Map CareXPS role values to database schema roles
+   * CRITICAL FIX: Database schema supports 'super_user' role - DO NOT convert to 'admin'
    */
-  private static mapRoleForDatabase(careXpsRole: string): 'admin' | 'healthcare_provider' | 'staff' {
+  private static mapRoleForDatabase(careXpsRole: string): 'admin' | 'healthcare_provider' | 'staff' | 'super_user' {
     const role = careXpsRole.toLowerCase()
 
     // Map CareXPS roles to database schema roles
+    // CRITICAL: Preserve 'super_user' role for first user and super administrators
     if (role === 'super_user' || role === 'superuser' || role === 'super user') {
-      return 'admin' // super_user maps to admin in database
+      return 'super_user' // FIXED: Database schema supports super_user role directly
     } else if (role === 'admin' || role === 'administrator') {
       return 'admin'
     } else if (role === 'provider' || role === 'healthcare_provider' || role === 'doctor' || role === 'physician') {
@@ -2490,6 +2543,12 @@ export class UserProfileService {
       throw new Error('Invalid user data provided to transformToUserProfileData')
     }
 
+    // CRITICAL FIX: Use original_role from metadata if available (super_user stored as admin in DB)
+    // Otherwise, map the database role back to application format
+    const applicationRole = user.metadata?.original_role || this.mapExistingRoleToExpected(user.role)
+
+    console.log(`🔄 ROLE MAPPING (transformToUserProfileData): DB role="${user.role}", metadata.original_role="${user.metadata?.original_role}", final="${applicationRole}"`)
+
     let decryptedSettings = {}
     if (settings?.retell_config) {
       const config = settings.retell_config as any
@@ -2504,7 +2563,7 @@ export class UserProfileService {
       id: user.id,
       email: user.email,
       name: user.name,
-      role: user.role,
+      role: applicationRole,
       avatar: user.avatar_url || undefined,
       mfa_enabled: user.mfa_enabled,
       settings: {

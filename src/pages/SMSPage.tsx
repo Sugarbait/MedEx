@@ -1589,7 +1589,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       // Footer on last page
       doc.setFontSize(8)
       doc.setFont('helvetica', 'italic')
-      doc.text('🤖 Generated with CareXPS Healthcare CRM', margin, pageHeight - 20)
+      doc.text('🤖 Generated with MedEx Healthcare CRM', margin, pageHeight - 20)
       doc.text(`Exported by: ${currentUser?.email || 'System'}`, margin, pageHeight - 12)
       doc.text(`Total Pages: ${doc.getNumberOfPages()}`, pageWidth - margin - 40, pageHeight - 12)
 

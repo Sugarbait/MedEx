@@ -126,7 +126,7 @@ export const SiteHelpChatbot: React.FC<SiteHelpChatbotProps> = ({
       {
         id: '1',
         type: 'bot',
-        content: 'Chat cleared! I\'m your CareXPS Assistant. How can I help you today?',
+        content: 'Chat cleared! I\'m your MedEx Assistant. How can I help you today?',
         timestamp: new Date()
       }
     ])
@@ -158,7 +158,7 @@ export const SiteHelpChatbot: React.FC<SiteHelpChatbotProps> = ({
             <span className="text-white text-xs font-bold">AI</span>
           </div>
           <div>
-            <h3 className="font-semibold text-gray-900 text-sm">CareXPS Assistant</h3>
+            <h3 className="font-semibold text-gray-900 text-sm">MedEx Assistant</h3>
           </div>
         </div>
         <div className="flex items-center gap-1">
@@ -235,7 +235,7 @@ export const SiteHelpChatbot: React.FC<SiteHelpChatbotProps> = ({
                 value={inputMessage}
                 onChange={(e) => setInputMessage(e.target.value)}
                 onKeyPress={handleKeyPress}
-                placeholder="Ask me anything about CareXPS..."
+                placeholder="Ask me anything about MedEx..."
                 className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
                 disabled={isTyping}
               />

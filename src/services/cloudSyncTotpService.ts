@@ -64,8 +64,8 @@ interface TOTPSyncResult {
 
 class CloudSyncTOTPService {
   private config: TOTPConfig = {
-    issuer: 'CareXPS Healthcare CRM',
-    label: 'CareXPS',
+    issuer: 'MedEx Healthcare CRM',
+    label: 'MedEx',
     algorithm: 'SHA1',
     digits: 6,
     period: 30

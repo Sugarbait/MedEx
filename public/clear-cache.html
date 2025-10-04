@@ -92,7 +92,7 @@
     <div style="margin-top: 30px;">
       <button onclick="clearCache()">Clear SMS Segment Cache</button>
       <button onclick="checkCache()">Check Cache Status</button>
-      <button class="danger" onclick="clearAllCaches()">Clear All CareXPS Caches</button>
+      <button class="danger" onclick="clearAllCaches()">Clear All MedEx Caches</button>
     </div>
 
     <div style="margin-top: 30px;">
@@ -155,7 +155,7 @@
     }
 
     function clearAllCaches() {
-      if (confirm('⚠️ This will clear ALL CareXPS caches including settings. Are you sure?')) {
+      if (confirm('⚠️ This will clear ALL MedEx caches including settings. Are you sure?')) {
         const keys = Object.keys(localStorage);
         let cleared = 0;
         keys.forEach(key => {
