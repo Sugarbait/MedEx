@@ -46,6 +46,7 @@ import { CallsPage } from './pages/CallsPage'
 import { SMSPage } from './pages/SMSPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { LoginPage } from './pages/LoginPage'
+import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage'
 import { MandatoryMfaLogin } from './components/auth/MandatoryMfaLogin'
 import { MfaProtectedRoute } from './components/auth/MfaProtectedRoute'
 
@@ -337,6 +338,10 @@ const AppContent: React.FC<{
               <Route
                 path="/settings"
                 element={<SettingsPage user={user} />}
+              />
+              <Route
+                path="/privacy-policy"
+                element={<PrivacyPolicyPage />}
               />
               <Route path="*" element={<Navigate to="/dashboard" replace />} />
             </Routes>

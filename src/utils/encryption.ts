@@ -27,9 +27,10 @@ export function encryptPHI(plaintext: string, keyType: 'phi' | 'audit' = 'phi'):
 
     const key = keyType === 'phi' ? encryptionConfig.phiKey : encryptionConfig.auditKey
     if (!key) {
-      // Graceful fallback to base64 encoding when encryption keys are not configured
-      console.warn(`⚠️ Encryption key not configured for type: ${keyType}, using base64 encoding`)
-      return btoa(plaintext)
+      // HIPAA COMPLIANCE: Never fallback to Base64 encoding - encryption keys are required
+      const errorMsg = `🚨 HIPAA VIOLATION: Encryption key not configured for type: ${keyType}. PHI cannot be stored without encryption.`
+      console.error(errorMsg)
+      throw new EncryptionError(`Encryption key not configured for type: ${keyType}`)
     }
 
     // Try Web Crypto API for proper GCM support (async, so this is a sync fallback)
@@ -47,9 +48,9 @@ export function encryptPHI(plaintext: string, keyType: 'phi' | 'audit' = 'phi'):
     const result = iv.concat(encrypted.ciphertext)
     return 'cbc:' + result.toString(CryptoJS.enc.Base64)
   } catch (error) {
-    // Graceful fallback to base64 encoding when encryption fails
-    console.warn('⚠️ Encryption failed, using base64 encoding:', error instanceof Error ? error.message : 'Unknown error')
-    return btoa(plaintext)
+    // HIPAA COMPLIANCE: Never fallback to Base64 encoding - throw error instead
+    console.error('🚨 HIPAA VIOLATION: Encryption failed:', error instanceof Error ? error.message : 'Unknown error')
+    throw new EncryptionError(`Encryption failed: ${error instanceof Error ? error.message : 'Unknown error'}`)
   }
 }
 

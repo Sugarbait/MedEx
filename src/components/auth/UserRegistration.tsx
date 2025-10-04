@@ -29,6 +29,8 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({ onCancel, on
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
   const [wasFirstUser, setWasFirstUser] = useState(false)
+  const [privacyConsent, setPrivacyConsent] = useState(false)
+  const [phiConsent, setPhiConsent] = useState(false)
 
   const validateForm = (): boolean => {
     if (!formData.name.trim()) {
@@ -48,6 +50,16 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({ onCancel, on
 
     if (formData.password !== formData.confirmPassword) {
       setError('Passwords do not match')
+      return false
+    }
+
+    if (!privacyConsent) {
+      setError('You must agree to the Privacy Policy to continue')
+      return false
+    }
+
+    if (!phiConsent) {
+      setError('You must consent to PHI collection and processing to continue')
       return false
     }
 
@@ -306,6 +318,39 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({ onCancel, on
             placeholder="(555) 123-4567"
             className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
           />
+        </div>
+
+        {/* HIPAA & PIPEDA Consent Checkboxes */}
+        <div className="space-y-3 border-t border-gray-200 dark:border-gray-600 pt-4">
+          <div className="flex items-start">
+            <input
+              type="checkbox"
+              id="privacyConsent"
+              checked={privacyConsent}
+              onChange={(e) => setPrivacyConsent(e.target.checked)}
+              className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              required
+            />
+            <label htmlFor="privacyConsent" className="ml-3 text-sm text-gray-700 dark:text-gray-300">
+              I agree to the <a href="/privacy-policy" target="_blank" className="text-blue-600 hover:underline">Privacy Policy</a> and
+              consent to the collection, use, and disclosure of my personal information as described. (Required for PIPEDA compliance)
+            </label>
+          </div>
+
+          <div className="flex items-start">
+            <input
+              type="checkbox"
+              id="phiConsent"
+              checked={phiConsent}
+              onChange={(e) => setPhiConsent(e.target.checked)}
+              className="mt-1 h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
+              required
+            />
+            <label htmlFor="phiConsent" className="ml-3 text-sm text-gray-700 dark:text-gray-300">
+              I consent to the collection, storage, and processing of my Protected Health Information (PHI) in accordance with
+              HIPAA regulations. I understand my data will be encrypted and securely stored. (Required for HIPAA compliance)
+            </label>
+          </div>
         </div>
 
         <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg p-3">
