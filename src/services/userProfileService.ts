@@ -4,6 +4,7 @@ import { Database, ServiceResponse } from '@/types/supabase'
 import { encryptionService } from './encryption'
 import { auditLogger } from './auditLogger'
 import { avatarStorageService } from './avatarStorageService'
+import { getCurrentTenantId } from '@/config/tenantConfig'
 
 type DatabaseUser = Database['public']['Tables']['users']['Row']
 type DatabaseUserProfile = Database['public']['Tables']['user_profiles']['Row']
@@ -662,13 +663,17 @@ export class UserProfileService {
 
       // Try to load from Supabase first for cross-device sync
       try {
+        const currentTenantId = getCurrentTenantId()
         console.log('🔄 Loading users from Supabase for cross-device sync...')
+        console.log(`🏢 [TENANT DEBUG] Filtering users by tenant_id: "${currentTenantId}"`)
 
         const { data: supabaseUsers, error: usersError } = await supabase
           .from('users')
           .select('*')
-          .eq('tenant_id', 'medex') // 🎯 Filter by MedEx tenant only
+          .eq('tenant_id', currentTenantId) // 🎯 Filter by current tenant only
           .order('created_at', { ascending: false })
+
+        console.log(`📊 [TENANT DEBUG] Query returned ${supabaseUsers?.length || 0} users for tenant "${currentTenantId}"`)
 
         if (!usersError && supabaseUsers && supabaseUsers.length > 0) {
           console.log(`✅ Found ${supabaseUsers.length} users in Supabase`)
@@ -1029,6 +1034,9 @@ export class UserProfileService {
         // Generate azure_ad_id placeholder for compatibility with schema
         const azureAdId = `placeholder_${Date.now()}_${Math.random().toString(36).substring(2)}`
 
+        const currentTenantId = getCurrentTenantId()
+        console.log(`🏢 [TENANT DEBUG] Creating user with tenant_id: "${currentTenantId}"`)
+
         const userToInsert = {
           email: userData.email,
           name: userData.name,
@@ -1042,8 +1050,10 @@ export class UserProfileService {
             original_role: userData.role, // Store original role in metadata
             device_id: this.currentDeviceId || 'unknown'
           },
-          tenant_id: 'medex' // Ensure tenant_id is set
+          tenant_id: currentTenantId // Ensure tenant_id is set for current tenant
         }
+
+        console.log(`🔍 [TENANT DEBUG] User insert data - tenant_id: "${userToInsert.tenant_id}", email: "${userToInsert.email}"`)
 
         console.log('🔍 DEBUG: Creating user with is_active =', userToInsert.is_active, 'for email:', userData.email)
         console.log(`📦 METADATA: Storing original_role="${userData.role}" in metadata for future role restoration`)

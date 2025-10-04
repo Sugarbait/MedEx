@@ -288,34 +288,34 @@ export const SimpleUserManager: React.FC = () => {
 
       {/* Add User Form */}
       {showAddUser && (
-        <div className="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg border border-gray-200 dark:border-gray-700">
-          <h4 className="font-medium mb-3">Add New User</h4>
-          <div className="grid grid-cols-2 gap-3">
+        <div className="bg-gray-50 dark:bg-gray-700 p-6 rounded-lg border border-gray-200 dark:border-gray-700 max-w-4xl">
+          <h4 className="font-medium mb-4 text-lg">Add New User</h4>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <input
               type="text"
               placeholder="Name"
               value={newUser.name}
               onChange={(e) => setNewUser({ ...newUser, name: e.target.value })}
-              className="px-3 py-2 border rounded"
+              className="px-3 py-2 border rounded dark:bg-gray-800 dark:border-gray-600 dark:text-white"
             />
             <input
               type="email"
               placeholder="Email"
               value={newUser.email}
               onChange={(e) => setNewUser({ ...newUser, email: e.target.value })}
-              className="px-3 py-2 border rounded"
+              className="px-3 py-2 border rounded dark:bg-gray-800 dark:border-gray-600 dark:text-white"
             />
             <input
               type="password"
               placeholder="Password"
               value={newUser.password}
               onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
-              className="px-3 py-2 border rounded"
+              className="px-3 py-2 border rounded dark:bg-gray-800 dark:border-gray-600 dark:text-white"
             />
             <select
               value={newUser.role}
               onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
-              className="px-3 py-2 border rounded"
+              className="px-3 py-2 border rounded dark:bg-gray-800 dark:border-gray-600 dark:text-white"
             >
               <option value="healthcare_provider">Healthcare Provider</option>
               <option value="admin">Admin</option>
@@ -323,10 +323,10 @@ export const SimpleUserManager: React.FC = () => {
               <option value="staff">Staff</option>
             </select>
           </div>
-          <div className="mt-3 flex gap-2">
+          <div className="mt-4 flex gap-3">
             <button
               onClick={handleAddUser}
-              className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+              className="px-6 py-2 bg-green-600 text-white rounded hover:bg-green-700 font-medium"
               disabled={isLoading}
             >
               Create User
@@ -336,7 +336,7 @@ export const SimpleUserManager: React.FC = () => {
                 setShowAddUser(false)
                 setNewUser({ name: '', email: '', password: '', role: 'healthcare_provider' })
               }}
-              className="px-4 py-2 bg-gray-50 dark:bg-gray-7000 text-white rounded hover:bg-gray-600"
+              className="px-6 py-2 bg-gray-500 dark:bg-gray-600 text-white rounded hover:bg-gray-600 dark:hover:bg-gray-700 font-medium"
             >
               Cancel
             </button>

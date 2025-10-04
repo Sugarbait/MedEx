@@ -20,7 +20,9 @@ export const TENANT_CONFIG = {
  * Get the current tenant ID for this application
  */
 export function getCurrentTenantId(): string {
-  return TENANT_CONFIG.CURRENT_TENANT
+  const tenantId = TENANT_CONFIG.CURRENT_TENANT
+  console.log(`🏢 [TENANT] getCurrentTenantId() called - Returning: "${tenantId}"`)
+  return tenantId
 }
 
 /**

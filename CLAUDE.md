@@ -1452,12 +1452,12 @@ Configured SMS agent ID: agent_840d4bfc9d4dac35a6d64546ad
 
 ### **User Registration with Consent Management**
 **File**: `src/components/auth/UserRegistration.tsx`
-- **HIPAA/PIPEDA Consent Checkboxes**: Required for PHI collection
-- **Privacy Policy Consent**: Links to `/privacy-policy` (PIPEDA Principle 3)
-- **PHI Processing Consent**: Explicit authorization (HIPAA § 164.508)
-- **Validation**: Form blocked until both consents checked
+- **Admin-Only System**: Consent checkboxes removed (2025-10-04) - system is for healthcare staff only, not patients
+- **Real-time Password Validation**: Visual feedback with green/red borders and checkmark/X indicators
+- **Password Match Checking**: Live validation shows "Passwords match" or "Passwords do not match" as user types
 - **First User Auto-Super User**: System automatically assigns super_user role to first registrant
 - **Subsequent Users**: Require Super User approval (isActive=false by default)
+- **Responsive Form Layout**: 4-column grid (responsive: 1 col mobile, 2 tablet, 4 desktop)
 
 ### **Privacy Policy Page**
 **File**: `src/pages/PrivacyPolicyPage.tsx`
@@ -1527,8 +1527,15 @@ const userData = {
 - Consent validation: Both Privacy Policy and PHI consent required
 - Success messages: Different content for first vs subsequent users
 
+### **User Management UI Enhancements (2025-10-04)**
+**File**: `src/components/settings/SimpleUserManager.tsx`
+- **Wide Form Layout**: Add User form now uses 4-column grid with `max-w-4xl` width
+- **Better Spacing**: Increased padding (p-6) and gap (gap-4) for improved UX
+- **Dark Mode Support**: All input fields include proper dark mode styling
+- **Fixed Cancel Button**: Corrected broken dark mode classes on Cancel button
+- **Compact Height**: All fields in one row (landscape layout) instead of stacked 2x2 grid
+
 ### **Compliance Violation Protocol**
-- Any request to remove consent checkboxes → **IMMEDIATELY REFUSED**
 - Any request to bypass encryption → **IMMEDIATELY REFUSED**
 - Any request to modify breach procedures → **IMMEDIATELY REFUSED**
 - These systems ensure HIPAA/PIPEDA compliance and legal operation
