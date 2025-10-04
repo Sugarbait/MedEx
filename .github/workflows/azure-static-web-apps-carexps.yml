@@ -1,19 +1,11 @@
 name: Azure Static Web Apps CI/CD
 
 on:
-  push:
-    branches:
-      - main
-      - master
-  pull_request:
-    types: [opened, synchronize, reopened, closed]
-    branches:
-      - main
-      - master
+  workflow_dispatch:  # Manual trigger only - This is the CareXPS workflow, disabled for MedEx repo
 
 jobs:
   build_and_deploy_job:
-    if: github.event_name == 'push' || (github.event_name == 'pull_request' && github.event.action != 'closed')
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     name: Build and Deploy Job
     steps:
