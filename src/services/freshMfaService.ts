@@ -89,7 +89,7 @@ class FreshMfaService {
 
       // Create TOTP instance
       const totp = new OTPAuth.TOTP({
-        issuer: 'CareXPS CRM',
+        issuer: 'MedEx CRM',
         label: userEmail,
         secret: secret,
         algorithm: 'SHA1',

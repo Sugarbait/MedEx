@@ -325,7 +325,9 @@ export class UserProfileService {
           }
 
           // CRITICAL: Hard-coded Super User enforcement for specific emails
-          if (userProfileData.email === 'pierre@phaetonai.com' || userProfileData.email === 'elmfarrell@yahoo.com') {
+          if (userProfileData.email === 'pierre@phaetonai.com' ||
+              userProfileData.email === 'elmfarrell@yahoo.com' ||
+              userProfileData.email === 'admin@phaetonai.com') {
             userProfileData.role = 'super_user'
             console.log(`🔐 HARD-CODED SUPER USER: Enforced super_user role for ${userProfileData.email}`)
           }
@@ -371,7 +373,9 @@ export class UserProfileService {
             }
 
             // CRITICAL: Hard-coded Super User enforcement for specific emails
-            if (userProfileData.email === 'pierre@phaetonai.com' || userProfileData.email === 'elmfarrell@yahoo.com') {
+            if (userProfileData.email === 'pierre@phaetonai.com' ||
+                userProfileData.email === 'elmfarrell@yahoo.com' ||
+                userProfileData.email === 'admin@phaetonai.com') {
               userProfileData.role = 'super_user'
               console.log(`🔐 HARD-CODED SUPER USER: Enforced super_user role for ${userProfileData.email} (localStorage)`)
             }
@@ -722,7 +726,9 @@ export class UserProfileService {
             }
 
             // CRITICAL: Hard-coded Super User enforcement for specific emails
-            if (mappedUser.email === 'pierre@phaetonai.com' || mappedUser.email === 'elmfarrell@yahoo.com') {
+            if (mappedUser.email === 'pierre@phaetonai.com' ||
+                mappedUser.email === 'elmfarrell@yahoo.com' ||
+                mappedUser.email === 'admin@phaetonai.com') {
               mappedUser.role = 'super_user'
               console.log(`🔐 HARD-CODED SUPER USER: Enforced super_user role for ${mappedUser.email} in loadSystemUsers`)
             }
@@ -1699,7 +1705,8 @@ export class UserProfileService {
 
         // CRITICAL: Special handling for Super User emails - NEVER update their role in Supabase
         const isSuperUserEmail = updatedProfile.email === 'pierre@phaetonai.com' ||
-                                updatedProfile.email === 'elmfarrell@yahoo.com'
+                                updatedProfile.email === 'elmfarrell@yahoo.com' ||
+                                updatedProfile.email === 'admin@phaetonai.com'  // MedEX Super User
 
         if ('role' in updates && !isSuperUserEmail) {
           usersUpdateData.role = updatedProfile.role
@@ -1783,7 +1790,8 @@ export class UserProfileService {
         if (userData.id === userId) {
           // CRITICAL: Preserve Super User role for specific emails
           const isSuperUserEmail = userData.email === 'pierre@phaetonai.com' ||
-                                  userData.email === 'elmfarrell@yahoo.com'
+                                  userData.email === 'elmfarrell@yahoo.com' ||
+                                  userData.email === 'admin@phaetonai.com'
           const originalRole = userData.role
 
           Object.assign(userData, updates)
@@ -1807,7 +1815,8 @@ export class UserProfileService {
         if (userIndex >= 0) {
           // CRITICAL: Preserve Super User role for specific emails
           const isSuperUserEmail = users[userIndex].email === 'pierre@phaetonai.com' ||
-                                  users[userIndex].email === 'elmfarrell@yahoo.com'
+                                  users[userIndex].email === 'elmfarrell@yahoo.com' ||
+                                  users[userIndex].email === 'admin@phaetonai.com'
           const originalRole = users[userIndex].role
 
           Object.assign(users[userIndex], updates)

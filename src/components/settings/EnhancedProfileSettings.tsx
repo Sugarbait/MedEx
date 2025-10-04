@@ -338,7 +338,9 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
         })
 
         // CRITICAL: ALWAYS preserve Super User role during profile updates
-        if (user.email === 'elmfarrell@yahoo.com' || user.email === 'pierre@phaetonai.com') {
+        if (user.email === 'elmfarrell@yahoo.com' ||
+            user.email === 'pierre@phaetonai.com' ||
+            user.email === 'admin@phaetonai.com') {
           // Re-apply super user role after profile update
           try {
             const preserveRoleResponse = await userProfileService.updateUserProfile(user.id, { role: 'super_user' }, {
@@ -459,7 +461,9 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
               userData.updated_at = new Date().toISOString()
 
               // CRITICAL: Ensure Super User role is preserved
-              if (user.email === 'elmfarrell@yahoo.com' || user.email === 'pierre@phaetonai.com') {
+              if (user.email === 'elmfarrell@yahoo.com' ||
+                  user.email === 'pierre@phaetonai.com' ||
+                  user.email === 'admin@phaetonai.com') {
                 userData.role = 'super_user'
                 console.log(`✅ AVATAR UPLOAD: Preserved Super User role for ${user.email}`)
               }
@@ -479,7 +483,9 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
               users[userIndex].updated_at = new Date().toISOString()
 
               // CRITICAL: Ensure Super User role is preserved
-              if (user.email === 'elmfarrell@yahoo.com' || user.email === 'pierre@phaetonai.com') {
+              if (user.email === 'elmfarrell@yahoo.com' ||
+                  user.email === 'pierre@phaetonai.com' ||
+                  user.email === 'admin@phaetonai.com') {
                 users[userIndex].role = 'super_user'
                 console.log(`✅ SYSTEM USERS: Preserved Super User role for ${user.email}`)
               }
@@ -511,7 +517,9 @@ export const EnhancedProfileSettings: React.FC<EnhancedProfileSettingsProps> = (
         // CRITICAL FIX: Delay events to prevent immediate reload that causes role loss
         setTimeout(() => {
           // CRITICAL: Ensure Super User role is preserved before triggering events
-          if (user.email === 'elmfarrell@yahoo.com' || user.email === 'pierre@phaetonai.com') {
+          if (user.email === 'elmfarrell@yahoo.com' ||
+              user.email === 'pierre@phaetonai.com' ||
+              user.email === 'admin@phaetonai.com') {
             // Force localStorage preservation right before events
             const currentUser = localStorage.getItem('currentUser')
             if (currentUser) {

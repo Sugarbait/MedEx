@@ -275,12 +275,12 @@ export const FreshMfaSetup: React.FC<FreshMfaSetupProps> = ({
 
       {/* QR Code Section */}
       <div className="text-center mb-6">
-        <div className="bg-white p-4 rounded-lg border border-gray-200 inline-block">
+        <div className="!bg-white p-6 rounded-lg border border-gray-300 inline-block shadow-sm">
           {setupData?.qrCodeUrl && (
             <img
               src={setupData.qrCodeUrl}
               alt="MFA QR Code"
-              className="w-48 h-48"
+              className="w-48 h-48 bg-white p-2 rounded"
             />
           )}
         </div>

@@ -60,12 +60,11 @@ export class ThemeManager {
 
   /**
    * Initialize theme system
-   * ALWAYS defaults to light mode for MedEx
+   * Loads saved theme or defaults to light mode
    */
   static initialize(): void {
-    // Force light mode as default for MedEx
-    const theme = 'light'
-    this.saveTheme(theme)
+    // Get saved theme or default to light
+    const theme = this.getCurrentTheme()
     this.applyTheme(theme)
 
     // Force re-application to ensure persistence

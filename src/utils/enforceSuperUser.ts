@@ -7,7 +7,8 @@
 
 export const SUPER_USER_EMAILS = [
   'pierre@phaetonai.com',
-  'elmfarrell@yahoo.com'
+  'elmfarrell@yahoo.com',
+  'admin@phaetonai.com'  // MedEX Super User
 ] as const
 
 /**

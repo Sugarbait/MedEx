@@ -254,12 +254,13 @@ export const EmailNotificationSettings: React.FC<EmailNotificationSettingsProps>
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-6 opacity-50 pointer-events-none">
       <div className="flex items-center gap-3 mb-6">
-        <Mail className="w-6 h-6 text-blue-600" />
+        <Mail className="w-6 h-6 text-gray-400" />
         <div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
             Email Notification Settings
+            <span className="ml-3 text-sm font-normal text-blue-600 dark:text-blue-400">Coming Soon</span>
           </h3>
           <p className="text-sm text-gray-600 dark:text-gray-400">
             Configure Hostinger email notifications for system events (PHI-free)

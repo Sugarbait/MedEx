@@ -18,7 +18,8 @@ import {
   QrCodeIcon,
   AlertTriangleIcon,
   KeyIcon,
-  LinkIcon
+  LinkIcon,
+  UsersIcon
 } from 'lucide-react'
 import FreshMfaService from '@/services/freshMfaService'
 import { FreshMfaSettings } from '@/components/settings/FreshMfaSettings'
@@ -103,6 +104,7 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
     { id: 'notifications', name: 'Notifications', icon: BellIcon },
     { id: 'audit', name: 'Audit Logs', icon: FileTextIcon },
     ...(user?.role === 'super_user' ? [
+      { id: 'users', name: 'User Management', icon: UsersIcon },
       { id: 'branding', name: 'Company Branding', icon: PaletteIcon },
     ] : [])
   ]
@@ -1308,6 +1310,11 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
               </div>
             </div>
+          )}
+
+          {/* User Management - Super Users Only */}
+          {activeTab === 'users' && user?.role === 'super_user' && (
+            <SimpleUserManager user={user} />
           )}
 
           {/* Company Branding - Super Users Only */}
