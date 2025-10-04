@@ -5,8 +5,9 @@ Add these secrets at: https://github.com/Sugarbait/MedEx/settings/secrets/action
 ## Required Secrets
 
 ### 1. AZURE_STATIC_WEB_APPS_API_TOKEN_MEDEX
-**Value**: `4dd732d6a3a2efce1c837286e19899c3a359938fb53e8cec4ad4b4eb16c1285902-685e3179-e63e-4a32-8b6d-f98fa065903500f05100ffab9a0f`
-**Source**: Azure deployment token you provided earlier
+**Value**: `957b352b208537e1320f3878ab5928255bb8d6c1049548f6983a6491f036033a02-622c1dac-70ec-44d6-aa4b-3aacbff8179100f05100ffab9a0f`
+**Source**: Azure deployment token (Updated October 3, 2025)
+**Status**: ✅ Added to GitHub Secrets
 
 ### 2. VITE_PHI_ENCRYPTION_KEY
 **Value**: `UxatBAkb3xe0Bc7+9RCP8Fqwh75tuFEu/ojggnH8rO0=`
