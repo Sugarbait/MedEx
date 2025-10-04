@@ -1,15 +1,29 @@
 name: Azure Static Web Apps CI/CD - MedEx
 
+# Temporarily disabled until GitHub secrets are configured
+# Required secrets:
+# - AZURE_STATIC_WEB_APPS_API_TOKEN_MEDEX
+# - VITE_PHI_ENCRYPTION_KEY
+# - VITE_AUDIT_ENCRYPTION_KEY
+# - VITE_SUPABASE_URL
+# - VITE_SUPABASE_ANON_KEY
+# - VITE_OPENAI_API_KEY (optional)
+# - VITE_EMAILJS_SERVICE_ID (optional)
+# - VITE_EMAILJS_TEMPLATE_ID (optional)
+# - VITE_EMAILJS_PUBLIC_KEY (optional)
+# - HOSTINGER_EMAIL_PASSWORD (optional)
+
 on:
-  push:
-    branches:
-      - main
-      - master
-  pull_request:
-    types: [opened, synchronize, reopened, closed]
-    branches:
-      - main
-      - master
+  workflow_dispatch:  # Manual trigger only
+  # push:
+  #   branches:
+  #     - main
+  #     - master
+  # pull_request:
+  #   types: [opened, synchronize, reopened, closed]
+  #   branches:
+  #     - main
+  #     - master
 
 jobs:
   build_and_deploy_job:
