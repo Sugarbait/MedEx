@@ -1846,6 +1846,119 @@ export class UserManagementService {
       return { status: 'error', error: error.message }
     }
   }
+
+  /**
+   * Get the first registered user (always protected as super_user)
+   */
+  static async getFirstRegisteredUser(): Promise<ServiceResponse<SystemUserWithCredentials | null>> {
+    try {
+      const { data: users, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('tenant_id', 'medex')
+        .order('created_at', { ascending: true })
+        .limit(1)
+
+      if (error) throw error
+
+      if (!users || users.length === 0) {
+        return { status: 'success', data: null }
+      }
+
+      const firstUser = users[0]
+      return {
+        status: 'success',
+        data: {
+          id: firstUser.id,
+          name: firstUser.name || firstUser.email,
+          email: firstUser.email,
+          role: firstUser.role,
+          isActive: firstUser.is_active,
+          created_at: firstUser.created_at
+        } as SystemUserWithCredentials
+      }
+    } catch (error: any) {
+      console.error('Failed to get first registered user:', error)
+      return { status: 'error', error: error.message }
+    }
+  }
+
+  /**
+   * Update user role (with protection for first registered user)
+   */
+  static async updateUserRole(userId: string, newRole: 'user' | 'super_user'): Promise<ServiceResponse<void>> {
+    try {
+      await auditLogger.logSecurityEvent('USER_ROLE_UPDATE_ATTEMPT', 'users', true, {
+        targetUserId: userId,
+        newRole
+      })
+
+      // Check if this is the first registered user
+      const firstUserResponse = await this.getFirstRegisteredUser()
+      if (firstUserResponse.status === 'success' && firstUserResponse.data) {
+        if (firstUserResponse.data.id === userId && newRole !== 'super_user') {
+          await auditLogger.logSecurityEvent('USER_ROLE_UPDATE_BLOCKED', 'users', false, {
+            targetUserId: userId,
+            reason: 'Cannot change first registered user from super_user'
+          })
+          return {
+            status: 'error',
+            error: 'Cannot change the role of the first registered user. This account must remain a Super User.'
+          }
+        }
+      }
+
+      // Update role in Supabase
+      const { error } = await supabase
+        .from('users')
+        .update({ role: newRole, updated_at: new Date().toISOString() })
+        .eq('id', userId)
+        .eq('tenant_id', 'medex')
+
+      if (error) throw error
+
+      // Update in localStorage for immediate effect
+      try {
+        const systemUsers = localStorage.getItem('systemUsers')
+        if (systemUsers) {
+          const users = JSON.parse(systemUsers)
+          const userIndex = users.findIndex((u: any) => u.id === userId)
+          if (userIndex >= 0) {
+            users[userIndex].role = newRole
+            users[userIndex].updated_at = new Date().toISOString()
+            localStorage.setItem('systemUsers', JSON.stringify(users))
+          }
+        }
+
+        // Update currentUser if this is the current user
+        const currentUser = localStorage.getItem('currentUser')
+        if (currentUser) {
+          const userData = JSON.parse(currentUser)
+          if (userData.id === userId) {
+            userData.role = newRole
+            userData.updated_at = new Date().toISOString()
+            localStorage.setItem('currentUser', JSON.stringify(userData))
+          }
+        }
+      } catch (error) {
+        console.warn('Failed to update localStorage after role change:', error)
+      }
+
+      await auditLogger.logSecurityEvent('USER_ROLE_UPDATED', 'users', true, {
+        targetUserId: userId,
+        newRole
+      })
+
+      return { status: 'success' }
+
+    } catch (error: any) {
+      await auditLogger.logSecurityEvent('USER_ROLE_UPDATE_FAILED', 'users', false, {
+        targetUserId: userId,
+        error: error.message
+      })
+      return { status: 'error', error: error.message }
+    }
+  }
 }
 
 export const userManagementService = UserManagementService

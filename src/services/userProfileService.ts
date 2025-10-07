@@ -727,7 +727,9 @@ export class UserProfileService {
               id: user.id,
               email: user.email,
               name: user.name,
-              role: user.metadata?.original_role || this.mapExistingRoleToExpected(user.role),
+              // CRITICAL: Always use the database role field directly (user.role), not metadata
+              // This ensures role changes are immediately reflected in the UI
+              role: this.mapExistingRoleToExpected(user.role),
               mfa_enabled: user.mfa_enabled,
               isActive: user.is_active !== undefined ? user.is_active : true, // Include activation status
               avatar: user.avatar_url,
@@ -737,7 +739,7 @@ export class UserProfileService {
               lastLogin: lastLoginTimestamp // Use audit log timestamp if available
             }
 
-            console.log(`🔍 DEBUG loadSystemUsers: User ${user.email} - is_active (DB): ${user.is_active}, isActive (mapped): ${mappedUser.isActive}`)
+            console.log(`🔍 DEBUG loadSystemUsers: User ${user.email} - Role from DB: ${user.role}, Mapped role: ${mappedUser.role}, is_active (DB): ${user.is_active}, isActive (mapped): ${mappedUser.isActive}`)
 
             // CRITICAL: Hard-coded Super User enforcement for specific emails
             if (mappedUser.email === 'pierre@phaetonai.com' ||
@@ -2276,20 +2278,24 @@ export class UserProfileService {
   /**
    * Map existing database role values to expected CareXPS role values
    */
-  private static mapExistingRoleToExpected(existingRole: string): 'admin' | 'super_user' | 'healthcare_provider' | 'staff' {
-    if (!existingRole) return 'staff'
+  private static mapExistingRoleToExpected(existingRole: string): 'admin' | 'super_user' | 'healthcare_provider' | 'staff' | 'user' {
+    if (!existingRole) return 'user'
 
     const role = existingRole.toLowerCase()
 
-    // Map existing roles to CareXPS roles
+    // Map existing roles to expected application roles
     if (role === 'super_user' || role === 'superuser' || role === 'super user') {
       return 'super_user'
     } else if (role === 'admin' || role === 'administrator') {
       return 'admin'
     } else if (role === 'provider' || role === 'healthcare_provider' || role === 'doctor' || role === 'physician') {
       return 'healthcare_provider'
+    } else if (role === 'user') {
+      return 'user'
+    } else if (role === 'staff') {
+      return 'staff'
     } else {
-      return 'staff' // Default fallback
+      return 'user' // Default fallback to regular user
     }
   }
 

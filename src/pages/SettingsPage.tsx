@@ -98,8 +98,8 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
   const tabs = [
     { id: 'profile', name: 'Profile', icon: UserIcon },
-    // Only show Security tab if user is explicitly enabled (isActive === true)
-    ...(user?.isActive === true ? [{ id: 'security', name: 'Security', icon: ShieldIcon }] : []),
+    // Show Security tab if user is a Super User OR if user is explicitly enabled (isActive === true)
+    ...(user?.role === 'super_user' || user?.isActive === true ? [{ id: 'security', name: 'Security', icon: ShieldIcon }] : []),
     { id: 'appearance', name: 'Appearance', icon: PaletteIcon },
     { id: 'notifications', name: 'Notifications', icon: BellIcon },
     // Super User only tabs

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { UserPlus, Trash2, Key, Lock, Unlock, UserCheck, UserX, Clock } from 'lucide-react'
+import { UserPlus, Trash2, Key, Lock, Unlock, UserCheck, UserX, Clock, ShieldCheck, Shield } from 'lucide-react'
 import { userManagementService } from '@/services/userManagementService'
 import { userProfileService } from '@/services/userProfileService'
 import { PasswordDebugger } from '@/utils/passwordDebug'
@@ -14,6 +14,7 @@ interface User {
   isLocked?: boolean
   isActive?: boolean
   lastLogin?: string
+  created_at?: string
 }
 
 export const SimpleUserManager: React.FC = () => {
@@ -23,6 +24,8 @@ export const SimpleUserManager: React.FC = () => {
   const [showChangePassword, setShowChangePassword] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<{ userId: string; email: string } | null>(null)
   const [confirmDisable, setConfirmDisable] = useState<{ userId: string; email: string } | null>(null)
+  const [confirmRoleChange, setConfirmRoleChange] = useState<{ userId: string; email: string; currentRole: string; newRole: 'user' | 'super_user' } | null>(null)
+  const [firstUserId, setFirstUserId] = useState<string | null>(null)
   const { toasts, showToast, removeToast } = useToast()
 
   // Helper function to format last login with both date and time
@@ -53,6 +56,7 @@ export const SimpleUserManager: React.FC = () => {
   // Load users on mount
   useEffect(() => {
     loadUsers()
+    loadFirstUser()
   }, [])
 
   const loadUsers = async () => {
@@ -76,17 +80,31 @@ export const SimpleUserManager: React.FC = () => {
                        u.email?.toLowerCase() === 'demo@medex.com' ||
                        u.email?.toLowerCase() === 'guest@email.com') ? false : (u.isLocked || false),
             isActive: u.isActive !== undefined ? u.isActive : true, // Default to true for existing users
-            lastLogin: u.lastLogin
+            lastLogin: u.lastLogin,
+            created_at: u.created_at
           }
-          console.log(`👤 DEBUG: User ${u.email} - isActive: ${mapped.isActive} (original: ${u.isActive})`)
+          console.log(`👤 DEBUG: User ${u.email} - Role: ${u.role}, isActive: ${mapped.isActive} (original: ${u.isActive})`)
           return mapped
         })
 
         setUsers(mappedUsers)
         console.log('✅ DEBUG: Set users state with', mappedUsers.length, 'users')
+        console.log('✅ DEBUG: User roles in state:', mappedUsers.map(u => `${u.email}: ${u.role}`))
       }
     } catch (error) {
       console.error('Failed to load users:', error)
+    }
+  }
+
+  const loadFirstUser = async () => {
+    try {
+      const response = await userManagementService.getFirstRegisteredUser()
+      if (response.status === 'success' && response.data) {
+        setFirstUserId(response.data.id)
+        console.log('🛡️ First registered user ID:', response.data.id, response.data.email)
+      }
+    } catch (error) {
+      console.error('Failed to load first registered user:', error)
     }
   }
 
@@ -218,6 +236,44 @@ export const SimpleUserManager: React.FC = () => {
     }
   }
 
+  const handleChangeRole = async (userId: string, email: string, currentRole: string, newRole: 'user' | 'super_user') => {
+    setIsLoading(true)
+    try {
+      console.log(`🔄 Changing role for ${email} from ${currentRole} to ${newRole}`)
+      const response = await userManagementService.updateUserRole(userId, newRole)
+      console.log('🔄 Role update response:', response)
+
+      if (response.status === 'success') {
+        showToast(`Role changed successfully for ${email}`, 'success')
+        console.log(`✅ Role changed successfully, updating UI state...`)
+
+        // Update the user in the local state immediately for instant UI feedback
+        setUsers(prevUsers => {
+          const updatedUsers = prevUsers.map(u =>
+            u.id === userId
+              ? { ...u, role: newRole }
+              : u
+          )
+          console.log('✅ Updated users state:', updatedUsers.map(u => `${u.email}: ${u.role}`))
+          return updatedUsers
+        })
+
+        // Also reload from the service to ensure consistency
+        console.log('🔄 Reloading users from service...')
+        await loadUsers()
+      } else {
+        console.error('❌ Role change failed:', response.error)
+        showToast(response.error || 'Failed to change role', 'error')
+      }
+    } catch (error: any) {
+      console.error('❌ Role change error:', error)
+      showToast(`Error changing role: ${error.message}`, 'error')
+    } finally {
+      setIsLoading(false)
+      setConfirmRoleChange(null)
+    }
+  }
+
   const pendingUsers = users.filter(u => !u.isActive)
   const activeUsers = users.filter(u => u.isActive)
 
@@ -234,7 +290,8 @@ export const SimpleUserManager: React.FC = () => {
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">User Management</h3>
           <button
             onClick={() => setShowAddUser(true)}
-            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 dark:bg-blue-700 dark:hover:bg-blue-600 flex items-center gap-2 transition-colors"
+            title="Add New User: Create a new user account for the system"
             disabled={isLoading}
           >
             <UserPlus className="w-4 h-4" />
@@ -261,13 +318,21 @@ export const SimpleUserManager: React.FC = () => {
                   <div className="font-medium text-gray-900 dark:text-white">{user.name}</div>
                   <div className="text-sm text-gray-600 dark:text-gray-400">{user.email}</div>
                   <div className="text-xs text-gray-500 dark:text-gray-500 mt-1">
-                    Role: <span className="font-medium">{user.role === 'user' ? 'User' : user.role.replace('_', ' ')}</span>
+                    Role: <span className="font-medium">
+                      {user.role === 'super_user' ? 'Super User' :
+                       user.role === 'user' ? 'User' :
+                       user.role === 'staff' ? 'Staff' :
+                       user.role === 'admin' ? 'Admin' :
+                       user.role === 'healthcare_provider' ? 'Healthcare Provider' :
+                       user.role.replace('_', ' ')}
+                    </span>
                   </div>
                 </div>
                 <div className="flex gap-2">
                   <button
                     onClick={() => handleEnableUser(user.id, user.email)}
-                    className="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 flex items-center gap-1 text-sm"
+                    className="px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 dark:bg-green-700 dark:hover:bg-green-600 flex items-center gap-1 text-sm transition-colors"
+                    title="Approve User: Activate this account and grant access to the system"
                     disabled={isLoading}
                   >
                     <UserCheck className="w-4 h-4" />
@@ -275,7 +340,8 @@ export const SimpleUserManager: React.FC = () => {
                   </button>
                   <button
                     onClick={() => setConfirmDelete({ userId: user.id, email: user.email })}
-                    className="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 flex items-center gap-1 text-sm"
+                    className="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 dark:bg-red-700 dark:hover:bg-red-600 flex items-center gap-1 text-sm transition-colors"
+                    title="Reject User: Delete this pending registration request"
                     disabled={isLoading}
                   >
                     <UserX className="w-4 h-4" />
@@ -369,14 +435,29 @@ export const SimpleUserManager: React.FC = () => {
                   <td className="px-4 py-3 text-sm">{user.name}</td>
                   <td className="px-4 py-3 text-sm">{user.email}</td>
                   <td className="px-4 py-3 text-sm">
-                    <span className={`px-2 py-1 text-xs rounded-full ${
-                      user.role === 'super_user' ? 'bg-purple-100 text-purple-700' :
-                      user.role === 'admin' ? 'bg-blue-100 text-blue-700' :
-                      user.role === 'healthcare_provider' ? 'bg-green-100 text-green-700' :
-                      'bg-gray-100 text-gray-700 dark:text-gray-300'
-                    }`}>
-                      {user.role === 'super_user' ? 'Super User' : user.role.replace('_', ' ')}
-                    </span>
+                    <div className="flex items-center gap-2">
+                      <span className={`px-2 py-1 text-xs rounded-full ${
+                        user.role === 'super_user' ? 'bg-purple-100 text-purple-700' :
+                        user.role === 'admin' ? 'bg-blue-100 text-blue-700' :
+                        user.role === 'healthcare_provider' ? 'bg-green-100 text-green-700' :
+                        user.role === 'user' ? 'bg-gray-100 text-gray-700' :
+                        user.role === 'staff' ? 'bg-gray-100 text-gray-700' :
+                        'bg-gray-100 text-gray-700 dark:text-gray-300'
+                      }`}>
+                        {user.role === 'super_user' ? 'Super User' :
+                         user.role === 'user' ? 'User' :
+                         user.role === 'staff' ? 'Staff' :
+                         user.role === 'admin' ? 'Admin' :
+                         user.role === 'healthcare_provider' ? 'Healthcare Provider' :
+                         user.role.replace('_', ' ')}
+                      </span>
+                      {user.id === firstUserId && (
+                        <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-700 border border-blue-300 flex items-center gap-1" title="First registered user - role cannot be changed">
+                          <Lock className="w-3 h-3" />
+                          Protected
+                        </span>
+                      )}
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-sm text-gray-600 dark:text-gray-400">
                     <span className={user.lastLogin ? "" : "text-gray-400"}>
@@ -394,17 +475,44 @@ export const SimpleUserManager: React.FC = () => {
                   </td>
                   <td className="px-4 py-3 text-sm text-right">
                     <div className="flex justify-end gap-2">
+                      {/* Role Change Button - only show if not the first user */}
+                      {user.id !== firstUserId && (
+                        <button
+                          onClick={() => {
+                            const newRole = user.role === 'super_user' ? 'user' : 'super_user'
+                            setConfirmRoleChange({
+                              userId: user.id,
+                              email: user.email,
+                              currentRole: user.role,
+                              newRole
+                            })
+                          }}
+                          className={`p-1 rounded transition-colors ${
+                            user.role === 'super_user'
+                              ? 'text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                              : 'text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20'
+                          }`}
+                          title={user.role === 'super_user' ? 'Change Role: Demote to User' : 'Change Role: Promote to Super User'}
+                          disabled={isLoading}
+                        >
+                          {user.role === 'super_user' ? (
+                            <Shield className="w-4 h-4" />
+                          ) : (
+                            <ShieldCheck className="w-4 h-4" />
+                          )}
+                        </button>
+                      )}
                       <button
                         onClick={() => setShowChangePassword(user.id)}
-                        className="p-1 text-purple-600 hover:bg-purple-50 rounded"
-                        title="Change Password"
+                        className="p-1 text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 rounded transition-colors"
+                        title="Change Password: Set a new password for this user"
                       >
                         <Key className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => handleUnlockUser(user.id, user.email)}
-                        className="p-1 text-orange-600 hover:bg-orange-50 rounded"
-                        title="Unlock Account (Clear Failed Login Attempts)"
+                        className="p-1 text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded transition-colors"
+                        title="Unlock Account: Clear all failed login attempts and unlock this account"
                         disabled={isLoading}
                       >
                         <Unlock className="w-4 h-4" />
@@ -412,8 +520,8 @@ export const SimpleUserManager: React.FC = () => {
                       {user.isLocked ? (
                         <button
                           onClick={() => handleEnableUser(user.id, user.email)}
-                          className="p-1 text-green-600 hover:bg-green-50 rounded"
-                          title="Enable Account"
+                          className="p-1 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
+                          title="Enable Account: Activate this user account"
                           disabled={isLoading}
                         >
                           <UserCheck className="w-4 h-4" />
@@ -426,8 +534,8 @@ export const SimpleUserManager: React.FC = () => {
                           user.email.toLowerCase() === 'guest@email.com') && (
                           <button
                             onClick={() => setConfirmDisable({ userId: user.id, email: user.email })}
-                            className="p-1 text-red-600 hover:bg-red-50 rounded"
-                            title="Disable Account"
+                            className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                            title="Disable Account: Prevent this user from logging in"
                             disabled={isLoading}
                           >
                             <Lock className="w-4 h-4" />
@@ -436,8 +544,8 @@ export const SimpleUserManager: React.FC = () => {
                       )}
                       <button
                         onClick={() => setConfirmDelete({ userId: user.id, email: user.email })}
-                        className="p-1 text-red-600 hover:bg-red-50 rounded"
-                        title="Delete User"
+                        className="p-1 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded transition-colors"
+                        title="Delete User: Permanently remove this user from the system"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
@@ -544,6 +652,74 @@ export const SimpleUserManager: React.FC = () => {
               disabled={isLoading}
             >
               Disable Account
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Role Change Confirmation Modal */}
+    {confirmRoleChange && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md mx-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2 flex items-center gap-2">
+            {confirmRoleChange.newRole === 'super_user' ? (
+              <>
+                <ShieldCheck className="w-5 h-5 text-purple-600" />
+                Promote to Super User
+              </>
+            ) : (
+              <>
+                <Shield className="w-5 h-5 text-blue-600" />
+                Demote to User
+              </>
+            )}
+          </h3>
+          <p className="text-gray-700 dark:text-gray-300 mb-4">
+            Are you sure you want to change the role of <strong>{confirmRoleChange.email}</strong> from{' '}
+            <strong className="text-blue-600">
+              {confirmRoleChange.currentRole === 'super_user' ? 'Super User' : 'User'}
+            </strong> to{' '}
+            <strong className="text-purple-600">
+              {confirmRoleChange.newRole === 'super_user' ? 'Super User' : 'User'}
+            </strong>?
+          </p>
+          {confirmRoleChange.newRole === 'super_user' && (
+            <div className="bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-700 rounded-lg p-3 mb-4">
+              <p className="text-sm text-purple-800 dark:text-purple-200">
+                <strong>Super Users</strong> have full administrative access including:
+              </p>
+              <ul className="text-xs text-purple-700 dark:text-purple-300 mt-2 space-y-1 ml-4 list-disc">
+                <li>User management</li>
+                <li>System configuration</li>
+                <li>Audit log access</li>
+                <li>Company branding control</li>
+              </ul>
+            </div>
+          )}
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => setConfirmRoleChange(null)}
+              className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+              disabled={isLoading}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => handleChangeRole(
+                confirmRoleChange.userId,
+                confirmRoleChange.email,
+                confirmRoleChange.currentRole,
+                confirmRoleChange.newRole
+              )}
+              className={`px-4 py-2 text-white rounded ${
+                confirmRoleChange.newRole === 'super_user'
+                  ? 'bg-purple-600 hover:bg-purple-700'
+                  : 'bg-blue-600 hover:bg-blue-700'
+              }`}
+              disabled={isLoading}
+            >
+              {confirmRoleChange.newRole === 'super_user' ? 'Promote to Super User' : 'Demote to User'}
             </button>
           </div>
         </div>
