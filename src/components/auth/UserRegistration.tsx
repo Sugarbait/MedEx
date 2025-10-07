@@ -181,7 +181,7 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({ onCancel, on
   }
 
   return (
-    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 max-w-md w-full">
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 max-w-4xl w-full">
       <div className="text-center mb-6">
         <div className="inline-flex items-center justify-center w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-full mb-3">
           <UserPlusIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
@@ -200,137 +200,148 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({ onCancel, on
       )}
 
       <form onSubmit={handleSubmit} className="space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Full Name *
-          </label>
-          <input
-            type="text"
-            value={formData.name}
-            onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            placeholder="John Doe"
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Email Address *
-          </label>
-          <input
-            type="email"
-            value={formData.email}
-            onChange={(e) => setFormData({ ...formData, email: e.target.value })}
-            placeholder="john.doe@example.com"
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-            required
-          />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Password *
-          </label>
-          <div className="relative">
+        {/* Row 1: Name and Email */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Full Name *
+            </label>
             <input
-              type={showPassword ? 'text' : 'password'}
-              value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
-              placeholder="Minimum 8 characters"
-              className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              type="text"
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+              placeholder="John Doe"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
               required
             />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2"
-            >
-              {showPassword ? (
-                <EyeOffIcon className="w-5 h-5 text-gray-400" />
-              ) : (
-                <EyeIcon className="w-5 h-5 text-gray-400" />
-              )}
-            </button>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Email Address *
+            </label>
+            <input
+              type="email"
+              value={formData.email}
+              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              placeholder="john.doe@example.com"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+              required
+            />
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Confirm Password *
-          </label>
-          <div className="relative">
-            <input
-              type={showConfirmPassword ? 'text' : 'password'}
-              value={formData.confirmPassword}
-              onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
-              placeholder="Re-enter your password"
-              className={`w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 dark:bg-gray-700 dark:text-white ${
-                formData.confirmPassword && formData.password
-                  ? formData.password === formData.confirmPassword
-                    ? 'border-green-500 dark:border-green-500 focus:ring-green-500'
-                    : 'border-red-500 dark:border-red-500 focus:ring-red-500'
-                  : 'border-gray-300 dark:border-gray-600 focus:ring-blue-500'
-              }`}
-              required
-            />
-            <button
-              type="button"
-              onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-              className="absolute right-3 top-1/2 transform -translate-y-1/2"
-            >
-              {showConfirmPassword ? (
-                <EyeOffIcon className="w-5 h-5 text-gray-400" />
-              ) : (
-                <EyeIcon className="w-5 h-5 text-gray-400" />
-              )}
-            </button>
-          </div>
-          {formData.confirmPassword && formData.password && (
-            <div className={`mt-2 flex items-center text-sm ${
-              formData.password === formData.confirmPassword
-                ? 'text-green-600 dark:text-green-400'
-                : 'text-red-600 dark:text-red-400'
-            }`}>
-              {formData.password === formData.confirmPassword ? (
-                <>
-                  <Check className="w-4 h-4 mr-1" />
-                  <span>Passwords match</span>
-                </>
-              ) : (
-                <>
-                  <X className="w-4 h-4 mr-1" />
-                  <span>Passwords do not match</span>
-                </>
-              )}
+        {/* Row 2: Password and Confirm Password */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Password *
+            </label>
+            <div className="relative">
+              <input
+                type={showPassword ? 'text' : 'password'}
+                value={formData.password}
+                onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+                placeholder="Minimum 8 characters"
+                className="w-full px-3 py-2 pr-10 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2"
+              >
+                {showPassword ? (
+                  <EyeOffIcon className="w-5 h-5 text-gray-400" />
+                ) : (
+                  <EyeIcon className="w-5 h-5 text-gray-400" />
+                )}
+              </button>
             </div>
-          )}
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Confirm Password *
+            </label>
+            <div className="relative">
+              <input
+                type={showConfirmPassword ? 'text' : 'password'}
+                value={formData.confirmPassword}
+                onChange={(e) => setFormData({ ...formData, confirmPassword: e.target.value })}
+                placeholder="Re-enter your password"
+                className={`w-full px-3 py-2 pr-10 border rounded-lg focus:outline-none focus:ring-2 dark:bg-gray-700 dark:text-white ${
+                  formData.confirmPassword && formData.password
+                    ? formData.password === formData.confirmPassword
+                      ? 'border-green-500 dark:border-green-500 focus:ring-green-500'
+                      : 'border-red-500 dark:border-red-500 focus:ring-red-500'
+                    : 'border-gray-300 dark:border-gray-600 focus:ring-blue-500'
+                }`}
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                className="absolute right-3 top-1/2 transform -translate-y-1/2"
+              >
+                {showConfirmPassword ? (
+                  <EyeOffIcon className="w-5 h-5 text-gray-400" />
+                ) : (
+                  <EyeIcon className="w-5 h-5 text-gray-400" />
+                )}
+              </button>
+            </div>
+          </div>
         </div>
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Department (Optional)
-          </label>
-          <input
-            type="text"
-            value={formData.department}
-            onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-            placeholder="e.g., Nursing, Radiology"
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-          />
-        </div>
+        {/* Password match indicator */}
+        {formData.confirmPassword && formData.password && (
+          <div className={`flex items-center text-sm ${
+            formData.password === formData.confirmPassword
+              ? 'text-green-600 dark:text-green-400'
+              : 'text-red-600 dark:text-red-400'
+          }`}>
+            {formData.password === formData.confirmPassword ? (
+              <>
+                <Check className="w-4 h-4 mr-1" />
+                <span>Passwords match</span>
+              </>
+            ) : (
+              <>
+                <X className="w-4 h-4 mr-1" />
+                <span>Passwords do not match</span>
+              </>
+            )}
+          </div>
+        )}
 
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Phone Number (Optional)
-          </label>
-          <input
-            type="tel"
-            value={formData.phone}
-            onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-            placeholder="(555) 123-4567"
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
-          />
+        {/* Row 3: Department and Phone */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Department (Optional)
+            </label>
+            <input
+              type="text"
+              value={formData.department}
+              onChange={(e) => setFormData({ ...formData, department: e.target.value })}
+              placeholder="e.g., Nursing, Radiology"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Phone Number (Optional)
+            </label>
+            <input
+              type="tel"
+              value={formData.phone}
+              onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
+              placeholder="(555) 123-4567"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 dark:bg-gray-700 dark:text-white"
+            />
+          </div>
         </div>
 
         <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg p-3">
