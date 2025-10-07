@@ -1,10 +1,9 @@
 /**
  * Retell AI Monitoring Service
- * Polls Retell AI for new calls/SMS and triggers email notifications
+ * Polls Retell AI for new calls/SMS and triggers on-screen toast notifications
  */
 
 import { retellService } from './retellService'
-import { sendNewCallNotification, sendNewSMSNotification } from './emailNotificationService'
 
 class RetellMonitoringService {
   private isMonitoring = false
@@ -107,15 +106,10 @@ class RetellMonitoringService {
       })
 
       if (newCalls.length > 0) {
-        console.log(`📊 Found ${newCalls.length} new calls, sending email notification`)
+        console.log(`📊 Found ${newCalls.length} new calls - on-screen notification will display`)
 
-        // Send email notification
-        try {
-          sendNewCallNotification(newCalls.length)
-          console.log('✅ Email notification sent for new calls')
-        } catch (error) {
-          console.error('Failed to send call email notification:', error)
-        }
+        // Email notifications disabled - using on-screen toast notifications only
+        // Toast notifications are handled by toastNotificationService in CallsPage
       }
 
       // Clean up old IDs to prevent memory leak (keep last 500)
@@ -158,15 +152,10 @@ class RetellMonitoringService {
       })
 
       if (newChats.length > 0) {
-        console.log(`📊 Found ${newChats.length} new chats/SMS, sending email notification`)
+        console.log(`📊 Found ${newChats.length} new chats/SMS - on-screen notification will display`)
 
-        // Send email notification
-        try {
-          sendNewSMSNotification(newChats.length)
-          console.log('✅ Email notification sent for new SMS')
-        } catch (error) {
-          console.error('Failed to send SMS email notification:', error)
-        }
+        // Email notifications disabled - using on-screen toast notifications only
+        // Toast notifications are handled by toastNotificationService in SMSPage
       }
 
       // Clean up old IDs to prevent memory leak (keep last 500)

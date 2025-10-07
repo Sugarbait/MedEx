@@ -127,6 +127,28 @@ export class UserManagementService {
         return { status: 'error', error: `A user with email ${userData.email} already exists` }
       }
 
+      // Create Supabase Auth user first so authentication will work
+      console.log('UserManagementService: Creating Supabase Auth user')
+      try {
+        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+          email: userData.email,
+          password: credentials.password,
+          email_confirm: true, // Auto-confirm email
+          user_metadata: {
+            name: userData.name,
+            role: userData.role
+          }
+        })
+
+        if (authError) {
+          console.warn('UserManagementService: Supabase Auth user creation failed, will use local credentials only:', authError.message)
+        } else {
+          console.log('UserManagementService: Supabase Auth user created successfully')
+        }
+      } catch (authCreationError) {
+        console.warn('UserManagementService: Supabase Auth not available, using local credentials only')
+      }
+
       // Create the user profile
       const createResponse = await userProfileService.createUser(userData)
       if (createResponse.status === 'error') {
@@ -135,8 +157,11 @@ export class UserManagementService {
 
       const newUser = createResponse.data!
 
-      // Save credentials
+      // Save credentials (for local authentication fallback)
       await this.saveUserCredentials(newUser.id, credentials)
+
+      // Clear any existing lockouts for this user (prevents immediate lockout on new accounts)
+      await this.clearAccountLockout(newUser.id)
 
       // Return complete user data
       const systemUser: SystemUserWithCredentials = {
@@ -190,6 +215,15 @@ export class UserManagementService {
 
       // Check if this is a demo user by email - if so, never lock them out
       const isDemoUser = email === 'demo@carexps.com' || email === 'elmfarrell@yahoo.com' || email === 'pierre@phaetonai.com'
+
+      // Check if user account is enabled (unless demo user)
+      if (!isDemoUser && user.isActive === false) {
+        await auditLogger.logSecurityEvent('USER_AUTHENTICATION_BLOCKED', 'users', false, {
+          email,
+          reason: 'Account not enabled by administrator'
+        })
+        return { status: 'error', error: 'Your account has not been enabled yet. Please contact your administrator.' }
+      }
 
       if (!isDemoUser) {
         // Check if user is locked (only for non-demo users)
@@ -1024,13 +1058,11 @@ export class UserManagementService {
     try {
       console.log('UserManagementService: Disabling user account:', userId)
 
-      // Update user in database
+      // Update user in database - set is_active to false
       const { error: updateError } = await supabase
         .from('users')
         .update({
-          is_locked: true,
-          locked_reason: reason || 'Account disabled by super user',
-          locked_at: new Date().toISOString()
+          is_active: false
         })
         .eq('id', userId)
 
@@ -1045,7 +1077,7 @@ export class UserManagementService {
           const users = JSON.parse(systemUsers)
           const userIndex = users.findIndex((u: any) => u.id === userId)
           if (userIndex >= 0) {
-            users[userIndex].isLocked = true
+            users[userIndex].isActive = false
             localStorage.setItem('systemUsers', JSON.stringify(users))
           }
         } catch (parseError) {
@@ -1082,15 +1114,11 @@ export class UserManagementService {
     try {
       console.log('UserManagementService: Enabling user account:', userId)
 
-      // Clear lockout in database
+      // Enable user in database - set is_active to true
       const { error: updateError } = await supabase
         .from('users')
         .update({
-          is_locked: false,
-          locked_reason: null,
-          locked_at: null,
-          failed_login_attempts: 0,
-          last_failed_login: null
+          is_active: true
         })
         .eq('id', userId)
 
@@ -1105,7 +1133,7 @@ export class UserManagementService {
           const users = JSON.parse(systemUsers)
           const userIndex = users.findIndex((u: any) => u.id === userId)
           if (userIndex >= 0) {
-            users[userIndex].isLocked = false
+            users[userIndex].isActive = true
             localStorage.setItem('systemUsers', JSON.stringify(users))
           }
         } catch (parseError) {

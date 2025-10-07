@@ -92,7 +92,7 @@ MedEx is a HIPAA-compliant healthcare CRM built with React/TypeScript and Vite. 
 - Azure Static Web Apps deployment
 - Demo mode fallback when services unavailable
 - Emergency logout functionality (Ctrl+Shift+L)
-- Advanced fuzzy search and filtering capabilities
+- Simple case-insensitive search across all fields
 
 ---
 
@@ -199,7 +199,6 @@ The codebase features an extensive service layer with 40+ specialized services o
 - **twilioCostService**: SMS cost tracking and optimization
 - **smsCostCacheService**: Cost data caching
 - **analyticsService**: Usage analytics and reporting
-- **fuzzySearchService**: Advanced search capabilities
 
 ### **User Management Services**
 - **userProfileService**: User profile management
@@ -1405,7 +1404,50 @@ Configured SMS agent ID: agent_840d4bfc9d4dac35a6d64546ad
 
 ---
 
-## **🔄 RECENT UPDATES (2025-10-03)**
+## **🔄 RECENT UPDATES (2025-10-07)**
+
+### **Search Functionality Overhaul:**
+- **Files**: `src/pages/CallsPage.tsx`, `src/pages/SMSPage.tsx`
+- **Change**: Removed fuzzy search system, implemented simple case-insensitive substring search
+- **Removed**:
+  - `fuzzySearchService` imports and dependencies
+  - `isFuzzySearchEnabled` state management
+  - Fuzzy search initialization useEffect hooks
+  - `ZapIcon` (lightning bolt) toggle button from UI
+- **New Implementation**:
+  - Simple `.toLowerCase().includes()` search across all fields
+  - Searches: IDs, phone numbers, names, status, sentiment, summaries, transcripts, custom analysis data
+  - Case-insensitive matching for all search terms
+  - Removed fuzzy search toggle, reduced search input padding from `pr-12` to `pr-4`
+- **Impact**: More predictable search behavior, faster performance, simpler codebase
+- **Status**: ✅ Complete
+
+### **Patient Name Extraction from Call Analysis:**
+- **Files**: `src/pages/CallsPage.tsx`, `src/components/common/CallDetailModal.tsx`
+- **Change**: Extract patient names from post-call analysis data instead of showing "Patient Unknown"
+- **Implementation**: Fallback chain checks multiple fields: `patient_name`, `caller_name`, `customer_name`, `name`
+- **Added**: `call_analysis` interface with `custom_analysis_data` type definition
+- **Impact**: Displays actual patient names from Retell AI analysis in call records
+- **Status**: ✅ Complete
+
+### **Detailed Analysis Section in Call Modal:**
+- **File**: `src/components/common/CallDetailModal.tsx`
+- **Change**: Added Detailed Analysis section (matching SMS modal pattern)
+- **Implementation**: 2-column grid display of all custom_analysis_data fields
+- **Position**: Between Call Summary and Full Transcript sections
+- **Impact**: Users can view all post-call analysis fields in organized format
+- **Status**: ✅ Complete
+
+### **UI Filter Cleanup:**
+- **Files**: `src/pages/CallsPage.tsx`, `src/pages/SMSPage.tsx`
+- **Changes**:
+  - Removed status dropdown filters (Active/Complete/Failed)
+  - Reduced search bar and sentiment dropdown height (`py-3` → `py-2`, `44px` → `36px`)
+  - Added horizontal width constraints (`max-w-3xl` container, `max-w-md` search input)
+  - Fixed sentiment dropdown width to `w-full sm:w-48` (from flexible width)
+  - Removed "ended" status tag from Calls page status column
+- **Impact**: Cleaner, more compact UI with better mobile responsiveness
+- **Status**: ✅ Complete
 
 ### **Super User Role Protection Enhancement:**
 - **File**: `src/utils/enforceSuperUser.ts`, `src/services/userProfileService.ts`, `src/components/settings/EnhancedProfileSettings.tsx`

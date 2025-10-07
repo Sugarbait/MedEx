@@ -13,7 +13,6 @@ import { retellService } from '@/services'
 import { twilioCostService } from '@/services/twilioCostService'
 import { currencyService } from '@/services/currencyService'
 import { userSettingsService } from '@/services'
-import { fuzzySearchService } from '@/services/fuzzySearchService'
 import { toastNotificationService } from '@/services/toastNotificationService'
 import {
   MessageSquareIcon,
@@ -38,8 +37,7 @@ import {
   StopCircleIcon,
   EyeIcon,
   StickyNoteIcon,
-  TrashIcon,
-  ZapIcon
+  TrashIcon
 } from 'lucide-react'
 import jsPDF from 'jspdf'
 import { patientIdService } from '@/services/patientIdService'
@@ -156,9 +154,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [searchTerm, setSearchTerm] = useState('')
-  const [statusFilter, setStatusFilter] = useState('all')
   const [sentimentFilter, setSentimentFilter] = useState('all')
-  const [isFuzzySearchEnabled, setIsFuzzySearchEnabled] = useState(true)
   const [selectedDateRange, setSelectedDateRange] = useState<DateRange>(() => {
     // Remember last selected date range from localStorage
     const saved = localStorage.getItem('sms_page_date_range')
@@ -644,7 +640,6 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     maxWait: 2000
   })
 
-  const { debouncedValue: debouncedStatusFilter } = useDebounce(statusFilter, 300)
   const { debouncedValue: debouncedSentimentFilter } = useDebounce(sentimentFilter, 300)
 
   // Note: debouncedFetchChats is defined after fetchChatsOptimized (around line 1156)
@@ -693,13 +688,6 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chats])
-
-  // Initialize fuzzy search engine when chats are loaded
-  useEffect(() => {
-    if (chats.length > 0 && isFuzzySearchEnabled) {
-      fuzzySearchService.initializeSMSSearch(chats)
-    }
-  }, [chats, isFuzzySearchEnabled])
 
   // ==================================================================================
   // 🔒 LOCKED CODE: CLEAR CACHE FUNCTION - PRODUCTION READY - NO MODIFICATIONS
@@ -1279,13 +1267,12 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   // Fetch when debounced filters change - defined after debouncedFetchChats
   useEffect(() => {
     if (debouncedSearchTerm !== searchTerm ||
-        debouncedStatusFilter !== statusFilter ||
         debouncedSentimentFilter !== sentimentFilter) {
       return // Wait for debouncing to complete
     }
     setCurrentPage(1)
     debouncedFetchChats(true)
-  }, [debouncedSearchTerm, debouncedStatusFilter, debouncedSentimentFilter, debouncedFetchChats])
+  }, [debouncedSearchTerm, debouncedSentimentFilter, debouncedFetchChats])
 
   // Auto-refresh functionality like other pages - defined after fetchChatsOptimized
   const { formatLastRefreshTime } = useAutoRefresh({
@@ -1624,7 +1611,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
   }
 
   const getSentimentColor = (sentiment?: string) => {
-    switch (sentiment) {
+    switch (sentiment?.toLowerCase()) {
       case 'positive': return 'text-green-600 bg-green-50 border-green-200'
       case 'negative': return 'text-red-600 bg-red-50 border-red-200'
       case 'neutral': return 'text-yellow-600 bg-yellow-50 border-yellow-200'
@@ -1822,71 +1809,109 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
     // Use chats (all data) - apply filtering first, then pagination
     let searchFilteredChats = chats
 
-    // Apply search filter using fuzzy search or fallback to basic search
+    // Apply simple case-insensitive search across all fields
     if (debouncedSearchTerm && debouncedSearchTerm.trim()) {
-      if (isFuzzySearchEnabled) {
-        try {
-          const fuzzyResults = fuzzySearchService.searchSMS(debouncedSearchTerm)
-          searchFilteredChats = fuzzyResults.filter(result => chats.some(chat => chat.chat_id === result.chat_id))
-        } catch (error) {
-          console.error('Fuzzy search failed, falling back to basic search:', error)
-          searchFilteredChats = fuzzySearchService.basicSMSSearch(chats, debouncedSearchTerm)
-        }
-      } else {
-        // Use basic search when fuzzy search is disabled
-        searchFilteredChats = fuzzySearchService.basicSMSSearch(chats, debouncedSearchTerm)
-      }
+      const lowerSearchTerm = debouncedSearchTerm.toLowerCase()
+
+      searchFilteredChats = chats.filter(chat => {
+        // Search across all relevant fields
+        const searchableFields = [
+          chat.chat_id,
+          chat.agent_id,
+          chat.phone_number,
+          chat.chat_status,
+          chat.chat_analysis?.custom_analysis_data?.phone_number,
+          chat.chat_analysis?.custom_analysis_data?.customer_phone_number,
+          chat.chat_analysis?.custom_analysis_data?.phone,
+          chat.chat_analysis?.custom_analysis_data?.contact_number,
+          chat.chat_analysis?.custom_analysis_data?.patient_name,
+          chat.chat_analysis?.custom_analysis_data?.caller_name,
+          chat.chat_analysis?.custom_analysis_data?.customer_name,
+          chat.chat_analysis?.custom_analysis_data?.name,
+          chat.chat_analysis?.user_sentiment,
+          chat.chat_analysis?.chat_summary,
+          chat.metadata?.phone_number,
+          chat.metadata?.patient_name,
+          chat.metadata?.customer_name,
+          // Search in all custom analysis data fields
+          ...(chat.chat_analysis?.custom_analysis_data ? Object.values(chat.chat_analysis.custom_analysis_data) : [])
+        ]
+
+        // Check if any field contains the search term
+        return searchableFields.some(field =>
+          field && String(field).toLowerCase().includes(lowerSearchTerm)
+        )
+      })
     }
 
-    // Apply status and sentiment filters to search results
+    // Apply sentiment filter to search results
     const fullyFilteredChats = searchFilteredChats.filter(chat => {
-      const matchesStatus = debouncedStatusFilter === 'all' || chat.chat_status === debouncedStatusFilter
-      const matchesSentiment = debouncedSentimentFilter === 'all' || chat.chat_analysis?.user_sentiment === debouncedSentimentFilter
+      const matchesSentiment = debouncedSentimentFilter === 'all' ||
+        chat.chat_analysis?.user_sentiment?.toLowerCase() === debouncedSentimentFilter.toLowerCase()
 
-      return matchesStatus && matchesSentiment
+      return matchesSentiment
     })
 
     // Apply pagination to filtered results (CallsPage pattern)
     const startIndex = (currentPage - 1) * recordsPerPage
     const endIndex = startIndex + recordsPerPage
     return fullyFilteredChats.slice(startIndex, endIndex)
-  }, [chats, debouncedSearchTerm, debouncedStatusFilter, debouncedSentimentFilter, isFuzzySearchEnabled, currentPage, recordsPerPage])
+  }, [chats, debouncedSearchTerm, debouncedSentimentFilter, currentPage, recordsPerPage])
 
   // Calculate total filtered count (before pagination) for pagination display
   const filteredChatsCount = React.useMemo(() => {
     let searchFilteredChats = chats
 
-    // Apply search filter using fuzzy search or fallback to basic search
+    // Apply simple case-insensitive search across all fields
     if (debouncedSearchTerm && debouncedSearchTerm.trim()) {
-      if (isFuzzySearchEnabled) {
-        try {
-          const fuzzyResults = fuzzySearchService.searchSMS(debouncedSearchTerm)
-          searchFilteredChats = fuzzyResults.filter(result => chats.some(chat => chat.chat_id === result.chat_id))
-        } catch (error) {
-          console.error('Fuzzy search failed, falling back to basic search:', error)
-          searchFilteredChats = fuzzySearchService.basicSMSSearch(chats, debouncedSearchTerm)
-        }
-      } else {
-        // Use basic search when fuzzy search is disabled
-        searchFilteredChats = fuzzySearchService.basicSMSSearch(chats, debouncedSearchTerm)
-      }
+      const lowerSearchTerm = debouncedSearchTerm.toLowerCase()
+
+      searchFilteredChats = chats.filter(chat => {
+        // Search across all relevant fields
+        const searchableFields = [
+          chat.chat_id,
+          chat.agent_id,
+          chat.phone_number,
+          chat.chat_status,
+          chat.chat_analysis?.custom_analysis_data?.phone_number,
+          chat.chat_analysis?.custom_analysis_data?.customer_phone_number,
+          chat.chat_analysis?.custom_analysis_data?.phone,
+          chat.chat_analysis?.custom_analysis_data?.contact_number,
+          chat.chat_analysis?.custom_analysis_data?.patient_name,
+          chat.chat_analysis?.custom_analysis_data?.caller_name,
+          chat.chat_analysis?.custom_analysis_data?.customer_name,
+          chat.chat_analysis?.custom_analysis_data?.name,
+          chat.chat_analysis?.user_sentiment,
+          chat.chat_analysis?.chat_summary,
+          chat.metadata?.phone_number,
+          chat.metadata?.patient_name,
+          chat.metadata?.customer_name,
+          // Search in all custom analysis data fields
+          ...(chat.chat_analysis?.custom_analysis_data ? Object.values(chat.chat_analysis.custom_analysis_data) : [])
+        ]
+
+        // Check if any field contains the search term
+        return searchableFields.some(field =>
+          field && String(field).toLowerCase().includes(lowerSearchTerm)
+        )
+      })
     }
 
-    // Apply status and sentiment filters to search results
+    // Apply sentiment filter to search results
     const fullyFilteredChats = searchFilteredChats.filter(chat => {
-      const matchesStatus = debouncedStatusFilter === 'all' || chat.chat_status === debouncedStatusFilter
-      const matchesSentiment = debouncedSentimentFilter === 'all' || chat.chat_analysis?.user_sentiment === debouncedSentimentFilter
+      const matchesSentiment = debouncedSentimentFilter === 'all' ||
+        chat.chat_analysis?.user_sentiment?.toLowerCase() === debouncedSentimentFilter.toLowerCase()
 
-      return matchesStatus && matchesSentiment
+      return matchesSentiment
     })
 
     return fullyFilteredChats.length
-  }, [chats, debouncedSearchTerm, debouncedStatusFilter, debouncedSentimentFilter, isFuzzySearchEnabled])
+  }, [chats, debouncedSearchTerm, debouncedSentimentFilter])
 
   // Reset to first page when filters change
   useEffect(() => {
     setCurrentPage(1)
-  }, [debouncedSearchTerm, debouncedStatusFilter, debouncedSentimentFilter])
+  }, [debouncedSearchTerm, debouncedSentimentFilter])
 
   // Remove displayChats - render filteredChats directly like CallsPage
 
@@ -2284,43 +2309,22 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
         <div>
             {/* Search and Filters */}
             <div className="mb-4 sm:mb-6 bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-4 sm:p-5 lg:p-6">
-              <div className="flex flex-col gap-3 sm:gap-4">
-                <div className="flex-1 relative">
+              <div className="flex flex-col sm:flex-row gap-3 sm:gap-4 max-w-3xl">
+                <div className="flex-1 relative max-w-md">
                   <SearchIcon className="w-5 h-5 text-gray-400 absolute left-3 top-1/2 transform -translate-y-1/2" />
                   <input
                     type="search"
                     placeholder="Search chats by phone number, patient name, or content..."
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-12 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[44px] text-sm sm:text-base touch-manipulation"
+                    className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 placeholder-gray-500 dark:placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 min-h-[36px] text-sm sm:text-base touch-manipulation"
                   />
-                  <button
-                    onClick={() => setIsFuzzySearchEnabled(!isFuzzySearchEnabled)}
-                    className={`absolute right-3 top-1/2 transform -translate-y-1/2 p-1 rounded transition-colors ${
-                      isFuzzySearchEnabled
-                        ? 'text-blue-600 hover:text-blue-700 bg-blue-50 dark:bg-blue-900/20'
-                        : 'text-gray-400 hover:text-gray-600 dark:hover:text-gray-300'
-                    }`}
-                    title={isFuzzySearchEnabled ? 'Fuzzy search enabled - click to disable' : 'Basic search - click to enable fuzzy search'}
-                  >
-                    <ZapIcon className="w-4 h-4" />
-                  </button>
                 </div>
                 <div className="flex flex-col sm:flex-row gap-3">
                   <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="px-3 sm:px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px] text-sm sm:text-base flex-1 sm:min-w-[120px] touch-manipulation"
-                  >
-                    <option value="all">All Status</option>
-                    <option value="ongoing">Ongoing</option>
-                    <option value="ended">Ended</option>
-                    <option value="error">Error</option>
-                  </select>
-                  <select
                     value={sentimentFilter}
                     onChange={(e) => setSentimentFilter(e.target.value)}
-                    className="px-3 sm:px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[44px] text-sm sm:text-base flex-1 sm:min-w-[130px] touch-manipulation"
+                    className="px-3 sm:px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-blue-500 min-h-[36px] text-sm sm:text-base w-full sm:w-48 touch-manipulation"
                   >
                     <option value="all">All Sentiment</option>
                     <option value="positive">Positive</option>

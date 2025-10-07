@@ -1043,7 +1043,7 @@ export class UserProfileService {
           role: dbRole, // Use mapped role for database
           azure_ad_id: azureAdId, // Required by schema
           mfa_enabled: userData.mfa_enabled || false,
-          is_active: userData.isActive !== undefined ? userData.isActive : true, // Respect isActive from userData, default to true
+          is_active: userData.isActive !== undefined ? userData.isActive : false, // Respect isActive from userData, default to false (requires Super User approval)
           last_login: null, // Initialize last_login as null for new users
           metadata: {
             created_via: 'user_management',

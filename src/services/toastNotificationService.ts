@@ -13,7 +13,6 @@
 import { supabase } from '@/config/supabase'
 import { RealtimeChannel } from '@supabase/supabase-js'
 import { ToastNotificationData } from '@/components/common/ToastNotification'
-import { sendNewSMSNotification, sendNewCallNotification } from './emailNotificationService'
 
 export interface ToastNotificationPreferences {
   enabled: boolean
@@ -454,15 +453,6 @@ class ToastNotificationService {
     }
 
     this.processNotification(notification)
-
-    // Send email notification (only for realtime events, not initial scan)
-    if (!skipTimingChecks) {
-      try {
-        sendNewCallNotification(1)
-      } catch (error) {
-        console.error('Failed to send call email notification:', error)
-      }
-    }
   }
 
   /**
@@ -493,15 +483,6 @@ class ToastNotificationService {
     }
 
     this.processNotification(notification)
-
-    // Send email notification (only for realtime events, not initial scan)
-    if (!skipTimingChecks) {
-      try {
-        sendNewSMSNotification(1)
-      } catch (error) {
-        console.error('Failed to send SMS email notification:', error)
-      }
-    }
   }
 
   /**

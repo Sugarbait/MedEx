@@ -98,12 +98,14 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
 
   const tabs = [
     { id: 'profile', name: 'Profile', icon: UserIcon },
-    { id: 'security', name: 'Security', icon: ShieldIcon },
-    { id: 'api', name: 'API Configuration', icon: KeyIcon },
+    // Only show Security tab if user is explicitly enabled (isActive === true)
+    ...(user?.isActive === true ? [{ id: 'security', name: 'Security', icon: ShieldIcon }] : []),
     { id: 'appearance', name: 'Appearance', icon: PaletteIcon },
     { id: 'notifications', name: 'Notifications', icon: BellIcon },
-    { id: 'audit', name: 'Audit Logs', icon: FileTextIcon },
+    // Super User only tabs
     ...(user?.role === 'super_user' ? [
+      { id: 'api', name: 'API Configuration', icon: KeyIcon },
+      { id: 'audit', name: 'Audit Logs', icon: FileTextIcon },
       { id: 'users', name: 'User Management', icon: UsersIcon },
       { id: 'branding', name: 'Company Branding', icon: PaletteIcon },
     ] : [])
@@ -1026,7 +1028,27 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
         <div className="lg:col-span-3">
           {/* Profile Settings */}
           {activeTab === 'profile' && (
-            <EnhancedProfileSettings user={user} />
+            <>
+              {/* Account Pending Activation Banner */}
+              {user?.isActive === false && (
+                <div className="bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4 mb-6">
+                  <div className="flex items-start gap-3">
+                    <ShieldIcon className="w-5 h-5 text-amber-600 dark:text-amber-400 mt-0.5 flex-shrink-0" />
+                    <div>
+                      <h4 className="font-semibold text-amber-900 dark:text-amber-100 mb-1">
+                        Account Pending Activation
+                      </h4>
+                      <p className="text-sm text-amber-800 dark:text-amber-200">
+                        Your account has been created but not yet enabled by an administrator.
+                        You can update your profile, but you won't be able to access Security settings (including MFA)
+                        until a Super User enables your account.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+              <EnhancedProfileSettings user={user} />
+            </>
           )}
 
           {/* API Configuration */}

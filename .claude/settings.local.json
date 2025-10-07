@@ -174,7 +174,9 @@
       "WebFetch(domain:www.retellai.com)",
       "Bash(start \"I:\\Apps Back Up\\CareXPS CRM\\test-toast-notifications.html\")",
       "WebFetch(domain:medex.nexasync.ca)",
-      "Bash(start clear-cache.html)"
+      "Bash(start clear-cache.html)",
+      "Bash(openssl:*)",
+      "Bash(start http://localhost:3223/settings)"
     ],
     "deny": [],
     "ask": []

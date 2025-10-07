@@ -3,6 +3,8 @@ import { UserPlus, Trash2, Key, Lock, Unlock, UserCheck, UserX, Clock } from 'lu
 import { userManagementService } from '@/services/userManagementService'
 import { userProfileService } from '@/services/userProfileService'
 import { PasswordDebugger } from '@/utils/passwordDebug'
+import { useToast } from '@/hooks/useToast'
+import { ToastContainer } from '@/components/common/ToastContainer'
 
 interface User {
   id: string
@@ -19,6 +21,9 @@ export const SimpleUserManager: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false)
   const [showAddUser, setShowAddUser] = useState(false)
   const [showChangePassword, setShowChangePassword] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<{ userId: string; email: string } | null>(null)
+  const [confirmDisable, setConfirmDisable] = useState<{ userId: string; email: string } | null>(null)
+  const { toasts, showToast, removeToast } = useToast()
 
   // Helper function to format last login with both date and time
   const formatLastLogin = (dateString: string | undefined) => {
@@ -39,7 +44,7 @@ export const SimpleUserManager: React.FC = () => {
     name: '',
     email: '',
     password: '',
-    role: 'healthcare_provider'
+    role: 'user'
   })
 
   // Password change form
@@ -87,7 +92,7 @@ export const SimpleUserManager: React.FC = () => {
 
   const handleAddUser = async () => {
     if (!newUser.name || !newUser.email || !newUser.password) {
-      alert('Please fill in all fields')
+      showToast('Please fill in all fields', 'warning')
       return
     }
 
@@ -99,7 +104,7 @@ export const SimpleUserManager: React.FC = () => {
         email: newUser.email,
         role: newUser.role as any,
         mfa_enabled: false,
-        is_locked: true, // New profiles are disabled by default until enabled by super user
+        isActive: false, // New profiles are disabled by default until enabled by super user
         settings: {}
       }
 
@@ -112,15 +117,15 @@ export const SimpleUserManager: React.FC = () => {
       const response = await userManagementService.createSystemUser(userData, credentials)
 
       if (response.status === 'success') {
-        alert(`User ${newUser.email} created successfully! Account is disabled by default - enable it when ready.`)
+        showToast(`User ${newUser.email} created successfully! Account is disabled by default - enable it when ready.`, 'success')
         setShowAddUser(false)
-        setNewUser({ name: '', email: '', password: '', role: 'healthcare_provider' })
+        setNewUser({ name: '', email: '', password: '', role: 'user' })
         await loadUsers()
       } else {
-        alert(`Failed to create user: ${response.error}`)
+        showToast(`Failed to create user: ${response.error}`, 'error')
       }
     } catch (error: any) {
-      alert(`Error creating user: ${error.message}`)
+      showToast(`Error creating user: ${error.message}`, 'error')
     } finally {
       setIsLoading(false)
     }
@@ -128,7 +133,7 @@ export const SimpleUserManager: React.FC = () => {
 
   const handleChangePassword = async (userId: string, email: string) => {
     if (!newPassword) {
-      alert('Please enter a new password')
+      showToast('Please enter a new password', 'warning')
       return
     }
 
@@ -136,34 +141,31 @@ export const SimpleUserManager: React.FC = () => {
     try {
       // Use the PasswordDebugger method that we know works
       await PasswordDebugger.setUserPassword(userId, email, newPassword)
-      alert(`Password changed successfully for ${email}`)
+      showToast(`Password changed successfully for ${email}`, 'success')
       setShowChangePassword(null)
       setNewPassword('')
     } catch (error: any) {
-      alert(`Failed to change password: ${error.message}`)
+      showToast(`Failed to change password: ${error.message}`, 'error')
     } finally {
       setIsLoading(false)
     }
   }
 
   const handleDeleteUser = async (userId: string, email: string) => {
-    if (!confirm(`Are you sure you want to delete ${email}?`)) {
-      return
-    }
-
     setIsLoading(true)
     try {
       const response = await userManagementService.deleteSystemUser(userId)
       if (response.status === 'success') {
-        alert(`User ${email} deleted successfully`)
+        showToast(`User ${email} deleted successfully`, 'success')
         await loadUsers()
       } else {
-        alert(`Failed to delete user: ${response.error}`)
+        showToast(`Failed to delete user: ${response.error}`, 'error')
       }
     } catch (error: any) {
-      alert(`Error deleting user: ${error.message}`)
+      showToast(`Error deleting user: ${error.message}`, 'error')
     } finally {
       setIsLoading(false)
+      setConfirmDelete(null)
     }
   }
 
@@ -171,10 +173,10 @@ export const SimpleUserManager: React.FC = () => {
     setIsLoading(true)
     try {
       await userManagementService.clearAccountLockout(userId)
-      alert(`Account ${email} unlocked successfully`)
+      showToast(`Account ${email} unlocked successfully`, 'success')
       await loadUsers()
     } catch (error: any) {
-      alert(`Failed to unlock account: ${error.message}`)
+      showToast(`Failed to unlock account: ${error.message}`, 'error')
     } finally {
       setIsLoading(false)
     }
@@ -186,23 +188,20 @@ export const SimpleUserManager: React.FC = () => {
         email.toLowerCase() === 'pierre@phaetonai.com' ||
         email.toLowerCase() === 'demo@medex.com' ||
         email.toLowerCase() === 'guest@email.com') {
-      alert('Cannot disable super users or demo accounts')
-      return
-    }
-
-    if (!confirm(`Are you sure you want to disable ${email}? They will not be able to log in.`)) {
+      showToast('Cannot disable super users or demo accounts', 'warning')
       return
     }
 
     setIsLoading(true)
     try {
       await userManagementService.disableUser(userId, 'Disabled by super user')
-      alert(`Account ${email} disabled successfully`)
+      showToast(`Account ${email} disabled successfully`, 'success')
       await loadUsers()
     } catch (error: any) {
-      alert(`Failed to disable account: ${error.message}`)
+      showToast(`Failed to disable account: ${error.message}`, 'error')
     } finally {
       setIsLoading(false)
+      setConfirmDisable(null)
     }
   }
 
@@ -210,10 +209,10 @@ export const SimpleUserManager: React.FC = () => {
     setIsLoading(true)
     try {
       await userManagementService.enableUser(userId)
-      alert(`Account ${email} enabled successfully`)
+      showToast(`Account ${email} enabled successfully`, 'success')
       await loadUsers()
     } catch (error: any) {
-      alert(`Failed to enable account: ${error.message}`)
+      showToast(`Failed to enable account: ${error.message}`, 'error')
     } finally {
       setIsLoading(false)
     }
@@ -227,18 +226,21 @@ export const SimpleUserManager: React.FC = () => {
   console.log('📊 DEBUG: Active users:', activeUsers.length, activeUsers.map(u => u.email))
 
   return (
-    <div className="space-y-6">
-      <div className="flex justify-between items-center">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">User Management</h3>
-        <button
-          onClick={() => setShowAddUser(true)}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
-          disabled={isLoading}
-        >
-          <UserPlus className="w-4 h-4" />
-          Add User
-        </button>
-      </div>
+    <>
+      <ToastContainer toasts={toasts} onRemove={removeToast} />
+
+      <div className="space-y-6">
+        <div className="flex justify-between items-center">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">User Management</h3>
+          <button
+            onClick={() => setShowAddUser(true)}
+            className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
+            disabled={isLoading}
+          >
+            <UserPlus className="w-4 h-4" />
+            Add User
+          </button>
+        </div>
 
       {/* Pending Approvals Section */}
       {pendingUsers.length > 0 && (
@@ -272,7 +274,7 @@ export const SimpleUserManager: React.FC = () => {
                     Approve
                   </button>
                   <button
-                    onClick={() => handleDeleteUser(user.id, user.email)}
+                    onClick={() => setConfirmDelete({ userId: user.id, email: user.email })}
                     className="px-3 py-1.5 bg-red-600 text-white rounded hover:bg-red-700 flex items-center gap-1 text-sm"
                     disabled={isLoading}
                   >
@@ -317,10 +319,8 @@ export const SimpleUserManager: React.FC = () => {
               onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
               className="px-3 py-2 border rounded dark:bg-gray-800 dark:border-gray-600 dark:text-white"
             >
-              <option value="healthcare_provider">Healthcare Provider</option>
-              <option value="admin">Admin</option>
+              <option value="user">User</option>
               <option value="super_user">Super User</option>
-              <option value="staff">Staff</option>
             </select>
           </div>
           <div className="mt-4 flex gap-3">
@@ -334,7 +334,7 @@ export const SimpleUserManager: React.FC = () => {
             <button
               onClick={() => {
                 setShowAddUser(false)
-                setNewUser({ name: '', email: '', password: '', role: 'healthcare_provider' })
+                setNewUser({ name: '', email: '', password: '', role: 'user' })
               }}
               className="px-6 py-2 bg-gray-500 dark:bg-gray-600 text-white rounded hover:bg-gray-600 dark:hover:bg-gray-700 font-medium"
             >
@@ -401,6 +401,14 @@ export const SimpleUserManager: React.FC = () => {
                       >
                         <Key className="w-4 h-4" />
                       </button>
+                      <button
+                        onClick={() => handleUnlockUser(user.id, user.email)}
+                        className="p-1 text-orange-600 hover:bg-orange-50 rounded"
+                        title="Unlock Account (Clear Failed Login Attempts)"
+                        disabled={isLoading}
+                      >
+                        <Unlock className="w-4 h-4" />
+                      </button>
                       {user.isLocked ? (
                         <button
                           onClick={() => handleEnableUser(user.id, user.email)}
@@ -408,7 +416,7 @@ export const SimpleUserManager: React.FC = () => {
                           title="Enable Account"
                           disabled={isLoading}
                         >
-                          <Unlock className="w-4 h-4" />
+                          <UserCheck className="w-4 h-4" />
                         </button>
                       ) : (
                         // Only show disable button for non-super users and non-demo users
@@ -417,7 +425,7 @@ export const SimpleUserManager: React.FC = () => {
                           user.email.toLowerCase() === 'demo@medex.com' ||
                           user.email.toLowerCase() === 'guest@email.com') && (
                           <button
-                            onClick={() => handleDisableUser(user.id, user.email)}
+                            onClick={() => setConfirmDisable({ userId: user.id, email: user.email })}
                             className="p-1 text-red-600 hover:bg-red-50 rounded"
                             title="Disable Account"
                             disabled={isLoading}
@@ -427,7 +435,7 @@ export const SimpleUserManager: React.FC = () => {
                         )
                       )}
                       <button
-                        onClick={() => handleDeleteUser(user.id, user.email)}
+                        onClick={() => setConfirmDelete({ userId: user.id, email: user.email })}
                         className="p-1 text-red-600 hover:bg-red-50 rounded"
                         title="Delete User"
                       >
@@ -479,5 +487,68 @@ export const SimpleUserManager: React.FC = () => {
         )}
       </div>
     </div>
+
+    {/* Delete Confirmation Modal */}
+    {confirmDelete && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md mx-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+            Confirm Delete
+          </h3>
+          <p className="text-gray-700 dark:text-gray-300 mb-6">
+            Are you sure you want to delete <strong>{confirmDelete.email}</strong>?
+            This action cannot be undone.
+          </p>
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => setConfirmDelete(null)}
+              className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+              disabled={isLoading}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => handleDeleteUser(confirmDelete.userId, confirmDelete.email)}
+              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+              disabled={isLoading}
+            >
+              Delete User
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+
+    {/* Disable Confirmation Modal */}
+    {confirmDisable && (
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+        <div className="bg-white dark:bg-gray-800 rounded-lg p-6 max-w-md mx-4">
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+            Confirm Disable
+          </h3>
+          <p className="text-gray-700 dark:text-gray-300 mb-6">
+            Are you sure you want to disable <strong>{confirmDisable.email}</strong>?
+            They will not be able to log in until you enable their account again.
+          </p>
+          <div className="flex gap-3 justify-end">
+            <button
+              onClick={() => setConfirmDisable(null)}
+              className="px-4 py-2 text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700 rounded"
+              disabled={isLoading}
+            >
+              Cancel
+            </button>
+            <button
+              onClick={() => handleDisableUser(confirmDisable.userId, confirmDisable.email)}
+              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700"
+              disabled={isLoading}
+            >
+              Disable Account
+            </button>
+          </div>
+        </div>
+      </div>
+    )}
+  </>
   )
 }
