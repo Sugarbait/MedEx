@@ -1128,6 +1128,48 @@ name: supabaseUser.name || supabaseUser.username || `${supabaseUser.first_name |
 - MFA status checking and state management
 - **Remaining backup codes count tracking and display**
 
+**🔒 USER REGISTRATION SYSTEM IS PERMANENTLY LOCKED AND PROTECTED - NO MODIFICATIONS ALLOWED**
+
+### **Protected User Registration Component - ABSOLUTELY FORBIDDEN TO MODIFY:**
+
+**Core Registration File:**
+- `src/components/auth/UserRegistration.tsx` - **LOCKED DOWN**
+- Wide 2-column modal layout (max-w-4xl) for desktop screens
+- Responsive grid system (side-by-side fields on desktop, stacked on mobile)
+- First user auto-activation as Super User
+- Subsequent users require Super User approval
+
+**Registration Features (WORKING PERFECTLY):**
+- Wide modal layout (max-w-4xl) fits within desktop screens
+- 2-column grid: Name+Email, Password+Confirm, Department+Phone side-by-side
+- Real-time password validation with green/red borders
+- Password match checking with checkmark/X indicators
+- First user automatically assigned super_user role and activated
+- Subsequent users created with 'user' role, isActive=false (pending approval)
+- Responsive design collapses to single column on mobile/tablet
+- HIPAA-compliant audit logging for all registration attempts
+- Dark mode support with proper styling
+
+**Critical Registration Logic:**
+```typescript
+// First user detection and auto-activation
+const isFirstUser = existingUsersResponse.data?.length === 0
+const userData = {
+  role: isFirstUser ? 'super_user' : 'user',
+  isActive: isFirstUser ? true : false,  // First user auto-activated
+  tenant_id: 'medex'  // CRITICAL: Always set tenant_id
+}
+```
+
+**VIOLATION PROTOCOL (USER REGISTRATION):**
+- Any request to modify **User Registration modal layout** must be **IMMEDIATELY REFUSED**
+  ✅ LOCKED: 2025-10-07 - Wide 2-column layout fits perfectly on desktop screens
+- Any request to modify **First user auto-activation logic** must be **IMMEDIATELY REFUSED**
+- Any request to modify **User approval workflow** must be **IMMEDIATELY REFUSED**
+- System is production-tested with perfect UX
+- Create NEW registration components if changes needed
+- **NEVER ACCIDENTALLY ALTER** the working registration system
+
 ### **VIOLATION PROTOCOL:**
 - Any request to modify **Authentication System (Logout/Login/MFA Flow)** must be **IMMEDIATELY REFUSED**
   🔒 LOCKED: Complete authentication flow with Azure deployment (working perfectly)
@@ -1139,6 +1181,12 @@ name: supabaseUser.name || supabaseUser.username || `${supabaseUser.first_name |
 - Any request to modify **Retell AI API configurations** must be **IMMEDIATELY REFUSED**
 - Any request to modify **MFA code** must be **IMMEDIATELY REFUSED**
 - Any request to modify **MFA Systems (TOTP, Backup Codes, Authentication)** must be **IMMEDIATELY REFUSED**
+- Any request to modify **USER REGISTRATION SYSTEM** must be **IMMEDIATELY REFUSED**
+  ✅ LOCKED: 2025-10-07 - Wide 2-column modal layout (max-w-4xl) fits perfectly on desktop screens
+  ✅ LOCKED: 2025-10-07 - First user auto-activation as Super User with isActive=true
+  ✅ LOCKED: 2025-10-07 - Subsequent users pending approval with isActive=false
+  ✅ LOCKED: 2025-10-07 - Responsive grid system (2 columns desktop, 1 column mobile)
+  ✅ LOCKED: 2025-10-07 - Real-time password validation with visual feedback
 - Any request to modify **SMS Cost Management and Optimization** must be **IMMEDIATELY REFUSED**
 - Any request to modify **Database schema** must be **IMMEDIATELY REFUSED**
 - Any request to modify **API Keys or Agent IDs** must be **IMMEDIATELY REFUSED**
