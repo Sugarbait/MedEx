@@ -53,7 +53,7 @@ export const SiteHelpChatbot: React.FC<SiteHelpChatbotProps> = ({
     {
       id: '1',
       type: 'bot',
-      content: 'Hello! I\'m your MedEx Assistant. I can help you navigate the platform and answer questions about using the system. How can I help you today?',
+      content: 'Hello! I\'m your MedEx Assistant. I can help you navigate the platform and answer questions about using the system.\n\nIMPORTANT: I have NO access to patient data or PHI. I can only help with general platform features and navigation. How can I help you today?',
       timestamp: new Date()
     }
   ])
