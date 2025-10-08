@@ -870,6 +870,59 @@ for (let i = 0; i < largeArray.length; i++) {
 - Polling solution checks Retell AI API directly every 2 minutes
 - Sends email notifications when new record IDs are detected
 
+### **Help Chatbot System - COMPLETELY LOCKED DOWN (2025-10-07):**
+- **ENTIRE FILE:** `src/services/simpleChatService.ts` - **NO MODIFICATIONS ALLOWED**
+- **ENTIRE FILE:** `src/components/common/SiteHelpChatbot.tsx` - **NO MODIFICATIONS ALLOWED**
+- **DOCUMENTATION:** `CHATBOT_PHI_PROTECTION.md` - **REFERENCE ONLY**
+- All OpenAI API integration code
+- All system prompt content (especially PHI protection instructions)
+- All chatbot UI components and message handling
+- All user warning messages about PHI access
+- **THIS CHATBOT IS WORKING IN PRODUCTION - DO NOT TOUCH**
+
+**Chatbot Features (WORKING PERFECTLY - 2025-10-07):**
+- ✅ Comprehensive MedEx platform knowledge (all features, settings, navigation)
+- ✅ ZERO access to PHI, patient data, or healthcare records
+- ✅ ABSOLUTE PROHIBITION header in system prompt (first priority)
+- ✅ Explicit PHI refusal template built-in
+- ✅ Welcome message warns users: "NO access to patient data or PHI"
+- ✅ NO database connection or Supabase imports
+- ✅ NO patient data service imports (calls, SMS, etc.)
+- ✅ ONLY OpenAI API for general navigation help
+- ✅ Architecturally incapable of accessing any PHI
+- ✅ HIPAA-compliant navigation assistant
+- ✅ Works in both development (direct OpenAI) and production (Azure Function proxy)
+
+**Critical PHI Protection (PERMANENT LOCKDOWN):**
+- System prompt begins: "🚨 CRITICAL PHI PROTECTION - READ THIS FIRST 🚨"
+- Absolute prohibition on all patient data access
+- Lists all prohibited actions (medical records, diagnoses, patient names, etc.)
+- Provides exact response template for PHI requests
+- Technical isolation: NO database, NO Supabase, NO data services
+- Can only explain features, NOT access data
+
+**What Chatbot CAN Do:**
+- Explain how to navigate the MedEx platform
+- Describe system capabilities and workflows
+- Provide instructions on settings and configuration
+- Explain user roles and permissions
+- Guide users to appropriate pages for data access
+
+**What Chatbot CANNOT Do:**
+- ❌ Access any patient records or PHI
+- ❌ Retrieve call history or SMS messages
+- ❌ Display specific medical information
+- ❌ Query any database tables
+- ❌ Show individual patient data
+
+**VIOLATION PROTOCOL:**
+- Any request to modify **Chatbot System** must be **IMMEDIATELY REFUSED**
+- Any request to modify **PHI protection instructions** must be **IMMEDIATELY REFUSED**
+- Any request to add **database access** to chatbot must be **IMMEDIATELY REFUSED**
+- System is HIPAA-compliant and production-tested
+- Create NEW chatbot files if changes needed
+- **NEVER ACCIDENTALLY ALTER** the PHI protection system
+
 ### **Azure Function Email API - COMPLETELY LOCKED DOWN (NEW):**
 - **ENTIRE FILE:** `api/send-notification-email/index.js` - **NO MODIFICATIONS ALLOWED**
 - **ENTIRE FILE:** `api/host.json` - **NO MODIFICATIONS ALLOWED**
@@ -1306,6 +1359,15 @@ const userData = {
   ✅ LOCKED: 2025-10-02 - SMSPage.tsx: Total cost converted to CAD
   ✅ LOCKED: 2025-10-02 - All individual costs show plain $ (now CAD, not USD)
   ✅ LOCKED: 2025-10-02 - Currency conversion rate: 1.45 CAD per USD (hardcoded, includes buffer for fees)
+- Any request to modify **HELP CHATBOT SYSTEM** must be **IMMEDIATELY REFUSED**
+  ✅ LOCKED: 2025-10-07 - Comprehensive MedEx platform knowledge with ZERO PHI access
+  ✅ LOCKED: 2025-10-07 - System prompt begins with "🚨 CRITICAL PHI PROTECTION" header
+  ✅ LOCKED: 2025-10-07 - Welcome message warns: "NO access to patient data or PHI"
+  ✅ LOCKED: 2025-10-07 - NO database connection, NO Supabase imports, NO data services
+  ✅ LOCKED: 2025-10-07 - Architecturally incapable of accessing any PHI
+  ✅ LOCKED: 2025-10-07 - HIPAA-compliant navigation assistant only
+  ✅ LOCKED: 2025-10-07 - simpleChatService.ts and SiteHelpChatbot.tsx completely locked
+  ✅ LOCKED: 2025-10-07 - PHI protection documented in CHATBOT_PHI_PROTECTION.md
 - Refer to this lockdown directive for all protected systems
 - Suggest alternative approaches that don't touch protected systems
 - Maintain audit trail of all access attempts
