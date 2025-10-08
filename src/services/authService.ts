@@ -4,6 +4,7 @@ import { secureLogger } from '@/services/secureLogger'
 import FreshMfaService from '@/services/freshMfaService'
 import { secureStorage } from '@/services/secureStorage'
 import { encryptionService } from '@/services/encryption'
+import { getCurrentTenantId } from '@/config/tenantConfig'
 
 const logger = secureLogger.component('AuthService')
 
@@ -17,6 +18,7 @@ class AuthService {
         .from('users')
         .select('*')
         .eq('azure_ad_id', accountId)
+        .eq('tenant_id', getCurrentTenantId()) // TENANT ISOLATION
         .single()
 
       if (error && error.code !== 'PGRST116') {
@@ -77,7 +79,8 @@ class AuthService {
                 name: userProfile.name,
                 role: userProfile.role,
                 last_login: new Date().toISOString(),
-                updated_at: new Date().toISOString()
+                updated_at: new Date().toISOString(),
+                tenant_id: getCurrentTenantId() // TENANT ISOLATION
               })
             logger.info('Updated existing user with Azure AD ID', accountId, undefined, { userId: userProfile.id })
           } catch (updateError) {
@@ -124,7 +127,8 @@ class AuthService {
             mfaEnabled: false, // Start with MFA disabled, user can enable later
             isActive: true,
             createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
+            updatedAt: new Date().toISOString(),
+            tenant_id: getCurrentTenantId() // TENANT ISOLATION
           }
 
           // Insert user into database
@@ -148,6 +152,7 @@ class AuthService {
           .from('users')
           .update({ last_login: new Date().toISOString() })
           .eq('azure_ad_id', accountId)
+          .eq('tenant_id', getCurrentTenantId()) // TENANT ISOLATION
 
         userProfile = user as User
       }
@@ -161,6 +166,7 @@ class AuthService {
           .from('user_settings')
           .select('*')
           .eq('user_id', userProfile.id)
+          .eq('tenant_id', getCurrentTenantId()) // TENANT ISOLATION
           .single()
 
         if (!settingsError && userSettings) {

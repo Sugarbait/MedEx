@@ -14,6 +14,7 @@
 
 import { supabase } from '@/config/supabase'
 import { encryptionService, EncryptedData } from './encryption'
+import { getCurrentTenantId } from '@/config/tenantConfig'
 
 export interface AuditLogEntry {
   id?: string
@@ -439,7 +440,8 @@ class HIPAAAuditLogger {
         outcome: encryptedEntry.outcome,
         failure_reason: encryptedEntry.failure_reason,
         additional_info: encryptedEntry.additional_info,
-        timestamp: encryptedEntry.timestamp
+        timestamp: encryptedEntry.timestamp,
+        tenant_id: getCurrentTenantId() // TENANT ISOLATION: Ensure audit logs are tenant-specific
       }
 
       const { error } = await supabase
@@ -581,6 +583,7 @@ CREATE POLICY "Admins can view all audit logs" ON public.audit_logs
         let query = supabase
           .from('audit_logs')
           .select('*')
+          .eq('tenant_id', getCurrentTenantId()) // TENANT ISOLATION: Filter by current tenant
           .order('timestamp', { ascending: false })
 
         // Apply search criteria

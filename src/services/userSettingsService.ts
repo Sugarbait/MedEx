@@ -10,6 +10,7 @@ import { Database, UserSettings, ServiceResponse, RealtimeChannel, UserDevice, D
 import { encryptionService } from './encryption'
 import { auditLogger } from './auditLogger'
 import { RealtimeChannel as SupabaseRealtimeChannel } from '@supabase/supabase-js'
+import { getCurrentTenantId } from '@/config/tenantConfig'
 
 type DatabaseUserSettings = Database['public']['Tables']['user_settings']['Row']
 
@@ -676,6 +677,7 @@ class UserSettingsServiceClass {
             .from('user_settings')
             .select('*')
             .eq('user_id', userId)
+            .eq('tenant_id', getCurrentTenantId()) // TENANT ISOLATION: Filter by current tenant
             .single()
 
           if (error) {
@@ -764,6 +766,7 @@ class UserSettingsServiceClass {
           // Add cross-device sync metadata
           supabaseData.device_sync_enabled = true
           supabaseData.last_synced = syncTimestamp
+          supabaseData.tenant_id = getCurrentTenantId() // TENANT ISOLATION: Ensure tenant_id is set
 
           const { error } = await supabase
             .from('user_settings')
@@ -879,6 +882,7 @@ class UserSettingsServiceClass {
         .from('user_settings')
         .select('updated_at, last_synced')
         .eq('user_id', userId)
+        .eq('tenant_id', getCurrentTenantId()) // TENANT ISOLATION: Filter by current tenant
         .single()
 
       if (error || !remoteSettings) return false

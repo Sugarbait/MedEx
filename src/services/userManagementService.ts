@@ -3,6 +3,7 @@ import { Database, ServiceResponse } from '@/types/supabase'
 import { userProfileService, UserProfileData } from './userProfileService'
 import { auditLogger } from './auditLogger'
 import { encryptionService } from './encryption'
+import { getCurrentTenantId } from '@/config/tenantConfig'
 
 type UserCredentials = {
   email: string
@@ -358,6 +359,7 @@ export class UserManagementService {
             fresh_mfa_backup_codes: null
           })
           .eq('user_id', userId)
+          .eq('tenant_id', getCurrentTenantId()) // TENANT ISOLATION
         console.log('UserManagementService: Cleared MFA data for deleted user')
       } catch (mfaError) {
         console.log('UserManagementService: MFA cleanup failed or tables missing')
@@ -533,6 +535,7 @@ export class UserManagementService {
               .from('users')
               .select('last_login')
               .eq('id', userId)
+              .eq('tenant_id', getCurrentTenantId()) // TENANT ISOLATION
               .single()
 
             return {
@@ -732,6 +735,7 @@ export class UserManagementService {
           last_login: now
         })
         .eq('id', userId)
+        .eq('tenant_id', getCurrentTenantId()) // TENANT ISOLATION
     } catch (error) {
       console.log('Could not update last login in Supabase (table may not exist), using localStorage fallback')
     }
@@ -764,6 +768,7 @@ export class UserManagementService {
         .from('users')
         .select('email')
         .eq('id', userId)
+        .eq('tenant_id', getCurrentTenantId()) // TENANT ISOLATION
         .single()
 
       if (!error && data?.email) {
@@ -1069,6 +1074,7 @@ export class UserManagementService {
           is_active: false
         })
         .eq('id', userId)
+        .eq('tenant_id', getCurrentTenantId()) // TENANT ISOLATION
 
       if (updateError) {
         throw updateError
@@ -1125,6 +1131,7 @@ export class UserManagementService {
           is_active: true
         })
         .eq('id', userId)
+        .eq('tenant_id', getCurrentTenantId()) // TENANT ISOLATION
 
       if (updateError) {
         throw updateError
@@ -1236,6 +1243,7 @@ export class UserManagementService {
             last_login: new Date().toISOString()
           })
           .eq('id', userId)
+          .eq('tenant_id', getCurrentTenantId()) // TENANT ISOLATION
         console.log('UserManagementService: Updated last_login in Supabase')
       } catch (error) {
         console.log('UserManagementService: Could not update last_login in Supabase (table may not exist)')
@@ -1629,6 +1637,7 @@ export class UserManagementService {
         .select('id')
         .eq('role', 'admin')
         .eq('is_active', true)
+        .eq('tenant_id', getCurrentTenantId()) // TENANT ISOLATION
 
       if (error) {
         throw new Error(`Failed to check for admin users: ${error.message}`)

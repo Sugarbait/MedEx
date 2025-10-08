@@ -1,6 +1,7 @@
 import { supabase } from '@/config/supabase'
 import { ServiceResponse } from '@/types/supabase'
 import { auditLogger } from './auditLogger'
+import { getCurrentTenantId } from '@/config/tenantConfig'
 
 export interface AvatarInfo {
   url: string
@@ -245,6 +246,7 @@ export class AvatarStorageService {
         .from('users')
         .select('avatar_url')
         .eq('id', userId)
+        .eq('tenant_id', getCurrentTenantId()) // TENANT ISOLATION
         .single()
 
       if (error) {
@@ -274,6 +276,7 @@ export class AvatarStorageService {
         .from('users')
         .select('avatar_url')
         .eq('email', email)
+        .eq('tenant_id', getCurrentTenantId()) // TENANT ISOLATION
         .single()
 
       if (error) {
@@ -304,6 +307,7 @@ export class AvatarStorageService {
         .from('users')
         .select('avatar_url')
         .eq('id', userId)
+        .eq('tenant_id', getCurrentTenantId()) // TENANT ISOLATION
         .single()
 
       if (error) {
@@ -581,6 +585,7 @@ export class AvatarStorageService {
         .from('users')
         .select('role, email')
         .eq('id', userId)
+        .eq('tenant_id', getCurrentTenantId()) // TENANT ISOLATION
         .single()
 
       // Prepare update data with role preservation
@@ -603,6 +608,7 @@ export class AvatarStorageService {
         .from('users')
         .update(updateData)
         .eq('id', userId)
+        .eq('tenant_id', getCurrentTenantId()) // TENANT ISOLATION
 
       if (dbError) {
         errors.push(`Database update failed: ${dbError.message}`)
@@ -911,6 +917,7 @@ export class AvatarStorageService {
       const { data: users, error: usersError } = await supabase
         .from('users')
         .select('id, avatar_url')
+        .eq('tenant_id', getCurrentTenantId()) // TENANT ISOLATION
         .not('avatar_url', 'is', null)
 
       if (usersError) {

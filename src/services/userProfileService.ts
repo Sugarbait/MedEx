@@ -1033,9 +1033,6 @@ export class UserProfileService {
 
         console.log(`🔄 ROLE TRANSFORMATION: Input role="${userData.role}" → Database role="${dbRole}"`)
 
-        // Generate azure_ad_id placeholder for compatibility with schema
-        const azureAdId = `placeholder_${Date.now()}_${Math.random().toString(36).substring(2)}`
-
         const currentTenantId = getCurrentTenantId()
         console.log(`🏢 [TENANT DEBUG] Creating user with tenant_id: "${currentTenantId}"`)
 
@@ -1043,7 +1040,7 @@ export class UserProfileService {
           email: userData.email,
           name: userData.name,
           role: dbRole, // Use mapped role for database
-          azure_ad_id: azureAdId, // Required by schema
+          // azure_ad_id: azureAdId, // REMOVED: Column doesn't exist in schema
           mfa_enabled: userData.mfa_enabled || false,
           is_active: userData.isActive !== undefined ? userData.isActive : false, // Respect isActive from userData, default to false (requires Super User approval)
           last_login: null, // Initialize last_login as null for new users
