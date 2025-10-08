@@ -19,6 +19,7 @@ interface MandatoryMfaLoginProps {
     id: string
     email: string
     name?: string
+    forcedBySecurityCheck?: boolean  // SECURITY FIX: Indicates MFA forced due to security override
   }
   onMfaVerified: () => void
   onMfaCancel: () => void
@@ -53,6 +54,18 @@ export const MandatoryMfaLogin: React.FC<MandatoryMfaLoginProps> = ({
   const checkMfaRequirement = async () => {
     try {
       console.log('🔐 MandatoryMfaLogin: Checking MFA requirement for user:', user.id)
+
+      // SECURITY FIX: Handle forced MFA verification due to security override
+      if (user.forcedBySecurityCheck) {
+        console.log('🚨 SECURITY: MFA forced by security check - enforcing verification')
+        setMfaCheckState({
+          isLoading: false,
+          mfaRequired: true,
+          error: null
+        })
+        setNeedsSetup(true)  // User may need to set up MFA if not already configured
+        return
+      }
 
       // Check if user has MFA enabled using Fresh MFA Service
       let mfaEnabled = false
@@ -302,6 +315,24 @@ export const MandatoryMfaLogin: React.FC<MandatoryMfaLoginProps> = ({
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-900 flex items-start justify-center pt-8 sm:pt-16 p-4">
         <div className="w-full max-w-md">
+          {/* SECURITY FIX: Show security warning when MFA is forced */}
+          {user.forcedBySecurityCheck && (
+            <div className="mb-6 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg p-4">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="text-sm font-semibold text-amber-900 dark:text-amber-100 mb-1">
+                    Security Verification Required
+                  </h3>
+                  <p className="text-sm text-amber-800 dark:text-amber-200">
+                    For your security, we need to verify your identity before granting access.
+                    This additional check protects your account from unauthorized access.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           <div className="text-center mb-4 sm:mb-6">
             {needsSetup && (
               <div className="mt-4">

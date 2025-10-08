@@ -564,6 +564,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         sessionStorage.removeItem('spa-redirect-path')
         console.log('✅ SessionStorage cleared for fresh login detection')
 
+        // SECURITY FIX: Clear all MFA bypass detection flags
+        sessionStorage.removeItem('mfaCompletedThisSession')
+        sessionStorage.removeItem('mfaPendingVerification')
+        sessionStorage.removeItem('mfaPendingTimestamp')
+        localStorage.removeItem('userLoginTimestamp')
+        console.log('🔐 SECURITY: MFA security flags cleared during logout')
+
         // COMPREHENSIVE: Clear ALL authentication and user-related localStorage items
         const keysToRemove = Object.keys(localStorage).filter(key =>
           key.startsWith('msal.') || // MSAL tokens

@@ -424,11 +424,20 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       // This prevents the duplicate MFA popup underneath the login form
       console.log('🔐 MFA required for user - App.tsx will handle MFA verification via MandatoryMfaLogin')
 
+      // SECURITY FIX: Set login timestamp for bypass detection
+      localStorage.setItem('userLoginTimestamp', Date.now().toString())
+      console.log('🔐 SECURITY: Set login timestamp for bypass detection')
+
       // Store user data and call onLogin() to let App.tsx handle MFA flow
       localStorage.setItem('currentUser', JSON.stringify(user))
       onLogin()
     } else {
       console.log('✅ SECURITY: No TOTP required - proceeding to dashboard')
+
+      // SECURITY FIX: Set login timestamp for bypass detection even when MFA not required
+      localStorage.setItem('userLoginTimestamp', Date.now().toString())
+      console.log('🔐 SECURITY: Set login timestamp for bypass detection (no MFA)')
+
       await auditLogger.logPHIAccess(
         AuditAction.LOGIN,
         ResourceType.SYSTEM,

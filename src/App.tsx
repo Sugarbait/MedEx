@@ -596,6 +596,120 @@ const App: React.FC = () => {
         if (fallbackUser) {
           const userData = fallbackUser
 
+          // ========================================================================
+          // CRITICAL MFA BYPASS DETECTION - CVSS 9.1 SECURITY FIX
+          // ========================================================================
+          // Get session flags for bypass detection
+          const mfaCompletedThisSession = sessionStorage.getItem('mfaCompletedThisSession')
+          const appInitialized = sessionStorage.getItem('appInitialized')
+          const mfaPendingFlag = sessionStorage.getItem('mfaPendingVerification')
+          const mfaPendingTimestamp = sessionStorage.getItem('mfaPendingTimestamp')
+          const userLoginTimestamp = localStorage.getItem('userLoginTimestamp')
+
+          const isFreshBrowserSession = !mfaCompletedThisSession && !appInitialized
+
+          // CRITICAL FIX 1: Check for stale MFA pending flags FIRST
+          if (mfaPendingFlag === 'true' && mfaPendingTimestamp) {
+            const pendingAge = Date.now() - parseInt(mfaPendingTimestamp)
+            const MAX_PENDING_AGE = 10 * 60 * 1000 // 10 minutes
+
+            if (pendingAge > MAX_PENDING_AGE) {
+              console.log('🔒 SECURITY: Clearing stale MFA pending flags (age:', Math.round(pendingAge / 60000), 'minutes)')
+              sessionStorage.removeItem('mfaPendingVerification')
+              sessionStorage.removeItem('mfaPendingTimestamp')
+              localStorage.removeItem('currentUser')
+              localStorage.removeItem('userLoginTimestamp')
+              setUser(null)
+              setIsInitializing(false)
+              setMfaCheckInProgress(false)
+              return // Treat as expired session - force fresh login
+            }
+          }
+
+          // CRITICAL FIX 2: Check MFA pending status FIRST (highest priority)
+          // This must happen BEFORE fresh login window check to prevent bypass
+          if (mfaPendingFlag === 'true' && mfaCompletedThisSession !== 'true') {
+            // CRITICAL SECURITY: MFA was started but never completed
+            // This catches the back-button + refresh bypass attempt
+            const pendingAge = mfaPendingTimestamp ? Date.now() - parseInt(mfaPendingTimestamp) : 0
+            console.error('🚨 CRITICAL SECURITY VIOLATION: MFA pending but not completed!')
+            console.error('  - MFA pending for:', Math.round(pendingAge / 1000), 'seconds')
+            console.error('  - This is a bypass attempt via back button + refresh')
+            console.error('  - FORCING LOGOUT')
+
+            // Log the security violation
+            await auditLogger.logAuthenticationEvent(
+              AuditAction.LOGIN_FAILURE,
+              userData.id,
+              AuditOutcome.FAILURE,
+              JSON.stringify({
+                action: 'MFA_BYPASS_ATTEMPT',
+                userId: userData.id,
+                email: userData.email,
+                method: 'back_button_refresh',
+                pendingAge: Math.round(pendingAge / 1000),
+                timestamp: Date.now()
+              })
+            )
+
+            // Clear ALL authentication state
+            localStorage.removeItem('currentUser')
+            localStorage.removeItem('userLoginTimestamp')
+            localStorage.removeItem('freshMfaVerified')
+            localStorage.removeItem('mfa_verified')
+            sessionStorage.clear()
+
+            // Force user back to login
+            setUser(null)
+            setIsInitializing(false)
+            setMfaCheckInProgress(false)
+            return // CRITICAL: Exit immediately
+          }
+
+          // CRITICAL FIX 3: Fresh login window check (only if pending flag passed)
+          if (fallbackUser && isFreshBrowserSession && userLoginTimestamp) {
+            // Check if this is a fresh login (within last 1 second)
+            const loginAge = Date.now() - parseInt(userLoginTimestamp)
+            const isFreshLogin = loginAge < 1000 // CRITICAL: 1 second window (not 5+ seconds)
+
+            if (isFreshLogin) {
+              // Fresh login from LoginPage - allow normal MFA flow
+              console.log('✅ Fresh login detected (timestamp:', loginAge, 'ms) - normal MFA flow')
+
+              // Log for security monitoring
+              await auditLogger.logAuthenticationEvent(
+                AuditAction.LOGIN,
+                userData.id,
+                AuditOutcome.SUCCESS,
+                JSON.stringify({
+                  action: 'FRESH_LOGIN_WINDOW',
+                  userId: userData.id,
+                  loginAge,
+                  timestamp: Date.now()
+                })
+              )
+
+              sessionStorage.setItem('appInitialized', 'true')
+              // Continue with normal MFA verification flow
+            } else {
+              // Old or missing timestamp - this is a stale session
+              console.warn('🚨 SECURITY ALERT: Stale session detected - user in localStorage without recent login')
+              console.warn('  Login timestamp age:', loginAge, 'ms (threshold: 1000ms)')
+              console.warn('🚨 This protects against session reuse attacks')
+
+              sessionStorage.setItem('appInitialized', 'true')
+
+              // OVERRIDE: Force MFA check even if database says MFA disabled
+              // This is fail-secure: we don't trust the database status alone
+              userData.mfaEnabled = true
+              userData.forcedBySecurityCheck = true  // Mark that MFA is forced for security
+              console.warn('🚨 SECURITY: Overriding mfaEnabled=true for stale session protection')
+            }
+          }
+          // ========================================================================
+          // END MFA BYPASS DETECTION
+          // ========================================================================
+
           // CRITICAL SECURITY FIX: Check MFA lockout status before any user loading
           // This prevents app-level bypass of MFA lockout
           console.log('🔒 SECURITY: Checking MFA lockout status before user initialization')
@@ -727,12 +841,18 @@ const App: React.FC = () => {
                 return // Exit early - don't set pending MFA user
               }
 
+              // SECURITY FIX: Set MFA pending flags to track bypass attempts
+              sessionStorage.setItem('mfaPendingVerification', 'true')
+              sessionStorage.setItem('mfaPendingTimestamp', Date.now().toString())
+              console.log('🔐 SECURITY: MFA pending flags set - bypass detection active')
+
               mfaRequiredDuringLoad = true // Mark MFA as required for this load
 
               // ANTI-FLASH FIX: Set pending user in state update function to ensure synchronization
               setPendingMfaUser({
                 ...userData,
-                mfaCheckFailed // Pass this info to help with debugging
+                mfaCheckFailed, // Pass this info to help with debugging
+                forcedBySecurityCheck: userData.forcedBySecurityCheck // Pass security override flag
               })
 
               // CRITICAL ANTI-FLASH: Keep mfaCheckInProgress true until MFA screen renders
@@ -1229,6 +1349,13 @@ const App: React.FC = () => {
         // Store MFA verification timestamp
         const mfaTimestamp = Date.now().toString()
         localStorage.setItem('freshMfaVerified', mfaTimestamp)
+
+        // SECURITY FIX: Clear all MFA bypass detection flags after successful verification
+        sessionStorage.setItem('mfaCompletedThisSession', 'true')
+        sessionStorage.removeItem('mfaPendingVerification')
+        sessionStorage.removeItem('mfaPendingTimestamp')
+        localStorage.removeItem('userLoginTimestamp')
+        console.log('🔐 SECURITY: MFA security flags cleared after successful verification')
 
         // Load the full user profile and complete authentication
         const userData = pendingMfaUser
