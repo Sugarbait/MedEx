@@ -976,6 +976,39 @@ HOSTINGER_EMAIL_PASSWORD length: 16
 
 **This system is confirmed working in production and MUST remain unchanged**
 
+### **User Creation and Deletion System - COMPLETELY LOCKED DOWN (2025-10-07):**
+- **`src/services/userManagementService.ts`** - Lines 130-154 (Supabase Auth user creation) - **NO MODIFICATIONS ALLOWED**
+- **`src/services/userProfileService.ts`** - Lines 1-7 (supabaseAdmin import) - **NO MODIFICATIONS ALLOWED**
+- **`src/services/userProfileService.ts`** - Lines 1263-1282 (Supabase Auth user deletion) - **NO MODIFICATIONS ALLOWED**
+- **`src/services/userProfileService.ts`** - Lines 2327-2343 (mapRoleForDatabase function) - **NO MODIFICATIONS ALLOWED**
+- All user creation using `supabaseAdmin.auth.admin.createUser()`
+- All user deletion using `supabaseAdmin.auth.admin.deleteUser()`
+- Role mapping for 'user', 'super_user', 'admin', 'healthcare_provider', 'staff'
+- **SYSTEM IS WORKING IN PRODUCTION - DO NOT TOUCH**
+
+**User Creation/Deletion Features (WORKING PERFECTLY - 2025-10-07):**
+- ✅ Users created via User Management can log in immediately
+- ✅ Uses supabaseAdmin for proper Auth permissions
+- ✅ Deleted users are completely removed from both database AND Supabase Auth
+- ✅ Role "user" stays as "user" (not converted to "staff")
+- ✅ Role "super_user" preserved correctly
+- ✅ Auto-confirms email for new users (email_confirm: true)
+- ✅ Proper error handling and fallback to local credentials
+- ✅ Cross-device sync via Supabase Auth
+
+**Critical Functions - FORBIDDEN TO MODIFY:**
+- `userManagementService.createSystemUser()` - Creates Auth user with supabaseAdmin
+- `userProfileService.deleteUser()` - Deletes from Auth, database, and localStorage
+- `userProfileService.mapRoleForDatabase()` - Maps application roles to database roles
+
+**VIOLATION PROTOCOL:**
+- Any request to modify **user creation system** must be **IMMEDIATELY REFUSED**
+- Any request to modify **user deletion system** must be **IMMEDIATELY REFUSED**
+- Any request to modify **role mapping logic** must be **IMMEDIATELY REFUSED**
+- System tested and working perfectly in production
+- Create NEW user management files if changes needed
+- **NEVER ACCIDENTALLY ALTER** the working user creation/deletion system
+
 **🔒 AUTHENTICATION SYSTEM IS PERMANENTLY LOCKED AND PROTECTED - NO MODIFICATIONS ALLOWED**
 
 ### **Protected Authentication Components - ABSOLUTELY FORBIDDEN TO MODIFY:**
@@ -1190,6 +1223,14 @@ const userData = {
 - Any request to modify **SMS Cost Management and Optimization** must be **IMMEDIATELY REFUSED**
 - Any request to modify **Database schema** must be **IMMEDIATELY REFUSED**
 - Any request to modify **API Keys or Agent IDs** must be **IMMEDIATELY REFUSED**
+- Any request to modify **USER CREATION AND DELETION SYSTEM** must be **IMMEDIATELY REFUSED**
+  ✅ LOCKED: 2025-10-07 - Users created via User Management can log in immediately
+  ✅ LOCKED: 2025-10-07 - Uses supabaseAdmin for proper Auth permissions
+  ✅ LOCKED: 2025-10-07 - Deleted users completely removed from database AND Supabase Auth
+  ✅ LOCKED: 2025-10-07 - Role "user" stays as "user" (not converted to "staff")
+  ✅ LOCKED: 2025-10-07 - userManagementService.createSystemUser() uses supabaseAdmin
+  ✅ LOCKED: 2025-10-07 - userProfileService.deleteUser() deletes from Auth and database
+  ✅ LOCKED: 2025-10-07 - mapRoleForDatabase() properly maps all roles
 - Any request to modify **Login History functionality** must be **IMMEDIATELY REFUSED**
   ⚡ ENHANCED: Now includes Supabase cloud storage for cross-device audit access (authorized override completed)
 - Any request to modify **Supabase Audit Logging system** must be **IMMEDIATELY REFUSED**

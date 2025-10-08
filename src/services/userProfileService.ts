@@ -1,4 +1,4 @@
-import { supabase } from '@/config/supabase'
+import { supabase, supabaseAdmin } from '@/config/supabase'
 import { User } from '@/types'
 import { Database, ServiceResponse } from '@/types/supabase'
 import { encryptionService } from './encryption'
@@ -1260,9 +1260,30 @@ export class UserProfileService {
 
       console.log('UserProfileService: Deleting user from Supabase and localStorage:', userId)
 
-      // STEP 1: Delete from Supabase first for cross-device sync
+      // STEP 0: Delete from Supabase Auth first (CRITICAL FIX)
       try {
-        console.log('UserProfileService: Attempting to delete user from Supabase...')
+        if (supabaseAdmin) {
+          console.log('UserProfileService: Attempting to delete user from Supabase Auth...')
+
+          const { error: authDeleteError } = await supabaseAdmin.auth.admin.deleteUser(userId)
+
+          if (authDeleteError) {
+            console.warn('UserProfileService: Supabase Auth deletion failed:', authDeleteError.message)
+            console.log('UserProfileService: User may not exist in Auth or already deleted')
+          } else {
+            console.log('✅ UserProfileService: User successfully deleted from Supabase Auth')
+          }
+        } else {
+          console.warn('UserProfileService: supabaseAdmin not available - skipping Auth deletion')
+        }
+      } catch (authError) {
+        console.warn('UserProfileService: Supabase Auth deletion error:', authError)
+        console.log('UserProfileService: Continuing with database deletion...')
+      }
+
+      // STEP 1: Delete from Supabase database tables for cross-device sync
+      try {
+        console.log('UserProfileService: Attempting to delete user from Supabase database...')
 
         const { error: deleteError } = await supabase
           .from('users')
@@ -2303,7 +2324,7 @@ export class UserProfileService {
    * Map CareXPS role values to database schema roles
    * CRITICAL FIX: Database schema supports 'super_user' role - DO NOT convert to 'admin'
    */
-  private static mapRoleForDatabase(careXpsRole: string): 'admin' | 'healthcare_provider' | 'staff' | 'super_user' {
+  private static mapRoleForDatabase(careXpsRole: string): 'admin' | 'healthcare_provider' | 'staff' | 'super_user' | 'user' {
     const role = careXpsRole.toLowerCase()
 
     // Map CareXPS roles to database schema roles
@@ -2314,8 +2335,10 @@ export class UserProfileService {
       return 'admin'
     } else if (role === 'provider' || role === 'healthcare_provider' || role === 'doctor' || role === 'physician') {
       return 'healthcare_provider'
+    } else if (role === 'user') {
+      return 'user' // Regular user role
     } else {
-      return 'staff' // Default fallback
+      return 'staff' // Default fallback for unrecognized roles
     }
   }
 

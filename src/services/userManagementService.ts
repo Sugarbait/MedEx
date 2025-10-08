@@ -1,4 +1,4 @@
-import { supabase } from '@/config/supabase'
+import { supabase, supabaseAdmin } from '@/config/supabase'
 import { Database, ServiceResponse } from '@/types/supabase'
 import { userProfileService, UserProfileData } from './userProfileService'
 import { auditLogger } from './auditLogger'
@@ -130,23 +130,27 @@ export class UserManagementService {
       // Create Supabase Auth user first so authentication will work
       console.log('UserManagementService: Creating Supabase Auth user')
       try {
-        const { data: authData, error: authError } = await supabase.auth.admin.createUser({
-          email: userData.email,
-          password: credentials.password,
-          email_confirm: true, // Auto-confirm email
-          user_metadata: {
-            name: userData.name,
-            role: userData.role
-          }
-        })
+        if (supabaseAdmin) {
+          const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
+            email: userData.email,
+            password: credentials.password,
+            email_confirm: true, // Auto-confirm email
+            user_metadata: {
+              name: userData.name,
+              role: userData.role
+            }
+          })
 
-        if (authError) {
-          console.warn('UserManagementService: Supabase Auth user creation failed, will use local credentials only:', authError.message)
+          if (authError) {
+            console.warn('UserManagementService: Supabase Auth user creation failed, will use local credentials only:', authError.message)
+          } else {
+            console.log('✅ UserManagementService: Supabase Auth user created successfully with ID:', authData.user.id)
+          }
         } else {
-          console.log('UserManagementService: Supabase Auth user created successfully')
+          console.warn('UserManagementService: supabaseAdmin not available - skipping Auth user creation')
         }
       } catch (authCreationError) {
-        console.warn('UserManagementService: Supabase Auth not available, using local credentials only')
+        console.warn('UserManagementService: Supabase Auth creation error:', authCreationError)
       }
 
       // Create the user profile
