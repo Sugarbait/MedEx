@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Clear Account Lockout - MedEx</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 30px;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #059669;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 16px;
+            margin-bottom: 30px;
+        }
+        .step {
+            background: #f8f9ff;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 5px solid #3b82f6;
+            border-radius: 6px;
+        }
+        .step h2 {
+            margin-top: 0;
+            color: #1e40af;
+            font-size: 20px;
+        }
+        button {
+            background: #10b981;
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 18px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #059669;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(16, 185, 129, 0.4);
+        }
+        .success-message {
+            background: #d1fae5;
+            border: 2px solid: #10b981;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            display: none;
+        }
+        .highlight {
+            background: #fef3c7;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔓 Clear Account Lockout</h1>
+        <p class="subtitle">Remove lockout for test@test.com</p>
+
+        <div class="step">
+            <h2>Current Situation</h2>
+            <p>Your test@test.com account is locked due to failed login attempts caused by the <strong>wrong Supabase URL</strong> configuration.</p>
+            <p>The lockout is stored in <span class="highlight">localStorage</span> in your browser.</p>
+        </div>
+
+        <div class="step">
+            <h2>How to Clear the Lockout</h2>
+            <p>Since you're on Azure production (https://medex.nexasync.ca), you need to clear the lockout there:</p>
+            <ol>
+                <li>Open <strong>https://medex.nexasync.ca</strong> in your browser</li>
+                <li>Open <strong>Developer Tools</strong> (F12)</li>
+                <li>Go to the <span class="highlight">Console</span> tab</li>
+                <li>Copy and paste this command:</li>
+            </ol>
+            <div style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 6px; font-family: 'Consolas', monospace; margin: 15px 0;">
+                <code id="clearCommand">localStorage.removeItem('failed_login_attempts_test@test.com'); localStorage.removeItem('lockout_until_test@test.com'); console.log('✅ Lockout cleared!');</code>
+            </div>
+            <button onclick="copyCommand()">📋 Copy Command</button>
+            <div id="copySuccess" style="display: none; color: #10b981; font-weight: 600; margin-top: 10px;">
+                ✅ Command copied! Now paste it in Azure production console.
+            </div>
+        </div>
+
+        <div class="step">
+            <h2>Alternative: Clear All LocalStorage</h2>
+            <p>If the command doesn't work, you can clear all localStorage:</p>
+            <ol>
+                <li>In Developer Tools Console, run: <code>localStorage.clear()</code></li>
+                <li>Refresh the page</li>
+                <li>Try logging in again</li>
+            </ol>
+        </div>
+
+        <div class="step">
+            <h2>⚠️ Important: Fix GitHub Secrets First!</h2>
+            <p>The lockout will happen again if you don't fix the root cause:</p>
+            <ol>
+                <li>Update GitHub secrets to point to correct MedEx database</li>
+                <li>Trigger new deployment (GitHub Actions)</li>
+                <li>Wait for deployment to complete (3-5 minutes)</li>
+                <li>Then clear lockout and test login</li>
+            </ol>
+            <button onclick="openGitHubSecrets()">🔧 Update GitHub Secrets</button>
+        </div>
+
+        <div style="margin-top: 40px; padding: 20px; background: #f3f4f6; border-radius: 8px;">
+            <h3 style="margin-top: 0;">📋 Complete Fix Checklist:</h3>
+            <ul style="line-height: 1.8;">
+                <li>☐ Update GitHub secret: <code>VITE_SUPABASE_URL</code></li>
+                <li>☐ Update GitHub secret: <code>VITE_SUPABASE_ANON_KEY</code></li>
+                <li>☐ Trigger new deployment in GitHub Actions</li>
+                <li>☐ Wait for deployment to complete</li>
+                <li>☐ Clear localStorage lockout on Azure production</li>
+                <li>☐ Test login at https://medex.nexasync.ca</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function copyCommand() {
+            const command = document.getElementById('clearCommand').textContent;
+            navigator.clipboard.writeText(command).then(() => {
+                document.getElementById('copySuccess').style.display = 'block';
+                setTimeout(() => {
+                    document.getElementById('copySuccess').style.display = 'none';
+                }, 5000);
+            });
+        }
+
+        function openGitHubSecrets() {
+            window.open('update-github-secrets.html', '_blank');
+        }
+    </script>
+</body>
+</html>
