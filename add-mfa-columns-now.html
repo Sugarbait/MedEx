@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Add MFA Columns - Quick Fix</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 900px;
+            margin: 50px auto;
+            padding: 30px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 16px;
+            margin-bottom: 30px;
+        }
+        .step {
+            background: #f8f9ff;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 5px solid #667eea;
+            border-radius: 6px;
+        }
+        .step h2 {
+            margin-top: 0;
+            color: #4c5fd5;
+            font-size: 20px;
+        }
+        .sql-box {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            overflow-x: auto;
+            margin: 15px 0;
+            position: relative;
+        }
+        .sql-box code {
+            color: #9cdcfe;
+        }
+        button {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #5568d3;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        button.success {
+            background: #10b981;
+        }
+        button.success:hover {
+            background: #059669;
+        }
+        .warning {
+            background: #fef3c7;
+            border: 2px solid #f59e0b;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .warning-icon {
+            font-size: 24px;
+            margin-right: 10px;
+        }
+        .success-message {
+            background: #d1fae5;
+            border: 2px solid #10b981;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            display: none;
+        }
+        .copy-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #4c5fd5;
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+        .highlight {
+            background: #fef3c7;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Add MFA Columns to Database</h1>
+        <p class="subtitle">Quick fix for "fresh_mfa_backup_codes column not found" error</p>
+
+        <div class="warning">
+            <span class="warning-icon">⚠️</span>
+            <strong>This fix is required before MFA can work!</strong>
+            <p>The user_settings table is missing 4 MFA columns. Follow the steps below to add them.</p>
+        </div>
+
+        <div class="step">
+            <h2>Step 1: Copy the SQL</h2>
+            <p>Click the button below to copy the SQL migration to your clipboard:</p>
+            <div class="sql-box">
+                <button class="copy-btn" onclick="copySql()">📋 Copy SQL</button>
+                <code id="sql">-- Add MFA columns to user_settings table
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS fresh_mfa_secret TEXT;
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS fresh_mfa_enabled BOOLEAN DEFAULT false;
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS fresh_mfa_setup_completed BOOLEAN DEFAULT false;
+ALTER TABLE user_settings ADD COLUMN IF NOT EXISTS fresh_mfa_backup_codes TEXT;</code>
+            </div>
+            <div id="copySuccess" style="display: none; color: #10b981; font-weight: 600; margin-top: 10px;">
+                ✅ SQL copied to clipboard!
+            </div>
+        </div>
+
+        <div class="step">
+            <h2>Step 2: Open Supabase SQL Editor</h2>
+            <p>Click the button below to open your Supabase SQL Editor in a new tab:</p>
+            <button onclick="openSupabase()">🚀 Open Supabase SQL Editor</button>
+        </div>
+
+        <div class="step">
+            <h2>Step 3: Paste and Run</h2>
+            <ol>
+                <li>Paste the SQL you copied (Ctrl+V / Cmd+V)</li>
+                <li>Click the <span class="highlight">RUN</span> button in Supabase</li>
+                <li>Wait for the success message</li>
+                <li>Return to MedEX and try MFA setup again!</li>
+            </ol>
+        </div>
+
+        <div class="step">
+            <h2>Step 4: Verify (Optional)</h2>
+            <p>After running the migration, you can verify the columns were added with this query:</p>
+            <div class="sql-box">
+                <button class="copy-btn" onclick="copyVerify()">📋 Copy</button>
+                <code id="verify">SELECT column_name
+FROM information_schema.columns
+WHERE table_name = 'user_settings'
+  AND column_name LIKE 'fresh_mfa%';</code>
+            </div>
+            <p style="margin-top: 15px; color: #666;">This should return 4 rows (the 4 MFA columns).</p>
+        </div>
+
+        <div class="success-message" id="allDone">
+            <strong>✅ All Done!</strong>
+            <p>Once you've run the SQL in Supabase, go back to MedEX and try setting up MFA again. The error should be gone!</p>
+        </div>
+
+        <div style="margin-top: 40px; padding: 20px; background: #f3f4f6; border-radius: 8px;">
+            <h3 style="margin-top: 0;">🔍 What This Does:</h3>
+            <ul style="line-height: 1.8;">
+                <li><strong>fresh_mfa_secret</strong> - Stores the TOTP secret key</li>
+                <li><strong>fresh_mfa_enabled</strong> - Boolean flag if MFA is active</li>
+                <li><strong>fresh_mfa_setup_completed</strong> - Boolean flag if setup is done</li>
+                <li><strong>fresh_mfa_backup_codes</strong> - JSON array of backup codes</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function copySql() {
+            const sql = document.getElementById('sql').textContent;
+            navigator.clipboard.writeText(sql).then(() => {
+                document.getElementById('copySuccess').style.display = 'block';
+                setTimeout(() => {
+                    document.getElementById('copySuccess').style.display = 'none';
+                }, 3000);
+            });
+        }
+
+        function copyVerify() {
+            const sql = document.getElementById('verify').textContent;
+            navigator.clipboard.writeText(sql).then(() => {
+                alert('✅ Verification SQL copied to clipboard!');
+            });
+        }
+
+        function openSupabase() {
+            window.open('https://supabase.com/dashboard/project/onwgbfetzrctshdwwimm/sql/new', '_blank');
+
+            // Show success message after opening
+            setTimeout(() => {
+                document.getElementById('allDone').style.display = 'block';
+            }, 1000);
+        }
+
+        // Auto-copy SQL on page load for convenience
+        window.onload = () => {
+            copySql();
+        };
+    </script>
+</body>
+</html>

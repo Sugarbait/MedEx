@@ -1001,7 +1001,7 @@ export class UserProfileService {
   /**
    * Create a new user (for user management) with proper Supabase integration and real-time sync
    */
-  static async createUser(userData: Omit<UserProfileData, 'id'>): Promise<ServiceResponse<UserProfileData>> {
+  static async createUser(userData: Omit<UserProfileData, 'id'> | UserProfileData): Promise<ServiceResponse<UserProfileData>> {
     try {
       console.log('🔍 createUser() ENTRY POINT - Received userData:', JSON.stringify(userData, null, 2))
       console.log('🔍 createUser() - Role verification:', {
@@ -1036,33 +1036,32 @@ export class UserProfileService {
         const currentTenantId = getCurrentTenantId()
         console.log(`🏢 [TENANT DEBUG] Creating user with tenant_id: "${currentTenantId}"`)
 
-        const userToInsert = {
+        const userToInsert: any = {
           email: userData.email,
           name: userData.name,
           role: dbRole, // Use mapped role for database
           // azure_ad_id: azureAdId, // REMOVED: Column doesn't exist in schema
-          mfa_enabled: userData.mfa_enabled || false,
+          // mfa_enabled: userData.mfa_enabled || false, // REMOVED: MFA is stored in user_settings table, not users
           is_active: userData.isActive !== undefined ? userData.isActive : false, // Respect isActive from userData, default to false (requires Super User approval)
           last_login: null, // Initialize last_login as null for new users
-          metadata: {
-            created_via: 'user_management',
-            original_role: userData.role, // Store original role in metadata
-            device_id: this.currentDeviceId || 'unknown'
-          },
+          // metadata: { // REMOVED: metadata column doesn't exist in users table
+          //   created_via: 'user_management',
+          //   original_role: userData.role, // Store original role in metadata
+          //   device_id: this.currentDeviceId || 'unknown'
+          // },
           tenant_id: currentTenantId // Ensure tenant_id is set for current tenant
+        }
+
+        // CRITICAL: If Auth user ID is provided, use it to match Auth and Database records
+        if ('id' in userData && userData.id) {
+          userToInsert.id = userData.id
+          console.log(`🔑 Using provided Auth user ID: ${userData.id}`)
         }
 
         console.log(`🔍 [TENANT DEBUG] User insert data - tenant_id: "${userToInsert.tenant_id}", email: "${userToInsert.email}"`)
 
         console.log('🔍 DEBUG: Creating user with is_active =', userToInsert.is_active, 'for email:', userData.email)
-        console.log(`📦 METADATA: Storing original_role="${userData.role}" in metadata for future role restoration`)
         console.log('🔍 DETAILED INSERT DATA:', JSON.stringify(userToInsert, null, 2))
-        console.log('🔍 METADATA VERIFICATION BEFORE INSERT:', {
-          metadata: userToInsert.metadata,
-          original_role_in_metadata: userToInsert.metadata?.original_role,
-          expected_original_role: userData.role,
-          db_role: userToInsert.role
-        })
 
         const { data: newUser, error: userError } = await supabase
           .from('users')
@@ -1077,7 +1076,7 @@ export class UserProfileService {
             email: newUser.email,
             name: newUser.name,
             role: userData.role, // Use original role in application (super_user)
-            mfa_enabled: newUser.mfa_enabled,
+            mfa_enabled: userData.mfa_enabled || false, // MFA is stored in user_settings, use input value
             isActive: newUser.is_active, // Include activation status
             settings: userData.settings || {},
             created_at: newUser.created_at,
@@ -1086,13 +1085,7 @@ export class UserProfileService {
           }
 
           console.log('✅ DEBUG: User created successfully with isActive =', newUserProfileData.isActive)
-          console.log(`✅ ROLE VERIFICATION: User created with application role="${newUserProfileData.role}" (DB has "${newUser.role}", metadata has "${newUser.metadata?.original_role}")`)
-          console.log('🔍 SUPABASE RESPONSE METADATA:', JSON.stringify(newUser.metadata, null, 2))
-          console.log('🔍 METADATA COMPARISON:', {
-            sent_original_role: userData.role,
-            received_original_role: newUser.metadata?.original_role,
-            match: userData.role === newUser.metadata?.original_role
-          })
+          console.log(`✅ ROLE VERIFICATION: User created with application role="${newUserProfileData.role}" (DB has "${newUser.role}")`)
 
           // Create user settings record for cross-device sync
           if (userData.settings && Object.keys(userData.settings).length > 0) {

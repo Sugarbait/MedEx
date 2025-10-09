@@ -130,6 +130,8 @@ export class UserManagementService {
 
       // Create Supabase Auth user first so authentication will work
       console.log('UserManagementService: Creating Supabase Auth user')
+      let authUserId: string | undefined = undefined
+
       try {
         if (supabaseAdmin) {
           const { data: authData, error: authError } = await supabaseAdmin.auth.admin.createUser({
@@ -145,7 +147,8 @@ export class UserManagementService {
           if (authError) {
             console.warn('UserManagementService: Supabase Auth user creation failed, will use local credentials only:', authError.message)
           } else {
-            console.log('✅ UserManagementService: Supabase Auth user created successfully with ID:', authData.user.id)
+            authUserId = authData.user.id
+            console.log('✅ UserManagementService: Supabase Auth user created successfully with ID:', authUserId)
           }
         } else {
           console.warn('UserManagementService: supabaseAdmin not available - skipping Auth user creation')
@@ -154,8 +157,10 @@ export class UserManagementService {
         console.warn('UserManagementService: Supabase Auth creation error:', authCreationError)
       }
 
-      // Create the user profile
-      const createResponse = await userProfileService.createUser(userData)
+      // Create the user profile with Auth user ID if available
+      const userDataWithId = authUserId ? { ...userData, id: authUserId } : userData
+      console.log('UserManagementService: Creating user profile with data:', { hasAuthId: !!authUserId, id: authUserId })
+      const createResponse = await userProfileService.createUser(userDataWithId as Omit<UserProfileData, 'id'>)
       if (createResponse.status === 'error') {
         return createResponse as ServiceResponse<SystemUserWithCredentials>
       }

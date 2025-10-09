@@ -12,6 +12,7 @@ import * as OTPAuth from 'otpauth'
 import QRCode from 'qrcode'
 import { supabase } from '../config/supabase'
 import { userIdTranslationService } from './userIdTranslationService'
+import { getCurrentTenantId } from '@/config/tenantConfig'
 
 export interface FreshMfaSetup {
   secret: string
@@ -328,6 +329,7 @@ class FreshMfaService {
           fresh_mfa_backup_codes: null
         })
         .eq('user_id', uuid) // Use translated UUID, not string ID
+        .eq('tenant_id', getCurrentTenantId())
 
       if (error) {
         console.error('❌ Error disabling MFA:', error)
@@ -407,6 +409,7 @@ class FreshMfaService {
       .from('user_settings')
       .upsert({
         user_id: uuid, // Use translated UUID, not string ID
+        tenant_id: getCurrentTenantId(),
         fresh_mfa_secret: data.secret, // Store as plain text - no encryption corruption
         fresh_mfa_enabled: data.enabled,
         fresh_mfa_setup_completed: data.setupCompleted,
@@ -441,6 +444,7 @@ class FreshMfaService {
       .from('user_settings')
       .select('fresh_mfa_secret, fresh_mfa_enabled, fresh_mfa_setup_completed, fresh_mfa_backup_codes')
       .eq('user_id', uuid) // Use translated UUID, not string ID
+      .eq('tenant_id', getCurrentTenantId())
       .single()
 
     if (error || !data) {
@@ -476,6 +480,7 @@ class FreshMfaService {
         updated_at: new Date().toISOString()
       })
       .eq('user_id', uuid) // Use translated UUID, not string ID
+      .eq('tenant_id', getCurrentTenantId())
 
     if (error) {
       console.error('❌ Error enabling fresh MFA:', error)
@@ -650,6 +655,7 @@ class FreshMfaService {
         updated_at: new Date().toISOString()
       })
       .eq('user_id', uuid)
+      .eq('tenant_id', getCurrentTenantId())
 
     if (error) {
       console.error('❌ Error updating backup codes:', error)

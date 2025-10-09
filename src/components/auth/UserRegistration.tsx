@@ -67,12 +67,24 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({ onCancel, on
     try {
       console.log('Creating new user registration:', formData.email)
 
-      // Check if this is the first user in the system
-      const existingUsersResponse = await userManagementService.loadSystemUsers()
-      const isFirstUser = existingUsersResponse.status === 'success' &&
-                          (!existingUsersResponse.data || existingUsersResponse.data.length === 0)
+      // Check if this is the first user in the system - CHECK ONLY SUPABASE, IGNORE LOCALSTORAGE
+      const { supabase } = await import('@/config/supabase')
+      const { data: existingUsers, error: userCheckError } = await supabase
+        .from('users')
+        .select('id')
+        .eq('tenant_id', 'medex')
+        .limit(1)
+
+      if (userCheckError) {
+        console.error('Error checking existing users:', userCheckError)
+        setError('Failed to check user count. Please try again.')
+        return
+      }
+
+      const isFirstUser = !existingUsers || existingUsers.length === 0
 
       console.log(`🔍 First user check: ${isFirstUser ? 'YES - will be Super User' : 'NO - will be regular User'}`)
+      console.log(`📊 Users found in Supabase: ${existingUsers?.length || 0}`)
 
       // Prepare user data and credentials for createSystemUser
       const userData = {
