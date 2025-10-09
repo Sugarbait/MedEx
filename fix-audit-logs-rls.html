@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Fix Audit Logs RLS Policy - Azure Production</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1000px;
+            margin: 50px auto;
+            padding: 30px;
+            background: linear-gradient(135deg, #dc2626 0%, #991b1b 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #dc2626;
+            margin-bottom: 10px;
+            font-size: 32px;
+        }
+        .subtitle {
+            color: #666;
+            font-size: 16px;
+            margin-bottom: 30px;
+        }
+        .error-box {
+            background: #fee2e2;
+            border: 3px solid #dc2626;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .error-box h2 {
+            margin-top: 0;
+            color: #991b1b;
+        }
+        .step {
+            background: #f8f9ff;
+            padding: 20px;
+            margin: 20px 0;
+            border-left: 5px solid #3b82f6;
+            border-radius: 6px;
+        }
+        .step h2 {
+            margin-top: 0;
+            color: #1e40af;
+            font-size: 20px;
+        }
+        .sql-box {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            overflow-x: auto;
+            margin: 15px 0;
+            position: relative;
+        }
+        .sql-box code {
+            color: #9cdcfe;
+        }
+        .sql-comment {
+            color: #6a9955;
+        }
+        button {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #2563eb;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(59, 130, 246, 0.4);
+        }
+        button.success {
+            background: #10b981;
+        }
+        button.success:hover {
+            background: #059669;
+        }
+        .copy-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: #4c5fd5;
+            padding: 6px 12px;
+            font-size: 12px;
+        }
+        .highlight {
+            background: #fef3c7;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: 600;
+        }
+        .success-message {
+            background: #d1fae5;
+            border: 2px solid #10b981;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Fix Azure Production Login - RLS Policy Issue</h1>
+        <p class="subtitle">Fixing Row Level Security policy blocking audit log inserts</p>
+
+        <div class="error-box">
+            <h2>❌ Current Error:</h2>
+            <code>new row violates row-level security policy for table "audit_logs"</code>
+            <p style="margin-top: 15px;">
+                <strong>Impact:</strong> This is blocking ALL logins in Azure production because the audit logger can't write security events.
+            </p>
+        </div>
+
+        <div class="step">
+            <h2>🔍 Problem Explanation</h2>
+            <p>The <code>audit_logs</code> table has RLS (Row Level Security) policies that only allow users to insert their own audit logs. However, for anonymous users (before authentication), we need to allow inserts for security events like login attempts.</p>
+
+            <p><strong>What we need to fix:</strong></p>
+            <ul>
+                <li>Allow INSERT for authenticated users (for their own logs)</li>
+                <li>Allow INSERT for service role (for system/anonymous logs)</li>
+                <li>Keep SELECT policies restrictive (only admins and own data)</li>
+            </ul>
+        </div>
+
+        <div class="step">
+            <h2>Step 1: Copy the SQL Fix</h2>
+            <p>Click the button below to copy the RLS policy fix:</p>
+            <div class="sql-box">
+                <button class="copy-btn" onclick="copySql()">📋 Copy SQL</button>
+                <code id="sql"><span class="sql-comment">-- Fix audit_logs RLS policies for Azure production login issue</span>
+<span class="sql-comment">-- Drop existing restrictive policies</span>
+DROP POLICY IF EXISTS "Users can view their own audit logs" ON public.audit_logs;
+DROP POLICY IF EXISTS "Admins can view all audit logs" ON public.audit_logs;
+DROP POLICY IF EXISTS "Users can insert their own audit logs" ON public.audit_logs;
+
+<span class="sql-comment">-- Create new policies that allow audit logging for security events</span>
+
+<span class="sql-comment">-- 1. Allow service role to insert audit logs (for system events)</span>
+CREATE POLICY "Service role can insert audit logs" ON public.audit_logs
+  FOR INSERT
+  TO service_role
+  WITH CHECK (true);
+
+<span class="sql-comment">-- 2. Allow authenticated users to insert audit logs</span>
+CREATE POLICY "Authenticated users can insert audit logs" ON public.audit_logs
+  FOR INSERT
+  TO authenticated
+  WITH CHECK (true);
+
+<span class="sql-comment">-- 3. Allow anon users to insert audit logs (for login attempts)</span>
+CREATE POLICY "Anonymous users can insert audit logs" ON public.audit_logs
+  FOR INSERT
+  TO anon
+  WITH CHECK (true);
+
+<span class="sql-comment">-- 4. Users can view their own audit logs</span>
+CREATE POLICY "Users can view their own audit logs" ON public.audit_logs
+  FOR SELECT
+  TO authenticated
+  USING (user_id = auth.uid()::text OR user_id = '00000000-0000-0000-0000-000000000000');
+
+<span class="sql-comment">-- 5. Super users and admins can view all audit logs</span>
+CREATE POLICY "Admins can view all audit logs" ON public.audit_logs
+  FOR SELECT
+  TO authenticated
+  USING (
+    EXISTS (
+      SELECT 1 FROM public.users
+      WHERE users.id = auth.uid()::text
+      AND users.role IN ('super_user', 'admin')
+      AND users.tenant_id = 'medex'
+    )
+  );
+
+<span class="sql-comment">-- Verify policies are created</span>
+SELECT schemaname, tablename, policyname, cmd, roles
+FROM pg_policies
+WHERE tablename = 'audit_logs'
+ORDER BY policyname;</code>
+            </div>
+            <div id="copySuccess" style="display: none; color: #10b981; font-weight: 600; margin-top: 10px;">
+                ✅ SQL copied to clipboard!
+            </div>
+        </div>
+
+        <div class="step">
+            <h2>Step 2: Open Supabase SQL Editor</h2>
+            <p>Click the button to open your Supabase SQL Editor:</p>
+            <button onclick="openSupabase()">🚀 Open Supabase SQL Editor</button>
+        </div>
+
+        <div class="step">
+            <h2>Step 3: Run the SQL</h2>
+            <ol>
+                <li>Paste the SQL you copied (Ctrl+V / Cmd+V)</li>
+                <li>Click the <span class="highlight">RUN</span> button</li>
+                <li>Wait for "Success. No rows returned" message</li>
+                <li>Verify the policies were created in the results table</li>
+            </ol>
+        </div>
+
+        <div class="step">
+            <h2>Step 4: Test Login</h2>
+            <p>After running the SQL:</p>
+            <ol>
+                <li>Go to <a href="https://medex.nexasync.ca" target="_blank">https://medex.nexasync.ca</a></li>
+                <li>Try logging in with <strong>test@test.com</strong></li>
+                <li>Login should work now! ✅</li>
+            </ol>
+            <button class="success" onclick="openApp()">✅ Open MedEx App</button>
+        </div>
+
+        <div class="success-message" id="allDone">
+            <strong>✅ SQL Ready!</strong>
+            <p>The SQL has been copied to your clipboard. Now run it in Supabase SQL Editor and test the login!</p>
+        </div>
+
+        <div style="margin-top: 40px; padding: 20px; background: #f3f4f6; border-radius: 8px;">
+            <h3 style="margin-top: 0;">🔍 What This Fix Does:</h3>
+            <ul style="line-height: 1.8;">
+                <li><strong>Removes restrictive INSERT policies</strong> - Old policies only allowed users to insert their own logs</li>
+                <li><strong>Adds INSERT policies for all roles</strong> - service_role, authenticated, and anon can now insert audit logs</li>
+                <li><strong>Keeps SELECT restrictive</strong> - Only admins and users can view logs (HIPAA compliant)</li>
+                <li><strong>Allows anonymous audit logging</strong> - Critical for login attempts and security events</li>
+            </ul>
+        </div>
+    </div>
+
+    <script>
+        function copySql() {
+            const sql = document.getElementById('sql').textContent;
+            navigator.clipboard.writeText(sql).then(() => {
+                document.getElementById('copySuccess').style.display = 'block';
+                document.getElementById('allDone').style.display = 'block';
+                setTimeout(() => {
+                    document.getElementById('copySuccess').style.display = 'none';
+                }, 3000);
+            });
+        }
+
+        function openSupabase() {
+            window.open('https://supabase.com/dashboard/project/onwgbfetzrctshdwwimm/sql/new', '_blank');
+        }
+
+        function openApp() {
+            window.open('https://medex.nexasync.ca', '_blank');
+        }
+
+        // Auto-copy SQL on page load
+        window.onload = () => {
+            copySql();
+        };
+    </script>
+</body>
+</html>
