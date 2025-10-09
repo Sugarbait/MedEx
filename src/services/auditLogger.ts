@@ -16,6 +16,9 @@ import { supabase } from '@/config/supabase'
 import { encryptionService, EncryptedData } from './encryption'
 import { getCurrentTenantId } from '@/config/tenantConfig'
 
+// Special UUID for anonymous users (for backward compatibility with UUID-type columns)
+const ANONYMOUS_USER_ID = '00000000-0000-0000-0000-000000000000'
+
 export interface AuditLogEntry {
   id?: string
   timestamp: string
@@ -309,7 +312,7 @@ class HIPAAAuditLogger {
 
       const auditEntry: AuditLogEntry = {
         timestamp,
-        user_id: this.currentUser?.id || 'anonymous',
+        user_id: this.currentUser?.id || ANONYMOUS_USER_ID,
         user_name: this.currentUser?.name || 'Anonymous User',
         user_role: this.currentUser?.role || 'unknown',
         action: params.action,
