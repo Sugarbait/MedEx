@@ -32,6 +32,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 
   // Registration modal state
   const [showRegistration, setShowRegistration] = useState(false)
+  const [hasUsers, setHasUsers] = useState<boolean | null>(null) // null = checking, true = users exist, false = no users
 
   // Function to check lockout status for known users
   const checkLockoutStatus = async (emailToCheck: string) => {
@@ -209,6 +210,33 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
       }
     }
     createUsersIfNeeded()
+  }, [])
+
+  // Check if any users exist in the system on component mount
+  React.useEffect(() => {
+    const checkForUsers = async () => {
+      try {
+        const { supabase } = await import('@/config/supabase')
+        const { data: users, error } = await supabase
+          .from('users')
+          .select('id')
+          .eq('tenant_id', 'medex')
+          .limit(1)
+
+        if (error) {
+          console.warn('Error checking for users:', error)
+          setHasUsers(true) // Assume users exist on error (fail-safe)
+          return
+        }
+
+        setHasUsers(users && users.length > 0)
+      } catch (error) {
+        console.error('Failed to check for users:', error)
+        setHasUsers(true) // Assume users exist on error (fail-safe)
+      }
+    }
+
+    checkForUsers()
   }, [])
 
   // Function to handle successful authentication - MANDATORY MFA CHECK WITH ZERO BYPASSES
@@ -1185,6 +1213,22 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               }
             </button>
 
+            {/* First User Welcome Message */}
+            {hasUsers === false && (
+              <div className="mt-4 bg-blue-50 border border-blue-200 rounded-lg p-4 text-center">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <ShieldCheckIcon className="w-5 h-5 text-blue-600" />
+                  <h3 className="text-sm font-semibold text-blue-900">Welcome to MedEx</h3>
+                </div>
+                <p className="text-xs text-blue-700 mb-3">
+                  Be the first to register and become the administrator of your healthcare organization.
+                </p>
+                <p className="text-xs text-blue-600">
+                  First user automatically gets Super User privileges.
+                </p>
+              </div>
+            )}
+
             <div className="mt-4 text-center">
               <button
                 type="button"
@@ -1249,6 +1293,7 @@ export const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
               setError('')
               setEmail('')
               setPassword('')
+              setHasUsers(true) // Update state to hide "first user" message
             }}
           />
         </div>
