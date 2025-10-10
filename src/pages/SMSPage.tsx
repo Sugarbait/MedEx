@@ -1576,7 +1576,7 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       // Footer on last page
       doc.setFontSize(8)
       doc.setFont('helvetica', 'italic')
-      doc.text('🤖 Generated with MedEx Healthcare CRM', margin, pageHeight - 20)
+      doc.text('Generated with MedEx Healthcare CRM', margin, pageHeight - 20)
       doc.text(`Exported by: ${currentUser?.email || 'System'}`, margin, pageHeight - 12)
       doc.text(`Total Pages: ${doc.getNumberOfPages()}`, pageWidth - margin - 40, pageHeight - 12)
 
@@ -1814,11 +1814,28 @@ export const SMSPage: React.FC<SMSPageProps> = ({ user }) => {
       const lowerSearchTerm = debouncedSearchTerm.toLowerCase()
 
       searchFilteredChats = chats.filter(chat => {
+        // Generate Patient ID in PT format for search
+        const phoneNumber = chat.chat_analysis?.custom_analysis_data?.phone_number ||
+                           chat.chat_analysis?.custom_analysis_data?.customer_phone_number ||
+                           chat.chat_analysis?.custom_analysis_data?.phone ||
+                           chat.chat_analysis?.custom_analysis_data?.contact_number ||
+                           chat.metadata?.phone_number ||
+                           chat.phone_number ||
+                           'Unknown'
+
+        let generatedPatientId = ''
+        try {
+          generatedPatientId = phoneNumber !== 'Unknown' ? patientIdService.getPatientId(phoneNumber) : ''
+        } catch (error) {
+          // Silently skip if patient ID generation fails
+        }
+
         // Search across all relevant fields
         const searchableFields = [
           chat.chat_id,
           chat.agent_id,
           chat.phone_number,
+          generatedPatientId, // PT format Patient ID (e.g., PT714285513)
           chat.chat_status,
           chat.chat_analysis?.custom_analysis_data?.phone_number,
           chat.chat_analysis?.custom_analysis_data?.customer_phone_number,

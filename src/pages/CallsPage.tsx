@@ -838,7 +838,7 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
       // Footer on last page
       doc.setFontSize(8)
       doc.setFont('helvetica', 'italic')
-      doc.text('🤖 Generated with MedEx Healthcare CRM', margin, pageHeight - 20)
+      doc.text('Generated with MedEx Healthcare CRM', margin, pageHeight - 20)
       doc.text(`Exported by: ${user?.email || 'System'}`, margin, pageHeight - 12)
       doc.text(`Total Pages: ${doc.getNumberOfPages()}`, pageWidth - margin - 40, pageHeight - 12)
 
@@ -888,10 +888,26 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
       const lowerSearchTerm = searchTerm.toLowerCase()
 
       searchFilteredCalls = calls.filter(call => {
+        // Generate Patient ID in PT format for search
+        const phoneNumber = call.call_analysis?.custom_analysis_data?.phone_number ||
+                           call.call_analysis?.custom_analysis_data?.customer_phone_number ||
+                           call.metadata?.phone_number ||
+                           call.from_number ||
+                           call.to_number ||
+                           'Unknown'
+
+        let generatedPatientId = ''
+        try {
+          generatedPatientId = phoneNumber !== 'Unknown' ? patientIdService.getPatientId(phoneNumber) : ''
+        } catch (error) {
+          // Silently skip if patient ID generation fails
+        }
+
         // Search across all relevant fields
         const searchableFields = [
           call.call_id,
           call.patient_id,
+          generatedPatientId, // PT format Patient ID (e.g., PT714285513)
           call.from_number,
           call.to_number,
           call.phone_number,
@@ -905,6 +921,8 @@ export const CallsPage: React.FC<CallsPageProps> = ({ user }) => {
           call.call_analysis?.custom_analysis_data?.caller_name,
           call.call_analysis?.custom_analysis_data?.customer_name,
           call.call_analysis?.custom_analysis_data?.name,
+          call.call_analysis?.custom_analysis_data?.phone_number,
+          call.call_analysis?.custom_analysis_data?.customer_phone_number,
           call.sentiment_analysis?.overall_sentiment,
           // Search in all custom analysis data fields
           ...(call.call_analysis?.custom_analysis_data ? Object.values(call.call_analysis.custom_analysis_data) : [])

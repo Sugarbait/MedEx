@@ -27,6 +27,7 @@
 import { supabase } from '@/config/supabase'
 import { RealtimeChannel } from '@supabase/supabase-js'
 import { userIdTranslationService } from './userIdTranslationService'
+import { getCurrentTenantId } from '@/config/tenantConfig'
 
 // CRITICAL FIX: Disable console logging in production to prevent infinite loops
 const isProduction = !import.meta.env.DEV
@@ -420,7 +421,8 @@ class NotesService {
         created_by: userInfo.id,
         created_by_name: userInfo.name,
         created_by_email: userInfo.email,
-        metadata: data.metadata || {}
+        metadata: data.metadata || {},
+        tenant_id: getCurrentTenantId() // CRITICAL: Ensure notes are saved with correct tenant for RLS filtering
       }
 
       safeLog('🚀 Creating note with robust persistence strategy:', {
@@ -570,7 +572,8 @@ class NotesService {
               created_by: note.created_by,
               created_by_name: note.created_by_name,
               created_by_email: note.created_by_email,
-              metadata: note.metadata
+              metadata: note.metadata,
+              tenant_id: getCurrentTenantId() // Ensure tenant filtering for cross-device sync
             })
             .select()
             .single()
@@ -1215,7 +1218,8 @@ class NotesService {
                 created_by: note.created_by,
                 created_by_name: note.created_by_name,
                 created_by_email: note.created_by_email,
-                metadata: note.metadata
+                metadata: note.metadata,
+                tenant_id: getCurrentTenantId() // Ensure notes are synced with correct tenant
               })
               .select()
               .single()
@@ -1439,7 +1443,8 @@ class NotesService {
                 created_by: note.created_by,
                 created_by_name: note.created_by_name,
                 created_by_email: note.created_by_email,
-                metadata: note.metadata
+                metadata: note.metadata,
+                tenant_id: getCurrentTenantId() // Emergency recovery with correct tenant
               })
 
             if (!error) {
