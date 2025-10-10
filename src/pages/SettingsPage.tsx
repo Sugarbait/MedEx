@@ -902,10 +902,21 @@ export const SettingsPage: React.FC<SettingsPageProps> = ({ user }) => {
         setCompanyLogos(updatedLogos)
         setLogoUploadStatus('success')
 
-        // Trigger a page reload to update all logo references
-        setTimeout(() => {
-          window.location.reload()
-        }, 1000)
+        // Dispatch event to update logos across components without page reload
+        window.dispatchEvent(new CustomEvent('companyLogosUpdated', {
+          detail: { logos: updatedLogos, type }
+        }))
+
+        // Update favicon dynamically if it's a favicon upload
+        if (type === 'favicon' && updatedLogos.favicon) {
+          const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement || document.createElement('link')
+          link.type = 'image/x-icon'
+          link.rel = 'shortcut icon'
+          link.href = updatedLogos.favicon
+          if (!document.querySelector("link[rel*='icon']")) {
+            document.getElementsByTagName('head')[0].appendChild(link)
+          }
+        }
       } else {
         throw new Error('Failed to save logo configuration')
       }

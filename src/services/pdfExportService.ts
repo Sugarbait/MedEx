@@ -81,33 +81,32 @@ class PDFExportService {
   private async generateCoverPage(metrics: DashboardMetrics, options: ExportOptions): Promise<void> {
     const centerX = this.pageWidth / 2
 
-    // Header gradient background (simulated with rectangles)
-    this.pdf.setFillColor(59, 130, 246) // Blue-600
+    // White background for header section
+    this.pdf.setFillColor(255, 255, 255) // White
     this.pdf.rect(0, 0, this.pageWidth, 80, 'F')
 
-    this.pdf.setFillColor(147, 197, 253) // Blue-300
-    this.pdf.rect(0, 60, this.pageWidth, 20, 'F')
-
-    // Add CareXPS logo
+    // Add company logo from brand settings
     try {
-      await this.addLogoToPDF(centerX, 15)
+      await this.addLogoToPDF(centerX, 10)
     } catch (error) {
       console.error('Failed to load logo, continuing without it:', error)
     }
 
-    // Company title and report info
-    this.pdf.setTextColor(255, 255, 255)
+    // Company title and report info (now with dark text on white background)
+    this.pdf.setTextColor(31, 41, 55) // Dark gray for better visibility on white
     this.pdf.setFontSize(24)
     this.pdf.setFont('helvetica', 'bold')
-    this.pdf.text(options.companyName || 'CareXPS Healthcare CRM', centerX, 45, { align: 'center' })
+    this.pdf.text(options.companyName || 'MedEx Healthcare CRM', centerX, 50, { align: 'center' })
 
     this.pdf.setFontSize(16)
     this.pdf.setFont('helvetica', 'normal')
-    this.pdf.text('Dashboard Analytics Report', centerX, 58, { align: 'center' })
+    this.pdf.setTextColor(75, 85, 99) // Medium gray
+    this.pdf.text('Dashboard Analytics Report', centerX, 62, { align: 'center' })
 
     // Date range
     this.pdf.setFontSize(11)
-    this.pdf.text(`Report Period: ${options.dateRange}`, centerX, 70, { align: 'center' })
+    this.pdf.setTextColor(107, 114, 128) // Light gray
+    this.pdf.text(`Report Period: ${options.dateRange}`, centerX, 72, { align: 'center' })
 
     // Key metrics summary box
     this.pdf.setFillColor(249, 250, 251) // Gray-50
@@ -307,7 +306,7 @@ class PDFExportService {
 
     // Cost breakdown pie chart
     await this.generateCostBreakdownChart(metrics, yPosition)
-    yPosition += 90
+    yPosition += 110  // Increased spacing to prevent legend overlap
 
     // Performance metrics chart
     await this.generatePerformanceChart(metrics, yPosition)
@@ -333,13 +332,17 @@ class PDFExportService {
     const chartCenterY = yPosition + chartRadius
 
     if (totalCost > 0) {
-      // Call costs slice
-      this.pdf.setFillColor(59, 130, 246) // Blue-600
-      this.drawPieSlice(centerX, chartCenterY, chartRadius, 0, (callPercentage / 100) * 2 * Math.PI)
+      // Start from -90 degrees (top of circle) for better visual appearance
+      const startAngle = -Math.PI / 2
 
-      // SMS costs slice
+      // Call costs slice (blue)
+      this.pdf.setFillColor(59, 130, 246) // Blue-600
+      const callEndAngle = startAngle + (callPercentage / 100) * 2 * Math.PI
+      this.drawPieSlice(centerX, chartCenterY, chartRadius, startAngle, callEndAngle)
+
+      // SMS costs slice (purple)
       this.pdf.setFillColor(168, 85, 247) // Purple-600
-      this.drawPieSlice(centerX, chartCenterY, chartRadius, (callPercentage / 100) * 2 * Math.PI, 2 * Math.PI)
+      this.drawPieSlice(centerX, chartCenterY, chartRadius, callEndAngle, startAngle + 2 * Math.PI)
     } else {
       // Empty state
       this.pdf.setFillColor(229, 231, 235) // Gray-200
@@ -392,13 +395,24 @@ class PDFExportService {
   }
 
   private drawPieSlice(centerX: number, centerY: number, radius: number, startAngle: number, endAngle: number): void {
-    const startX = centerX + radius * Math.cos(startAngle)
-    const startY = centerY + radius * Math.sin(startAngle)
-    const endX = centerX + radius * Math.cos(endAngle)
-    const endY = centerY + radius * Math.sin(endAngle)
+    // Draw pie slice using multiple small triangular segments for smooth arc
+    const segments = 50 // Number of segments for smooth arc
+    const angleRange = endAngle - startAngle
+    const segmentAngle = angleRange / segments
 
-    // For simplicity, we'll draw sectors as triangular approximations
-    this.pdf.triangle(centerX, centerY, startX, startY, endX, endY, 'F')
+    // Draw each segment
+    for (let i = 0; i < segments; i++) {
+      const angle1 = startAngle + i * segmentAngle
+      const angle2 = startAngle + (i + 1) * segmentAngle
+
+      const x1 = centerX + radius * Math.cos(angle1)
+      const y1 = centerY + radius * Math.sin(angle1)
+      const x2 = centerX + radius * Math.cos(angle2)
+      const y2 = centerY + radius * Math.sin(angle2)
+
+      // Draw triangle from center to arc segment
+      this.pdf.triangle(centerX, centerY, x1, y1, x2, y2, 'F')
+    }
   }
 
   private generateChartLegend(items: Array<{ label: string; color: [number, number, number] }>, yPosition: number): void {
@@ -433,10 +447,6 @@ class PDFExportService {
 
     // Recommendations
     this.generateRecommendationsSection(metrics, yPosition)
-    yPosition += 80
-
-    // Compliance notice
-    this.generateComplianceSection(yPosition)
   }
 
   private generateHighlightsSection(metrics: DashboardMetrics, yPosition: number): void {
@@ -505,32 +515,6 @@ class PDFExportService {
     return recommendations.slice(0, 4)
   }
 
-  private generateComplianceSection(yPosition: number): void {
-    // Compliance box
-    this.pdf.setFillColor(254, 242, 242) // Red-50
-    this.pdf.setDrawColor(252, 165, 165) // Red-300
-    this.pdf.roundedRect(this.margin, yPosition, this.pageWidth - 2 * this.margin, 40, 3, 3, 'FD')
-
-    this.pdf.setFontSize(12)
-    this.pdf.setFont('helvetica', 'bold')
-    this.pdf.setTextColor(153, 27, 27) // Red-800
-    this.pdf.text('HIPAA Compliance Notice', this.margin + 5, yPosition + 12)
-
-    this.pdf.setFontSize(9)
-    this.pdf.setFont('helvetica', 'normal')
-    this.pdf.setTextColor(127, 29, 29) // Red-900
-
-    const complianceText = [
-      'This report contains Protected Health Information (PHI) and is subject to HIPAA regulations.',
-      'Unauthorized disclosure is prohibited. Handle according to your organization\'s privacy policies.',
-      'All data has been encrypted and anonymized where possible to ensure patient privacy.'
-    ]
-
-    complianceText.forEach((text, index) => {
-      this.pdf.text(text, this.margin + 5, yPosition + 20 + index * 5)
-    })
-  }
-
   private generateFileName(options: ExportOptions): string {
     const timestamp = format(new Date(), 'yyyy-MM-dd_HH-mm')
     const dateRange = options.dateRange.replace(/\s+/g, '_').toLowerCase()
@@ -539,36 +523,51 @@ class PDFExportService {
 
   private async addLogoToPDF(centerX: number, y: number): Promise<void> {
     try {
-      // Try to load the logo - first try local copy, then fallback to external URL
-      let logoUrl = '/images/Logo.png'
-      let response = await fetch(logoUrl).catch(() => null)
+      // Get logo from Company Branding Header Logo (using company_logos key)
+      const companyLogos = localStorage.getItem('company_logos')
+      let logoDataUrl: string | null = null
 
-      if (!response || !response.ok) {
-        // Try external URL as fallback
-        logoUrl = 'https://nexasync.ca/images/Logo.png'
-        response = await fetch(logoUrl).catch(() => null)
+      if (companyLogos) {
+        try {
+          const logos = JSON.parse(companyLogos)
+          // Use ONLY the headerLogo from company logos
+          logoDataUrl = logos.headerLogo
+          console.log('PDF Export: Found header logo in company_logos:', logoDataUrl ? logoDataUrl.substring(0, 50) + '...' : 'null')
+        } catch (parseError) {
+          console.warn('Failed to parse company logos:', parseError)
+        }
+      } else {
+        console.log('PDF Export: No company_logos found in localStorage')
       }
 
-      if (!response.ok) {
-        // Silently skip logo if unavailable to reduce console noise
+      // If no brand logo uploaded, skip logo entirely (no hardcoded fallbacks)
+      if (!logoDataUrl) {
+        console.log('No Company Branding Header Logo found in settings, skipping logo')
         return
       }
 
-      const blob = await response.blob()
-
-      return new Promise((resolve, reject) => {
-        const reader = new FileReader()
-        reader.onload = () => {
+      // Load image to get dimensions and maintain aspect ratio
+      return new Promise<void>((resolve, reject) => {
+        const img = new Image()
+        img.onload = () => {
           try {
-            const base64Data = reader.result as string
+            // Calculate dimensions maintaining aspect ratio
+            const maxWidth = 50 // mm - maximum logo width
+            const maxHeight = 30 // mm - maximum logo height
 
-            // Calculate logo dimensions (maintaining aspect ratio)
-            const logoWidth = 30 // mm
-            const logoHeight = 15 // mm (approximate 2:1 ratio)
+            const imgAspectRatio = img.width / img.height
+            let logoWidth = maxWidth
+            let logoHeight = maxWidth / imgAspectRatio
 
-            // Add the logo to the PDF
+            // If height exceeds max, scale down based on height
+            if (logoHeight > maxHeight) {
+              logoHeight = maxHeight
+              logoWidth = maxHeight * imgAspectRatio
+            }
+
+            // Add the logo to the PDF with proper aspect ratio
             this.pdf.addImage(
-              base64Data,
+              logoDataUrl!,
               'PNG',
               centerX - logoWidth / 2, // Center horizontally
               y,
@@ -581,12 +580,12 @@ class PDFExportService {
             reject(error)
           }
         }
-        reader.onerror = () => reject(new Error('Failed to read image'))
-        reader.readAsDataURL(blob)
+        img.onerror = () => reject(new Error('Failed to load image'))
+        img.src = logoDataUrl!
       })
     } catch (error) {
-      // Silently skip logo if there's a CORS or network error
-      // This prevents console errors while maintaining PDF generation
+      // Silently skip logo if there's an error
+      console.warn('Logo loading failed, continuing without logo:', error)
       return
     }
   }

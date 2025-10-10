@@ -439,6 +439,48 @@ const App: React.FC = () => {
     }
   }, [])
 
+  // Initialize favicon on app startup
+  useEffect(() => {
+    const loadFavicon = () => {
+      try {
+        const brandSettings = localStorage.getItem('brand_settings')
+        if (brandSettings) {
+          const settings = JSON.parse(brandSettings)
+          if (settings.favicon) {
+            const link = document.querySelector("link[rel*='icon']") as HTMLLinkElement || document.createElement('link')
+            link.type = 'image/x-icon'
+            link.rel = 'shortcut icon'
+            link.href = settings.favicon
+            if (!document.querySelector("link[rel*='icon']")) {
+              document.getElementsByTagName('head')[0].appendChild(link)
+            }
+            console.log('✅ Favicon loaded from brand settings on app startup')
+          }
+        }
+      } catch (error) {
+        console.error('Failed to load favicon on app startup:', error)
+      }
+    }
+
+    // Load favicon immediately on app startup
+    loadFavicon()
+
+    // Listen for companyLogosUpdated event to update favicon dynamically
+    const handleLogoUpdate = (event: Event) => {
+      const customEvent = event as CustomEvent
+      if (customEvent.detail && customEvent.detail.type === 'favicon' && customEvent.detail.logos) {
+        loadFavicon()
+        console.log('✅ Favicon updated from companyLogosUpdated event')
+      }
+    }
+
+    window.addEventListener('companyLogosUpdated', handleLogoUpdate as EventListener)
+
+    return () => {
+      window.removeEventListener('companyLogosUpdated', handleLogoUpdate as EventListener)
+    }
+  }, [])
+
   useEffect(() => {
     // Initialize security and storage systems
     const initializeSecurity = async () => {
@@ -788,42 +830,38 @@ const App: React.FC = () => {
               }
             }
 
-            // SECURITY ENHANCEMENT: Always require MFA verification on fresh app load
-            // Clear any existing MFA session to ensure user must verify MFA after each login
+            // MFA SESSION MANAGEMENT: Allow MFA skip on page refresh within session window
             const mfaTimestamp = localStorage.getItem('freshMfaVerified')
             let hasValidMfaSession = false
 
-            // MFA ENFORCEMENT: ALWAYS require MFA on login for MFA-enabled users
-            // Use sessionStorage to distinguish login vs page refresh
+            // Check if this is a page refresh (not initial login)
             const isPageRefresh = sessionStorage.getItem('appInitialized')
 
-            if (isPageRefresh) {
+            if (isPageRefresh && mfaTimestamp) {
               // Page refresh - check if MFA session is still valid
-              if (mfaTimestamp) {
-                const sessionAge = Date.now() - parseInt(mfaTimestamp)
-                const MAX_MFA_SESSION_AGE = 30 * 60 * 1000 // 30 minutes
-                hasValidMfaSession = sessionAge < MAX_MFA_SESSION_AGE
+              const sessionAge = Date.now() - parseInt(mfaTimestamp)
+              const MAX_MFA_SESSION_AGE = 30 * 60 * 1000 // 30 minutes
+              hasValidMfaSession = sessionAge < MAX_MFA_SESSION_AGE
 
-                console.log('🔄 PAGE REFRESH - MFA session check:', {
-                  sessionAgeMinutes: Math.round(sessionAge / 60000),
-                  isValid: hasValidMfaSession
-                })
-              } else {
-                hasValidMfaSession = false
-                console.log('🔄 PAGE REFRESH - No MFA session found')
-              }
+              console.log('🔐 Page Refresh Detected:', {
+                sessionAge: Math.round(sessionAge / 1000) + 's',
+                maxAge: '30 minutes',
+                hasValidSession: hasValidMfaSession
+              })
             } else {
-              // Fresh login - ALWAYS require MFA for MFA-enabled users
+              // Initial login - always require MFA
+              console.log('🔐 Initial Login Detected - MFA required')
               hasValidMfaSession = false
-              sessionStorage.setItem('appInitialized', 'true')
-              console.log('🚪 FRESH LOGIN - MFA verification required (no skips)')
             }
+
+            sessionStorage.setItem('appInitialized', 'true')
 
             console.log('🔐 App MFA Status Check:', {
               userId: userData.id,
               email: userData.email,
               mfaEnabled,
               mfaCheckFailed,
+              isPageRefresh: !!isPageRefresh,
               hasValidMfaSession,
               requiresVerification: mfaEnabled && !hasValidMfaSession
             })
