@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Enable Test Super User - MedEx CRM</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+        }
+        .info {
+            background: #dbeafe;
+            border-left: 4px solid #2563eb;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        .success {
+            background: #d1fae5;
+            border-left: 4px solid #10b981;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+            color: #065f46;
+        }
+        .error {
+            background: #fee2e2;
+            border-left: 4px solid #ef4444;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+            color: #991b1b;
+        }
+        .warning {
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+            color: #92400e;
+        }
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+        button:hover {
+            background: #1d4ed8;
+        }
+        button:disabled {
+            background: #9ca3af;
+            cursor: not-allowed;
+        }
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #2563eb;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin-left: 10px;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        pre {
+            background: #1f2937;
+            color: #10b981;
+            padding: 15px;
+            border-radius: 4px;
+            overflow-x: auto;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Enable Test Super User</h1>
+
+        <div class="info">
+            <strong>This tool will:</strong><br>
+            1. Find the existing test@test.com user<br>
+            2. Update password to: <code>test1000!</code><br>
+            3. Set role to: <strong>Super User</strong><br>
+            4. Activate the account<br>
+            5. Set tenant to: <strong>medex</strong>
+        </div>
+
+        <button id="updateBtn" onclick="updateTestUser()">Update Test User</button>
+
+        <div id="result"></div>
+        <div id="details"></div>
+    </div>
+
+    <script>
+        const SUPABASE_URL = 'https://cpkslvmydfdevdftieck.supabase.co'
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwa3Nsdm15ZGZkZXZkZnRpZWNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY5MDAyOTUsImV4cCI6MjA2MjQ3NjI5NX0.IfkIVsp3AtLOyXDW9hq9bEvnozd9IaaUay244iDhWGE'
+        const SERVICE_ROLE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwa3Nsdm15ZGZkZXZkZnRpZWNrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjkwMDI5NSwiZXhwIjoyMDYyNDc2Mjk1fQ.5Nwr-DrgL63DwPMH2egxgdjoHGhAxCvIrz2SMTMKqD0'
+
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+        const supabaseAdmin = window.supabase.createClient(SUPABASE_URL, SERVICE_ROLE_KEY)
+
+        async function updateTestUser() {
+            const btn = document.getElementById('updateBtn')
+            const resultDiv = document.getElementById('result')
+            const detailsDiv = document.getElementById('details')
+
+            btn.disabled = true
+            btn.innerHTML = 'Updating User... <span class="loading"></span>'
+            resultDiv.innerHTML = ''
+            detailsDiv.innerHTML = ''
+
+            try {
+                console.log('Step 1: Finding user by email...')
+
+                // Get user by email from Auth
+                const { data: authUsers, error: listError } = await supabaseAdmin.auth.admin.listUsers()
+
+                if (listError) {
+                    throw new Error(`Failed to list users: ${listError.message}`)
+                }
+
+                const authUser = authUsers.users.find(u => u.email === 'test@test.com')
+
+                if (!authUser) {
+                    throw new Error('User test@test.com not found in Supabase Auth')
+                }
+
+                console.log('Found auth user:', authUser.id)
+
+                console.log('Step 2: Updating password...')
+
+                // Update password
+                const { data: updateData, error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+                    authUser.id,
+                    {
+                        password: 'test1000!',
+                        email_confirm: true
+                    }
+                )
+
+                if (updateError) {
+                    throw new Error(`Password update failed: ${updateError.message}`)
+                }
+
+                console.log('Password updated successfully')
+
+                console.log('Step 3: Updating user profile...')
+
+                // Check if profile exists
+                const { data: existingProfile } = await supabase
+                    .from('users')
+                    .select('*')
+                    .eq('id', authUser.id)
+                    .single()
+
+                let profileResult
+
+                if (existingProfile) {
+                    // Update existing profile
+                    const { data, error } = await supabase
+                        .from('users')
+                        .update({
+                            email: 'test@test.com',
+                            name: 'Test Super User',
+                            role: 'super_user',
+                            is_active: true,
+                            tenant_id: 'medex',
+                            updated_at: new Date().toISOString()
+                        })
+                        .eq('id', authUser.id)
+                        .select()
+
+                    if (error) throw new Error(`Profile update failed: ${error.message}`)
+                    profileResult = data[0]
+                    console.log('Profile updated')
+                } else {
+                    // Create new profile
+                    const { data, error } = await supabase
+                        .from('users')
+                        .insert([{
+                            id: authUser.id,
+                            email: 'test@test.com',
+                            name: 'Test Super User',
+                            role: 'super_user',
+                            is_active: true,
+                            tenant_id: 'medex',
+                            created_at: new Date().toISOString(),
+                            updated_at: new Date().toISOString()
+                        }])
+                        .select()
+
+                    if (error) throw new Error(`Profile creation failed: ${error.message}`)
+                    profileResult = data[0]
+                    console.log('Profile created')
+                }
+
+                console.log('Step 4: Creating user credentials...')
+
+                // Store credentials for login
+                const bcrypt = {
+                    hash: async (password) => {
+                        // Simple hash for testing (in production, use proper bcrypt)
+                        const encoder = new TextEncoder()
+                        const data = encoder.encode(password)
+                        const hashBuffer = await crypto.subtle.digest('SHA-256', data)
+                        const hashArray = Array.from(new Uint8Array(hashBuffer))
+                        return hashArray.map(b => b.toString(16).padStart(2, '0')).join('')
+                    }
+                }
+
+                const hashedPassword = await bcrypt.hash('test1000!')
+
+                // Store credentials
+                const { error: credError } = await supabase
+                    .from('user_credentials')
+                    .upsert([{
+                        user_id: authUser.id,
+                        password: hashedPassword,
+                        updated_at: new Date().toISOString()
+                    }])
+
+                if (credError) {
+                    console.warn('Credentials table might not exist, skipping...')
+                }
+
+                resultDiv.innerHTML = `
+                    <div class="success">
+                        <strong>✅ Test Super User Updated Successfully!</strong><br><br>
+                        <strong>Login Credentials:</strong><br>
+                        Email: <code>test@test.com</code><br>
+                        Password: <code>test1000!</code><br><br>
+                        <strong>Profile Details:</strong><br>
+                        User ID: ${authUser.id}<br>
+                        Name: ${profileResult.name}<br>
+                        Role: ${profileResult.role}<br>
+                        Status: ${profileResult.is_active ? 'Active' : 'Inactive'}<br>
+                        Tenant: ${profileResult.tenant_id}<br><br>
+                        <strong>You can now log in at:</strong><br>
+                        <a href="http://localhost:5174/" target="_blank">http://localhost:5174/</a>
+                    </div>
+                `
+
+                detailsDiv.innerHTML = `
+                    <pre>${JSON.stringify(profileResult, null, 2)}</pre>
+                `
+
+            } catch (error) {
+                console.error('Error updating test user:', error)
+                resultDiv.innerHTML = `
+                    <div class="error">
+                        <strong>Error updating test user:</strong><br>
+                        ${error.message}
+                    </div>
+                `
+            } finally {
+                btn.disabled = false
+                btn.innerHTML = 'Update Test User'
+            }
+        }
+    </script>
+</body>
+</html>

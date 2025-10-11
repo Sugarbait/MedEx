@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Show All User Profiles - MedEx CRM</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 20px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        h1 {
+            color: #333;
+        }
+        .profile-card {
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            margin: 15px 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .profile-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid #eee;
+        }
+        .profile-name {
+            font-size: 1.4em;
+            font-weight: bold;
+            color: #2563eb;
+        }
+        .profile-role {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+        .role-super_user {
+            background: #10b981;
+            color: white;
+        }
+        .role-user {
+            background: #6b7280;
+            color: white;
+        }
+        .status {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 4px;
+            font-size: 0.85em;
+            font-weight: bold;
+            margin-left: 8px;
+        }
+        .status-active {
+            background: #10b981;
+            color: white;
+        }
+        .status-inactive {
+            background: #ef4444;
+            color: white;
+        }
+        .profile-details {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 10px;
+        }
+        .detail-item {
+            padding: 8px;
+            background: #f9fafb;
+            border-radius: 4px;
+        }
+        .detail-label {
+            font-size: 0.85em;
+            color: #6b7280;
+            font-weight: 600;
+            margin-bottom: 4px;
+        }
+        .detail-value {
+            color: #111827;
+            word-break: break-word;
+        }
+        .loading {
+            text-align: center;
+            padding: 40px;
+            font-size: 1.2em;
+            color: #666;
+        }
+        .error {
+            background: #fee2e2;
+            border: 1px solid #ef4444;
+            color: #991b1b;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .stats {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            display: flex;
+            gap: 30px;
+        }
+        .stat-item {
+            text-align: center;
+        }
+        .stat-value {
+            font-size: 2em;
+            font-weight: bold;
+            color: #2563eb;
+        }
+        .stat-label {
+            color: #6b7280;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <h1>🏥 MedEx CRM - All User Profiles</h1>
+
+    <div id="stats"></div>
+    <div id="loading" class="loading">Loading user profiles...</div>
+    <div id="error"></div>
+    <div id="profiles"></div>
+
+    <script>
+        const SUPABASE_URL = 'https://cpkslvmydfdevdftieck.supabase.co'
+        const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwa3Nsdm15ZGZkZXZkZnRpZWNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY5MDAyOTUsImV4cCI6MjA2MjQ3NjI5NX0.IfkIVsp3AtLOyXDW9hq9bEvnozd9IaaUay244iDhWGE'
+
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+        async function loadProfiles() {
+            try {
+                console.log('Querying Supabase for MedEx users...')
+
+                // Query users table for MedEx tenant
+                const { data: users, error } = await supabase
+                    .from('users')
+                    .select('*')
+                    .eq('tenant_id', 'medex')
+                    .order('created_at', { ascending: false })
+
+                if (error) {
+                    throw error
+                }
+
+                console.log('Found users:', users)
+
+                document.getElementById('loading').style.display = 'none'
+
+                if (!users || users.length === 0) {
+                    document.getElementById('profiles').innerHTML = '<p style="text-align: center; color: #666; padding: 40px;">No user profiles found for MedEx tenant.</p>'
+                    return
+                }
+
+                // Display statistics
+                const activeCount = users.filter(u => u.isActive).length
+                const superUserCount = users.filter(u => u.role === 'super_user').length
+
+                document.getElementById('stats').innerHTML = `
+                    <div class="stats">
+                        <div class="stat-item">
+                            <div class="stat-value">${users.length}</div>
+                            <div class="stat-label">Total Users</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${activeCount}</div>
+                            <div class="stat-label">Active Users</div>
+                        </div>
+                        <div class="stat-item">
+                            <div class="stat-value">${superUserCount}</div>
+                            <div class="stat-label">Super Users</div>
+                        </div>
+                    </div>
+                `
+
+                // Display each profile
+                const profilesHTML = users.map(user => {
+                    const roleBadge = `<span class="profile-role role-${user.role}">${user.role.replace('_', ' ')}</span>`
+                    const statusBadge = `<span class="status status-${user.isActive ? 'active' : 'inactive'}">${user.isActive ? 'Active' : 'Inactive'}</span>`
+
+                    return `
+                        <div class="profile-card">
+                            <div class="profile-header">
+                                <div class="profile-name">${user.name || user.username || user.email}</div>
+                                <div>${roleBadge}${statusBadge}</div>
+                            </div>
+                            <div class="profile-details">
+                                <div class="detail-item">
+                                    <div class="detail-label">Email</div>
+                                    <div class="detail-value">${user.email || 'N/A'}</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">User ID</div>
+                                    <div class="detail-value">${user.id}</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">Department</div>
+                                    <div class="detail-value">${user.department || 'N/A'}</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">Phone</div>
+                                    <div class="detail-value">${user.phone || 'N/A'}</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">Location</div>
+                                    <div class="detail-value">${user.location || 'N/A'}</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">Last Login</div>
+                                    <div class="detail-value">${user.last_login ? new Date(user.last_login).toLocaleString() : 'Never'}</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">Created</div>
+                                    <div class="detail-value">${new Date(user.created_at).toLocaleString()}</div>
+                                </div>
+                                <div class="detail-item">
+                                    <div class="detail-label">Tenant</div>
+                                    <div class="detail-value">${user.tenant_id}</div>
+                                </div>
+                                ${user.bio ? `
+                                <div class="detail-item" style="grid-column: 1 / -1;">
+                                    <div class="detail-label">Bio</div>
+                                    <div class="detail-value">${user.bio}</div>
+                                </div>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `
+                }).join('')
+
+                document.getElementById('profiles').innerHTML = profilesHTML
+
+            } catch (error) {
+                console.error('Error loading profiles:', error)
+                document.getElementById('loading').style.display = 'none'
+                document.getElementById('error').innerHTML = `
+                    <div class="error">
+                        <strong>Error loading profiles:</strong><br>
+                        ${error.message}
+                    </div>
+                `
+            }
+        }
+
+        // Load profiles when page loads
+        loadProfiles()
+    </script>
+</body>
+</html>

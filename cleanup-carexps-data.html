@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Remove CareXPS Data from MedEx Database</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 1000px;
+      margin: 40px auto;
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+    }
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+      padding: 30px;
+    }
+    h1 {
+      color: #333;
+      border-bottom: 3px solid #667eea;
+      padding-bottom: 10px;
+      margin-bottom: 20px;
+    }
+    h2 {
+      color: #667eea;
+      margin-top: 30px;
+      border-bottom: 2px solid #e0e0e0;
+      padding-bottom: 8px;
+    }
+    button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin: 10px 5px;
+    }
+    button:hover {
+      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .danger-btn {
+      background: #ef4444;
+    }
+    .danger-btn:hover {
+      background: #dc2626;
+    }
+    .loading {
+      color: #667eea;
+      font-style: italic;
+      margin: 20px 0;
+    }
+    .error {
+      background: #fee2e2;
+      border: 1px solid #fecaca;
+      color: #dc2626;
+      padding: 12px;
+      border-radius: 6px;
+      margin: 20px 0;
+    }
+    .success {
+      background: #dcfce7;
+      border: 1px solid #bbf7d0;
+      color: #16a34a;
+      padding: 12px;
+      border-radius: 6px;
+      margin: 20px 0;
+    }
+    .warning {
+      background: #fef3c7;
+      border: 1px solid #fde68a;
+      color: #d97706;
+      padding: 12px;
+      border-radius: 6px;
+      margin: 20px 0;
+    }
+    .info {
+      background: #dbeafe;
+      border: 1px solid #bfdbfe;
+      color: #2563eb;
+      padding: 12px;
+      border-radius: 6px;
+      margin: 20px 0;
+    }
+    .data-summary {
+      background: #f9fafb;
+      border: 1px solid #e5e7eb;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+    }
+    .data-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px;
+      border-bottom: 1px solid #e5e7eb;
+    }
+    .data-row:last-child {
+      border-bottom: none;
+    }
+    .table-name {
+      font-weight: 600;
+      color: #374151;
+    }
+    .count {
+      font-weight: 700;
+      color: #667eea;
+    }
+    .count.carexps {
+      color: #ef4444;
+    }
+    .count.medex {
+      color: #10b981;
+    }
+    pre {
+      background: #1f2937;
+      color: #f3f4f6;
+      padding: 15px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 13px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧹 Clean MedEx Database</h1>
+
+    <div class="warning">
+      <strong>⚠️ WARNING:</strong> This tool will permanently remove all CareXPS data from your database.
+      <br><br>
+      <strong>This database should be ONLY for MedEx data.</strong>
+    </div>
+
+    <h2>Step 1: Scan Database</h2>
+    <button onclick="scanDatabase()">🔍 Scan for CareXPS Data</button>
+
+    <div id="loading" class="loading" style="display: none;">
+      ⏳ Scanning database...
+    </div>
+
+    <div id="error" class="error" style="display: none;"></div>
+    <div id="scanResults"></div>
+
+    <div id="deleteSection" style="display: none;">
+      <h2>Step 2: Remove CareXPS Data</h2>
+      <div class="warning">
+        <strong>⚠️ FINAL WARNING:</strong> This will permanently delete all CareXPS records!
+        <br>This action cannot be undone.
+      </div>
+      <button class="danger-btn" onclick="deleteCareXPSData()">
+        🗑️ DELETE ALL CareXPS Data
+      </button>
+    </div>
+
+    <div id="deleteResults"></div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://onwgbfetzrctshdwwimm.supabase.co'
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ud2diZmV0enJjdHNoZHd3aW1tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk5ODA5ODYsImV4cCI6MjA3NTU1Njk4Nn0.MgsjiXT2Y0WqQf2puG2p27tHaMRfhiUET2TDWc668lI'
+
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+    // Tables that have tenant_id column
+    const TABLES_WITH_TENANT = [
+      'users',
+      'user_settings',
+      'audit_logs',
+      'notes'
+    ]
+
+    let scanData = {}
+
+    async function scanDatabase() {
+      const loadingEl = document.getElementById('loading')
+      const errorEl = document.getElementById('error')
+      const resultsEl = document.getElementById('scanResults')
+      const deleteSection = document.getElementById('deleteSection')
+
+      loadingEl.style.display = 'block'
+      errorEl.style.display = 'none'
+      resultsEl.innerHTML = ''
+      deleteSection.style.display = 'none'
+      scanData = {}
+
+      try {
+        let html = '<div class="data-summary">'
+        html += '<h3>📊 Database Contents</h3>'
+
+        let totalCarexps = 0
+        let totalMedex = 0
+
+        // Scan each table
+        for (const table of TABLES_WITH_TENANT) {
+          try {
+            // Count CareXPS records
+            const { data: carexpsData, error: carexpsError } = await supabase
+              .from(table)
+              .select('id', { count: 'exact', head: true })
+              .eq('tenant_id', 'carexps')
+
+            const carexpsCount = carexpsError ? 0 : (carexpsData?.length || 0)
+
+            // Count MedEx records
+            const { data: medexData, error: medexError } = await supabase
+              .from(table)
+              .select('id', { count: 'exact', head: true })
+              .eq('tenant_id', 'medex')
+
+            const medexCount = medexError ? 0 : (medexData?.length || 0)
+
+            scanData[table] = {
+              carexps: carexpsCount,
+              medex: medexCount
+            }
+
+            totalCarexps += carexpsCount
+            totalMedex += medexCount
+
+            html += `
+              <div class="data-row">
+                <span class="table-name">${table}</span>
+                <div>
+                  <span class="count medex">MedEx: ${medexCount}</span>
+                  <span style="margin: 0 10px;">|</span>
+                  <span class="count carexps">CareXPS: ${carexpsCount}</span>
+                </div>
+              </div>
+            `
+          } catch (tableError) {
+            console.error(`Error scanning ${table}:`, tableError)
+          }
+        }
+
+        html += `
+          <div class="data-row" style="border-top: 2px solid #667eea; margin-top: 10px; padding-top: 15px;">
+            <span class="table-name" style="font-size: 18px;">TOTAL</span>
+            <div>
+              <span class="count medex" style="font-size: 18px;">MedEx: ${totalMedex}</span>
+              <span style="margin: 0 10px;">|</span>
+              <span class="count carexps" style="font-size: 18px;">CareXPS: ${totalCarexps}</span>
+            </div>
+          </div>
+        `
+
+        html += '</div>'
+
+        if (totalCarexps > 0) {
+          html += `
+            <div class="warning">
+              <strong>⚠️ Found ${totalCarexps} CareXPS records in the database!</strong>
+              <br>These records should be removed to make this a MedEx-only database.
+            </div>
+          `
+          deleteSection.style.display = 'block'
+        } else {
+          html += `
+            <div class="success">
+              ✅ <strong>Great!</strong> No CareXPS data found. This database is clean and contains only MedEx data.
+            </div>
+          `
+        }
+
+        resultsEl.innerHTML = html
+        loadingEl.style.display = 'none'
+
+      } catch (error) {
+        loadingEl.style.display = 'none'
+        errorEl.textContent = `❌ Error: ${error.message}`
+        errorEl.style.display = 'block'
+        console.error('Error scanning database:', error)
+      }
+    }
+
+    async function deleteCareXPSData() {
+      if (!confirm('⚠️ ARE YOU ABSOLUTELY SURE?\n\nThis will PERMANENTLY DELETE all CareXPS data from the database.\n\nType YES in the next prompt to confirm.')) {
+        return
+      }
+
+      const confirmation = prompt('Type YES to confirm deletion:')
+      if (confirmation !== 'YES') {
+        alert('Deletion cancelled.')
+        return
+      }
+
+      const loadingEl = document.getElementById('loading')
+      const errorEl = document.getElementById('error')
+      const resultsEl = document.getElementById('deleteResults')
+
+      loadingEl.style.display = 'block'
+      errorEl.style.display = 'none'
+      resultsEl.innerHTML = ''
+
+      try {
+        let html = '<div class="data-summary">'
+        html += '<h3>🗑️ Deletion Results</h3>'
+
+        let totalDeleted = 0
+
+        // Delete from each table
+        for (const table of TABLES_WITH_TENANT) {
+          try {
+            const { error: deleteError } = await supabase
+              .from(table)
+              .delete()
+              .eq('tenant_id', 'carexps')
+
+            const deletedCount = scanData[table]?.carexps || 0
+
+            if (deleteError) {
+              html += `
+                <div class="data-row">
+                  <span class="table-name">${table}</span>
+                  <span class="count" style="color: #ef4444;">❌ Error: ${deleteError.message}</span>
+                </div>
+              `
+            } else {
+              totalDeleted += deletedCount
+              html += `
+                <div class="data-row">
+                  <span class="table-name">${table}</span>
+                  <span class="count" style="color: #10b981;">✅ Deleted ${deletedCount} records</span>
+                </div>
+              `
+            }
+          } catch (tableError) {
+            console.error(`Error deleting from ${table}:`, tableError)
+            html += `
+              <div class="data-row">
+                <span class="table-name">${table}</span>
+                <span class="count" style="color: #ef4444;">❌ Error: ${tableError.message}</span>
+              </div>
+            `
+          }
+        }
+
+        html += '</div>'
+
+        if (totalDeleted > 0) {
+          html += `
+            <div class="success">
+              <strong>✅ SUCCESS!</strong> Deleted ${totalDeleted} CareXPS records.
+              <br><br>
+              Your database is now MedEx-only!
+            </div>
+          `
+        } else {
+          html += `
+            <div class="info">
+              ℹ️ No records were deleted. The database may have already been clean.
+            </div>
+          `
+        }
+
+        resultsEl.innerHTML = html
+        loadingEl.style.display = 'none'
+
+        // Re-scan to verify
+        setTimeout(() => {
+          scanDatabase()
+        }, 2000)
+
+      } catch (error) {
+        loadingEl.style.display = 'none'
+        errorEl.textContent = `❌ Error: ${error.message}`
+        errorEl.style.display = 'block'
+        console.error('Error deleting CareXPS data:', error)
+      }
+    }
+
+    // Auto-scan when page loads
+    window.addEventListener('load', () => {
+      scanDatabase()
+    })
+  </script>
+</body>
+</html>

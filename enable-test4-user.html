@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Enable test4@test.com User</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 800px;
+      margin: 50px auto;
+      padding: 20px;
+    }
+    .status {
+      padding: 15px;
+      margin: 20px 0;
+      border-radius: 5px;
+    }
+    .success {
+      background-color: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+    }
+    .error {
+      background-color: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+    }
+    .info {
+      background-color: #d1ecf1;
+      color: #0c5460;
+      border: 1px solid #bee5eb;
+    }
+    button {
+      background-color: #28a745;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 16px;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #218838;
+    }
+    button:disabled {
+      background-color: #6c757d;
+      cursor: not-allowed;
+    }
+  </style>
+</head>
+<body>
+  <h1>🔓 Enable test4@test.com User</h1>
+  <div class="info">
+    <strong>Purpose:</strong> This tool will enable the test4@test.com user account so they can login from any device.
+  </div>
+
+  <div id="status"></div>
+
+  <button id="enableBtn" onclick="enableUser()">Enable test4@test.com User</button>
+
+  <script>
+    const SUPABASE_URL = 'https://cpkslvmydfdevdftieck.supabase.co'
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwa3Nsdm15ZGZkZXZkZnRpZWNrIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDY5MDAyOTUsImV4cCI6MjA2MjQ3NjI5NX0.wQaCBE_cXtWiFZYBXkAFnqo1RgSIymRJGw9N-TnQJfI'
+
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+    async function enableUser() {
+      const statusDiv = document.getElementById('status')
+      const btn = document.getElementById('enableBtn')
+
+      btn.disabled = true
+      statusDiv.innerHTML = '<div class="info">⏳ Processing...</div>'
+
+      try {
+        // Find the user
+        const { data: users, error: findError } = await supabase
+          .from('users')
+          .select('*')
+          .eq('email', 'test4@test.com')
+          .eq('tenant_id', 'medex')
+
+        if (findError) {
+          throw new Error(`Failed to find user: ${findError.message}`)
+        }
+
+        if (!users || users.length === 0) {
+          statusDiv.innerHTML = '<div class="error">❌ User test4@test.com not found in database. Make sure the user was created first.</div>'
+          btn.disabled = false
+          return
+        }
+
+        const user = users[0]
+        console.log('Found user:', user)
+
+        // Enable the user
+        const { data: updateData, error: updateError } = await supabase
+          .from('users')
+          .update({
+            is_active: true,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', user.id)
+          .eq('tenant_id', 'medex')
+          .select()
+
+        if (updateError) {
+          throw new Error(`Failed to enable user: ${updateError.message}`)
+        }
+
+        console.log('User enabled:', updateData)
+
+        statusDiv.innerHTML = `
+          <div class="success">
+            ✅ <strong>Success!</strong><br>
+            User test4@test.com has been enabled and can now login from any device.<br><br>
+            <strong>User Details:</strong><br>
+            - Email: ${user.email}<br>
+            - Name: ${user.name}<br>
+            - Role: ${user.role}<br>
+            - Status: Active ✓
+          </div>
+        `
+
+      } catch (error) {
+        console.error('Error:', error)
+        statusDiv.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`
+        btn.disabled = false
+      }
+    }
+  </script>
+</body>
+</html>

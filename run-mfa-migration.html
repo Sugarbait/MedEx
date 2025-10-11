@@ -1,0 +1,450 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MFA Migration Tool - MedEx CRM</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      padding: 20px;
+    }
+
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      padding: 40px;
+      max-width: 600px;
+      width: 100%;
+    }
+
+    h1 {
+      color: #2d3748;
+      margin-bottom: 10px;
+      font-size: 28px;
+    }
+
+    .subtitle {
+      color: #718096;
+      margin-bottom: 30px;
+      font-size: 14px;
+    }
+
+    .info-box {
+      background: #edf2f7;
+      border-left: 4px solid #4299e1;
+      padding: 15px;
+      margin-bottom: 25px;
+      border-radius: 4px;
+    }
+
+    .info-box h3 {
+      color: #2d3748;
+      margin-bottom: 8px;
+      font-size: 16px;
+    }
+
+    .info-box p {
+      color: #4a5568;
+      font-size: 14px;
+      line-height: 1.6;
+    }
+
+    .form-group {
+      margin-bottom: 20px;
+    }
+
+    label {
+      display: block;
+      margin-bottom: 8px;
+      color: #2d3748;
+      font-weight: 500;
+      font-size: 14px;
+    }
+
+    input {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e2e8f0;
+      border-radius: 6px;
+      font-size: 14px;
+      transition: border-color 0.2s;
+    }
+
+    input:focus {
+      outline: none;
+      border-color: #4299e1;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 12px;
+      margin-top: 25px;
+    }
+
+    button {
+      flex: 1;
+      padding: 14px;
+      border: none;
+      border-radius: 6px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+
+    .btn-primary {
+      background: #4299e1;
+      color: white;
+    }
+
+    .btn-primary:hover {
+      background: #3182ce;
+      transform: translateY(-1px);
+    }
+
+    .btn-primary:disabled {
+      background: #cbd5e0;
+      cursor: not-allowed;
+      transform: none;
+    }
+
+    .btn-secondary {
+      background: #edf2f7;
+      color: #2d3748;
+    }
+
+    .btn-secondary:hover {
+      background: #e2e8f0;
+    }
+
+    .log-box {
+      background: #1a202c;
+      color: #e2e8f0;
+      padding: 15px;
+      border-radius: 6px;
+      margin-top: 20px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      max-height: 300px;
+      overflow-y: auto;
+      display: none;
+    }
+
+    .log-box.show {
+      display: block;
+    }
+
+    .log-entry {
+      margin-bottom: 5px;
+      padding: 4px 0;
+    }
+
+    .log-success {
+      color: #48bb78;
+    }
+
+    .log-error {
+      color: #f56565;
+    }
+
+    .log-warning {
+      color: #ed8936;
+    }
+
+    .log-info {
+      color: #4299e1;
+    }
+
+    .status-badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 12px;
+      font-weight: 600;
+      margin-top: 10px;
+    }
+
+    .status-pending {
+      background: #fef3c7;
+      color: #92400e;
+    }
+
+    .status-success {
+      background: #d1fae5;
+      color: #065f46;
+    }
+
+    .status-error {
+      background: #fee2e2;
+      color: #991b1b;
+    }
+
+    .spinner {
+      display: inline-block;
+      width: 16px;
+      height: 16px;
+      border: 2px solid #ffffff;
+      border-radius: 50%;
+      border-top-color: transparent;
+      animation: spin 0.6s linear infinite;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔐 MFA Migration Tool</h1>
+    <p class="subtitle">Add Fresh MFA columns to user_settings table</p>
+
+    <div class="info-box">
+      <h3>ℹ️ What this tool does:</h3>
+      <p>
+        This migration adds the required columns (fresh_mfa_secret, fresh_mfa_enabled,
+        fresh_mfa_setup_completed, fresh_mfa_backup_codes) to your user_settings table.
+        It's safe to run multiple times.
+      </p>
+    </div>
+
+    <div class="form-group">
+      <label for="supabaseUrl">Supabase URL</label>
+      <input
+        type="text"
+        id="supabaseUrl"
+        placeholder="https://xxxxx.supabase.co"
+        value=""
+      />
+    </div>
+
+    <div class="form-group">
+      <label for="serviceRoleKey">Service Role Key (NOT Anon Key!)</label>
+      <input
+        type="password"
+        id="serviceRoleKey"
+        placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+        value=""
+      />
+    </div>
+
+    <div class="button-group">
+      <button class="btn-secondary" onclick="loadFromEnv()">
+        Load from .env.local
+      </button>
+      <button class="btn-primary" id="runBtn" onclick="runMigration()">
+        Run Migration
+      </button>
+    </div>
+
+    <div id="status"></div>
+    <div id="logBox" class="log-box"></div>
+  </div>
+
+  <script>
+    // SQL Migration
+    const MIGRATION_SQL = `
+-- Add Fresh MFA columns to user_settings table
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'user_settings' AND column_name = 'fresh_mfa_secret'
+  ) THEN
+    ALTER TABLE user_settings ADD COLUMN fresh_mfa_secret TEXT;
+    RAISE NOTICE 'Added column fresh_mfa_secret to user_settings';
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'user_settings' AND column_name = 'fresh_mfa_enabled'
+  ) THEN
+    ALTER TABLE user_settings ADD COLUMN fresh_mfa_enabled BOOLEAN DEFAULT false;
+    RAISE NOTICE 'Added column fresh_mfa_enabled to user_settings';
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'user_settings' AND column_name = 'fresh_mfa_setup_completed'
+  ) THEN
+    ALTER TABLE user_settings ADD COLUMN fresh_mfa_setup_completed BOOLEAN DEFAULT false;
+    RAISE NOTICE 'Added column fresh_mfa_setup_completed to user_settings';
+  END IF;
+END $$;
+
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_name = 'user_settings' AND column_name = 'fresh_mfa_backup_codes'
+  ) THEN
+    ALTER TABLE user_settings ADD COLUMN fresh_mfa_backup_codes TEXT;
+    RAISE NOTICE 'Added column fresh_mfa_backup_codes to user_settings';
+  END IF;
+END $$;
+    `.trim();
+
+    function log(message, type = 'info') {
+      const logBox = document.getElementById('logBox');
+      logBox.classList.add('show');
+
+      const entry = document.createElement('div');
+      entry.className = `log-entry log-${type}`;
+      entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+      logBox.appendChild(entry);
+      logBox.scrollTop = logBox.scrollHeight;
+    }
+
+    function setStatus(message, type) {
+      const statusDiv = document.getElementById('status');
+      statusDiv.innerHTML = `<div class="status-badge status-${type}">${message}</div>`;
+    }
+
+    function loadFromEnv() {
+      // Try to load from localStorage (if previously saved)
+      const savedUrl = localStorage.getItem('supabase_url');
+      const savedKey = localStorage.getItem('supabase_key');
+
+      if (savedUrl) {
+        document.getElementById('supabaseUrl').value = savedUrl;
+        log('Loaded URL from localStorage', 'success');
+      } else {
+        log('No saved credentials found. Please enter manually.', 'warning');
+      }
+
+      if (savedKey) {
+        document.getElementById('serviceRoleKey').value = savedKey;
+        log('Loaded service key from localStorage', 'success');
+      }
+    }
+
+    async function runMigration() {
+      const supabaseUrl = document.getElementById('supabaseUrl').value.trim();
+      const serviceRoleKey = document.getElementById('serviceRoleKey').value.trim();
+
+      // Validation
+      if (!supabaseUrl || !serviceRoleKey) {
+        log('Please provide both Supabase URL and Service Role Key', 'error');
+        setStatus('Missing credentials', 'error');
+        return;
+      }
+
+      if (!supabaseUrl.includes('supabase.co')) {
+        log('Invalid Supabase URL format', 'error');
+        setStatus('Invalid URL', 'error');
+        return;
+      }
+
+      if (!serviceRoleKey.startsWith('eyJ')) {
+        log('Invalid Service Role Key format (should start with eyJ)', 'error');
+        setStatus('Invalid key', 'error');
+        return;
+      }
+
+      // Save for future use
+      localStorage.setItem('supabase_url', supabaseUrl);
+      localStorage.setItem('supabase_key', serviceRoleKey);
+
+      // Clear log
+      document.getElementById('logBox').innerHTML = '';
+
+      // Disable button
+      const btn = document.getElementById('runBtn');
+      btn.disabled = true;
+      btn.innerHTML = 'Running Migration<span class="spinner"></span>';
+
+      setStatus('Running migration...', 'pending');
+      log('Starting MFA migration...', 'info');
+      log(`Supabase URL: ${supabaseUrl}`, 'info');
+
+      try {
+        // Split SQL into individual statements
+        const statements = MIGRATION_SQL.split(/\$\$/g)
+          .map(s => s.trim())
+          .filter(s => s && s !== ';');
+
+        log(`Found ${Math.floor(statements.length / 2)} migration blocks`, 'info');
+
+        // Execute each DO block
+        for (let i = 0; i < statements.length; i += 2) {
+          if (statements[i] && statements[i + 1]) {
+            const doBlock = `DO $$${statements[i + 1]}$$`;
+
+            log(`Executing block ${Math.floor(i / 2) + 1}...`, 'info');
+
+            const response = await fetch(`${supabaseUrl}/rest/v1/rpc/exec_sql`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'apikey': serviceRoleKey,
+                'Authorization': `Bearer ${serviceRoleKey}`,
+                'Prefer': 'return=representation'
+              },
+              body: JSON.stringify({ query: doBlock })
+            });
+
+            if (!response.ok) {
+              const errorText = await response.text();
+              log(`Block ${Math.floor(i / 2) + 1} error: ${errorText}`, 'error');
+            } else {
+              log(`Block ${Math.floor(i / 2) + 1} completed`, 'success');
+            }
+          }
+        }
+
+        // Verify columns
+        log('Verifying columns...', 'info');
+
+        const verifyResponse = await fetch(`${supabaseUrl}/rest/v1/user_settings?select=fresh_mfa_secret,fresh_mfa_enabled,fresh_mfa_setup_completed,fresh_mfa_backup_codes&limit=0`, {
+          headers: {
+            'apikey': serviceRoleKey,
+            'Authorization': `Bearer ${serviceRoleKey}`
+          }
+        });
+
+        if (verifyResponse.ok) {
+          log('✅ All MFA columns verified successfully!', 'success');
+          setStatus('Migration completed successfully', 'success');
+        } else {
+          const errorText = await verifyResponse.text();
+          log(`Verification warning: ${errorText}`, 'warning');
+          log('Columns may have been added but verification failed', 'warning');
+          setStatus('Migration completed with warnings', 'warning');
+        }
+
+      } catch (error) {
+        log(`Migration failed: ${error.message}`, 'error');
+        setStatus('Migration failed', 'error');
+        console.error(error);
+      } finally {
+        btn.disabled = false;
+        btn.innerHTML = 'Run Migration';
+      }
+    }
+
+    // Auto-load on page load
+    window.addEventListener('load', loadFromEnv);
+  </script>
+</body>
+</html>

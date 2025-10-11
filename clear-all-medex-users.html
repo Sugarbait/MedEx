@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clear All MedEx Users - Fresh Start</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+    }
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+      padding: 30px;
+    }
+    h1 {
+      color: #333;
+      border-bottom: 3px solid #667eea;
+      padding-bottom: 10px;
+      margin-bottom: 20px;
+    }
+    button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin: 10px 5px;
+    }
+    button:hover {
+      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .danger-btn {
+      background: #ef4444;
+    }
+    .danger-btn:hover {
+      background: #dc2626;
+    }
+    .loading {
+      color: #667eea;
+      font-style: italic;
+      margin: 20px 0;
+    }
+    .error {
+      background: #fee2e2;
+      border: 1px solid #fecaca;
+      color: #dc2626;
+      padding: 12px;
+      border-radius: 6px;
+      margin: 20px 0;
+    }
+    .success {
+      background: #dcfce7;
+      border: 1px solid #bbf7d0;
+      color: #16a34a;
+      padding: 12px;
+      border-radius: 6px;
+      margin: 20px 0;
+    }
+    .warning {
+      background: #fef3c7;
+      border: 1px solid #fde68a;
+      color: #d97706;
+      padding: 12px;
+      border-radius: 6px;
+      margin: 20px 0;
+    }
+    .info {
+      background: #dbeafe;
+      border: 1px solid #bfdbfe;
+      color: #2563eb;
+      padding: 12px;
+      border-radius: 6px;
+      margin: 20px 0;
+    }
+    pre {
+      background: #1f2937;
+      color: #f3f4f6;
+      padding: 15px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 13px;
+      max-height: 300px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔄 Fresh Start - Clear All MedEx Users</h1>
+
+    <div class="warning">
+      <strong>⚠️ WARNING:</strong> This will permanently delete ALL MedEx user accounts and related data.
+      <br><br>
+      <strong>Use this to start fresh with a clean database.</strong>
+    </div>
+
+    <div class="info">
+      <strong>What will be deleted:</strong>
+      <ul>
+        <li>All user accounts (tenant_id = 'medex')</li>
+        <li>All user settings</li>
+        <li>All audit logs</li>
+        <li>All notes</li>
+        <li>All localStorage data</li>
+      </ul>
+      <br>
+      <strong>After deletion:</strong>
+      <ul>
+        <li>Database will be empty and ready for first user registration</li>
+        <li>First user to register will automatically become Super User</li>
+      </ul>
+    </div>
+
+    <button onclick="checkUsers()">🔍 Check Current Users</button>
+
+    <div id="loading" class="loading" style="display: none;">
+      ⏳ Processing...
+    </div>
+
+    <div id="error" class="error" style="display: none;"></div>
+    <div id="userList"></div>
+
+    <div id="deleteSection" style="display: none;">
+      <button class="danger-btn" onclick="clearAllMedExUsers()">
+        🗑️ DELETE ALL MEDEX USERS & START FRESH
+      </button>
+    </div>
+
+    <div id="results"></div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://onwgbfetzrctshdwwimm.supabase.co'
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ud2diZmV0enJjdHNoZHd3aW1tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk5ODA5ODYsImV4cCI6MjA3NTU1Njk4Nn0.MgsjiXT2Y0WqQf2puG2p27tHaMRfhiUET2TDWc668lI'
+
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+    async function checkUsers() {
+      const loadingEl = document.getElementById('loading')
+      const errorEl = document.getElementById('error')
+      const userListEl = document.getElementById('userList')
+      const deleteSection = document.getElementById('deleteSection')
+
+      loadingEl.style.display = 'block'
+      errorEl.style.display = 'none'
+      userListEl.innerHTML = ''
+      deleteSection.style.display = 'none'
+
+      try {
+        const { data: users, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('tenant_id', 'medex')
+          .order('created_at', { ascending: true })
+
+        loadingEl.style.display = 'none'
+
+        if (error) throw error
+
+        if (!users || users.length === 0) {
+          userListEl.innerHTML = `
+            <div class="success">
+              ✅ <strong>Database is already clean!</strong>
+              <br><br>
+              No MedEx users found. You can start fresh by registering your first user.
+            </div>
+          `
+          return
+        }
+
+        let html = `
+          <div class="info">
+            <strong>Found ${users.length} MedEx user(s) in the database:</strong>
+          </div>
+          <pre>${JSON.stringify(users.map(u => ({
+            email: u.email,
+            name: u.name,
+            role: u.role,
+            is_active: u.is_active,
+            created_at: u.created_at
+          })), null, 2)}</pre>
+        `
+
+        userListEl.innerHTML = html
+        deleteSection.style.display = 'block'
+
+      } catch (error) {
+        loadingEl.style.display = 'none'
+        errorEl.textContent = `❌ Error: ${error.message}`
+        errorEl.style.display = 'block'
+        console.error('Error checking users:', error)
+      }
+    }
+
+    async function clearAllMedExUsers() {
+      if (!confirm('⚠️ FINAL WARNING!\n\nThis will PERMANENTLY DELETE all MedEx users and data.\n\nType YES in the next prompt to confirm.')) {
+        return
+      }
+
+      const confirmation = prompt('Type YES to confirm complete deletion:')
+      if (confirmation !== 'YES') {
+        alert('Deletion cancelled.')
+        return
+      }
+
+      const loadingEl = document.getElementById('loading')
+      const errorEl = document.getElementById('error')
+      const resultsEl = document.getElementById('results')
+
+      loadingEl.style.display = 'block'
+      errorEl.style.display = 'none'
+      resultsEl.innerHTML = ''
+
+      try {
+        let deletionLog = []
+
+        // 1. Delete from users table (cascade will handle related records)
+        const { error: usersError } = await supabase
+          .from('users')
+          .delete()
+          .eq('tenant_id', 'medex')
+
+        if (usersError) throw usersError
+        deletionLog.push('✅ Deleted all users')
+
+        // 2. Delete user_settings
+        const { error: settingsError } = await supabase
+          .from('user_settings')
+          .delete()
+          .eq('tenant_id', 'medex')
+
+        if (settingsError) {
+          deletionLog.push(`⚠️ User settings: ${settingsError.message}`)
+        } else {
+          deletionLog.push('✅ Deleted all user settings')
+        }
+
+        // 3. Delete audit_logs
+        const { error: auditError } = await supabase
+          .from('audit_logs')
+          .delete()
+          .eq('tenant_id', 'medex')
+
+        if (auditError) {
+          deletionLog.push(`⚠️ Audit logs: ${auditError.message}`)
+        } else {
+          deletionLog.push('✅ Deleted all audit logs')
+        }
+
+        // 4. Delete notes
+        const { error: notesError } = await supabase
+          .from('notes')
+          .delete()
+          .eq('tenant_id', 'medex')
+
+        if (notesError) {
+          deletionLog.push(`⚠️ Notes: ${notesError.message}`)
+        } else {
+          deletionLog.push('✅ Deleted all notes')
+        }
+
+        // 5. Clear localStorage
+        try {
+          localStorage.clear()
+          deletionLog.push('✅ Cleared localStorage')
+        } catch (storageError) {
+          deletionLog.push(`⚠️ localStorage: ${storageError.message}`)
+        }
+
+        loadingEl.style.display = 'none'
+
+        resultsEl.innerHTML = `
+          <div class="success">
+            <strong>✅ SUCCESS! Database has been completely cleared.</strong>
+            <br><br>
+            <strong>Deletion Summary:</strong>
+            <pre>${deletionLog.join('\n')}</pre>
+            <br>
+            <strong>Next Steps:</strong>
+            <ul>
+              <li>Your database is now empty and ready for a fresh start</li>
+              <li>Go to the MedEx app and register your first user</li>
+              <li>The first user will automatically become a Super User</li>
+            </ul>
+            <br>
+            <button onclick="window.location.reload()">🔄 Refresh Page</button>
+          </div>
+        `
+
+      } catch (error) {
+        loadingEl.style.display = 'none'
+        errorEl.textContent = `❌ Error: ${error.message}`
+        errorEl.style.display = 'block'
+        console.error('Error clearing database:', error)
+      }
+    }
+
+    // Auto-check on load
+    window.addEventListener('load', () => {
+      checkUsers()
+    })
+  </script>
+</body>
+</html>

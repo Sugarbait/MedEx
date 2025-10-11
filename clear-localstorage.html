@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Clear Browser Storage - MedEx</title>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 800px;
+      margin: 40px auto;
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+    }
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+      padding: 30px;
+    }
+    h1 {
+      color: #333;
+      border-bottom: 3px solid #667eea;
+      padding-bottom: 10px;
+      margin-bottom: 20px;
+    }
+    button {
+      background: #ef4444;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin: 10px 5px;
+    }
+    button:hover {
+      background: #dc2626;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+    }
+    .success {
+      background: #dcfce7;
+      border: 1px solid #bbf7d0;
+      color: #16a34a;
+      padding: 12px;
+      border-radius: 6px;
+      margin: 20px 0;
+    }
+    .warning {
+      background: #fef3c7;
+      border: 1px solid #fde68a;
+      color: #d97706;
+      padding: 12px;
+      border-radius: 6px;
+      margin: 20px 0;
+    }
+    pre {
+      background: #1f2937;
+      color: #f3f4f6;
+      padding: 15px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 13px;
+      max-height: 400px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🧹 Clear Browser Storage</h1>
+
+    <div class="warning">
+      <strong>⚠️ This will clear ALL localStorage data for MedEx</strong>
+      <br><br>
+      This fixes registration issues caused by stale data in browser storage.
+    </div>
+
+    <button onclick="showStorage()">📋 Show Current Storage</button>
+    <button onclick="clearAllStorage()">🗑️ Clear All Storage</button>
+
+    <div id="results"></div>
+  </div>
+
+  <script>
+    function showStorage() {
+      const resultsEl = document.getElementById('results')
+
+      const storageData = {}
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i)
+        if (key) {
+          try {
+            const value = localStorage.getItem(key)
+            storageData[key] = value?.substring(0, 100) + (value && value.length > 100 ? '...' : '')
+          } catch (e) {
+            storageData[key] = '[Error reading]'
+          }
+        }
+      }
+
+      let html = `
+        <div class="success">
+          <strong>Found ${Object.keys(storageData).length} items in localStorage</strong>
+        </div>
+        <pre>${JSON.stringify(storageData, null, 2)}</pre>
+      `
+
+      resultsEl.innerHTML = html
+    }
+
+    function clearAllStorage() {
+      if (!confirm('⚠️ Are you sure you want to clear ALL browser storage?\n\nThis will log you out and remove all cached data.')) {
+        return
+      }
+
+      const itemsBefore = localStorage.length
+
+      // Clear localStorage
+      localStorage.clear()
+
+      // Clear sessionStorage
+      sessionStorage.clear()
+
+      // Clear indexedDB if present
+      if (window.indexedDB) {
+        indexedDB.databases().then(databases => {
+          databases.forEach(db => {
+            if (db.name) {
+              indexedDB.deleteDatabase(db.name)
+            }
+          })
+        })
+      }
+
+      const resultsEl = document.getElementById('results')
+      resultsEl.innerHTML = `
+        <div class="success">
+          <strong>✅ Storage Cleared Successfully!</strong>
+          <br><br>
+          <strong>Removed:</strong>
+          <ul>
+            <li>${itemsBefore} items from localStorage</li>
+            <li>All sessionStorage items</li>
+            <li>All IndexedDB databases</li>
+          </ul>
+          <br>
+          <strong>Next steps:</strong>
+          <ol>
+            <li>Go to <a href="http://localhost:3000" target="_blank">http://localhost:3000</a></li>
+            <li>Try registering again with test@test.com</li>
+            <li>You should now be able to create the first user!</li>
+          </ol>
+        </div>
+      `
+
+      // Also reload after 3 seconds
+      setTimeout(() => {
+        window.location.reload()
+      }, 3000)
+    }
+
+    // Auto-show storage on load
+    window.addEventListener('load', () => {
+      showStorage()
+    })
+  </script>
+</body>
+</html>

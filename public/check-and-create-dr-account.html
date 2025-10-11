@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Check & Create dr@medexhealthservices.com</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+    }
+    .container {
+      background: white;
+      border-radius: 16px;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    h1 { color: #2d3748; margin-bottom: 10px; font-size: 28px; }
+    button {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 14px 28px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      width: 100%;
+      margin-bottom: 12px;
+    }
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+    }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .output {
+      background: #1a202c;
+      color: #e2e8f0;
+      padding: 20px;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      max-height: 500px;
+      overflow-y: auto;
+      margin-top: 16px;
+      white-space: pre-wrap;
+    }
+    .success { color: #48bb78; }
+    .error { color: #fc8181; }
+    .warning { color: #f6ad55; }
+    .info { color: #63b3ed; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔍 Check & Create Account</h1>
+
+    <button onclick="checkAllUsers()">1. Check All MedEx Users</button>
+    <button onclick="createDrAccount()">2. Create dr@medexhealthservices.com</button>
+    <button onclick="unlockAccount()">3. Unlock Account (if exists)</button>
+
+    <div class="output" id="output" style="display: none;"></div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://onwgbfetzrctshdwwimm.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ud2diZmV0enJjdHNoZHd3aW1tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk5ODA5ODYsImV4cCI6MjA3NTU1Njk4Nn0.MgsjiXT2Y0WqQf2puG2p27tHaMRfhiUET2TDWc668lI';
+
+    let supabase;
+
+    // Load Supabase
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+    script.onload = () => {
+      supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    };
+    document.head.appendChild(script);
+
+    function log(message, type = 'info') {
+      const output = document.getElementById('output');
+      output.style.display = 'block';
+      const colors = { success: 'success', error: 'error', warning: 'warning', info: 'info' };
+      const timestamp = new Date().toLocaleTimeString();
+      const line = `[${timestamp}] ${message}\n`;
+      output.innerHTML += `<span class="${colors[type]}">${line}</span>`;
+      output.scrollTop = output.scrollHeight;
+    }
+
+    async function checkAllUsers() {
+      const output = document.getElementById('output');
+      output.innerHTML = '';
+      output.style.display = 'block';
+
+      try {
+        log('🔍 Checking all MedEx users...', 'info');
+
+        const { data: users, error } = await supabase
+          .from('users')
+          .select('id, email, name, role, is_active, created_at')
+          .eq('tenant_id', 'medex')
+          .order('created_at', { ascending: true });
+
+        if (error) throw error;
+
+        if (!users || users.length === 0) {
+          log('⚠️  No users found in MedEx tenant!', 'warning');
+          log('   This is the first user - will be auto-assigned Super User role', 'info');
+          return;
+        }
+
+        log(`✅ Found ${users.length} user(s) in MedEx:`, 'success');
+        users.forEach((user, i) => {
+          log(`\n${i + 1}. ${user.email}`, 'info');
+          log(`   ID: ${user.id}`, 'info');
+          log(`   Name: ${user.name || 'Not set'}`, 'info');
+          log(`   Role: ${user.role}`, 'info');
+          log(`   Active: ${user.is_active}`, 'info');
+          log(`   Created: ${new Date(user.created_at).toLocaleString()}`, 'info');
+        });
+
+        // Check if dr@medexhealthservices.com exists
+        const drUser = users.find(u => u.email === 'dr@medexhealthservices.com');
+        if (drUser) {
+          log(`\n✅ dr@medexhealthservices.com EXISTS!`, 'success');
+          log(`   ID: ${drUser.id}`, 'info');
+          log(`   Active: ${drUser.is_active}`, 'info');
+        } else {
+          log(`\n⚠️  dr@medexhealthservices.com NOT FOUND`, 'warning');
+          log(`   Click button 2 to create this account`, 'info');
+        }
+
+      } catch (error) {
+        log(`❌ ERROR: ${error.message}`, 'error');
+        console.error('Full error:', error);
+      }
+    }
+
+    async function createDrAccount() {
+      const output = document.getElementById('output');
+      output.innerHTML = '';
+      output.style.display = 'block';
+
+      try {
+        log('🏗️  Creating dr@medexhealthservices.com account...', 'info');
+
+        // Check if user already exists
+        const { data: existing } = await supabase
+          .from('users')
+          .select('id')
+          .eq('email', 'dr@medexhealthservices.com')
+          .eq('tenant_id', 'medex');
+
+        if (existing && existing.length > 0) {
+          log('⚠️  User already exists!', 'warning');
+          log('   Use button 3 to unlock instead', 'info');
+          return;
+        }
+
+        // Check if this is first user
+        const { data: allUsers } = await supabase
+          .from('users')
+          .select('id')
+          .eq('tenant_id', 'medex');
+
+        const isFirstUser = !allUsers || allUsers.length === 0;
+
+        log(`   First user: ${isFirstUser ? 'YES (will be Super User)' : 'NO (will be regular User)'}`, 'info');
+
+        // Create user in database
+        log('\n📝 Creating user record...', 'info');
+        const { data: newUser, error: createError } = await supabase
+          .from('users')
+          .insert({
+            email: 'dr@medexhealthservices.com',
+            name: 'Dr. MedEx',
+            role: isFirstUser ? 'super_user' : 'user',
+            is_active: isFirstUser ? true : false,
+            tenant_id: 'medex',
+            created_at: new Date().toISOString()
+          })
+          .select()
+          .single();
+
+        if (createError) throw createError;
+
+        log('✅ User created successfully!', 'success');
+        log(`   ID: ${newUser.id}`, 'info');
+        log(`   Email: ${newUser.email}`, 'info');
+        log(`   Role: ${newUser.role}`, 'info');
+        log(`   Active: ${newUser.is_active}`, 'info');
+
+        log('\n⚠️  IMPORTANT: You must now set a password!', 'warning');
+        log('   Option 1: Use User Management UI', 'info');
+        log('     1. Log in as Super User', 'info');
+        log('     2. Go to Settings → User Management', 'info');
+        log('     3. Find dr@medexhealthservices.com', 'info');
+        log('     4. Click KEY icon to set password', 'info');
+        log('\n   Option 2: Use browser console:', 'info');
+        log('     Run this command:', 'info');
+        log(`     await userManagementService.changeUserPassword('${newUser.id}', 'YourPassword123!')`, 'warning');
+
+      } catch (error) {
+        log(`❌ ERROR: ${error.message}`, 'error');
+        console.error('Full error:', error);
+      }
+    }
+
+    async function unlockAccount() {
+      const output = document.getElementById('output');
+      output.innerHTML = '';
+      output.style.display = 'block';
+
+      try {
+        log('🔓 Unlocking dr@medexhealthservices.com...', 'info');
+
+        // Find user
+        const { data: users, error: userError } = await supabase
+          .from('users')
+          .select('id, email, is_active')
+          .eq('email', 'dr@medexhealthservices.com')
+          .eq('tenant_id', 'medex');
+
+        if (userError || !users || users.length === 0) {
+          log('❌ User not found! Create it first (button 2)', 'error');
+          return;
+        }
+
+        const user = users[0];
+        log(`✅ Found user: ${user.email}`, 'success');
+
+        // Clear lockouts
+        log('\n🔓 Clearing lockouts...', 'info');
+        await supabase
+          .from('failed_login_attempts')
+          .delete()
+          .eq('email', 'dr@medexhealthservices.com');
+
+        localStorage.removeItem(`loginStats_${user.id}`);
+        localStorage.setItem(`loginStats_${user.id}`, JSON.stringify({
+          loginAttempts: 0,
+          lastLogin: undefined,
+          lockoutUntil: undefined
+        }));
+
+        log('✅ Lockouts cleared', 'success');
+
+        // Enable account
+        log('\n🔑 Enabling account...', 'info');
+        await supabase
+          .from('users')
+          .update({ is_active: true })
+          .eq('id', user.id)
+          .eq('tenant_id', 'medex');
+
+        log('✅ Account enabled', 'success');
+        log('\n🎉 Account unlocked successfully!', 'success');
+
+      } catch (error) {
+        log(`❌ ERROR: ${error.message}`, 'error');
+        console.error('Full error:', error);
+      }
+    }
+  </script>
+</body>
+</html>

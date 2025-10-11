@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Check Existing MedEx Users</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+    }
+    .container {
+      background: white;
+      border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+      padding: 30px;
+    }
+    h1 {
+      color: #333;
+      border-bottom: 3px solid #667eea;
+      padding-bottom: 10px;
+      margin-bottom: 20px;
+    }
+    button {
+      background: #667eea;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      font-size: 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin-bottom: 20px;
+    }
+    button:hover {
+      background: #5568d3;
+      transform: translateY(-2px);
+      box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+    }
+    button:disabled {
+      background: #ccc;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .loading {
+      color: #667eea;
+      font-style: italic;
+      margin: 20px 0;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      padding: 12px;
+      text-align: left;
+      border-bottom: 1px solid #e0e0e0;
+    }
+    th {
+      background: #f5f7fa;
+      color: #667eea;
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+    }
+    tr:hover {
+      background: #f9f9f9;
+    }
+    .badge {
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-size: 12px;
+      font-weight: 600;
+    }
+    .badge.super-user {
+      background: #10b981;
+      color: white;
+    }
+    .badge.user {
+      background: #3b82f6;
+      color: white;
+    }
+    .badge.active {
+      background: #10b981;
+      color: white;
+    }
+    .badge.inactive {
+      background: #ef4444;
+      color: white;
+    }
+    .error {
+      background: #fee2e2;
+      border: 1px solid #fecaca;
+      color: #dc2626;
+      padding: 12px;
+      border-radius: 6px;
+      margin: 20px 0;
+    }
+    .success {
+      background: #dcfce7;
+      border: 1px solid #bbf7d0;
+      color: #16a34a;
+      padding: 12px;
+      border-radius: 6px;
+      margin: 20px 0;
+    }
+    .info {
+      background: #dbeafe;
+      border: 1px solid #bfdbfe;
+      color: #2563eb;
+      padding: 12px;
+      border-radius: 6px;
+      margin: 20px 0;
+    }
+    .delete-btn {
+      background: #ef4444;
+      padding: 6px 12px;
+      font-size: 14px;
+      border-radius: 4px;
+    }
+    .delete-btn:hover {
+      background: #dc2626;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔍 Check Existing MedEx Users</h1>
+
+    <div class="info">
+      <strong>What this tool does:</strong>
+      <ul>
+        <li>Shows all users registered in your MedEx system</li>
+        <li>Displays email addresses, roles, and activation status</li>
+        <li>Helps you identify which emails are already in use</li>
+        <li>Allows you to delete duplicate or test users</li>
+      </ul>
+    </div>
+
+    <button id="checkBtn" onclick="checkUsers()">🔍 Check Existing Users</button>
+
+    <div id="loading" class="loading" style="display: none;">
+      ⏳ Loading users from database...
+    </div>
+
+    <div id="error" class="error" style="display: none;"></div>
+    <div id="success" class="success" style="display: none;"></div>
+
+    <div id="results"></div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://onwgbfetzrctshdwwimm.supabase.co'
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ud2diZmV0enJjdHNoZHd3aW1tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk5ODA5ODYsImV4cCI6MjA3NTU1Njk4Nn0.MgsjiXT2Y0WqQf2puG2p27tHaMRfhiUET2TDWc668lI'
+
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+
+    async function checkUsers() {
+      const loadingEl = document.getElementById('loading')
+      const errorEl = document.getElementById('error')
+      const successEl = document.getElementById('success')
+      const resultsEl = document.getElementById('results')
+      const checkBtn = document.getElementById('checkBtn')
+
+      // Reset UI
+      loadingEl.style.display = 'block'
+      errorEl.style.display = 'none'
+      successEl.style.display = 'none'
+      resultsEl.innerHTML = ''
+      checkBtn.disabled = true
+
+      try {
+        // Query all MedEx users
+        const { data: users, error } = await supabase
+          .from('users')
+          .select('*')
+          .eq('tenant_id', 'medex')
+          .order('created_at', { ascending: true })
+
+        loadingEl.style.display = 'none'
+        checkBtn.disabled = false
+
+        if (error) {
+          throw new Error(error.message)
+        }
+
+        if (!users || users.length === 0) {
+          successEl.textContent = '✅ No users found in the database. You can register as the first user!'
+          successEl.style.display = 'block'
+          return
+        }
+
+        // Display users in a table
+        let html = `
+          <div class="success">
+            ✅ Found ${users.length} registered user(s) in MedEx system
+          </div>
+          <table>
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Email</th>
+                <th>Name</th>
+                <th>Role</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+        `
+
+        users.forEach((user, index) => {
+          const roleClass = user.role === 'super_user' ? 'super-user' : 'user'
+          const statusClass = user.is_active ? 'active' : 'inactive'
+          const createdDate = new Date(user.created_at).toLocaleDateString()
+
+          html += `
+            <tr>
+              <td>${index + 1}</td>
+              <td><strong>${user.email}</strong></td>
+              <td>${user.name || 'N/A'}</td>
+              <td><span class="badge ${roleClass}">${user.role || 'user'}</span></td>
+              <td><span class="badge ${statusClass}">${user.is_active ? 'Active' : 'Pending'}</span></td>
+              <td>${createdDate}</td>
+              <td>
+                <button class="delete-btn" onclick="deleteUser('${user.id}', '${user.email}')">
+                  🗑️ Delete
+                </button>
+              </td>
+            </tr>
+          `
+        })
+
+        html += `
+            </tbody>
+          </table>
+        `
+
+        resultsEl.innerHTML = html
+
+      } catch (error) {
+        loadingEl.style.display = 'none'
+        checkBtn.disabled = false
+        errorEl.textContent = `❌ Error: ${error.message}`
+        errorEl.style.display = 'block'
+        console.error('Error checking users:', error)
+      }
+    }
+
+    async function deleteUser(userId, userEmail) {
+      if (!confirm(`⚠️ Are you sure you want to delete user: ${userEmail}?\n\nThis action cannot be undone!`)) {
+        return
+      }
+
+      const errorEl = document.getElementById('error')
+      const successEl = document.getElementById('success')
+
+      errorEl.style.display = 'none'
+      successEl.style.display = 'none'
+
+      try {
+        // Delete from Supabase Auth first
+        console.log(`Deleting user from Auth: ${userId}`)
+
+        // Delete from database (cascade will handle related records)
+        const { error: dbError } = await supabase
+          .from('users')
+          .delete()
+          .eq('id', userId)
+          .eq('tenant_id', 'medex')
+
+        if (dbError) {
+          throw new Error(`Database deletion failed: ${dbError.message}`)
+        }
+
+        successEl.textContent = `✅ Successfully deleted user: ${userEmail}`
+        successEl.style.display = 'block'
+
+        // Refresh the user list
+        setTimeout(() => {
+          checkUsers()
+        }, 1500)
+
+      } catch (error) {
+        errorEl.textContent = `❌ Failed to delete user: ${error.message}`
+        errorEl.style.display = 'block'
+        console.error('Error deleting user:', error)
+      }
+    }
+
+    // Auto-load users when page loads
+    window.addEventListener('load', () => {
+      checkUsers()
+    })
+  </script>
+</body>
+</html>

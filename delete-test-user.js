@@ -1,81 +1,47 @@
 /**
- * Delete Test User Script
- * Removes a user from the Supabase database
+ * Delete test@test.com user completely from database
  */
 
 import { createClient } from '@supabase/supabase-js'
 
-const SUPABASE_URL = 'https://cpkslvmydfdevdftieck.supabase.co'
-const SUPABASE_SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImNwa3Nsdm15ZGZkZXZkZnRpZWNrIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc0NjkwMDI5NSwiZXhwIjoyMDYyNDc2Mjk1fQ.5Nwr-DrgL63DwPMH2egxgdjoHGhAxCvIrz2SMTMKqD0'
+const SUPABASE_URL = 'https://onwgbfetzrctshdwwimm.supabase.co'
+const SERVICE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ud2diZmV0enJjdHNoZHd3aW1tIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc1OTk4MDk4NiwiZXhwIjoyMDc1NTU2OTg2fQ.uCxrGkQJQjR3wCmmCo3A6Oi6zBY-QdMX1hLZmD5HvZA'
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_KEY)
+const supabase = createClient(SUPABASE_URL, SERVICE_KEY, {
+  auth: { autoRefreshToken: false, persistSession: false }
+})
+
+console.log('🗑️  Deleting test@test.com user completely...\n')
 
 async function deleteTestUser() {
   try {
-    console.log('🔍 Fetching all users from database...')
-
-    // Get all users
-    const { data: users, error: fetchError } = await supabase
+    // Get user ID first
+    const { data: users } = await supabase
       .from('users')
-      .select('*')
-      .eq('tenant_id', 'medex')
-      .order('created_at', { ascending: false })
+      .select('id')
+      .eq('email', 'test@test.com')
 
-    if (fetchError) {
-      console.error('❌ Error fetching users:', fetchError)
-      return
+    if (users && users.length > 0) {
+      const userId = users[0].id
+      console.log(`Found user: ${userId}`)
+
+      // Delete related records
+      await supabase.from('user_credentials').delete().eq('user_id', userId)
+      await supabase.from('user_settings').delete().eq('user_id', userId)
+      await supabase.from('notes').delete().eq('user_id', userId)
+      await supabase.from('users').delete().eq('id', userId)
+      console.log('✅ Deleted user and related records')
     }
 
-    if (!users || users.length === 0) {
-      console.log('✅ No users found in database')
-      return
-    }
+    // Delete failed login attempts
+    await supabase.from('failed_login_attempts').delete().eq('email', 'test@test.com')
+    console.log('✅ Deleted failed login attempts')
 
-    console.log(`\n📊 Found ${users.length} user(s):`)
-    users.forEach((user, index) => {
-      console.log(`\n${index + 1}. ${user.email}`)
-      console.log(`   ID: ${user.id}`)
-      console.log(`   Name: ${user.name}`)
-      console.log(`   Role: ${user.role}`)
-      console.log(`   Metadata Role: ${user.metadata?.original_role || 'N/A'}`)
-      console.log(`   Active: ${user.is_active}`)
-      console.log(`   Created: ${user.created_at}`)
-    })
-
-    // Delete all users
-    console.log('\n🗑️  Deleting all users...')
-    for (const user of users) {
-      const { error: deleteError } = await supabase
-        .from('users')
-        .delete()
-        .eq('id', user.id)
-
-      if (deleteError) {
-        console.error(`❌ Error deleting user ${user.email}:`, deleteError)
-      } else {
-        console.log(`✅ Deleted user: ${user.email}`)
-      }
-
-      // Also delete from user_settings if exists
-      const { error: settingsError } = await supabase
-        .from('user_settings')
-        .delete()
-        .eq('user_id', user.id)
-
-      if (settingsError && settingsError.code !== 'PGRST116') {
-        console.log(`   ⚠️  Could not delete settings: ${settingsError.message}`)
-      } else {
-        console.log(`   ✅ Deleted user_settings for ${user.email}`)
-      }
-    }
-
-    console.log('\n✅ All users deleted successfully!')
-    console.log('💡 You can now register as the first user and get Super User role')
+    console.log('\n✅ test@test.com COMPLETELY DELETED!\n')
 
   } catch (error) {
-    console.error('❌ Unexpected error:', error)
+    console.error('❌ Error:', error.message)
   }
 }
 
-// Run the script
 deleteTestUser()

@@ -1,0 +1,332 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MedEx - Run SQL in Supabase</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            padding: 40px;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #2c3e50;
+            border-bottom: 4px solid #667eea;
+            padding-bottom: 15px;
+            margin-top: 0;
+        }
+        .step {
+            background: #f8f9fa;
+            padding: 20px;
+            border-left: 5px solid #667eea;
+            margin: 20px 0;
+            border-radius: 5px;
+        }
+        .step h2 {
+            margin-top: 0;
+            color: #667eea;
+            font-size: 24px;
+        }
+        .step-number {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 40px;
+            font-weight: bold;
+            font-size: 20px;
+            margin-right: 10px;
+        }
+        .copy-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            margin: 15px 0;
+            transition: transform 0.2s, box-shadow 0.2s;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+        }
+        .copy-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.6);
+        }
+        .copy-btn:active {
+            transform: translateY(0);
+        }
+        .sql-preview {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 20px;
+            border-radius: 8px;
+            overflow-x: auto;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            margin: 15px 0;
+        }
+        .success-box {
+            background: #d4edda;
+            border: 2px solid #c3e6cb;
+            color: #155724;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .warning-box {
+            background: #fff3cd;
+            border: 2px solid #ffeaa7;
+            color: #856404;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+        .link-btn {
+            display: inline-block;
+            background: #27ae60;
+            color: white;
+            padding: 15px 30px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            font-size: 18px;
+            margin: 10px 5px;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(39, 174, 96, 0.4);
+        }
+        .link-btn:hover {
+            background: #229954;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(39, 174, 96, 0.6);
+        }
+        #notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: #27ae60;
+            color: white;
+            padding: 20px 30px;
+            border-radius: 8px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+            display: none;
+            z-index: 1000;
+            font-size: 16px;
+            font-weight: bold;
+        }
+        .checklist {
+            list-style: none;
+            padding-left: 0;
+        }
+        .checklist li {
+            padding: 10px;
+            margin: 5px 0;
+            background: #f8f9fa;
+            border-left: 3px solid #667eea;
+            padding-left: 15px;
+        }
+        .checklist li:before {
+            content: '☐ ';
+            font-size: 20px;
+            margin-right: 10px;
+            color: #667eea;
+        }
+        .highlight {
+            background: #fff3cd;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="notification">✅ SQL copied to clipboard!</div>
+
+    <div class="container">
+        <h1>🚀 MedEx Database Setup - SQL Execution Guide</h1>
+
+        <div class="warning-box">
+            <strong>⚡ Quick Start:</strong> This page will help you create the database tables in 2 minutes!
+            <br>Just follow the 3 simple steps below.
+        </div>
+
+        <!-- Step 1 -->
+        <div class="step">
+            <h2><span class="step-number">1</span> Copy the SQL Code</h2>
+            <p>Click the button below to copy the complete database schema SQL to your clipboard:</p>
+            <button class="copy-btn" onclick="copySQLToClipboard()">📋 Copy SQL to Clipboard</button>
+            <p style="margin-top: 10px; color: #666;">
+                <small>This will copy 225 lines of SQL that create 6 tables with full security policies.</small>
+            </p>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="step">
+            <h2><span class="step-number">2</span> Open Supabase SQL Editor</h2>
+            <p>Click the button below to open the Supabase SQL Editor (opens in new tab):</p>
+            <a href="https://supabase.com/dashboard/project/onwgbfetzrctshdwwimm/sql/new" target="_blank" class="link-btn">
+                🌐 Open Supabase SQL Editor
+            </a>
+            <p style="margin-top: 10px; color: #666;">
+                <small>This will open a new SQL query in your Supabase dashboard.</small>
+            </p>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="step">
+            <h2><span class="step-number">3</span> Paste and Execute</h2>
+            <p>In the Supabase SQL Editor that just opened:</p>
+            <ol style="line-height: 2;">
+                <li><strong>Paste</strong> the SQL you copied in Step 1 (Ctrl+V or Cmd+V)</li>
+                <li>Click the <span class="highlight">Run</span> button (or press Ctrl+Enter)</li>
+                <li>Wait 5-10 seconds for execution</li>
+                <li>You should see: <span class="highlight">"Success. No rows returned"</span></li>
+            </ol>
+        </div>
+
+        <!-- Success Checklist -->
+        <div class="success-box">
+            <h3 style="margin-top: 0;">✅ After Successful Execution:</h3>
+            <ul class="checklist">
+                <li>6 database tables will be created</li>
+                <li>Row Level Security (RLS) will be enabled</li>
+                <li>Security policies will be active</li>
+                <li>Tenant isolation will be configured</li>
+                <li>Your app can now create users!</li>
+            </ul>
+        </div>
+
+        <!-- SQL Preview -->
+        <h2 style="margin-top: 40px;">📄 SQL Preview (what will be executed):</h2>
+        <p style="color: #666;">Below is a preview of the SQL code. You can review it before executing.</p>
+        <div class="sql-preview" id="sqlPreview">Loading SQL...</div>
+
+        <!-- What Gets Created -->
+        <h2 style="margin-top: 40px;">📊 Tables That Will Be Created:</h2>
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+            <thead>
+                <tr style="background: #667eea; color: white;">
+                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Table</th>
+                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Purpose</th>
+                    <th style="padding: 12px; text-align: left; border: 1px solid #ddd;">Key Features</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr style="background: #f8f9fa;">
+                    <td style="padding: 12px; border: 1px solid #ddd;"><strong>users</strong></td>
+                    <td style="padding: 12px; border: 1px solid #ddd;">User profiles & authentication</td>
+                    <td style="padding: 12px; border: 1px solid #ddd;">Tenant isolation, roles, activation</td>
+                </tr>
+                <tr>
+                    <td style="padding: 12px; border: 1px solid #ddd;"><strong>user_settings</strong></td>
+                    <td style="padding: 12px; border: 1px solid #ddd;">User preferences & config</td>
+                    <td style="padding: 12px; border: 1px solid #ddd;">Theme, notifications, Retell AI</td>
+                </tr>
+                <tr style="background: #f8f9fa;">
+                    <td style="padding: 12px; border: 1px solid #ddd;"><strong>audit_logs</strong></td>
+                    <td style="padding: 12px; border: 1px solid #ddd;">HIPAA compliance</td>
+                    <td style="padding: 12px; border: 1px solid #ddd;">6-year retention, full audit trail</td>
+                </tr>
+                <tr>
+                    <td style="padding: 12px; border: 1px solid #ddd;"><strong>user_credentials</strong></td>
+                    <td style="padding: 12px; border: 1px solid #ddd;">Password storage</td>
+                    <td style="padding: 12px; border: 1px solid #ddd;">Encrypted, separate security</td>
+                </tr>
+                <tr style="background: #f8f9fa;">
+                    <td style="padding: 12px; border: 1px solid #ddd;"><strong>notes</strong></td>
+                    <td style="padding: 12px; border: 1px solid #ddd;">Cross-device notes</td>
+                    <td style="padding: 12px; border: 1px solid #ddd;">Real-time sync, user-specific</td>
+                </tr>
+                <tr>
+                    <td style="padding: 12px; border: 1px solid #ddd;"><strong>failed_login_attempts</strong></td>
+                    <td style="padding: 12px; border: 1px solid #ddd;">Security monitoring</td>
+                    <td style="padding: 12px; border: 1px solid #ddd;">Track failures, account lockout</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <!-- Quick Links -->
+        <div style="background: #e3f2fd; padding: 20px; border-radius: 8px; margin: 30px 0;">
+            <h3 style="margin-top: 0; color: #1976d2;">🔗 Useful Links:</h3>
+            <ul style="line-height: 2;">
+                <li><a href="https://supabase.com/dashboard/project/onwgbfetzrctshdwwimm/sql/new" target="_blank">SQL Editor</a> - Execute the SQL</li>
+                <li><a href="https://supabase.com/dashboard/project/onwgbfetzrctshdwwimm/editor" target="_blank">Table Editor</a> - View created tables</li>
+                <li><a href="https://supabase.com/dashboard/project/onwgbfetzrctshdwwimm" target="_blank">Dashboard</a> - Project overview</li>
+            </ul>
+        </div>
+
+        <!-- Troubleshooting -->
+        <details style="margin: 30px 0; background: #f8f9fa; padding: 15px; border-radius: 8px;">
+            <summary style="cursor: pointer; font-weight: bold; font-size: 18px; color: #667eea;">
+                🔧 Troubleshooting (click to expand)
+            </summary>
+            <div style="margin-top: 15px; line-height: 1.8;">
+                <p><strong>If you see "relation already exists" error:</strong></p>
+                <p style="margin-left: 20px;">✅ Great! Tables are already created. Just close this and test your app.</p>
+
+                <p><strong>If execution fails:</strong></p>
+                <p style="margin-left: 20px;">• Check the error message in red text<br>
+                • Make sure you're in the correct database project<br>
+                • Try refreshing the Supabase page and running again</p>
+
+                <p><strong>If tables don't appear in Table Editor:</strong></p>
+                <p style="margin-left: 20px;">• Wait 60 seconds for cache refresh<br>
+                • Go to Settings → Database → Click "Restart"</p>
+            </div>
+        </details>
+
+    </div>
+
+    <script>
+        // Load SQL content
+        fetch('medex-setup-new-database.sql')
+            .then(response => response.text())
+            .then(sql => {
+                document.getElementById('sqlPreview').textContent = sql;
+                window.sqlContent = sql; // Store for copying
+            })
+            .catch(error => {
+                document.getElementById('sqlPreview').textContent = '❌ Error loading SQL file.\n\nMake sure medex-setup-new-database.sql is in the same folder as this HTML file.';
+            });
+
+        async function copySQLToClipboard() {
+            try {
+                if (window.sqlContent) {
+                    await navigator.clipboard.writeText(window.sqlContent);
+                } else {
+                    // Fallback: fetch SQL again
+                    const response = await fetch('medex-setup-new-database.sql');
+                    const sql = await response.text();
+                    await navigator.clipboard.writeText(sql);
+                }
+
+                // Show notification
+                const notification = document.getElementById('notification');
+                notification.style.display = 'block';
+                setTimeout(() => {
+                    notification.style.display = 'none';
+                }, 3000);
+            } catch (error) {
+                alert('Error copying SQL: ' + error.message + '\n\nPlease manually copy from the preview below.');
+            }
+        }
+    </script>
+</body>
+</html>

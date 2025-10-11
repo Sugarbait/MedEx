@@ -1,0 +1,437 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Diagnose Notes Cross-Device Issue - MedEx CRM</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+      background: #1a202c;
+      color: #e2e8f0;
+    }
+    .container {
+      background: #2d3748;
+      border-radius: 12px;
+      padding: 30px;
+      margin-bottom: 20px;
+    }
+    h1 { color: #63b3ed; margin-top: 0; }
+    h2 { color: #4fd1c5; margin-top: 20px; }
+    button {
+      background: #4299e1;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      margin: 10px 10px 10px 0;
+      font-size: 16px;
+      font-weight: 600;
+    }
+    button:hover { background: #3182ce; }
+    .success { background: #276749; color: #9ae6b4; padding: 15px; border-radius: 6px; margin: 10px 0; }
+    .error { background: #742a2a; color: #fc8181; padding: 15px; border-radius: 6px; margin: 10px 0; }
+    .warning { background: #744210; color: #fbd38d; padding: 15px; border-radius: 6px; margin: 10px 0; }
+    .info { background: #2c5282; color: #90cdf4; padding: 15px; border-radius: 6px; margin: 10px 0; }
+    pre {
+      background: #1a202c;
+      color: #68d391;
+      padding: 15px;
+      border-radius: 6px;
+      overflow-x: auto;
+      font-size: 13px;
+      line-height: 1.5;
+    }
+    .test-section {
+      background: #4a5568;
+      padding: 20px;
+      border-radius: 8px;
+      margin: 15px 0;
+    }
+    input[type="text"] {
+      background: #1a202c;
+      color: #e2e8f0;
+      border: 2px solid #4a5568;
+      padding: 10px;
+      border-radius: 6px;
+      width: 400px;
+      font-size: 14px;
+      margin-right: 10px;
+    }
+    textarea {
+      background: #1a202c;
+      color: #e2e8f0;
+      border: 2px solid #4a5568;
+      padding: 10px;
+      border-radius: 6px;
+      width: 100%;
+      font-size: 14px;
+      font-family: inherit;
+      resize: vertical;
+    }
+    .note-item {
+      background: #1a202c;
+      padding: 12px;
+      margin: 8px 0;
+      border-radius: 6px;
+      border-left: 4px solid #4299e1;
+    }
+    .note-meta {
+      color: #a0aec0;
+      font-size: 12px;
+      margin-top: 5px;
+    }
+  </style>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <div class="container">
+    <h1>🔍 Notes Cross-Device Diagnostics</h1>
+    <p>Test and diagnose cross-device note synchronization issues</p>
+  </div>
+
+  <div class="container">
+    <h2>1️⃣ Test Database Connection</h2>
+    <button onclick="testConnection()">🔌 Test Supabase Connection</button>
+    <div id="connection-result"></div>
+  </div>
+
+  <div class="container">
+    <h2>2️⃣ Check Notes Table Schema</h2>
+    <button onclick="checkSchema()">📋 Check Table Structure</button>
+    <div id="schema-result"></div>
+  </div>
+
+  <div class="container">
+    <h2>3️⃣ View All Notes in Database</h2>
+    <button onclick="viewAllNotes()">👀 View All Notes</button>
+    <button onclick="viewMedexNotes()">🏥 View MedEx Notes Only</button>
+    <div id="notes-result"></div>
+  </div>
+
+  <div class="container">
+    <h2>4️⃣ Create Test Note</h2>
+    <div class="test-section">
+      <div style="margin-bottom: 15px;">
+        <input type="text" id="test-ref-id" placeholder="Enter call_id or chat_id" value="test-call-123">
+        <select id="test-ref-type" style="background: #1a202c; color: #e2e8f0; border: 2px solid #4a5568; padding: 10px; border-radius: 6px;">
+          <option value="call">Call</option>
+          <option value="sms">SMS</option>
+        </select>
+      </div>
+      <textarea id="test-content" rows="3" placeholder="Enter note content...">This is a test note created at ${new Date().toLocaleTimeString()}</textarea>
+      <div style="margin-top: 10px;">
+        <button onclick="createTestNote()">✍️ Create Test Note</button>
+      </div>
+    </div>
+    <div id="create-result"></div>
+  </div>
+
+  <div class="container">
+    <h2>5️⃣ Test Real-Time Subscription</h2>
+    <div class="test-section">
+      <input type="text" id="sub-ref-id" placeholder="Enter call_id or chat_id" value="test-call-123">
+      <select id="sub-ref-type" style="background: #1a202c; color: #e2e8f0; border: 2px solid #4a5568; padding: 10px; border-radius: 6px;">
+        <option value="call">Call</option>
+        <option value="sms">SMS</option>
+      </select>
+      <div style="margin-top: 10px;">
+        <button onclick="startSubscription()">▶️ Start Listening</button>
+        <button onclick="stopSubscription()">⏹️ Stop Listening</button>
+      </div>
+    </div>
+    <div id="subscription-result"></div>
+  </div>
+
+  <div class="container">
+    <h2>6️⃣ Check RLS Policies</h2>
+    <button onclick="checkRLS()">🔒 Check RLS Policies</button>
+    <div id="rls-result"></div>
+  </div>
+
+  <script>
+    const SUPABASE_URL = 'https://onwgbfetzrctshdwwimm.supabase.co'
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ud2diZmV0enJjdHNoZHd3aW1tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk5ODA5ODYsImV4cCI6MjA3NTU1Njk4Nn0.MgsjiXT2Y0WqQf2puG2p27tHaMRfhiUET2TDWc668lI'
+
+    const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+    let subscription = null
+
+    async function testConnection() {
+      const result = document.getElementById('connection-result')
+      result.innerHTML = '<div class="info">Testing connection...</div>'
+
+      try {
+        const { data, error } = await supabase.from('notes').select('id').limit(1)
+        if (error) {
+          result.innerHTML = `<div class="error">❌ Connection failed: ${error.message}</div>`
+        } else {
+          result.innerHTML = '<div class="success">✅ Supabase connection successful!</div>'
+        }
+      } catch (err) {
+        result.innerHTML = `<div class="error">❌ Error: ${err.message}</div>`
+      }
+    }
+
+    async function checkSchema() {
+      const result = document.getElementById('schema-result')
+      result.innerHTML = '<div class="info">Checking table schema...</div>'
+
+      try {
+        const { data, error } = await supabase
+          .from('notes')
+          .select('*')
+          .limit(1)
+
+        if (error) {
+          result.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`
+          return
+        }
+
+        const sample = data && data.length > 0 ? data[0] : null
+        const columns = sample ? Object.keys(sample) : []
+
+        const hasTenantId = columns.includes('tenant_id')
+
+        result.innerHTML = `
+          <div class="${hasTenantId ? 'success' : 'error'}">
+            ${hasTenantId ? '✅' : '❌'} tenant_id column ${hasTenantId ? 'EXISTS' : 'MISSING'}
+          </div>
+          <div class="info">
+            <strong>Table Columns:</strong>
+            <pre>${columns.join('\n')}</pre>
+          </div>
+          ${sample ? `<div class="info"><strong>Sample Note:</strong><pre>${JSON.stringify(sample, null, 2)}</pre></div>` : '<div class="warning">No notes in database yet</div>'}
+        `
+      } catch (err) {
+        result.innerHTML = `<div class="error">❌ Error: ${err.message}</div>`
+      }
+    }
+
+    async function viewAllNotes() {
+      const result = document.getElementById('notes-result')
+      result.innerHTML = '<div class="info">Fetching all notes...</div>'
+
+      try {
+        const { data, error } = await supabase
+          .from('notes')
+          .select('*')
+          .order('created_at', { ascending: false })
+
+        if (error) {
+          result.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`
+          return
+        }
+
+        if (data.length === 0) {
+          result.innerHTML = '<div class="warning">No notes found in database</div>'
+          return
+        }
+
+        const notesHtml = data.map(note => `
+          <div class="note-item">
+            <strong>${note.content}</strong>
+            <div class="note-meta">
+              📋 ID: ${note.id} |
+              🏥 Tenant: ${note.tenant_id || 'NO TENANT'} |
+              📎 Ref: ${note.reference_type}/${note.reference_id} |
+              👤 By: ${note.created_by_name} |
+              🕐 ${new Date(note.created_at).toLocaleString()}
+            </div>
+          </div>
+        `).join('')
+
+        result.innerHTML = `
+          <div class="success">✅ Found ${data.length} total notes</div>
+          ${notesHtml}
+        `
+      } catch (err) {
+        result.innerHTML = `<div class="error">❌ Error: ${err.message}</div>`
+      }
+    }
+
+    async function viewMedexNotes() {
+      const result = document.getElementById('notes-result')
+      result.innerHTML = '<div class="info">Fetching MedEx notes...</div>'
+
+      try {
+        const { data, error } = await supabase
+          .from('notes')
+          .select('*')
+          .eq('tenant_id', 'medex')
+          .order('created_at', { ascending: false })
+
+        if (error) {
+          result.innerHTML = `<div class="error">❌ Error: ${error.message}</div>`
+          return
+        }
+
+        if (data.length === 0) {
+          result.innerHTML = '<div class="warning">No MedEx notes found</div>'
+          return
+        }
+
+        const notesHtml = data.map(note => `
+          <div class="note-item">
+            <strong>${note.content}</strong>
+            <div class="note-meta">
+              📋 ID: ${note.id} |
+              📎 Ref: ${note.reference_type}/${note.reference_id} |
+              👤 By: ${note.created_by_name} |
+              🕐 ${new Date(note.created_at).toLocaleString()}
+            </div>
+          </div>
+        `).join('')
+
+        result.innerHTML = `
+          <div class="success">✅ Found ${data.length} MedEx notes</div>
+          ${notesHtml}
+        `
+      } catch (err) {
+        result.innerHTML = `<div class="error">❌ Error: ${err.message}</div>`
+      }
+    }
+
+    async function createTestNote() {
+      const result = document.getElementById('create-result')
+      const refId = document.getElementById('test-ref-id').value
+      const refType = document.getElementById('test-ref-type').value
+      const content = document.getElementById('test-content').value
+
+      if (!refId || !content) {
+        result.innerHTML = '<div class="error">Please enter reference ID and content</div>'
+        return
+      }
+
+      result.innerHTML = '<div class="info">Creating note...</div>'
+
+      try {
+        const { data, error } = await supabase
+          .from('notes')
+          .insert({
+            reference_id: refId,
+            reference_type: refType,
+            content: content,
+            content_type: 'plain',
+            created_by: 'test-user-' + Date.now(),
+            created_by_name: 'Test User (Diagnostic Tool)',
+            tenant_id: 'medex'
+          })
+          .select()
+          .single()
+
+        if (error) {
+          result.innerHTML = `<div class="error">❌ Failed to create note: ${error.message}</div>`
+          return
+        }
+
+        result.innerHTML = `
+          <div class="success">✅ Note created successfully!</div>
+          <pre>${JSON.stringify(data, null, 2)}</pre>
+          <div class="info">Now check if this note appears in another browser window!</div>
+        `
+      } catch (err) {
+        result.innerHTML = `<div class="error">❌ Error: ${err.message}</div>`
+      }
+    }
+
+    async function startSubscription() {
+      const result = document.getElementById('subscription-result')
+      const refId = document.getElementById('sub-ref-id').value
+      const refType = document.getElementById('sub-ref-type').value
+
+      if (!refId) {
+        result.innerHTML = '<div class="error">Please enter reference ID</div>'
+        return
+      }
+
+      if (subscription) {
+        await stopSubscription()
+      }
+
+      result.innerHTML = '<div class="info">Setting up real-time subscription...</div>'
+
+      subscription = supabase
+        .channel(`notes_diagnostic_${refType}_${refId}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'notes',
+            filter: `reference_id=eq.${refId}`
+          },
+          (payload) => {
+            const timestamp = new Date().toLocaleTimeString()
+            console.log('Real-time update:', payload)
+            result.innerHTML += `
+              <div class="success">
+                📡 [${timestamp}] Real-time update received!
+                <pre>${JSON.stringify(payload, null, 2)}</pre>
+              </div>
+            `
+          }
+        )
+        .subscribe((status) => {
+          console.log('Subscription status:', status)
+          if (status === 'SUBSCRIBED') {
+            result.innerHTML = `<div class="success">✅ Listening for changes to ${refType}/${refId}...</div>`
+          } else if (status === 'CHANNEL_ERROR') {
+            result.innerHTML = '<div class="error">❌ Subscription failed</div>'
+          }
+        })
+    }
+
+    async function stopSubscription() {
+      if (subscription) {
+        await supabase.removeChannel(subscription)
+        subscription = null
+        document.getElementById('subscription-result').innerHTML = '<div class="info">Stopped listening</div>'
+      }
+    }
+
+    async function checkRLS() {
+      const result = document.getElementById('rls-result')
+      result.innerHTML = '<div class="info">Checking RLS policies...</div>'
+
+      try {
+        // Try to query without filtering to see what RLS allows
+        const { data, error, count } = await supabase
+          .from('notes')
+          .select('*', { count: 'exact' })
+
+        if (error) {
+          result.innerHTML = `<div class="error">❌ RLS Error: ${error.message}</div>`
+          return
+        }
+
+        const medexNotes = data.filter(n => n.tenant_id === 'medex')
+        const otherNotes = data.filter(n => n.tenant_id !== 'medex')
+
+        result.innerHTML = `
+          <div class="success">✅ RLS policies are permissive (no auth required)</div>
+          <div class="info">
+            <strong>Accessible Notes:</strong>
+            <ul>
+              <li>Total notes returned: ${data.length}</li>
+              <li>MedEx notes: ${medexNotes.length}</li>
+              <li>Other tenant notes: ${otherNotes.length}</li>
+            </ul>
+          </div>
+          ${otherNotes.length > 0 ? `<div class="warning">⚠️ Warning: Non-MedEx notes are also visible (RLS may not be filtering properly)</div>` : '<div class="success">✅ Only MedEx notes are visible</div>'}
+        `
+      } catch (err) {
+        result.innerHTML = `<div class="error">❌ Error: ${err.message}</div>`
+      }
+    }
+
+    // Auto-run connection test on load
+    window.addEventListener('load', () => {
+      testConnection()
+    })
+  </script>
+</body>
+</html>

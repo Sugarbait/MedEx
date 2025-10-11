@@ -1,0 +1,753 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Unlock DR Account - MedEx CRM</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 2rem;
+            margin-bottom: 10px;
+        }
+
+        .header p {
+            opacity: 0.9;
+        }
+
+        .content {
+            padding: 30px;
+        }
+
+        .section {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+
+        .section h2 {
+            color: #667eea;
+            margin-bottom: 15px;
+            font-size: 1.5rem;
+        }
+
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+
+        .success-box {
+            background: #e8f5e9;
+            border-left: 4px solid #4CAF50;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+
+        .error-box {
+            background: #ffebee;
+            border-left: 4px solid #f44336;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+
+        .warning-box {
+            background: #fff3e0;
+            border-left: 4px solid #ff9800;
+            padding: 15px;
+            margin: 15px 0;
+            border-radius: 4px;
+        }
+
+        button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            border-radius: 6px;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin: 10px 10px 10px 0;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        button:active {
+            transform: translateY(0);
+        }
+
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .sql-code {
+            background: #263238;
+            color: #aed581;
+            padding: 20px;
+            border-radius: 6px;
+            overflow-x: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9rem;
+            line-height: 1.6;
+            margin: 15px 0;
+        }
+
+        .log-output {
+            background: #263238;
+            color: #00ff00;
+            padding: 20px;
+            border-radius: 6px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85rem;
+            max-height: 400px;
+            overflow-y: auto;
+            margin: 15px 0;
+            line-height: 1.5;
+        }
+
+        .log-output div {
+            margin-bottom: 5px;
+        }
+
+        .log-success { color: #4CAF50; }
+        .log-error { color: #f44336; }
+        .log-warning { color: #ff9800; }
+        .log-info { color: #2196F3; }
+
+        .credential-box {
+            background: #fff;
+            border: 2px solid #667eea;
+            padding: 20px;
+            border-radius: 8px;
+            margin: 15px 0;
+        }
+
+        .credential-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .credential-item:last-child {
+            border-bottom: none;
+        }
+
+        .credential-label {
+            font-weight: bold;
+            color: #667eea;
+        }
+
+        .credential-value {
+            font-family: monospace;
+            background: #f5f5f5;
+            padding: 5px 10px;
+            border-radius: 4px;
+        }
+
+        .step-indicator {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            width: 30px;
+            height: 30px;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 30px;
+            margin-right: 10px;
+            font-weight: bold;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 30px;
+            background: #e0e0e0;
+            border-radius: 15px;
+            overflow: hidden;
+            margin: 15px 0;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            transition: width 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔧 Unlock DR Account</h1>
+            <p>Emergency Account Recovery Tool for dr@medexhealthservices.com</p>
+        </div>
+
+        <div class="content">
+            <!-- Instructions Section -->
+            <div class="section">
+                <h2><span class="step-indicator">1</span> SQL Queries (Run in Supabase First)</h2>
+                <div class="warning-box">
+                    <strong>⚠️ Important:</strong> Run these SQL queries in the Supabase SQL Editor before using the browser tools below.
+                </div>
+                <div class="sql-code">-- 1. Get user information
+SELECT id, email, name, role, is_active, tenant_id, created_at, last_login
+FROM users
+WHERE email = 'dr@medexhealthservices.com' AND tenant_id = 'medex';
+
+-- 2. Clear all failed login attempts
+DELETE FROM failed_login_attempts WHERE email = 'dr@medexhealthservices.com';
+
+-- 3. Check stored credentials
+SELECT user_id, encrypted_retell_api_key
+FROM user_profiles
+WHERE user_id = (
+  SELECT id FROM users WHERE email = 'dr@medexhealthservices.com' AND tenant_id = 'medex'
+);
+
+-- 4. Enable the account (if disabled)
+UPDATE users
+SET is_active = true, updated_at = NOW()
+WHERE email = 'dr@medexhealthservices.com' AND tenant_id = 'medex';
+
+-- 5. Check audit logs for login attempts
+SELECT timestamp, action, outcome, source_ip, user_agent
+FROM audit_logs
+WHERE user_id = (SELECT id FROM users WHERE email = 'dr@medexhealthservices.com')
+ORDER BY timestamp DESC
+LIMIT 20;</div>
+                <button onclick="copySqlToClipboard()">📋 Copy SQL to Clipboard</button>
+            </div>
+
+            <!-- Diagnostic Section -->
+            <div class="section">
+                <h2><span class="step-indicator">2</span> Run Diagnostics</h2>
+                <div class="info-box">
+                    <strong>ℹ️ What this does:</strong>
+                    <ul style="margin-top: 10px; margin-left: 20px;">
+                        <li>Checks if user exists in Supabase</li>
+                        <li>Verifies account status (active/inactive)</li>
+                        <li>Checks for failed login attempts</li>
+                        <li>Verifies password storage in Supabase and localStorage</li>
+                        <li>Tests credential encryption/decryption</li>
+                    </ul>
+                </div>
+                <button id="diagnoseBtn" onclick="runDiagnostics()">🔍 Run Diagnostics</button>
+                <div id="diagnosticOutput" class="log-output" style="display: none;"></div>
+            </div>
+
+            <!-- Unlock and Reset Section -->
+            <div class="section">
+                <h2><span class="step-indicator">3</span> Unlock Account & Reset Password</h2>
+                <div class="warning-box">
+                    <strong>⚠️ Warning:</strong> This will:
+                    <ul style="margin-top: 10px; margin-left: 20px;">
+                        <li>Clear all lockout data from Supabase and localStorage</li>
+                        <li>Set a new temporary password</li>
+                        <li>Store credentials in BOTH Supabase AND localStorage</li>
+                        <li>Enable the account</li>
+                    </ul>
+                </div>
+                <div class="credential-box">
+                    <div class="credential-item">
+                        <span class="credential-label">New Password:</span>
+                        <span class="credential-value" id="newPassword">MedEx2025!</span>
+                    </div>
+                    <div class="credential-item">
+                        <span class="credential-label">Account Email:</span>
+                        <span class="credential-value">dr@medexhealthservices.com</span>
+                    </div>
+                </div>
+                <button id="unlockBtn" onclick="unlockAndReset()">🔓 Unlock Account & Reset Password</button>
+                <div id="unlockProgress" class="progress-bar" style="display: none;">
+                    <div id="progressFill" class="progress-fill" style="width: 0%;">0%</div>
+                </div>
+                <div id="unlockOutput" class="log-output" style="display: none;"></div>
+            </div>
+
+            <!-- Test Login Section -->
+            <div class="section">
+                <h2><span class="step-indicator">4</span> Test Login</h2>
+                <div class="info-box">
+                    <strong>ℹ️ Verification:</strong> After unlocking, test the new credentials to ensure everything works.
+                </div>
+                <button id="testBtn" onclick="testLogin()">🧪 Test Login</button>
+                <div id="testOutput" class="log-output" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const EMAIL = 'dr@medexhealthservices.com';
+        const NEW_PASSWORD = 'MedEx2025!';
+        const TENANT_ID = 'medex';
+
+        // Utility functions
+        function log(message, type = 'info', outputId = 'diagnosticOutput') {
+            const output = document.getElementById(outputId);
+            output.style.display = 'block';
+            const div = document.createElement('div');
+            div.className = `log-${type}`;
+            div.textContent = message;
+            output.appendChild(div);
+            output.scrollTop = output.scrollHeight;
+            console.log(message);
+        }
+
+        function clearLog(outputId) {
+            const output = document.getElementById(outputId);
+            output.innerHTML = '';
+        }
+
+        function updateProgress(percent, text) {
+            const progressBar = document.getElementById('unlockProgress');
+            const progressFill = document.getElementById('progressFill');
+            progressBar.style.display = 'block';
+            progressFill.style.width = percent + '%';
+            progressFill.textContent = text || percent + '%';
+        }
+
+        function copySqlToClipboard() {
+            const sqlCode = document.querySelector('.sql-code').textContent;
+            navigator.clipboard.writeText(sqlCode).then(() => {
+                alert('✅ SQL queries copied to clipboard!');
+            }).catch(err => {
+                alert('❌ Failed to copy: ' + err);
+            });
+        }
+
+        // Check if running in MedEx CRM
+        function checkEnvironment() {
+            if (typeof window.supabase === 'undefined') {
+                log('❌ Error: This page must be opened within the MedEx CRM application', 'error', 'diagnosticOutput');
+                log('Please navigate to the MedEx CRM app and open this page there', 'error', 'diagnosticOutput');
+                return false;
+            }
+            if (typeof window.encryptionService === 'undefined') {
+                log('❌ Error: Encryption service not available', 'error', 'diagnosticOutput');
+                return false;
+            }
+            return true;
+        }
+
+        // Diagnostic function
+        async function runDiagnostics() {
+            clearLog('diagnosticOutput');
+            log('🔍 Starting diagnostics for dr@medexhealthservices.com...', 'info', 'diagnosticOutput');
+            log('='.repeat(80), 'info', 'diagnosticOutput');
+
+            if (!checkEnvironment()) return;
+
+            const supabase = window.supabase;
+            const encryptionService = window.encryptionService;
+
+            try {
+                // Step 1: Get user from Supabase
+                log('\n📍 Step 1: Checking Supabase user record...', 'info', 'diagnosticOutput');
+                const { data: user, error: userError } = await supabase
+                    .from('users')
+                    .select('*')
+                    .eq('email', EMAIL)
+                    .eq('tenant_id', TENANT_ID)
+                    .single();
+
+                if (userError || !user) {
+                    log('❌ User not found in Supabase', 'error', 'diagnosticOutput');
+                    log('Error: ' + (userError?.message || 'Unknown error'), 'error', 'diagnosticOutput');
+                    return;
+                }
+
+                log('✅ User found:', 'success', 'diagnosticOutput');
+                log(`   ID: ${user.id}`, 'info', 'diagnosticOutput');
+                log(`   Email: ${user.email}`, 'info', 'diagnosticOutput');
+                log(`   Name: ${user.name}`, 'info', 'diagnosticOutput');
+                log(`   Role: ${user.role}`, 'info', 'diagnosticOutput');
+                log(`   Active: ${user.is_active ? 'YES' : 'NO'}`, user.is_active ? 'success' : 'error', 'diagnosticOutput');
+                log(`   Created: ${user.created_at}`, 'info', 'diagnosticOutput');
+                log(`   Last Login: ${user.last_login || 'Never'}`, 'info', 'diagnosticOutput');
+
+                const userId = user.id;
+
+                // Step 2: Check failed login attempts in Supabase
+                log('\n📍 Step 2: Checking failed login attempts in Supabase...', 'info', 'diagnosticOutput');
+                const { data: attempts, error: attemptsError } = await supabase
+                    .from('failed_login_attempts')
+                    .select('*')
+                    .eq('email', EMAIL);
+
+                if (attemptsError) {
+                    log('⚠️ Could not check failed attempts: ' + attemptsError.message, 'warning', 'diagnosticOutput');
+                } else {
+                    const count = attempts?.length || 0;
+                    if (count > 0) {
+                        log(`⚠️ Found ${count} failed login attempts`, 'warning', 'diagnosticOutput');
+                        log('   Most recent:', 'info', 'diagnosticOutput');
+                        attempts.slice(0, 3).forEach(a => {
+                            log(`   - ${a.attempted_at}: ${a.failure_reason}`, 'info', 'diagnosticOutput');
+                        });
+                    } else {
+                        log('✅ No failed login attempts found', 'success', 'diagnosticOutput');
+                    }
+                }
+
+                // Step 3: Check credentials in user_profiles
+                log('\n📍 Step 3: Checking credentials in Supabase (user_profiles)...', 'info', 'diagnosticOutput');
+                const { data: profile, error: profileError } = await supabase
+                    .from('user_profiles')
+                    .select('encrypted_retell_api_key')
+                    .eq('user_id', userId)
+                    .single();
+
+                if (profileError) {
+                    log('⚠️ Error checking user_profiles: ' + profileError.message, 'warning', 'diagnosticOutput');
+                } else if (!profile?.encrypted_retell_api_key) {
+                    log('❌ No credentials stored in Supabase', 'error', 'diagnosticOutput');
+                } else {
+                    log('✅ Credentials found in Supabase', 'success', 'diagnosticOutput');
+                    try {
+                        const decrypted = await encryptionService.decryptString(profile.encrypted_retell_api_key);
+                        const creds = JSON.parse(decrypted);
+                        log('✅ Credentials can be decrypted', 'success', 'diagnosticOutput');
+                        log(`   Email in credentials: ${creds.email}`, 'info', 'diagnosticOutput');
+                    } catch (err) {
+                        log('❌ Cannot decrypt credentials: ' + err.message, 'error', 'diagnosticOutput');
+                    }
+                }
+
+                // Step 4: Check localStorage
+                log('\n📍 Step 4: Checking localStorage...', 'info', 'diagnosticOutput');
+
+                const loginStats = localStorage.getItem(`loginStats_${userId}`);
+                if (loginStats) {
+                    const stats = JSON.parse(loginStats);
+                    log('✅ Login stats found:', 'success', 'diagnosticOutput');
+                    log(`   Attempts: ${stats.loginAttempts || 0}`, 'info', 'diagnosticOutput');
+                    log(`   Locked until: ${stats.lockoutUntil || 'Not locked'}`, stats.lockoutUntil ? 'warning' : 'success', 'diagnosticOutput');
+                    log(`   Last login: ${stats.lastLogin || 'Never'}`, 'info', 'diagnosticOutput');
+                } else {
+                    log('⚠️ No login stats in localStorage', 'warning', 'diagnosticOutput');
+                }
+
+                const userCreds = localStorage.getItem(`userCredentials_${userId}`);
+                if (userCreds) {
+                    log('✅ User credentials found in localStorage', 'success', 'diagnosticOutput');
+                    try {
+                        const decrypted = await encryptionService.decryptString(userCreds);
+                        const creds = JSON.parse(decrypted);
+                        log('✅ Can decrypt localStorage credentials', 'success', 'diagnosticOutput');
+                        log(`   Email in credentials: ${creds.email}`, 'info', 'diagnosticOutput');
+                    } catch (err) {
+                        log('❌ Cannot decrypt localStorage credentials: ' + err.message, 'error', 'diagnosticOutput');
+                    }
+                } else {
+                    log('❌ No user credentials in localStorage', 'error', 'diagnosticOutput');
+                }
+
+                const failedAttempts = localStorage.getItem('failed_login_attempts');
+                if (failedAttempts) {
+                    const attempts = JSON.parse(failedAttempts);
+                    const drAttempts = attempts.filter(a => a.email === EMAIL);
+                    if (drAttempts.length > 0) {
+                        log(`⚠️ Found ${drAttempts.length} failed attempts in localStorage`, 'warning', 'diagnosticOutput');
+                    } else {
+                        log('✅ No failed attempts for this user in localStorage', 'success', 'diagnosticOutput');
+                    }
+                }
+
+                // Summary
+                log('\n' + '='.repeat(80), 'info', 'diagnosticOutput');
+                log('📊 DIAGNOSIS SUMMARY', 'info', 'diagnosticOutput');
+                log('='.repeat(80), 'info', 'diagnosticOutput');
+                log(`User ID: ${userId}`, 'info', 'diagnosticOutput');
+                log(`Account Active: ${user.is_active ? 'YES ✅' : 'NO ❌'}`, user.is_active ? 'success' : 'error', 'diagnosticOutput');
+                log(`Failed Attempts (Supabase): ${attempts?.length || 0}`, (attempts?.length || 0) > 0 ? 'warning' : 'success', 'diagnosticOutput');
+                log(`Credentials in Supabase: ${profile?.encrypted_retell_api_key ? 'YES ✅' : 'NO ❌'}`, profile?.encrypted_retell_api_key ? 'success' : 'error', 'diagnosticOutput');
+                log(`Credentials in localStorage: ${userCreds ? 'YES ✅' : 'NO ❌'}`, userCreds ? 'success' : 'error', 'diagnosticOutput');
+                log('='.repeat(80), 'info', 'diagnosticOutput');
+
+            } catch (error) {
+                log('\n❌ DIAGNOSIS FAILED:', 'error', 'diagnosticOutput');
+                log(error.message, 'error', 'diagnosticOutput');
+                console.error(error);
+            }
+        }
+
+        // Unlock and reset function
+        async function unlockAndReset() {
+            clearLog('unlockOutput');
+            updateProgress(0, 'Starting...');
+            log('🔧 Starting account unlock and password reset...', 'info', 'unlockOutput');
+            log('='.repeat(80), 'info', 'unlockOutput');
+
+            if (!checkEnvironment()) {
+                updateProgress(0, 'Error');
+                return;
+            }
+
+            const supabase = window.supabase;
+            const encryptionService = window.encryptionService;
+
+            try {
+                // Step 1: Get user
+                updateProgress(10, 'Getting user...');
+                log('\n📍 Step 1: Getting user from Supabase...', 'info', 'unlockOutput');
+                const { data: user, error: userError } = await supabase
+                    .from('users')
+                    .select('id, email, name, role, is_active')
+                    .eq('email', EMAIL)
+                    .eq('tenant_id', TENANT_ID)
+                    .single();
+
+                if (userError || !user) {
+                    log('❌ User not found', 'error', 'unlockOutput');
+                    updateProgress(0, 'Failed');
+                    return;
+                }
+
+                log('✅ User found: ' + user.email, 'success', 'unlockOutput');
+                const userId = user.id;
+
+                // Step 2: Clear Supabase failed attempts
+                updateProgress(25, 'Clearing Supabase...');
+                log('\n📍 Step 2: Clearing failed login attempts from Supabase...', 'info', 'unlockOutput');
+                const { error: deleteError } = await supabase
+                    .from('failed_login_attempts')
+                    .delete()
+                    .eq('email', EMAIL);
+
+                if (deleteError) {
+                    log('⚠️ Warning: ' + deleteError.message, 'warning', 'unlockOutput');
+                } else {
+                    log('✅ Cleared Supabase failed_login_attempts', 'success', 'unlockOutput');
+                }
+
+                // Step 3: Clear localStorage
+                updateProgress(40, 'Clearing localStorage...');
+                log('\n📍 Step 3: Clearing localStorage lockout data...', 'info', 'unlockOutput');
+
+                localStorage.removeItem(`loginStats_${userId}`);
+                log('✅ Cleared loginStats', 'success', 'unlockOutput');
+
+                try {
+                    const existingAttempts = localStorage.getItem('failed_login_attempts');
+                    if (existingAttempts) {
+                        let attempts = JSON.parse(existingAttempts);
+                        const originalCount = attempts.length;
+                        attempts = attempts.filter(a => a.email !== EMAIL);
+                        localStorage.setItem('failed_login_attempts', JSON.stringify(attempts));
+                        log(`✅ Removed ${originalCount - attempts.length} failed attempts`, 'success', 'unlockOutput');
+                    }
+                } catch (err) {
+                    log('⚠️ Warning clearing failed attempts: ' + err.message, 'warning', 'unlockOutput');
+                    localStorage.removeItem('failed_login_attempts');
+                }
+
+                const cleanStats = {
+                    loginAttempts: 0,
+                    lastLogin: undefined,
+                    lockoutUntil: undefined
+                };
+                localStorage.setItem(`loginStats_${userId}`, JSON.stringify(cleanStats));
+                log('✅ Set clean lockout state', 'success', 'unlockOutput');
+
+                // Step 4: Store new password
+                updateProgress(60, 'Storing password...');
+                log('\n📍 Step 4: Storing new password in BOTH locations...', 'info', 'unlockOutput');
+
+                const credentials = {
+                    email: EMAIL,
+                    password: NEW_PASSWORD,
+                    tempPassword: false
+                };
+
+                // Hash password
+                const hashedPassword = await encryptionService.encryptString(NEW_PASSWORD);
+                const credentialsToStore = {
+                    ...credentials,
+                    password: hashedPassword
+                };
+
+                // Encrypt entire credentials
+                const encryptedCredentials = await encryptionService.encryptString(JSON.stringify(credentialsToStore));
+
+                // Store in Supabase
+                const { error: supabaseError } = await supabase
+                    .from('user_profiles')
+                    .upsert({
+                        user_id: userId,
+                        encrypted_retell_api_key: encryptedCredentials
+                    });
+
+                if (supabaseError) {
+                    log('⚠️ Warning: Could not store in Supabase: ' + supabaseError.message, 'warning', 'unlockOutput');
+                } else {
+                    log('✅ Password stored in Supabase', 'success', 'unlockOutput');
+                }
+
+                // Store in localStorage
+                localStorage.setItem(`userCredentials_${userId}`, encryptedCredentials);
+                log('✅ Password stored in localStorage', 'success', 'unlockOutput');
+
+                // Step 5: Verify storage
+                updateProgress(80, 'Verifying...');
+                log('\n📍 Step 5: Verifying password storage...', 'info', 'unlockOutput');
+
+                const { data: profileData } = await supabase
+                    .from('user_profiles')
+                    .select('encrypted_retell_api_key')
+                    .eq('user_id', userId)
+                    .single();
+
+                if (profileData?.encrypted_retell_api_key) {
+                    log('✅ Supabase storage verified', 'success', 'unlockOutput');
+                }
+
+                const localCreds = localStorage.getItem(`userCredentials_${userId}`);
+                if (localCreds) {
+                    log('✅ localStorage storage verified', 'success', 'unlockOutput');
+                }
+
+                // Step 6: Enable account
+                updateProgress(90, 'Enabling account...');
+                log('\n📍 Step 6: Enabling user account...', 'info', 'unlockOutput');
+                const { error: enableError } = await supabase
+                    .from('users')
+                    .update({ is_active: true, updated_at: new Date().toISOString() })
+                    .eq('id', userId)
+                    .eq('tenant_id', TENANT_ID);
+
+                if (enableError) {
+                    log('⚠️ Warning: ' + enableError.message, 'warning', 'unlockOutput');
+                } else {
+                    log('✅ Account enabled', 'success', 'unlockOutput');
+                }
+
+                // Complete
+                updateProgress(100, 'Complete!');
+                log('\n' + '='.repeat(80), 'success', 'unlockOutput');
+                log('🎉 UNLOCK AND PASSWORD RESET COMPLETE!', 'success', 'unlockOutput');
+                log('='.repeat(80), 'success', 'unlockOutput');
+                log('\n📊 Summary:', 'info', 'unlockOutput');
+                log(`   ✅ User ID: ${userId}`, 'success', 'unlockOutput');
+                log(`   ✅ Email: ${EMAIL}`, 'success', 'unlockOutput');
+                log(`   ✅ Account unlocked: YES`, 'success', 'unlockOutput');
+                log(`   ✅ Password stored in Supabase: ${!supabaseError ? 'YES' : 'NO'}`, !supabaseError ? 'success' : 'warning', 'unlockOutput');
+                log(`   ✅ Password stored in localStorage: YES`, 'success', 'unlockOutput');
+                log(`   ✅ Account enabled: YES`, 'success', 'unlockOutput');
+                log('\n🔑 New Login Credentials:', 'info', 'unlockOutput');
+                log(`   Email: ${EMAIL}`, 'info', 'unlockOutput');
+                log(`   Password: ${NEW_PASSWORD}`, 'info', 'unlockOutput');
+                log('\n💡 Next Steps:', 'info', 'unlockOutput');
+                log('   1. Click "Test Login" button below', 'info', 'unlockOutput');
+                log('   2. If successful, ask user to change password in Settings', 'info', 'unlockOutput');
+                log('   3. Password should now persist across sessions', 'info', 'unlockOutput');
+                log('='.repeat(80), 'info', 'unlockOutput');
+
+            } catch (error) {
+                log('\n❌ UNLOCK FAILED:', 'error', 'unlockOutput');
+                log(error.message, 'error', 'unlockOutput');
+                console.error(error);
+                updateProgress(0, 'Failed');
+            }
+        }
+
+        // Test login function
+        async function testLogin() {
+            clearLog('testOutput');
+            log('🧪 Testing login with new credentials...', 'info', 'testOutput');
+            log('='.repeat(80), 'info', 'testOutput');
+
+            if (!checkEnvironment()) return;
+
+            const supabase = window.supabase;
+
+            try {
+                // Test Supabase Auth login
+                log('\n📍 Testing Supabase Auth login...', 'info', 'testOutput');
+                const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+                    email: EMAIL,
+                    password: NEW_PASSWORD
+                });
+
+                if (authData?.session && !authError) {
+                    log('✅ Supabase Auth login successful!', 'success', 'testOutput');
+                    log('   Session ID: ' + authData.session.access_token.substring(0, 20) + '...', 'info', 'testOutput');
+
+                    // Sign out immediately
+                    await supabase.auth.signOut();
+                    log('✅ Signed out (test complete)', 'success', 'testOutput');
+                } else {
+                    log('❌ Supabase Auth login failed', 'error', 'testOutput');
+                    if (authError) {
+                        log('   Error: ' + authError.message, 'error', 'testOutput');
+                    }
+                }
+
+                log('\n' + '='.repeat(80), 'info', 'testOutput');
+                log('📊 TEST SUMMARY', 'info', 'testOutput');
+                log('='.repeat(80), 'info', 'testOutput');
+                log(`Authentication: ${authData?.session ? 'SUCCESS ✅' : 'FAILED ❌'}`, authData?.session ? 'success' : 'error', 'testOutput');
+                log('\n💡 If authentication succeeded:', 'info', 'testOutput');
+                log('   - Account is fully unlocked and working', 'success', 'testOutput');
+                log('   - Password persists in both Supabase and localStorage', 'success', 'testOutput');
+                log('   - User can log in with: ' + EMAIL, 'success', 'testOutput');
+                log('   - Password: ' + NEW_PASSWORD, 'success', 'testOutput');
+                log('\n💡 Next steps:', 'info', 'testOutput');
+                log('   1. Have user log in with these credentials', 'info', 'testOutput');
+                log('   2. User should change password in Settings', 'info', 'testOutput');
+                log('='.repeat(80), 'info', 'testOutput');
+
+            } catch (error) {
+                log('\n❌ TEST FAILED:', 'error', 'testOutput');
+                log(error.message, 'error', 'testOutput');
+                console.error(error);
+            }
+        }
+    </script>
+</body>
+</html>

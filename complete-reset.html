@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>MedEx Complete Reset</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2563eb;
+            margin-bottom: 20px;
+        }
+        .step {
+            background: #f0f9ff;
+            padding: 15px;
+            margin: 15px 0;
+            border-left: 4px solid #2563eb;
+            border-radius: 4px;
+        }
+        .step h3 {
+            margin-top: 0;
+            color: #1e40af;
+        }
+        button {
+            background: #dc2626;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            margin: 10px 5px;
+        }
+        button:hover {
+            background: #b91c1c;
+        }
+        button.success {
+            background: #16a34a;
+        }
+        button.success:hover {
+            background: #15803d;
+        }
+        .warning {
+            background: #fef3c7;
+            border: 2px solid #f59e0b;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+        }
+        .success-message {
+            background: #d1fae5;
+            border: 2px solid #10b981;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 20px 0;
+            display: none;
+        }
+        code {
+            background: #1f2937;
+            color: #10b981;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 MedEx Complete System Reset</h1>
+
+        <div class="warning">
+            <strong>⚠️ WARNING:</strong> This will completely clear all user data from your browser's localStorage.
+            Any unsaved data will be lost.
+        </div>
+
+        <div class="step">
+            <h3>Step 1: Clear Browser Storage</h3>
+            <p>Click the button below to clear all localStorage data:</p>
+            <button onclick="clearStorage()">🗑️ Clear All LocalStorage</button>
+            <div id="clearResult"></div>
+        </div>
+
+        <div class="step">
+            <h3>Step 2: Clear Browser Cache</h3>
+            <p>Press <code>Ctrl + Shift + R</code> (Windows) or <code>Cmd + Shift + R</code> (Mac) to hard refresh the page.</p>
+        </div>
+
+        <div class="step">
+            <h3>Step 3: Verify Database is Empty</h3>
+            <p>The database should already be empty from the previous clear operation.</p>
+            <p>If needed, run: <code>node clear-all-users.js</code></p>
+        </div>
+
+        <div class="step">
+            <h3>Step 4: Close All Browser Tabs</h3>
+            <p>Close ALL tabs for <code>localhost:3003</code> to ensure a clean start.</p>
+        </div>
+
+        <div class="step">
+            <h3>Step 5: Start Fresh</h3>
+            <p>Open a new browser tab and navigate to:</p>
+            <code>http://localhost:3003</code>
+            <br><br>
+            <button class="success" onclick="openApp()">✨ Open MedEx (New Tab)</button>
+        </div>
+
+        <div class="success-message" id="successMessage">
+            <strong>✅ Storage Cleared Successfully!</strong>
+            <p>Removed the following keys:</p>
+            <ul id="removedKeys"></ul>
+            <p><strong>Next Steps:</strong></p>
+            <ol>
+                <li>Press <code>Ctrl + Shift + R</code> to hard refresh</li>
+                <li>Close this tab</li>
+                <li>Open a new tab to <code>http://localhost:3003</code></li>
+                <li>You should see the "Welcome to MedEx" message</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        function clearStorage() {
+            const removedKeys = [];
+
+            // Get all keys before clearing
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key) {
+                    removedKeys.push(key);
+                }
+            }
+
+            // Clear everything
+            localStorage.clear();
+            sessionStorage.clear();
+
+            // Show success message
+            const successDiv = document.getElementById('successMessage');
+            const keysList = document.getElementById('removedKeys');
+
+            keysList.innerHTML = '';
+            removedKeys.forEach(key => {
+                const li = document.createElement('li');
+                li.textContent = key;
+                keysList.appendChild(li);
+            });
+
+            successDiv.style.display = 'block';
+
+            document.getElementById('clearResult').innerHTML = `
+                <p style="color: green; font-weight: bold; margin-top: 10px;">
+                    ✅ Cleared ${removedKeys.length} localStorage items
+                </p>
+            `;
+        }
+
+        function openApp() {
+            window.open('http://localhost:3003', '_blank');
+        }
+    </script>
+</body>
+</html>

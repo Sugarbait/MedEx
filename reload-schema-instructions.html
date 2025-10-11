@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PostgREST Schema Cache Reload Instructions</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+      line-height: 1.6;
+      color: #1a202c;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+      padding: 2rem;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+      overflow: hidden;
+    }
+
+    .header {
+      background: #1a202c;
+      color: white;
+      padding: 2rem;
+      text-align: center;
+    }
+
+    .header h1 {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+
+    .header .status {
+      display: inline-block;
+      background: #f56565;
+      color: white;
+      padding: 0.5rem 1rem;
+      border-radius: 20px;
+      font-size: 0.9rem;
+      margin-top: 1rem;
+    }
+
+    .content {
+      padding: 2rem;
+    }
+
+    .problem-box {
+      background: #fff5f5;
+      border-left: 4px solid #f56565;
+      padding: 1.5rem;
+      border-radius: 8px;
+      margin-bottom: 2rem;
+    }
+
+    .problem-box h2 {
+      color: #c53030;
+      margin-bottom: 1rem;
+    }
+
+    .problem-box code {
+      background: #2d3748;
+      color: #f56565;
+      padding: 0.25rem 0.5rem;
+      border-radius: 4px;
+      font-size: 0.9rem;
+    }
+
+    .steps {
+      margin: 2rem 0;
+    }
+
+    .step {
+      background: #f7fafc;
+      border-left: 4px solid #4299e1;
+      padding: 1.5rem;
+      margin-bottom: 1.5rem;
+      border-radius: 8px;
+      position: relative;
+    }
+
+    .step-number {
+      position: absolute;
+      top: -12px;
+      left: 20px;
+      background: #4299e1;
+      color: white;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      font-size: 1.1rem;
+    }
+
+    .step h3 {
+      color: #2d3748;
+      margin-bottom: 0.75rem;
+      margin-top: 0.5rem;
+    }
+
+    .step p {
+      color: #4a5568;
+      margin-bottom: 0.5rem;
+    }
+
+    .step .url {
+      background: #2d3748;
+      color: #68d391;
+      padding: 0.75rem;
+      border-radius: 6px;
+      font-family: 'Courier New', monospace;
+      margin: 0.75rem 0;
+      word-break: break-all;
+    }
+
+    .step .button-demo {
+      background: #48bb78;
+      color: white;
+      padding: 0.75rem 1.5rem;
+      border-radius: 6px;
+      display: inline-block;
+      margin: 0.75rem 0;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    .step .button-demo:hover {
+      background: #38a169;
+    }
+
+    .success-box {
+      background: #f0fff4;
+      border-left: 4px solid #48bb78;
+      padding: 1.5rem;
+      border-radius: 8px;
+      margin-top: 2rem;
+    }
+
+    .success-box h2 {
+      color: #22543d;
+      margin-bottom: 1rem;
+    }
+
+    .success-box ul {
+      list-style: none;
+      padding-left: 0;
+    }
+
+    .success-box li {
+      color: #2f855a;
+      padding: 0.5rem 0;
+    }
+
+    .success-box li:before {
+      content: "✅ ";
+      margin-right: 0.5rem;
+    }
+
+    .alternative {
+      background: #fffaf0;
+      border-left: 4px solid #ed8936;
+      padding: 1.5rem;
+      border-radius: 8px;
+      margin: 2rem 0;
+    }
+
+    .alternative h3 {
+      color: #7c2d12;
+      margin-bottom: 1rem;
+    }
+
+    .alternative pre {
+      background: #2d3748;
+      color: #68d391;
+      padding: 1rem;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin: 0.75rem 0;
+    }
+
+    .footer {
+      background: #edf2f7;
+      padding: 1.5rem;
+      text-align: center;
+      color: #4a5568;
+      font-size: 0.9rem;
+    }
+
+    .checklist {
+      background: #e6fffa;
+      border-left: 4px solid #319795;
+      padding: 1.5rem;
+      border-radius: 8px;
+      margin: 2rem 0;
+    }
+
+    .checklist h3 {
+      color: #234e52;
+      margin-bottom: 1rem;
+    }
+
+    .checklist label {
+      display: block;
+      padding: 0.5rem 0;
+      color: #2c7a7b;
+      cursor: pointer;
+    }
+
+    .checklist input[type="checkbox"] {
+      margin-right: 0.75rem;
+      width: 18px;
+      height: 18px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>🔧 PostgREST Schema Cache Fix</h1>
+      <div class="status">⚠️ MANUAL ACTION REQUIRED</div>
+    </div>
+
+    <div class="content">
+      <div class="problem-box">
+        <h2>❌ Problem Identified</h2>
+        <p>The MedEx database tables were successfully created in PostgreSQL, but PostgREST cannot find them in its schema cache.</p>
+        <p style="margin-top: 1rem;"><strong>Error Message:</strong></p>
+        <code>PGRST205: Could not find the table 'public.audit_logs' in the schema cache</code>
+      </div>
+
+      <div class="steps">
+        <h2 style="margin-bottom: 1.5rem; color: #2d3748;">🛠️ Fix Steps (5 minutes)</h2>
+
+        <div class="step">
+          <div class="step-number">1</div>
+          <h3>Open Supabase Dashboard</h3>
+          <p>Click the link below to access your project dashboard:</p>
+          <div class="url">https://supabase.com/dashboard</div>
+          <p style="margin-top: 0.5rem; color: #718096; font-size: 0.9rem;">Login with your Supabase credentials if prompted</p>
+        </div>
+
+        <div class="step">
+          <div class="step-number">2</div>
+          <h3>Select Your Project</h3>
+          <p>Find and click on the MedEx CRM project:</p>
+          <div class="url">Project ID: onwgbfetzrctshdwwimm</div>
+        </div>
+
+        <div class="step">
+          <div class="step-number">3</div>
+          <h3>Navigate to API Settings</h3>
+          <p>In the left sidebar:</p>
+          <ul style="list-style: none; padding-left: 1rem; margin-top: 0.75rem;">
+            <li style="padding: 0.25rem 0;">1. Click <strong>Settings</strong> ⚙️</li>
+            <li style="padding: 0.25rem 0;">2. Click <strong>API</strong> tab</li>
+          </ul>
+        </div>
+
+        <div class="step">
+          <div class="step-number">4</div>
+          <h3>Reload Schema Cache</h3>
+          <p>Scroll down to find the <strong>PostgREST Schema Cache</strong> section</p>
+          <p style="margin-top: 0.75rem;">Click this button:</p>
+          <div class="button-demo">🔄 Reload Schema</div>
+          <p style="margin-top: 0.75rem; color: #718096; font-size: 0.9rem;">⏱️ Wait 10-15 seconds for the reload to complete</p>
+        </div>
+
+        <div class="step">
+          <div class="step-number">5</div>
+          <h3>Verify Tables Are Visible</h3>
+          <p>Navigate to <strong>Table Editor</strong> in the left sidebar</p>
+          <p style="margin-top: 0.75rem;">You should see all 6 tables:</p>
+          <ul style="list-style: none; padding-left: 1rem; margin-top: 0.75rem;">
+            <li style="padding: 0.25rem 0;">✅ users</li>
+            <li style="padding: 0.25rem 0;">✅ user_settings</li>
+            <li style="padding: 0.25rem 0;">✅ audit_logs</li>
+            <li style="padding: 0.25rem 0;">✅ user_credentials</li>
+            <li style="padding: 0.25rem 0;">✅ notes</li>
+            <li style="padding: 0.25rem 0;">✅ failed_login_attempts</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="alternative">
+        <h3>🔀 Alternative Method (If "Reload Schema" button not found)</h3>
+        <p>Run this SQL in the <strong>SQL Editor</strong>:</p>
+        <p style="margin-top: 0.5rem;">Go to: <strong>SQL Editor</strong> → <strong>New query</strong></p>
+        <pre>NOTIFY pgrst, 'reload schema';</pre>
+        <p style="margin-top: 0.75rem;">Then click <strong>Run</strong></p>
+      </div>
+
+      <div class="checklist">
+        <h3>✓ Verification Checklist</h3>
+        <label>
+          <input type="checkbox" id="check1">
+          Supabase Dashboard shows all 6 tables in Table Editor
+        </label>
+        <label>
+          <input type="checkbox" id="check2">
+          No PGRST205 errors when accessing tables
+        </label>
+        <label>
+          <input type="checkbox" id="check3">
+          Can access user registration page
+        </label>
+        <label>
+          <input type="checkbox" id="check4">
+          Can create first user successfully
+        </label>
+      </div>
+
+      <div class="success-box">
+        <h2>🎉 After Fix is Complete</h2>
+        <ul>
+          <li>All REST API endpoints will work correctly</li>
+          <li>User registration will function properly</li>
+          <li>First user will be auto-assigned super_user role</li>
+          <li>Application will load without errors</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="footer">
+      <p><strong>Need Help?</strong> If the issue persists after following these steps, check the project documentation or contact support.</p>
+      <p style="margin-top: 0.5rem;">Project: MedEx Healthcare CRM | Database: Supabase PostgreSQL</p>
+    </div>
+  </div>
+
+  <script>
+    // Auto-open dashboard link when user clicks
+    document.addEventListener('DOMContentLoaded', () => {
+      const urls = document.querySelectorAll('.url');
+      urls.forEach(url => {
+        url.style.cursor = 'pointer';
+        url.addEventListener('click', () => {
+          const link = url.textContent.trim();
+          if (link.startsWith('http')) {
+            window.open(link, '_blank');
+          }
+        });
+      });
+    });
+  </script>
+</body>
+</html>

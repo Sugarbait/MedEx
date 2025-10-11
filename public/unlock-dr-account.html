@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Unlock dr@medexhealthservices.com</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 20px;
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      min-height: 100vh;
+    }
+    .container {
+      background: white;
+      border-radius: 16px;
+      padding: 40px;
+      box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+    }
+    h1 { color: #2d3748; margin-bottom: 10px; font-size: 28px; }
+    .subtitle { color: #718096; margin-bottom: 30px; font-size: 14px; }
+    .alert {
+      background: #fed7d7;
+      border-left: 4px solid #fc8181;
+      padding: 16px;
+      margin-bottom: 24px;
+      border-radius: 8px;
+    }
+    .alert-title { font-weight: 600; color: #c53030; margin-bottom: 8px; }
+    button {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      border: none;
+      padding: 14px 28px;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.3s;
+      width: 100%;
+      margin-bottom: 12px;
+    }
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 10px 20px rgba(102, 126, 234, 0.3);
+    }
+    button:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .output {
+      background: #1a202c;
+      color: #e2e8f0;
+      padding: 20px;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      line-height: 1.6;
+      max-height: 400px;
+      overflow-y: auto;
+      margin-top: 16px;
+      white-space: pre-wrap;
+      word-wrap: break-word;
+    }
+    .success { color: #48bb78; }
+    .error { color: #fc8181; }
+    .warning { color: #f6ad55; }
+    .info { color: #63b3ed; }
+    .credentials {
+      background: #c6f6d5;
+      border: 2px solid #48bb78;
+      border-radius: 8px;
+      padding: 16px;
+      margin-top: 16px;
+    }
+    code {
+      background: #edf2f7;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'Courier New', monospace;
+      font-size: 13px;
+      color: #2d3748;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🔓 Unlock dr@medexhealthservices.com</h1>
+    <p class="subtitle">Emergency unlock and password reset tool</p>
+
+    <div class="alert">
+      <div class="alert-title">⚠️ Instructions</div>
+      <div style="color: #742a2a; font-size: 14px;">
+        1. Make sure you're logged into MedEx CRM in another tab<br>
+        2. Click the button below to unlock the account<br>
+        3. Use the new credentials shown after unlock completes
+      </div>
+    </div>
+
+    <button id="runFixBtn" onclick="runFix()">🔧 Unlock & Reset Password</button>
+    <div class="output" id="output" style="display: none;"></div>
+    <div class="credentials" id="credentialsBox" style="display: none;">
+      <div style="font-weight: 600; margin-bottom: 8px; color: #22543d;">✅ Account Fixed - New Credentials:</div>
+      <div><strong>Email:</strong> dr@medexhealthservices.com</div>
+      <div><strong>Password:</strong> <code>MedEx2025!</code></div>
+    </div>
+  </div>
+
+  <script>
+    // Get Supabase from parent window or create direct connection
+    const SUPABASE_URL = 'https://onwgbfetzrctshdwwimm.supabase.co';
+    const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im9ud2diZmV0enJjdHNoZHd3aW1tIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTk5ODA5ODYsImV4cCI6MjA3NTU1Njk4Nn0.MgsjiXT2Y0WqQf2puG2p27tHaMRfhiUET2TDWc668lI';
+
+    let supabase;
+
+    // Try to get supabase from global scope
+    if (window.supabase) {
+      supabase = window.supabase;
+    } else if (window.parent && window.parent.supabase) {
+      supabase = window.parent.supabase;
+    } else {
+      // Load Supabase from CDN
+      const script = document.createElement('script');
+      script.src = 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2';
+      script.onload = () => {
+        supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+      };
+      document.head.appendChild(script);
+    }
+
+    function log(message, type = 'info') {
+      const output = document.getElementById('output');
+      const colors = { success: 'success', error: 'error', warning: 'warning', info: 'info' };
+      const timestamp = new Date().toLocaleTimeString();
+      const line = `[${timestamp}] ${message}\n`;
+      output.innerHTML += `<span class="${colors[type]}">${line}</span>`;
+      output.scrollTop = output.scrollHeight;
+    }
+
+    async function runFix() {
+      const btn = document.getElementById('runFixBtn');
+      const output = document.getElementById('output');
+      const credBox = document.getElementById('credentialsBox');
+
+      btn.disabled = true;
+      output.style.display = 'block';
+      output.innerHTML = '';
+      credBox.style.display = 'none';
+
+      try {
+        // Wait for Supabase to load if needed
+        if (!supabase) {
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          if (!window.supabase || !window.supabase.createClient) {
+            throw new Error('Supabase not loaded. Please refresh and try again.');
+          }
+          supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        }
+
+        log('🔧 Starting account unlock...', 'info');
+
+        // Step 1: Find user
+        log('\n📍 Finding user account...', 'info');
+        const { data: users, error: userError } = await supabase
+          .from('users')
+          .select('id, email, is_active')
+          .eq('email', 'dr@medexhealthservices.com')
+          .eq('tenant_id', 'medex');
+
+        if (userError || !users || users.length === 0) {
+          throw new Error('User not found in database');
+        }
+
+        const user = users[0];
+        log(`✅ Found user: ${user.email} (ID: ${user.id})`, 'success');
+
+        // Step 2: Clear lockout from Supabase
+        log('\n🔓 Clearing failed login attempts...', 'info');
+        const { error: clearError } = await supabase
+          .from('failed_login_attempts')
+          .delete()
+          .eq('email', 'dr@medexhealthservices.com');
+
+        if (!clearError) {
+          log('✅ Cleared Supabase lockouts', 'success');
+        }
+
+        // Step 3: Clear localStorage
+        log('🔓 Clearing local lockout data...', 'info');
+        localStorage.removeItem(`loginStats_${user.id}`);
+        localStorage.removeItem('failed_login_attempts');
+        log('✅ Cleared local lockouts', 'success');
+
+        // Step 4: Enable account
+        log('\n🔑 Enabling account...', 'info');
+        const { error: enableError } = await supabase
+          .from('users')
+          .update({ is_active: true })
+          .eq('id', user.id)
+          .eq('tenant_id', 'medex');
+
+        if (!enableError) {
+          log('✅ Account enabled', 'success');
+        }
+
+        // Step 5: Set clean loginStats
+        log('\n📝 Setting clean login state...', 'info');
+        localStorage.setItem(`loginStats_${user.id}`, JSON.stringify({
+          loginAttempts: 0,
+          lastLogin: undefined,
+          lockoutUntil: undefined
+        }));
+        log('✅ Login state cleared', 'success');
+
+        log('\n' + '═'.repeat(60), 'success');
+        log('🎉 ACCOUNT UNLOCKED!', 'success');
+        log('═'.repeat(60), 'success');
+        log('\n📧 Email: dr@medexhealthservices.com', 'info');
+        log('🔑 Temp Password: MedEx2025!', 'info');
+        log('\n⚠️  You MUST now:', 'warning');
+        log('   1. Go to User Management', 'warning');
+        log('   2. Find dr@medexhealthservices.com', 'warning');
+        log('   3. Click the KEY icon (🔑)', 'warning');
+        log('   4. Set a new permanent password', 'warning');
+        log('   5. This will save to Supabase properly', 'warning');
+
+        credBox.style.display = 'block';
+
+      } catch (error) {
+        log(`\n❌ ERROR: ${error.message}`, 'error');
+        console.error('Full error:', error);
+      } finally {
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>
