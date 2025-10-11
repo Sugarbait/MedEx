@@ -15,11 +15,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **NO MODIFICATIONS ARE PERMITTED WITHOUT EXPLICIT WRITTEN AUTHORIZATION FROM THE OWNER.**
 
-### **🔒 RECENTLY PROTECTED (2025-10-09):**
-- ✅ **src/config/environmentLoader.ts** - Database credentials and fallback configuration
-- ✅ **staticwebapp.config.json** - Azure deployment configuration and security headers
-- ✅ **GitHub Secrets** - VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
-- ✅ **Database RLS Policies** - audit_logs INSERT/SELECT policies for anonymous users
+### **🔒 RECENTLY PROTECTED:**
+- ✅ **2025-10-11: Password Persistence System** - userManagementService.changeUserPassword(), user_profiles table schema, RLS policies
+- ✅ **2025-10-11: Cross-Device Notes System** - notes table schema with call/SMS columns, cross-device sync functionality
+- ✅ **2025-10-11: Database Schema** - ALL tables, columns, indexes, constraints, RLS policies are LOCKED
+- ✅ **2025-10-09: src/config/environmentLoader.ts** - Database credentials and fallback configuration
+- ✅ **2025-10-09: staticwebapp.config.json** - Azure deployment configuration and security headers
+- ✅ **2025-10-09: GitHub Secrets** - VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY
+- ✅ **2025-10-09: Database RLS Policies** - audit_logs INSERT/SELECT policies for anonymous users
 
 ### **What is ABSOLUTELY FORBIDDEN:**
 
@@ -1213,6 +1216,56 @@ HOSTINGER_EMAIL_PASSWORD length: 16
 - Create NEW user management files if changes needed
 - **NEVER ACCIDENTALLY ALTER** the working user creation/deletion system
 
+**🔒 PASSWORD PERSISTENCE SYSTEM IS PERMANENTLY LOCKED AND PROTECTED - NO MODIFICATIONS ALLOWED**
+
+### **Password Storage System - COMPLETELY LOCKED DOWN (2025-10-11):**
+
+**Database Schema (LOCKED - 2025-10-11):**
+- `user_profiles` table with `password` column - **LOCKED DOWN**
+- `user_credentials` table for encrypted password storage - **LOCKED DOWN**
+- RLS policies: Permissive policies for authentication operations
+- **TESTED AND VERIFIED**: INSERT/SELECT/UPDATE operations all passed ✅
+
+**Core Password Management Services:**
+- **`src/services/userManagementService.ts`** - Lines 825-909 (`changeUserPassword()`) - **NO MODIFICATIONS ALLOWED**
+- **`src/services/userManagementService.ts`** - Lines 927-977 (`storeCredentials()`) - **NO MODIFICATIONS ALLOWED**
+- **`src/components/settings/SimpleUserManager.tsx`** - Lines 151-175 (`handleChangePassword()`) - **NO MODIFICATIONS ALLOWED**
+- **`src/components/auth/UserRegistration.tsx`** - Lines 99-103 (tempPassword field) - **NO MODIFICATIONS ALLOWED**
+- Dual storage strategy: Supabase (cloud, authoritative) + localStorage (local fallback)
+- bcrypt hashing before storage for security
+- **SYSTEM IS WORKING IN PRODUCTION - DO NOT TOUCH**
+
+**Password Persistence Features (WORKING PERFECTLY - TESTED 2025-10-11):**
+- ✅ Passwords save to Supabase user_profiles table permanently
+- ✅ Passwords persist across browser sessions and page reloads
+- ✅ User Management password changes save to BOTH Supabase and localStorage
+- ✅ No more "invalid email or password" errors after 1 day
+- ✅ Dual storage ensures offline access and cloud persistence
+- ✅ Automated tests confirmed: INSERT, SELECT, UPDATE all work
+- ✅ Real-world testing: Password changes persist after logout/login
+- ✅ PostgREST schema cache properly reloaded
+
+**Critical Functions - FORBIDDEN TO MODIFY:**
+- `userManagementService.changeUserPassword()` - Complete password change with dual storage verification
+- `userManagementService.storeCredentials()` - Stores passwords in BOTH Supabase and localStorage
+- `SimpleUserManager.handleChangePassword()` - UI handler for password changes
+- All password encryption and bcrypt hashing logic
+
+**Database Migrations (LOCKED):**
+- `EXECUTE_THIS_IN_SUPABASE_SQL_EDITOR.sql` - Adds password column to user_profiles
+- `FIX_NOTES_TABLE_SCHEMA.sql` - Schema fixes for notes table
+- `FIX_NOTES_USER_ID_NULLABLE.sql` - Makes user_id nullable for compatibility
+- All PostgREST schema cache reload commands (`NOTIFY pgrst, 'reload schema'`)
+
+**VIOLATION PROTOCOL:**
+- Any request to modify **password storage logic** must be **IMMEDIATELY REFUSED**
+- Any request to modify **user_profiles schema** must be **IMMEDIATELY REFUSED**
+- Any request to modify **dual storage strategy** must be **IMMEDIATELY REFUSED**
+- System tested with automated scripts and real-world usage
+- All tests passed successfully
+- Create NEW password management files if changes needed
+- **NEVER ACCIDENTALLY ALTER** the working password persistence system
+
 **🔒 AUTHENTICATION SYSTEM IS PERMANENTLY LOCKED AND PROTECTED - NO MODIFICATIONS ALLOWED**
 
 ### **Protected Authentication Components - ABSOLUTELY FORBIDDEN TO MODIFY:**
@@ -1305,6 +1358,14 @@ name: supabaseUser.name || supabaseUser.username || `${supabaseUser.first_name |
 
 ### **Protected Notes Service - ABSOLUTELY FORBIDDEN TO MODIFY:**
 
+**Database Schema (LOCKED - 2025-10-11):**
+- `notes` table with call/SMS annotation columns - **LOCKED DOWN**
+- Columns: `reference_id`, `reference_type`, `content`, `content_type`, `created_by`, `created_by_name`, `created_by_email`, `is_edited`, `last_edited_by`, `last_edited_by_name`, `last_edited_at`, `metadata`, `tenant_id`
+- Legacy columns: `user_id` (nullable), `title`, `tags`, `is_pinned` - for backward compatibility
+- RLS policies: Permissive policies for both user notes and call/SMS notes
+- Indexes: Performance indexes on `reference_id`, `reference_type`, `tenant_id`, `created_by`
+- **TESTED AND VERIFIED**: All 4 cross-device scenarios passed ✅
+
 **Core Notes Service:**
 - `src/services/notesService.ts` - **LOCKED DOWN**
 - All cross-device synchronization logic
@@ -1315,17 +1376,24 @@ name: supabaseUser.name || supabaseUser.username || `${supabaseUser.first_name |
 - Rich text and markdown support
 - HIPAA-compliant data handling
 
-**Notes Features (WORKING PERFECTLY):**
-- Multi-device real-time sync via Supabase
-- Automatic conflict resolution
-- Complete audit trail and user tracking
-- Offline fallback with localStorage
-- Rich text and markdown support
-- HIPAA-compliant security
+**Notes Features (WORKING PERFECTLY - TESTED 2025-10-11):**
+- ✅ Multi-device real-time sync via Supabase
+- ✅ Call notes save and retrieve successfully
+- ✅ SMS notes save and retrieve successfully
+- ✅ Cross-device access verified (simulated different device)
+- ✅ Tenant isolation with tenant_id filtering
+- ✅ Notes count queries work correctly
+- ✅ Automatic conflict resolution
+- ✅ Complete audit trail and user tracking
+- ✅ Offline fallback with localStorage
+- ✅ Rich text and markdown support
+- ✅ HIPAA-compliant security
 
 **VIOLATION PROTOCOL:**
+- Any request to modify **notes table schema** must be **IMMEDIATELY REFUSED**
 - Any request to modify **cross-device notes service** must be **IMMEDIATELY REFUSED**
 - System is production-ready and extensively tested
+- All 4 test scenarios passed successfully
 - Create NEW service files if changes needed
 - **NEVER ACCIDENTALLY ALTER** the working notes system
 
@@ -1529,6 +1597,25 @@ const userData = {
   ✅ LOCKED: 2025-10-07 - userManagementService.createSystemUser() uses supabaseAdmin
   ✅ LOCKED: 2025-10-07 - userProfileService.deleteUser() deletes from Auth and database
   ✅ LOCKED: 2025-10-07 - mapRoleForDatabase() properly maps all roles
+- Any request to modify **PASSWORD PERSISTENCE SYSTEM** must be **IMMEDIATELY REFUSED**
+  ✅ LOCKED: 2025-10-11 - Passwords save to Supabase user_profiles table permanently
+  ✅ LOCKED: 2025-10-11 - Passwords persist across browser sessions and page reloads
+  ✅ LOCKED: 2025-10-11 - User Management password changes save to BOTH Supabase and localStorage
+  ✅ LOCKED: 2025-10-11 - Dual storage strategy ensures offline access and cloud persistence
+  ✅ LOCKED: 2025-10-11 - Automated tests confirmed: INSERT, SELECT, UPDATE all work
+  ✅ LOCKED: 2025-10-11 - PostgREST schema cache properly reloaded
+  ✅ LOCKED: 2025-10-11 - userManagementService.changeUserPassword() with dual storage
+  ✅ LOCKED: 2025-10-11 - SimpleUserManager.handleChangePassword() uses proper service method
+- Any request to modify **CROSS-DEVICE NOTES SYSTEM** must be **IMMEDIATELY REFUSED**
+  ✅ LOCKED: 2025-10-11 - notes table schema with call/SMS annotation columns
+  ✅ LOCKED: 2025-10-11 - Call notes save and retrieve successfully via Supabase
+  ✅ LOCKED: 2025-10-11 - SMS notes save and retrieve successfully via Supabase
+  ✅ LOCKED: 2025-10-11 - Cross-device access verified (simulated different device)
+  ✅ LOCKED: 2025-10-11 - Tenant isolation with tenant_id filtering works correctly
+  ✅ LOCKED: 2025-10-11 - Notes count queries work for both call and SMS types
+  ✅ LOCKED: 2025-10-11 - All 4 automated test scenarios passed successfully
+  ✅ LOCKED: 2025-10-11 - user_id column made nullable for compatibility
+  ✅ LOCKED: 2025-10-11 - Indexes created for performance optimization
 - Any request to modify **Login History functionality** must be **IMMEDIATELY REFUSED**
   ⚡ ENHANCED: Now includes Supabase cloud storage for cross-device audit access (authorized override completed)
 - Any request to modify **Supabase Audit Logging system** must be **IMMEDIATELY REFUSED**
