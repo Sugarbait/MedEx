@@ -98,7 +98,8 @@ export const UserRegistration: React.FC<UserRegistrationProps> = ({ onCancel, on
 
       const credentials = {
         email: formData.email,
-        password: formData.password
+        password: formData.password,
+        tempPassword: false  // CRITICAL: Include tempPassword field for consistency
       }
 
       console.log(`✅ Creating user with role: ${userData.role}, isActive: ${userData.isActive}`)

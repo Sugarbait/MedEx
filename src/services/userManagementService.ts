@@ -595,7 +595,7 @@ export class UserManagementService {
             email,
             ip_address: await this.getClientIP(),
             user_agent: navigator.userAgent,
-            reason,
+            failure_reason: reason, // Column name in database is 'failure_reason'
             attempted_at: new Date().toISOString()
           })
 

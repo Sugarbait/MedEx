@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react'
 import { UserPlus, Trash2, Key, Lock, Unlock, UserCheck, UserX, Clock, ShieldCheck, Shield } from 'lucide-react'
 import { userManagementService } from '@/services/userManagementService'
 import { userProfileService } from '@/services/userProfileService'
-import { PasswordDebugger } from '@/utils/passwordDebug'
 import { useToast } from '@/hooks/useToast'
 import { ToastContainer } from '@/components/common/ToastContainer'
 
@@ -157,11 +156,17 @@ export const SimpleUserManager: React.FC = () => {
 
     setIsLoading(true)
     try {
-      // Use the PasswordDebugger method that we know works
-      await PasswordDebugger.setUserPassword(userId, email, newPassword)
-      showToast(`Password changed successfully for ${email}`, 'success')
-      setShowChangePassword(null)
-      setNewPassword('')
+      // CRITICAL FIX: Use changeUserPassword which stores in BOTH Supabase AND localStorage
+      // PasswordDebugger only stores in localStorage which causes passwords to be lost when cache is cleared
+      const result = await userManagementService.changeUserPassword(userId, newPassword)
+
+      if (result.status === 'success') {
+        showToast(`Password changed successfully for ${email}`, 'success')
+        setShowChangePassword(null)
+        setNewPassword('')
+      } else {
+        showToast(`Failed to change password: ${result.error}`, 'error')
+      }
     } catch (error: any) {
       showToast(`Failed to change password: ${error.message}`, 'error')
     } finally {
