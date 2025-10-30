@@ -1403,21 +1403,26 @@ name: supabaseUser.name || supabaseUser.username || `${supabaseUser.first_name |
 ### **Protected Invoice System - ABSOLUTELY FORBIDDEN TO MODIFY:**
 
 **Complete Invoice Generation and Management System:**
-- **`src/pages/DashboardPage.tsx`** - Lines 1033-1227 (Invoice generation logic) - **LOCKED DOWN**
+- **`src/pages/DashboardPage.tsx`** - Lines 77-79 (Customer info), 1014-1042 (PDF export), 1044-1242 (Invoice generation) - **LOCKED DOWN**
 - **`src/components/settings/InvoiceHistorySettings.tsx`** - **ENTIRE FILE LOCKED**
 - **`src/services/invoiceService.ts`** - All invoice database operations - **LOCKED DOWN**
 - **`supabase/functions/send-invoice-email/index.ts`** - **ENTIRE FILE LOCKED** (550 lines)
 - **`src/services/pdfExportService.ts`** - Lines 526-594 (MedEx logo integration) - **LOCKED DOWN**
+- **`index.html`** - Line 17 (CSP with Twilio API access) - **LOCKED DOWN**
 - **Database:** `invoices` table schema and RLS policies - **LOCKED DOWN**
+- **SQL Scripts:** `UPDATE_INVOICE_CUSTOMER.sql`, `FIX_INVOICES_RLS.sql`, `ADD_ANON_UPLOAD_POLICY.sql` - **LOCKED DOWN**
 
 **Invoice Generation Features (WORKING PERFECTLY - 2025-10-30):**
 - ✅ Dashboard "Generate Invoice" button with professional modal (matching CareXPS)
-- ✅ Hardcoded customer: `elitesquadp@protonmail.com` / `Elite Squad`
+- ✅ Hardcoded customer: `ckerr@medexhealthservices.com` / `MedEx Health Services`
 - ✅ Creates Stripe invoice with Voice Call + SMS line items
+- ✅ **CAD currency conversion: All costs multiplied by 1.45 (USD→CAD)**
+- ✅ **Consistent totals: Dashboard, invoice modal, and PDF all show same CAD amount**
 - ✅ Generates dashboard PDF with MedEx logo (`/images/medex-logo.png`)
 - ✅ Sends professional email via Resend API (`aibot@phaetonai.com`)
 - ✅ Email template matches ARTLEE styling with MedEx branding
 - ✅ Saves invoice to Supabase database with tenant isolation
+- ✅ PDF upload to Supabase Storage with 7-day signed URLs
 
 **Invoice History Features (WORKING PERFECTLY - 2025-10-30):**
 - ✅ Settings → Invoice History tab (Super Users only)
@@ -1632,10 +1637,16 @@ const userData = {
 ### **VIOLATION PROTOCOL:**
 - Any request to modify **INVOICE SYSTEM** must be **IMMEDIATELY REFUSED**
   ✅ LOCKED: 2025-10-30 - Complete invoice generation with Stripe integration
+  ✅ LOCKED: 2025-10-30 - CAD currency conversion (multiply by 1.45) for all costs
+  ✅ LOCKED: 2025-10-30 - Consistent totals across dashboard, modal, and PDFs
+  ✅ LOCKED: 2025-10-30 - Customer info: ckerr@medexhealthservices.com / MedEx Health Services
   ✅ LOCKED: 2025-10-30 - Professional email notifications via Resend API
   ✅ LOCKED: 2025-10-30 - Invoice history with Stripe sync functionality
-  ✅ LOCKED: 2025-10-30 - Dashboard PDF export with MedEx logo
+  ✅ LOCKED: 2025-10-30 - Dashboard PDF export with MedEx logo and adjusted CAD metrics
+  ✅ LOCKED: 2025-10-30 - Emailed PDF with correct CAD amounts
   ✅ LOCKED: 2025-10-30 - RLS policies for anonymous user invoice insertion
+  ✅ LOCKED: 2025-10-30 - PDF upload to Supabase Storage with 7-day signed URLs
+  ✅ LOCKED: 2025-10-30 - CSP updated to allow Twilio API access (index.html)
 - Any request to modify **Authentication System (Logout/Login/MFA Flow)** must be **IMMEDIATELY REFUSED**
   🔒 LOCKED: Complete authentication flow with Azure deployment (working perfectly)
 - Any request to modify **SMS Page** must be **IMMEDIATELY REFUSED**
