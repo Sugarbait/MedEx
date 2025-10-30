@@ -68,6 +68,7 @@ export default {
       animation: {
         'shimmer': 'shimmer 2s linear infinite',
         'pulse-soft': 'pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+        'slide-in-right': 'slide-in-right 0.3s ease-out',
       },
       keyframes: {
         shimmer: {
@@ -77,6 +78,10 @@ export default {
         'pulse-soft': {
           '0%, 100%': { opacity: '1' },
           '50%': { opacity: '0.8' },
+        },
+        'slide-in-right': {
+          '0%': { transform: 'translateX(100%)', opacity: '0' },
+          '100%': { transform: 'translateX(0)', opacity: '1' },
         },
       },
     },

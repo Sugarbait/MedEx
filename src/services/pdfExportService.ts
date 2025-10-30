@@ -6,6 +6,7 @@
 import jsPDF from 'jspdf'
 import html2canvas from 'html2canvas'
 import { format, startOfDay, endOfDay } from 'date-fns'
+import { supabase, supabaseAdmin } from '@/config/supabase'
 
 interface DashboardMetrics {
   totalCalls: number
@@ -21,6 +22,7 @@ interface DashboardMetrics {
   avgCostPerMessage: number
   messageDeliveryRate: number
   totalSMSCost: number
+  totalChats?: number // Alias for totalMessages for invoice compatibility
 }
 
 interface ExportOptions {
@@ -523,28 +525,10 @@ class PDFExportService {
 
   private async addLogoToPDF(centerX: number, y: number): Promise<void> {
     try {
-      // Get logo from Company Branding Header Logo (using company_logos key)
-      const companyLogos = localStorage.getItem('company_logos')
-      let logoDataUrl: string | null = null
+      // Use MedEx logo from public folder
+      const logoUrl = '/images/medex-logo.png'
 
-      if (companyLogos) {
-        try {
-          const logos = JSON.parse(companyLogos)
-          // Use ONLY the headerLogo from company logos
-          logoDataUrl = logos.headerLogo
-          console.log('PDF Export: Found header logo in company_logos:', logoDataUrl ? logoDataUrl.substring(0, 50) + '...' : 'null')
-        } catch (parseError) {
-          console.warn('Failed to parse company logos:', parseError)
-        }
-      } else {
-        console.log('PDF Export: No company_logos found in localStorage')
-      }
-
-      // If no brand logo uploaded, skip logo entirely (no hardcoded fallbacks)
-      if (!logoDataUrl) {
-        console.log('No Company Branding Header Logo found in settings, skipping logo')
-        return
-      }
+      console.log('PDF Export: Loading MedEx logo from:', logoUrl)
 
       // Load image to get dimensions and maintain aspect ratio
       return new Promise<void>((resolve, reject) => {
@@ -565,28 +549,138 @@ class PDFExportService {
               logoWidth = maxHeight * imgAspectRatio
             }
 
-            // Add the logo to the PDF with proper aspect ratio
-            this.pdf.addImage(
-              logoDataUrl!,
-              'PNG',
-              centerX - logoWidth / 2, // Center horizontally
-              y,
-              logoWidth,
-              logoHeight
-            )
+            console.log(`PDF Export: Adding logo with dimensions ${logoWidth.toFixed(2)}mm x ${logoHeight.toFixed(2)}mm`)
 
-            resolve()
+            // Convert image to data URL for jsPDF
+            const canvas = document.createElement('canvas')
+            canvas.width = img.width
+            canvas.height = img.height
+            const ctx = canvas.getContext('2d')
+            if (ctx) {
+              ctx.drawImage(img, 0, 0)
+              const logoDataUrl = canvas.toDataURL('image/png')
+
+              // Add the logo to the PDF with proper aspect ratio
+              this.pdf.addImage(
+                logoDataUrl,
+                'PNG',
+                centerX - logoWidth / 2, // Center horizontally
+                y,
+                logoWidth,
+                logoHeight
+              )
+
+              console.log('PDF Export: Logo added successfully')
+              resolve()
+            } else {
+              reject(new Error('Failed to get canvas context'))
+            }
           } catch (error) {
             reject(error)
           }
         }
-        img.onerror = () => reject(new Error('Failed to load image'))
-        img.src = logoDataUrl!
+        img.onerror = () => {
+          console.error('Failed to load MedEx logo from:', logoUrl)
+          reject(new Error('Failed to load MedEx logo'))
+        }
+        img.crossOrigin = 'anonymous' // Enable CORS for local images
+        img.src = logoUrl
       })
     } catch (error) {
       // Silently skip logo if there's an error
       console.warn('Logo loading failed, continuing without logo:', error)
       return
+    }
+  }
+
+  /**
+   * Upload PDF report to Supabase Storage and return signed URL for invoice emails
+   * @param metrics - Dashboard metrics for report generation
+   * @param options - Export options including date range
+   * @returns Object with success status, download URL, and filename
+   */
+  async uploadReportToStorage(
+    metrics: DashboardMetrics,
+    options: ExportOptions
+  ): Promise<{ success: boolean; downloadUrl?: string; filename?: string; error?: string }> {
+    const STORAGE_BUCKET = 'invoice-reports'
+    const EXPIRY_SECONDS = 7 * 24 * 60 * 60 // 7 days
+
+    try {
+      // Reset PDF and generate report
+      this.pdf = new jsPDF('p', 'mm', 'a4')
+      this.pageWidth = this.pdf.internal.pageSize.getWidth()
+      this.pageHeight = this.pdf.internal.pageSize.getHeight()
+
+      // Generate cover page
+      await this.generateCoverPage(metrics, options)
+
+      // Add new page for detailed metrics
+      this.pdf.addPage()
+      this.generateMetricsPage(metrics, options)
+
+      // Add charts page
+      this.pdf.addPage()
+      await this.generateChartsPage(metrics, options)
+
+      // Add summary page
+      this.pdf.addPage()
+      this.generateSummaryPage(metrics, options)
+
+      // Convert PDF to Blob
+      const pdfBlob = this.pdf.output('blob')
+
+      // Generate filename
+      const timestamp = format(new Date(), 'yyyy-MM-dd_HHmmss')
+      const fileName = `invoice-report-${timestamp}.pdf`
+      const storagePath = `reports/${fileName}`
+
+      console.log('📤 Uploading PDF report to Supabase Storage...')
+
+      // Use service role client to bypass RLS (if available)
+      const storageClient = supabaseAdmin || supabase
+      if (!supabaseAdmin) {
+        console.warn('⚠️ Service role key not available, using regular client (may fail due to RLS)')
+      } else {
+        console.log('✅ Using service role client for storage operations (bypasses RLS)')
+      }
+
+      // Upload to Supabase Storage
+      const { data: uploadData, error: uploadError } = await storageClient.storage
+        .from(STORAGE_BUCKET)
+        .upload(storagePath, pdfBlob, {
+          cacheControl: '3600',
+          upsert: true,
+          contentType: 'application/pdf'
+        })
+
+      if (uploadError) {
+        console.error('❌ Storage upload error:', uploadError)
+        return { success: false, error: uploadError.message }
+      }
+
+      console.log('✅ PDF uploaded to storage:', uploadData.path)
+
+      // Generate signed URL for download
+      const { data: signedUrlData, error: signedUrlError } = await storageClient.storage
+        .from(STORAGE_BUCKET)
+        .createSignedUrl(storagePath, EXPIRY_SECONDS)
+
+      if (signedUrlError) {
+        console.error('❌ Signed URL generation error:', signedUrlError)
+        return { success: false, error: signedUrlError.message }
+      }
+
+      console.log('✅ Signed URL generated (expires in 7 days)')
+
+      return {
+        success: true,
+        downloadUrl: signedUrlData.signedUrl,
+        filename: fileName
+      }
+    } catch (error: any) {
+      console.error('❌ PDF upload failed:', error)
+      return { success: false, error: error.message || 'Unknown error during PDF upload' }
     }
   }
 }

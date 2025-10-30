@@ -48,7 +48,21 @@
       "Bash(start FIX_NOTES_TABLE_SCHEMA.sql)",
       "Bash(start CHECK_EXISTING_NOTES_SCHEMA.sql)",
       "Bash(if exist:*)",
-      "Bash(start FIX_NOTES_USER_ID_NULLABLE.sql)"
+      "Bash(start FIX_NOTES_USER_ID_NULLABLE.sql)",
+      "Bash(move check-user-email.js check-user-email.cjs)",
+      "Bash(ren:*)",
+      "Bash(curl:*)",
+      "Bash(/dev/null)",
+      "Bash(pkill:*)",
+      "Read(//i/Apps Back Up/CareXPS CRM/src/pages/**)",
+      "Bash(supabase functions deploy:*)",
+      "Bash(npx supabase functions deploy:*)",
+      "Bash(npx supabase login)",
+      "Bash(start \"I:\\Apps Back Up\\Main MedEX CRM\\deploy-invoice-email.bat\")",
+      "Read(//i/Apps Back Up/CareXPS CRM/src/**)",
+      "Bash(start \"I:\\Apps Back Up\\Main MedEX CRM\\FIX_INVOICES_RLS.sql\")",
+      "Bash(start \"I:\\Apps Back Up\\Main MedEX CRM\\SETUP_PDF_STORAGE.md\")",
+      "Bash(start:*)"
     ],
     "deny": [],
     "ask": []

@@ -5,7 +5,10 @@ import { DateRangePicker, DateRange, getDateRangeFromSelection } from '@/compone
 import { retellService, currencyService, twilioCostService, chatService } from '@/services'
 import { pdfExportService } from '@/services/pdfExportService'
 import { userSettingsService } from '@/services'
+import { saveInvoiceToDatabase } from '@/services/invoiceService'
+import { getCurrentTenantId } from '@/config/tenantConfig'
 import { SiteHelpChatbot } from '@/components/common/SiteHelpChatbot'
+import { format } from 'date-fns'
 import {
   PhoneIcon,
   MessageSquareIcon,
@@ -20,7 +23,10 @@ import {
   ThumbsUpIcon,
   AlertCircleIcon,
   BarChart3Icon,
-  TrashIcon
+  TrashIcon,
+  Loader2Icon,
+  XIcon,
+  SendIcon
 } from 'lucide-react'
 
 interface DashboardPageProps {
@@ -64,6 +70,15 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
 
   const [error, setError] = useState('')
   const [isExporting, setIsExporting] = useState(false)
+
+  // Invoice modal state
+  const [showInvoiceModal, setShowInvoiceModal] = useState(false)
+  const [isGeneratingInvoice, setIsGeneratingInvoice] = useState(false)
+  // Customer info hard-coded for MedEx Health Services
+  const invoiceCustomerEmail = 'ckerr@medexhealthservices.com'
+  const invoiceCustomerName = 'MedEx Health Services'
+  const [invoiceSuccess, setInvoiceSuccess] = useState<string | null>(null)
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false)
 
   // SMS Segment caching state (exact copy from SMS page)
   const [fullDataSegmentCache, setFullDataSegmentCache] = useState<Map<string, number>>(new Map())
@@ -1001,7 +1016,18 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
     try {
       const { start, end } = getDateRangeFromSelection(selectedDateRange, customStartDate, customEndDate)
 
-      await pdfExportService.generateDashboardReport(metrics, {
+      // Create adjusted metrics with CAD conversion (multiply by 1.45)
+      const adjustedMetrics = {
+        ...metrics,
+        totalCost: (metrics.totalCost || 0) * 1.45,
+        avgCostPerCall: (metrics.avgCostPerCall || 0) * 1.45,
+        highestCostCall: (metrics.highestCostCall || 0) * 1.45,
+        lowestCostCall: (metrics.lowestCostCall || 0) * 1.45,
+        totalSMSCost: (metrics.totalSMSCost || 0) * 1.45,
+        avgCostPerMessage: (metrics.avgCostPerMessage || 0) * 1.45
+      }
+
+      await pdfExportService.generateDashboardReport(adjustedMetrics, {
         dateRange: selectedDateRange,
         startDate: start,
         endDate: end,
@@ -1012,6 +1038,211 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
       setError('Failed to generate PDF report. Please try again.')
     } finally {
       setIsExporting(false)
+    }
+  }
+
+  const handleGenerateInvoice = async () => {
+    // Customer email/name are now hard-coded (ckerr@medexhealthservices.com / MedEx Health Services)
+
+    setIsGeneratingInvoice(true)
+    setError('')
+    setInvoiceSuccess(null)
+    setShowConfirmDialog(false) // Reset confirmation dialog
+
+    try {
+      const { start, end } = getDateRangeFromSelection(selectedDateRange, customStartDate, customEndDate)
+      const dateRangeText = `${format(start, 'MMM d, yyyy')} - ${format(end, 'MMM d, yyyy')}`
+
+      console.log('📝 Starting invoice generation...')
+
+      // Get Stripe credentials from environment
+      const stripeSecretKey = import.meta.env.VITE_STRIPE_SECRET_KEY
+      const stripeCustomerId = import.meta.env.VITE_STRIPE_CUSTOMER_ID
+
+      if (!stripeSecretKey || !stripeCustomerId) {
+        throw new Error('Stripe configuration missing. Please set VITE_STRIPE_SECRET_KEY and VITE_STRIPE_CUSTOMER_ID in .env.local')
+      }
+
+      // Calculate costs (convert to CAD by multiplying by 1.45)
+      const callCostCAD = (metrics.totalCost || 0) * 1.45
+      const smsCostCAD = (metrics.totalSMSCost || 0) * 1.45
+      const totalCAD = callCostCAD + smsCostCAD
+
+      // Create Stripe invoice
+      console.log('📝 Creating Stripe invoice...')
+      const createInvoiceResponse = await fetch('https://api.stripe.com/v1/invoices', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${stripeSecretKey}`,
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: new URLSearchParams({
+          'customer': stripeCustomerId,
+          'auto_advance': 'true',
+          'collection_method': 'send_invoice',
+          'days_until_due': '30',
+          'description': `MedEx Healthcare CRM - Invoice for ${dateRangeText}`,
+          'metadata[date_range]': dateRangeText,
+          'metadata[call_count]': String(metrics.totalCalls || 0),
+          'metadata[sms_count]': String(metrics.totalMessages || 0),
+        }),
+      })
+
+      if (!createInvoiceResponse.ok) {
+        const errorText = await createInvoiceResponse.text()
+        throw new Error(`Stripe API error: ${createInvoiceResponse.statusText} - ${errorText}`)
+      }
+
+      const invoice = await createInvoiceResponse.json()
+      console.log('✅ Stripe invoice created:', invoice.id)
+
+      // Add line items
+      console.log('➕ Adding invoice line items...')
+
+      // Add call costs line item
+      if (callCostCAD > 0) {
+        await fetch('https://api.stripe.com/v1/invoiceitems', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${stripeSecretKey}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            'customer': stripeCustomerId,
+            'invoice': invoice.id,
+            'description': `Voice Call Services (${metrics.totalCalls || 0} calls)`,
+            'amount': String(Math.round(callCostCAD * 100)), // Stripe uses cents
+            'currency': 'cad',
+          }),
+        })
+      }
+
+      // Add SMS costs line item
+      if (smsCostCAD > 0) {
+        await fetch('https://api.stripe.com/v1/invoiceitems', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${stripeSecretKey}`,
+            'Content-Type': 'application/x-www-form-urlencoded',
+          },
+          body: new URLSearchParams({
+            'customer': stripeCustomerId,
+            'invoice': invoice.id,
+            'description': `SMS Messaging (${metrics.totalMessages || 0} messages)`,
+            'amount': String(Math.round(smsCostCAD * 100)),
+            'currency': 'cad',
+          }),
+        })
+      }
+
+      // Finalize invoice
+      console.log('✅ Finalizing invoice...')
+      const finalizeResponse = await fetch(`https://api.stripe.com/v1/invoices/${invoice.id}/finalize`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${stripeSecretKey}`,
+        },
+      })
+
+      if (!finalizeResponse.ok) {
+        throw new Error(`Failed to finalize invoice: ${finalizeResponse.statusText}`)
+      }
+
+      const finalizedInvoice = await finalizeResponse.json()
+      console.log('✅ Invoice finalized:', finalizedInvoice.number)
+
+      // Generate and upload PDF report with adjusted CAD costs
+      console.log('📤 Uploading PDF report to Supabase Storage...')
+      const adjustedMetrics = {
+        ...metrics,
+        totalCost: callCostCAD, // Already multiplied by 1.45 above
+        avgCostPerCall: (metrics.avgCostPerCall || 0) * 1.45,
+        highestCostCall: (metrics.highestCostCall || 0) * 1.45,
+        lowestCostCall: (metrics.lowestCostCall || 0) * 1.45,
+        totalSMSCost: smsCostCAD, // Already multiplied by 1.45 above
+        avgCostPerMessage: (metrics.avgCostPerMessage || 0) * 1.45
+      }
+      const pdfUploadResult = await pdfExportService.uploadReportToStorage(adjustedMetrics, {
+        dateRange: selectedDateRange,
+        startDate: start,
+        endDate: end,
+        companyName: 'MedEx Healthcare CRM',
+        reportTitle: `Invoice ${finalizedInvoice.number} - Dashboard Report`
+      })
+
+      let pdfDownloadLink = pdfUploadResult.downloadUrl || ''
+
+      if (!pdfUploadResult.success) {
+        console.error('❌ PDF upload failed:', pdfUploadResult.error)
+        console.warn('⚠️ Email will be sent WITHOUT Dashboard PDF download link')
+      } else {
+        console.log('✅ PDF uploaded successfully:', pdfDownloadLink)
+      }
+
+      // Send email notification
+      console.log('📧 Sending invoice email...')
+      const emailResult = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/send-invoice-email`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${import.meta.env.VITE_SUPABASE_ANON_KEY}`
+          },
+          body: JSON.stringify({
+            to_email: invoiceCustomerEmail.trim(),
+            to_name: invoiceCustomerName,
+            invoice_id: finalizedInvoice.number,
+            date_range: dateRangeText,
+            total_amount: `CAD $${totalCAD.toFixed(2)}`,
+            total_calls: metrics.totalCalls || 0,
+            call_cost: `CAD $${callCostCAD.toFixed(2)}`,
+            total_chats: metrics.totalMessages || 0,
+            sms_cost: `CAD $${smsCostCAD.toFixed(2)}`,
+            invoice_url: finalizedInvoice.hosted_invoice_url,
+            pdf_download_link: pdfDownloadLink || finalizedInvoice.hosted_invoice_url,
+            pdf_expiry_days: 7
+          })
+        }
+      )
+
+      const emailResponse = await emailResult.json()
+
+      // Save to invoice history database
+      console.log('💾 Saving invoice to database...')
+      const tenantId = getCurrentTenantId()
+      await saveInvoiceToDatabase({
+        invoice_number: finalizedInvoice.number,
+        customer_email: invoiceCustomerEmail.trim(),
+        customer_name: invoiceCustomerName,
+        date_range: dateRangeText,
+        total_amount: totalCAD,
+        currency: 'cad',
+        status: 'open',
+        stripe_invoice_id: finalizedInvoice.id,
+        stripe_invoice_url: finalizedInvoice.hosted_invoice_url,
+        pdf_download_url: pdfDownloadLink,
+        call_count: metrics.totalCalls || 0,
+        call_cost: callCostCAD,
+        sms_count: metrics.totalMessages || 0,
+        sms_cost: smsCostCAD,
+        tenant_id: tenantId
+      })
+
+      // Show success notification in modal
+      if (emailResponse.success) {
+        setError('')
+        setInvoiceSuccess(`✅ Invoice ${finalizedInvoice.number} generated and sent successfully to ${invoiceCustomerEmail}!`)
+      } else {
+        console.warn('Email failed:', emailResponse.error)
+        setInvoiceSuccess(`⚠️ Invoice ${finalizedInvoice.number} generated but email failed: ${emailResponse.error || 'Unknown error'}`)
+      }
+
+    } catch (error: any) {
+      console.error('❌ Invoice generation failed:', error)
+      setError(`Failed to generate invoice: ${error.message}`)
+    } finally {
+      setIsGeneratingInvoice(false)
     }
   }
 
@@ -1093,6 +1324,27 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
             <DownloadIcon className={`w-4 h-4 ${isExporting ? 'animate-spin' : ''}`} />
             <span className="hidden sm:inline">{isExporting ? 'Generating PDF...' : 'Export Dashboard Report'}</span>
             <span className="sm:hidden">{isExporting ? 'Generating...' : 'Export'}</span>
+          </button>
+          <button
+            onClick={() => setShowInvoiceModal(true)}
+            disabled={isGeneratingInvoice || isLoading}
+            className="flex items-center gap-2 px-3 sm:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px]"
+            aria-label="Generate invoice for current date range"
+            title="Generate Stripe invoice and send to customer"
+          >
+            {isGeneratingInvoice ? (
+              <>
+                <Loader2Icon className="w-4 h-4 animate-spin" />
+                <span className="hidden sm:inline">Generating...</span>
+                <span className="sm:hidden">Gen...</span>
+              </>
+            ) : (
+              <>
+                <DollarSignIcon className="w-4 h-4" />
+                <span className="hidden sm:inline">Generate Invoice</span>
+                <span className="sm:hidden">Invoice</span>
+              </>
+            )}
           </button>
         </div>
       </div>
@@ -1438,6 +1690,169 @@ export const DashboardPage: React.FC<DashboardPageProps> = ({ user }) => {
         isVisible={isChatbotVisible}
         onToggle={() => setIsChatbotVisible(!isChatbotVisible)}
       />
+
+      {/* Invoice Generation Modal */}
+      {showInvoiceModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">
+                Generate Invoice
+              </h2>
+              <button
+                onClick={() => {
+                  setShowInvoiceModal(false)
+                  setInvoiceSuccess(null)
+                  setError('')
+                }}
+                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200"
+              >
+                <XIcon className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Date Range Info */}
+              <div className="bg-blue-50 dark:bg-blue-900/20 rounded-lg p-3">
+                <div className="text-sm text-blue-800 dark:text-blue-200">
+                  <strong>Invoice Period:</strong> {selectedDateRange === 'custom' && customStartDate && customEndDate
+                    ? `${customStartDate.toLocaleDateString()} - ${customEndDate.toLocaleDateString()}`
+                    : selectedDateRange}
+                </div>
+                <div className="text-sm text-blue-800 dark:text-blue-200 mt-1">
+                  <strong>Total Amount:</strong> CAD ${(((metrics.totalCost || 0) + (metrics.totalSMSCost || 0)) * 1.45).toFixed(2)}
+                </div>
+              </div>
+
+              {/* Confirmation Dialog */}
+              {showConfirmDialog ? (
+                <div className="bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-600 rounded-lg p-4">
+                  <div className="flex items-start gap-3">
+                    <AlertCircleIcon className="w-5 h-5 text-yellow-600 flex-shrink-0 mt-0.5" />
+                    <div>
+                      <h3 className="text-sm font-semibold text-yellow-800 dark:text-yellow-200 mb-2">
+                        Confirm Invoice Generation
+                      </h3>
+                      <div className="text-sm text-yellow-700 dark:text-yellow-300 space-y-1">
+                        <div><strong>Recipient:</strong> {invoiceCustomerEmail}</div>
+                        <div><strong>Customer:</strong> {invoiceCustomerName}</div>
+                        <div><strong>Amount:</strong> CAD ${(((metrics.totalCost || 0) + (metrics.totalSMSCost || 0)) * 1.45).toFixed(2)}</div>
+                        <div><strong>Period:</strong> {selectedDateRange === 'custom' && customStartDate && customEndDate
+                          ? `${customStartDate.toLocaleDateString()} - ${customEndDate.toLocaleDateString()}`
+                          : selectedDateRange}</div>
+                      </div>
+                      <p className="text-sm text-yellow-700 dark:text-yellow-300 mt-3">
+                        Are you sure you want to generate and send this invoice?
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-600 rounded-lg p-4">
+                  <p className="text-sm text-blue-800 dark:text-blue-200">
+                    Invoice will be generated for <strong>{invoiceCustomerName}</strong> ({invoiceCustomerEmail})
+                  </p>
+                  <p className="text-xs text-blue-600 dark:text-blue-300 mt-1">
+                    A professional invoice email will be sent automatically
+                  </p>
+                </div>
+              )}
+
+              {/* Success Message */}
+              {invoiceSuccess && (
+                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-600 rounded-lg p-3">
+                  <div className="flex items-center gap-2">
+                    <svg className="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-sm text-green-800 dark:text-green-200">{invoiceSuccess}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Error Message */}
+              {error && (
+                <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-600 rounded-lg p-3">
+                  <div className="flex items-center gap-2">
+                    <XIcon className="w-5 h-5 text-red-600" />
+                    <span className="text-sm text-red-800 dark:text-red-200">{error}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Action Buttons */}
+              <div className="flex gap-3 pt-4">
+                {invoiceSuccess ? (
+                  // Show only Close button after successful generation
+                  <button
+                    onClick={() => {
+                      setShowInvoiceModal(false)
+                      setInvoiceSuccess(null)
+                      setError('')
+                      setShowConfirmDialog(false)
+                    }}
+                    className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                  >
+                    Close
+                  </button>
+                ) : showConfirmDialog ? (
+                  <>
+                    <button
+                      onClick={() => setShowConfirmDialog(false)}
+                      disabled={isGeneratingInvoice}
+                      className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+                    >
+                      Back
+                    </button>
+                    <button
+                      onClick={handleGenerateInvoice}
+                      disabled={isGeneratingInvoice}
+                      className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      {isGeneratingInvoice ? (
+                        <>
+                          <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                          <span>Generating...</span>
+                        </>
+                      ) : (
+                        <>
+                          <SendIcon className="w-4 h-4" />
+                          <span>Confirm & Send</span>
+                        </>
+                      )}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => {
+                        setShowInvoiceModal(false)
+                        setInvoiceSuccess(null)
+                        setError('')
+                        setShowConfirmDialog(false)
+                      }}
+                      disabled={isGeneratingInvoice}
+                      className="flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors disabled:opacity-50"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      onClick={() => {
+                        setShowConfirmDialog(true)
+                      }}
+                      disabled={isGeneratingInvoice}
+                      className="flex-1 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      <SendIcon className="w-4 h-4" />
+                      <span>Generate Invoice</span>
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
