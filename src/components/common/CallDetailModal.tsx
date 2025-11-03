@@ -14,6 +14,7 @@ import {
 } from 'lucide-react'
 import { CallNotes } from './CallNotes'
 import { patientIdService } from '@/services/patientIdService'
+import { AnimatedModal } from './AnimatedModal'
 
 interface CallDetailModalProps {
   call: {
@@ -74,8 +75,6 @@ export const CallDetailModal: React.FC<CallDetailModalProps> = ({ call, isOpen, 
     }
   }, [isOpen, call])
 
-  if (!isOpen) return null
-
   const formatDuration = (seconds?: number) => {
     if (!seconds || seconds <= 0) return '0:00'
     const minutes = Math.floor(seconds / 60)
@@ -112,42 +111,47 @@ export const CallDetailModal: React.FC<CallDetailModalProps> = ({ call, isOpen, 
   const { date, time } = formatDateTime(call.start_timestamp)
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
-          <div className="flex items-center gap-4">
-            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
-              <PhoneCallIcon className="w-6 h-6 text-blue-600" />
-            </div>
-            <div>
-              <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
-                {call.call_analysis?.custom_analysis_data?.patient_name ||
-                 call.call_analysis?.custom_analysis_data?.caller_name ||
-                 call.call_analysis?.custom_analysis_data?.customer_name ||
-                 call.call_analysis?.custom_analysis_data?.name ||
-                 call.metadata?.patient_name || 'Caller'}
-              </h2>
-              <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
-                <span>ID: {generatedPatientId || 'PT00000000'}</span>
-                <span className="flex items-center gap-1">
-                  <CalendarIcon className="w-4 h-4" />
-                  {date} at {time}
-                </span>
-              </div>
+    <AnimatedModal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="4xl"
+      showCloseButton={false}
+      className="max-h-[90vh] overflow-hidden"
+    >
+      {/* Custom Header */}
+      <div className="flex items-center justify-between -mt-6 -mx-6 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 bg-blue-100 dark:bg-blue-900 rounded-full flex items-center justify-center">
+            <PhoneCallIcon className="w-6 h-6 text-blue-600 dark:text-blue-400" />
+          </div>
+          <div>
+            <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100">
+              {call.call_analysis?.custom_analysis_data?.patient_name ||
+               call.call_analysis?.custom_analysis_data?.caller_name ||
+               call.call_analysis?.custom_analysis_data?.customer_name ||
+               call.call_analysis?.custom_analysis_data?.name ||
+               call.metadata?.patient_name || 'Caller'}
+            </h2>
+            <div className="flex items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+              <span>ID: {generatedPatientId || 'PT00000000'}</span>
+              <span className="flex items-center gap-1">
+                <CalendarIcon className="w-4 h-4" />
+                {date} at {time}
+              </span>
             </div>
           </div>
-          <button
-            onClick={onClose}
-            className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
-          >
-            <XIcon className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-          </button>
         </div>
+        <button
+          onClick={onClose}
+          className="p-2 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-lg transition-colors"
+        >
+          <XIcon className="w-5 h-5 text-gray-500 dark:text-gray-400" />
+        </button>
+      </div>
 
-        {/* Content */}
-        <div className="overflow-y-auto max-h-[calc(90vh-140px)]">
-          <div className="p-6 space-y-6">
+      {/* Content */}
+      <div className="overflow-y-auto max-h-[calc(90vh-220px)] -mx-6 px-6 mt-4">
+        <div className="space-y-6">
             {/* Quick Stats */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4">
@@ -643,7 +647,6 @@ export const CallDetailModal: React.FC<CallDetailModalProps> = ({ call, isOpen, 
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </AnimatedModal>
   )
 }

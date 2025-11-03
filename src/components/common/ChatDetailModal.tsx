@@ -22,6 +22,7 @@ import { Chat, chatService } from '@/services/chatService'
 import { ChatNotes } from './ChatNotes'
 import { twilioCostService, twilioApiService, currencyService } from '@/services'
 import { patientIdService } from '@/services/patientIdService'
+import { AnimatedModal } from './AnimatedModal'
 import jsPDF from 'jspdf'
 
 interface ChatDetailModalProps {
@@ -334,8 +335,6 @@ export const ChatDetailModal: React.FC<ChatDetailModalProps> = ({ chat, isOpen, 
     }
   }
 
-  if (!isOpen) return null
-
   // Use full chat data if available, otherwise fall back to original
   const displayChat = fullChat || chat
 
@@ -478,10 +477,15 @@ export const ChatDetailModal: React.FC<ChatDetailModalProps> = ({ chat, isOpen, 
   const displayName = extractedName ? callerName : `Caller`
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 dark:bg-gray-800 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+    <AnimatedModal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="4xl"
+      showCloseButton={false}
+      className="max-h-[90vh] overflow-hidden"
+    >
+      {/* Custom Header */}
+      <div className="flex items-center justify-between -mt-6 -mx-6 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-4">
             <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
               displayChat.chat_status === 'ongoing' ? 'bg-blue-100' :
@@ -537,8 +541,8 @@ export const ChatDetailModal: React.FC<ChatDetailModalProps> = ({ chat, isOpen, 
           </div>
         </div>
 
-        {/* Content */}
-        <div className="overflow-y-auto max-h-[calc(90vh-140px)]">
+      {/* Content */}
+      <div className="overflow-y-auto max-h-[calc(90vh-220px)] -mx-6 px-6 mt-4">
           <div className="p-6 space-y-6">
             {/* Quick Stats */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -887,7 +891,6 @@ export const ChatDetailModal: React.FC<ChatDetailModalProps> = ({ chat, isOpen, 
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </AnimatedModal>
   )
 }

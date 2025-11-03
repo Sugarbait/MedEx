@@ -17,6 +17,7 @@ import {
 import { EnhancedChatNotes } from '@/components/common/EnhancedChatNotes'
 import { twilioCostService } from '@/services/twilioCostService'
 import { patientIdService } from '@/services/patientIdService'
+import { AnimatedModal } from './AnimatedModal'
 
 interface SMSDetailModalProps {
   message: {
@@ -61,8 +62,6 @@ export const SMSDetailModal: React.FC<SMSDetailModalProps> = ({ message, isOpen,
       console.log('SMS Modal: Conditions not met for Patient ID generation:', { isOpen, hasPhone: !!message.phone_number })
     }
   }, [isOpen, message.phone_number])
-
-  if (!isOpen) return null
 
   const formatDateTime = (timestamp: string) => {
     try {
@@ -198,10 +197,15 @@ export const SMSDetailModal: React.FC<SMSDetailModalProps> = ({ message, isOpen,
   const cleanLength = smsDebugInfo.combinedCleanLength || smsDebugInfo.totalCleanChars
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-800 rounded-xl max-w-4xl w-full max-h-[90vh] overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between p-6 border-b border-gray-200 dark:border-gray-700">
+    <AnimatedModal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="4xl"
+      showCloseButton={false}
+      className="max-h-[90vh] overflow-hidden"
+    >
+      {/* Custom Header */}
+      <div className="flex items-center justify-between -mt-6 -mx-6 px-6 py-4 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-4">
             <div className={`w-12 h-12 rounded-full flex items-center justify-center ${getDirectionColor()}`}>
               {getDirectionIcon()}
@@ -232,8 +236,8 @@ export const SMSDetailModal: React.FC<SMSDetailModalProps> = ({ message, isOpen,
           </button>
         </div>
 
-        {/* Content */}
-        <div className="overflow-y-auto max-h-[calc(90vh-140px)]">
+      {/* Content */}
+      <div className="overflow-y-auto max-h-[calc(90vh-220px)] -mx-6 px-6 mt-4">
           <div className="p-6 space-y-6">
             {/* Quick Stats */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
@@ -486,7 +490,6 @@ export const SMSDetailModal: React.FC<SMSDetailModalProps> = ({ message, isOpen,
             </div>
           </div>
         </div>
-      </div>
-    </div>
+    </AnimatedModal>
   )
 }
