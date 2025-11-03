@@ -16,6 +16,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **NO MODIFICATIONS ARE PERMITTED WITHOUT EXPLICIT WRITTEN AUTHORIZATION FROM THE OWNER.**
 
 ### **🔒 RECENTLY PROTECTED:**
+- ✅ **2025-11-03: AnimatedModal System** - AnimatedModal component, CallDetailModal, ChatDetailModal, SMSDetailModal with blur backdrop
+- ✅ **2025-11-03: ParticleBackground Component** - Animated canvas background for Combined Service Cost card
 - ✅ **2025-10-30: Invoice System** - Complete invoice generation, email notifications, Stripe sync, and history display
 - ✅ **2025-10-11: Password Persistence System** - userManagementService.changeUserPassword(), user_profiles table schema, RLS policies
 - ✅ **2025-10-11: Cross-Device Notes System** - notes table schema with call/SMS columns, cross-device sync functionality
@@ -801,6 +803,74 @@ Comprehensive PDF generation for SMS chats with detailed analysis:
 - **Error Handling**: Detailed error messages with troubleshooting steps
 - **Cost Analysis**: Includes segment counts and cost breakdowns
 - **HIPAA Compliant**: Safe patient ID generation with audit logging
+
+### **AnimatedModal System** (Added 2025-11-03)
+Reusable modal component with blur backdrop and smooth animations for all detail modals:
+
+```typescript
+// Component: src/components/common/AnimatedModal.tsx
+// Usage in: CallDetailModal, ChatDetailModal, SMSDetailModal, DashboardPage (invoice modal)
+
+import { AnimatedModal } from '@/components/common/AnimatedModal'
+
+<AnimatedModal
+  isOpen={isOpen}
+  onClose={() => setIsOpen(false)}
+  title="Modal Title"  // Optional, can use custom header instead
+  size="4xl"           // sm, md, lg, xl, 2xl, 3xl, 4xl, full
+  showCloseButton={false}  // Use false for custom headers
+  className="max-h-[90vh] overflow-hidden"
+>
+  {/* Modal content */}
+</AnimatedModal>
+```
+
+**Animation Features:**
+- **Backdrop Blur**: `backdrop-blur-sm` (4px) - Light, subtle blur effect
+- **Dark Overlay**: Semi-transparent black background (50% opacity)
+- **Slide-in Animation**: Smooth slide from top with scale effect (300ms)
+- **Fade Effects**: Opacity transitions for professional appearance
+- **Body Scroll Lock**: Prevents background scrolling when modal open
+- **Keyboard Support**: ESC key to close, focus trap within modal
+- **Click to Close**: Configurable backdrop click to dismiss
+
+**Implementation Notes:**
+- Uses CSS transforms for 60fps hardware-accelerated animations
+- Double `requestAnimationFrame` ensures smooth animation start
+- Automatic cleanup on unmount prevents memory leaks
+- z-index: 50 for proper layering
+- Dark mode fully supported
+
+**Applied To:**
+- `CallDetailModal.tsx` - Call record details from Calls page
+- `ChatDetailModal.tsx` - SMS chat conversations from SMS page
+- `SMSDetailModal.tsx` - Individual SMS messages from SMS page
+- `DashboardPage.tsx` - Invoice generation modal
+
+### **ParticleBackground Component** (Added 2025-11-03)
+Animated canvas background with floating waves and particles:
+
+```typescript
+// Component: src/components/ui/ParticleBackground.tsx
+// Used in: DashboardPage Combined Service Cost card
+
+import { ParticleBackground } from '@/components/ui/ParticleBackground'
+
+<div className="bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg relative overflow-hidden">
+  <ParticleBackground />
+  <div className="relative z-10">
+    {/* Content appears above animated background */}
+  </div>
+</div>
+```
+
+**Features:**
+- Canvas-based animation with multiple wave layers
+- Floating circles with dynamic motion
+- High DPI support for crisp rendering
+- Responsive design adapts to container size
+- Smooth 60fps animations using requestAnimationFrame
+- Automatic cleanup on unmount
 
 ---
 
