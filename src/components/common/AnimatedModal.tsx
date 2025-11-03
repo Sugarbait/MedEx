@@ -91,8 +91,8 @@ export const AnimatedModal: React.FC<AnimatedModalProps> = ({
     >
       {/* Backdrop with blur effect */}
       <div
-        className={`absolute inset-0 bg-black/50 backdrop-blur-md transition-all duration-300 ${
-          isAnimating ? 'opacity-100 backdrop-blur-md' : 'opacity-0 backdrop-blur-none'
+        className={`absolute inset-0 bg-black/50 backdrop-blur-sm transition-all duration-300 ${
+          isAnimating ? 'opacity-100 backdrop-blur-sm' : 'opacity-0 backdrop-blur-none'
         }`}
       />
 
