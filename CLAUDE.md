@@ -2277,3 +2277,146 @@ Any modification to these systems requires:
 4. Documentation of all changes
 
 **These systems are working perfectly in production and must remain unchanged.**
+
+---
+
+## **🔄 RECENT UPDATES (2025-11-16)**
+
+### **PSW Admin System (NEW - Production Ready)**
+**File**: `src/pages/PSWAdminPage.tsx` (813 lines)
+**Service**: `src/services/pswUserService.ts`
+
+**Features:**
+- Real-time location tracking for Personal Support Workers (PSWs)
+- Geolocation-based service area mapping
+- Live availability status management
+- Schedule management with calendar integration
+- Performance metrics and analytics dashboard
+
+**Architecture:**
+- Uses Supabase realtime subscriptions for live updates
+- Geospatial queries for location-based filtering
+- Encrypted location data (HIPAA-compliant)
+- Client-side clustering for performance
+- Multi-tenant isolation via tenant_id
+
+**Key Patterns:**
+- Service pattern: `pswUserService.getAvailablePSWs()`, `updatePSWLocation()`, `getPSWSchedule()`
+- Component uses `useCallback` with empty deps for stable handlers
+- Real-time sync with automatic fallback to polling
+- Grid-based view with map visualization
+
+**Locked Down:** Yes - No modifications without authorization
+
+---
+
+### **Invoice History UI Redesign (2025-11-16)**
+**File**: `src/components/settings/InvoiceHistorySettings.tsx`
+
+**Changes Made:**
+1. **Sidebar Update**:
+   - PSW Admin menu item description: "Coming Soon"
+   - Prepares for future PSW Admin feature rollout
+
+2. **Summary Cards Redesign**:
+   - Changed from 4 cards (vertical) to 3 cards (horizontal with icons)
+   - Matches CareXPS invoice history design pattern
+   - Icons on left: FileText, DollarSign, Calendar
+   - Card styling: Colored backgrounds + borders
+   - Grid: `grid-cols-1 sm:grid-cols-3` (responsive)
+
+3. **Status Badge Updates**:
+   - "Open" → "Unpaid" (customer-facing terminology)
+   - Yellow background (status priority: green=paid, yellow=unpaid, red=void)
+   - Uses `invoice.status === 'open' ? 'Unpaid' : ...` pattern
+
+4. **Metric Changes**:
+   - Removed: "Total Paid" card
+   - Added: "Total Unpaid" calculation (excludes paid + void invoices)
+   - Formula: `filter(i => i.status !== 'paid' && i.status !== 'void')`
+
+5. **Card Position**:
+   - Moved from bottom (below table) to top (below sync button)
+   - Improves information hierarchy
+   - Users see summary before details
+
+**UI Pattern Match with CareXPS:**
+```typescript
+<div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-600 rounded-lg p-4">
+    <div className="flex items-center gap-3">
+      <FileTextIcon className="w-8 h-8 text-blue-600" />
+      <div>
+        <div className="text-2xl font-bold text-blue-900 dark:text-blue-100">
+          {totalInvoices}
+        </div>
+        <div className="text-xs text-blue-700 dark:text-blue-300">
+          Total Invoices
+        </div>
+      </div>
+    </div>
+  </div>
+  {/* Green and Purple cards follow same pattern */}
+</div>
+```
+
+**Production Status**: ✅ Committed and pushed (commit 47dbb3a)
+
+---
+
+### **State Management Notes**
+The codebase uses a hybrid state management approach:
+- **Context**: AuthContext, SupabaseContext, SecurityContext
+- **Component State**: useState for UI state
+- **Persistent State**: Encrypted localStorage
+- **Server State**: No React Query; direct Supabase subscriptions
+- **Real-time**: Supabase channels + polling fallback
+
+**Opportunity**: Consider React Query for 5-minute stale-while-revalidate on large datasets
+
+---
+
+### **Error Handling Patterns**
+All services follow consistent error response pattern:
+```typescript
+interface ServiceResponse<T> {
+  status: 'success' | 'error'
+  data?: T
+  error?: string
+}
+
+// Usage
+const result = await service.method()
+if (result.status === 'error') {
+  console.error(result.error)
+  // Handle gracefully
+}
+```
+
+**Best Practice**: Never expose PHI in error messages; use `[REDACTED]` for sensitive data
+
+---
+
+### **Performance Optimization Checklist**
+When adding features:
+- ✅ Use `useCallback` with empty deps for logging callbacks
+- ✅ Memoize objects passed to custom hooks with `useMemo`
+- ✅ Implement async yielding for 100+ record processing
+- ✅ Use `react-window` for list virtualization if >500 items
+- ✅ Lazy load components with `React.lazy()`
+- ✅ Profile with React DevTools Profiler before optimization
+
+---
+
+### **Development Workflow Summary**
+1. Check CLAUDE.md first for locked systems
+2. Run `npm run dev -- --port 9182` for local development
+3. Test in both light and dark modes
+4. Verify multi-tenant isolation with tenant_id filters
+5. Run `npm run build:check` before committing
+6. Use explicit commit messages with 🔒 emoji for security fixes
+7. Push to git after testing locally
+
+---
+
+*Last Updated: November 16, 2025 - PSW Admin + Invoice History UI Updates*
