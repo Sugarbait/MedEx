@@ -14,7 +14,8 @@ import {
   ActivityIcon,
   UserIcon,
   Shield,
-  AlertTriangle
+  AlertTriangle,
+  UsersIcon
 } from 'lucide-react'
 
 interface SidebarProps {
@@ -32,8 +33,9 @@ interface MfaStatus {
 
 const getNavigationItems = (user: any, mfaStatus: MfaStatus) => {
   const hasMFA = mfaStatus.hasSetup && mfaStatus.isEnabled
+  const isSuperUser = user?.role === 'super_user' || user?.role === 'admin'
 
-  return [
+  const items = [
     {
       name: 'Dashboard',
       href: '/dashboard',
@@ -56,14 +58,28 @@ const getNavigationItems = (user: any, mfaStatus: MfaStatus) => {
       description: hasMFA ? 'SMS management and analytics' : 'Requires MFA setup',
       requiresMFA: true,
       mfaEnabled: hasMFA
-    },
-    {
-      name: 'Settings',
-      href: '/settings',
-      icon: SettingsIcon,
-      description: 'System configuration'
     }
   ]
+
+  // Add PSW Admin menu item for super users only
+  if (isSuperUser) {
+    items.push({
+      name: 'PSW Admin',
+      href: '/psw-admin',
+      icon: UsersIcon,
+      description: 'Coming Soon'
+    })
+  }
+
+  // Add Settings as the last item
+  items.push({
+    name: 'Settings',
+    href: '/settings',
+    icon: SettingsIcon,
+    description: 'System configuration'
+  })
+
+  return items
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ isOpen, onToggle, user }) => {

@@ -44,6 +44,7 @@ import { retellMonitoringService } from './services/retellMonitoringService'
 import { DashboardPage } from './pages/DashboardPage'
 import { CallsPage } from './pages/CallsPage'
 import { SMSPage } from './pages/SMSPage'
+import { PSWAdminPage } from './pages/PSWAdminPage'
 import { SettingsPage } from './pages/SettingsPage'
 import { LoginPage } from './pages/LoginPage'
 import { PrivacyPolicyPage } from './pages/PrivacyPolicyPage'
@@ -65,6 +66,8 @@ const getPageTitle = (pathname: string): string => {
       return 'SMS'
     case '/users':
       return 'User Management'
+    case '/psw-admin':
+      return 'PSW Administration'
     case '/settings':
       return 'Settings'
     default:
@@ -333,6 +336,11 @@ const AppContent: React.FC<{
                     <SMSPage user={user} />
                   </MfaProtectedRoute>
                 }
+              />
+
+              <Route
+                path="/psw-admin"
+                element={<PSWAdminPage user={user} />}
               />
 
               <Route
