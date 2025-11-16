@@ -62,7 +62,8 @@
       "Read(//i/Apps Back Up/CareXPS CRM/src/**)",
       "Bash(start \"I:\\Apps Back Up\\Main MedEX CRM\\FIX_INVOICES_RLS.sql\")",
       "Bash(start \"I:\\Apps Back Up\\Main MedEX CRM\\SETUP_PDF_STORAGE.md\")",
-      "Bash(start:*)"
+      "Bash(start:*)",
+      "Bash(git -C \"I:\\Apps Back Up\\Main MedEX CRM\" log --oneline -20)"
     ],
     "deny": [],
     "ask": []
