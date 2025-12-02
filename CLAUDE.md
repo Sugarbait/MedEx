@@ -16,6 +16,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **NO MODIFICATIONS ARE PERMITTED WITHOUT EXPLICIT WRITTEN AUTHORIZATION FROM THE OWNER.**
 
 ### **🔒 RECENTLY PROTECTED:**
+- ✅ **2025-12-02: Stripe Invoice Fix** - GitHub Actions workflow and Vite config updated to inject Stripe env vars (VITE_STRIPE_SECRET_KEY, VITE_STRIPE_PUBLISHABLE_KEY, VITE_STRIPE_CUSTOMER_ID) for Azure production builds
 - ✅ **2025-11-16: Favicon Update** - MedEx branding (nexasync.ca/images/MedEx-Favicon.png)
 - ✅ **2025-11-16: Invoice History UI** - CareXPS-style cards, yellow "Unpaid" badges
 - ✅ **2025-11-16: PSW Admin Sidebar** - "Coming Soon" description
