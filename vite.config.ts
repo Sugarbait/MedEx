@@ -28,7 +28,10 @@ export default defineConfig({
     __VITE_SUPABASE_SERVICE_ROLE_KEY__: JSON.stringify(process.env.VITE_SUPABASE_SERVICE_ROLE_KEY),
     __VITE_AZURE_CLIENT_ID__: JSON.stringify(process.env.VITE_AZURE_CLIENT_ID),
     __VITE_AZURE_TENANT_ID__: JSON.stringify(process.env.VITE_AZURE_TENANT_ID),
-    __VITE_HIPAA_MODE__: JSON.stringify(process.env.VITE_HIPAA_MODE)
+    __VITE_HIPAA_MODE__: JSON.stringify(process.env.VITE_HIPAA_MODE),
+    'import.meta.env.VITE_STRIPE_SECRET_KEY': JSON.stringify(process.env.VITE_STRIPE_SECRET_KEY),
+    'import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY': JSON.stringify(process.env.VITE_STRIPE_PUBLISHABLE_KEY),
+    'import.meta.env.VITE_STRIPE_CUSTOMER_ID': JSON.stringify(process.env.VITE_STRIPE_CUSTOMER_ID)
   },
   // Make version info available to app
   envPrefix: 'VITE_',
